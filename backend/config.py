@@ -10,12 +10,17 @@ class Config:
     # Server Settings
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
+    CORS_ORIGINS: list[str] = [
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+        if origin.strip()
+    ]
 
     # Camera Settings (Webcam / USB Camera default: 0)
     CAMERA_INDEX: int = int(os.getenv("CAMERA_INDEX", "0"))
-    FRAME_WIDTH: int = 1280
-    FRAME_HEIGHT: int = 720
-    FPS: int = 30
+    FRAME_WIDTH: int = int(os.getenv("FRAME_WIDTH", "1280"))
+    FRAME_HEIGHT: int = int(os.getenv("FRAME_HEIGHT", "720"))
+    FPS: int = int(os.getenv("FPS", "30"))
 
     # Model Settings (Small version for speed & accuracy)
     # Menggunakan yolo26s-pose.pt (YOLO26 Small Pose - Versi Terbaru)
@@ -58,7 +63,24 @@ class Config:
     TRACK_COOLDOWN_SECONDS: int = 300
     # Audio warning "Silakan mundur" debounce in seconds per person
     AUDIO_STEP_BACK_DEBOUNCE_SECONDS: float = 3.5
+    # Stale track purge timeout in seconds
+    TRACK_TIMEOUT_SECONDS: float = float(os.getenv("TRACK_TIMEOUT_SECONDS", "15.0"))
+    # Standby reset delay when corridor is empty
+    STANDBY_RESET_DELAY_SECONDS: float = float(os.getenv("STANDBY_RESET_DELAY_SECONDS", "4.0"))
+    # Maximum history records kept in memory
+    MAX_HISTORY_RECORDS: int = int(os.getenv("MAX_HISTORY_RECORDS", "30"))
 
+    # Local Fast-Pass Vision Thresholds (HSV & Area Ratios)
+    HSV_ORANGE_LOWER: tuple[int, int, int] = (5, 80, 80)
+    HSV_ORANGE_UPPER: tuple[int, int, int] = (22, 255, 255)
+    HSV_YELLOW_LOWER: tuple[int, int, int] = (22, 70, 80)
+    HSV_YELLOW_UPPER: tuple[int, int, int] = (42, 255, 255)
+    HSV_SILVER_LOWER: tuple[int, int, int] = (0, 0, 210)
+    HSV_SILVER_UPPER: tuple[int, int, int] = (180, 60, 255)
+    HSV_SKIN_LOWER: tuple[int, int, int] = (0, 30, 60)
+    HSV_SKIN_UPPER: tuple[int, int, int] = (25, 170, 255)
+    HI_VIS_MIN_RATIO: float = 0.06
+    SKIN_MAX_RATIO: float = 0.18
 
     # Audio Settings
     AUDIO_DIR: Path = BASE_DIR / "audio"

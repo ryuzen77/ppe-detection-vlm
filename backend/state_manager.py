@@ -114,12 +114,12 @@ class StateManager:
                 self.active_person_id = list(active_ids)[0]
             else:
                 self.active_person_id = None
-                if (now - notifier.last_change_time) > 4.0 and notifier.current_state != "OFF":
+                if (now - notifier.last_change_time) > cfg.STANDBY_RESET_DELAY_SECONDS and notifier.current_state != "OFF":
                     notifier.set_idle()
 
 
-            # Clean stale tracks (> 15s absent)
-            stale_ids = [tid for tid, t in self.tracks.items() if (now - t.last_seen) > 15.0]
+            # Clean stale tracks (> TRACK_TIMEOUT_SECONDS absent)
+            stale_ids = [tid for tid, t in self.tracks.items() if (now - t.last_seen) > cfg.TRACK_TIMEOUT_SECONDS]
             for tid in stale_ids:
                 del self.tracks[tid]
 
@@ -167,7 +167,7 @@ class StateManager:
                         "snapshot_filename": saved_meta.get("snapshot_filename", "")
                     }
                     self.inspection_history.insert(0, record)
-                    if len(self.inspection_history) > 30:
+                    if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
                         self.inspection_history.pop()
 
                     if result.is_complete:

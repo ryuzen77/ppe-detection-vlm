@@ -93,12 +93,12 @@ class LocalVisionAnalyzer:
         torso = image_bgr[int(h * 0.20):int(h * 0.55), :]
         hsv_torso = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV)
         
-        # Orange mask: H: 5-22, S: 80-255, V: 80-255
-        orange_mask = cv2.inRange(hsv_torso, np.array([5, 80, 80]), np.array([22, 255, 255]))
-        # Yellow / Lime mask: H: 22-42, S: 70-255, V: 80-255
-        yellow_mask = cv2.inRange(hsv_torso, np.array([22, 70, 80]), np.array([42, 255, 255]))
-        # Reflective tape strips (high brightness V > 210, low saturation S < 60)
-        silver_mask = cv2.inRange(hsv_torso, np.array([0, 0, 210]), np.array([180, 60, 255]))
+        # Orange mask
+        orange_mask = cv2.inRange(hsv_torso, np.array(cfg.HSV_ORANGE_LOWER), np.array(cfg.HSV_ORANGE_UPPER))
+        # Yellow / Lime mask
+        yellow_mask = cv2.inRange(hsv_torso, np.array(cfg.HSV_YELLOW_LOWER), np.array(cfg.HSV_YELLOW_UPPER))
+        # Reflective tape strips
+        silver_mask = cv2.inRange(hsv_torso, np.array(cfg.HSV_SILVER_LOWER), np.array(cfg.HSV_SILVER_UPPER))
 
         orange_px = cv2.countNonZero(orange_mask)
         yellow_px = cv2.countNonZero(yellow_mask)
@@ -106,7 +106,7 @@ class LocalVisionAnalyzer:
         total_torso_px = max(torso.shape[0] * torso.shape[1], 1)
 
         hi_vis_ratio = (orange_px + yellow_px + silver_px) / total_torso_px
-        rompi_detected = hi_vis_ratio > 0.06
+        rompi_detected = hi_vis_ratio > cfg.HI_VIS_MIN_RATIO
         rompi_valid = rompi_detected
         rompi_color = "orange" if orange_px >= yellow_px else "kuning"
 
@@ -120,10 +120,10 @@ class LocalVisionAnalyzer:
         legs = image_bgr[int(h * 0.55):int(h * 0.88), :]
         hsv_legs = cv2.cvtColor(legs, cv2.COLOR_BGR2HSV)
         # Skin tone mask in leg region
-        skin_mask = cv2.inRange(hsv_legs, np.array([0, 30, 60]), np.array([25, 170, 255]))
+        skin_mask = cv2.inRange(hsv_legs, np.array(cfg.HSV_SKIN_LOWER), np.array(cfg.HSV_SKIN_UPPER))
         skin_ratio = cv2.countNonZero(skin_mask) / max(legs.shape[0] * legs.shape[1], 1)
-        # If bare skin ratio is high (> 18%), it's shorts (celana pendek)
-        celana_panjang = skin_ratio < 0.18
+        # If bare skin ratio is high, it's shorts (celana pendek)
+        celana_panjang = skin_ratio < cfg.SKIN_MAX_RATIO
 
         # 4. Shoes Analysis
         sepatu_tertutup = True  # Verified by pose ankle distance to frame bottom
