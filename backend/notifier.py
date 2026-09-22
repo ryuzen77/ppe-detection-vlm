@@ -37,10 +37,27 @@ class IoTNotifier:
             if self.iot_type == "serial" and self.serial_conn:
                 self.serial_conn.write(f"{cmd}\n".encode())
             elif self.iot_type == "http":
-                # Ready for HTTP relay webhook
-                pass
+                import threading
+                threading.Thread(target=self._send_http, args=(cmd,), daemon=True).start()
         except Exception as e:
             print(f"[IoTNotifier] Failed to send command '{cmd}': {e}")
+
+    def _send_http(self, cmd: str):
+        import urllib.request
+        state_map = {
+            "LIGHT_GREEN": "green",
+            "LIGHT_RED": "red",
+            "LIGHT_OFF": "off"
+        }
+        state = state_map.get(cmd, "off")
+        base_url = cfg.IOT_HTTP_URL.rstrip('/')
+        url = f"{base_url}/api/light?state={state}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "SafeguardAI/1.0"})
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                pass
+        except Exception as e:
+            print(f"[IoTNotifier] Wireless HTTP to ESP32 failed ({url}): {e}")
 
     def set_green(self):
         self.send_command("LIGHT_GREEN")

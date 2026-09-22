@@ -91,5 +91,6 @@ class Config:
     IOT_TYPE: str = os.getenv("IOT_TYPE", "serial")  # "serial", "http", or "mqtt"
     IOT_SERIAL_PORT: str = os.getenv("IOT_SERIAL_PORT", "COM3")
     IOT_SERIAL_BAUD: int = 9600
+    IOT_HTTP_URL: str = os.getenv("IOT_HTTP_URL", "http://192.168.1.50")
 
 cfg = Config()

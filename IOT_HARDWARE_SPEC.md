@@ -19,7 +19,9 @@ Dokumen ini berisi panduan lengkap kebutuhan perangkat keras (hardware), spesifi
 
 ---
 
-## 1. Arsitektur & Alur Kerja Sistem
+## 1. Arsitektur & Alur Kerja Sistem (Wireless ESP32 vs Serial USB)
+
+Dengan beralih ke **ESP32 DevKit V1**, sistem dapat bekerja secara **100% Nirkabel (Wireless Wi-Fi)**. Laptop server AI di pos kontrol tidak perlu lagi dihubungkan dengan kabel fisik ke tiang gerbang!
 
 ```
 ┌─────────────────────────────────┐
@@ -28,37 +30,42 @@ Dokumen ini berisi panduan lengkap kebutuhan perangkat keras (hardware), spesifi
                  │ Feed Video 30 FPS
                  ▼
 ┌────────────────────────────────────────────────────────┐
-│     Komputer / Edge Server (RTX 4060)                  │
+│     Laptop / Edge Server AI (RTX 4060)                 │
 │  - backend/main.py & detector.py (YOLO-Pose)           │
 │  - backend/vlm_analyzer.py (Gemini VLM / Local)        │
-│  - backend/notifier.py (IoT Serial Controller)         │
+│  - backend/notifier.py (Wireless HTTP / Serial)        │
 └────────────────┬───────────────────────────────────────┘
-                 │ Kabel USB Serial (Baud: 9600)
-                 │ Sinyal: LIGHT_GREEN / LIGHT_RED / LIGHT_OFF
+                 │ Sinyal Wi-Fi (HTTP REST / WebSocket)
+                 │ URL: http://gate-k3.local/api/light?state=green
                  ▼
-┌─────────────────────────────────┐
-│   Mikrokontroler                │
-│   (Arduino Nano / Uno / ESP32)  │
-└───────┬─────────────────┬───────┘
-        │ Pin D2          │ Pin D3
-        ▼                 ▼
- ┌───────────────┐ ┌───────────────┐
- │ Driver Relay  │ │ Driver Relay  │
- └──────┬────────┘ └──────┬────────┘
-        ▼                 ▼
- ┌───────────────┐ ┌───────────────┐
- │ 🟢 LAMPU      │ │ 🔴 LAMPU      │
- │    HIJAU      │ │    MERAH      │
- │    BULAT      │ │    BULAT      │
- └───────────────┘ └───────────────┘
-  (AKSES DIIZINKAN) (AKSES DITOLAK)
+┌────────────────────────────────────────────────────────┐
+│  KONTROLER FISIK GERBANG MANDIRI (STANDALONE DI GATE)  │
+│  - Mikrokontroler: ESP32 DevKit V1                     │
+│  - Catu Daya: Adaptor 12V DC (Step-down 5V / Charger)  │
+│  - Tanpa terhubung kabel ke laptop!                    │
+└───────┬────────────────────────────────────────┬───────┘
+        │ GPIO 18                                │ GPIO 19
+        ▼                                        ▼
+ ┌───────────────┐                        ┌───────────────┐
+ │ Relay 1 (Opto)│                        │ Relay 2 (Opto)│
+ └──────┬────────┘                        └──────┬────────┘
+        ▼                                        ▼
+ ┌───────────────┐                        ┌───────────────┐
+ │ 🟢 LAMPU      │                        │ 🔴 LAMPU      │
+ │    HIJAU      │                        │    MERAH      │
+ │    BULAT      │                        │    BULAT      │
+ └───────────────┘                        └───────────────┘
+  (AKSES DIIZINKAN)                        (AKSES DITOLAK)
 ```
 
-### Protokol Serial Komunikasi:
-Perintah dikirimkan dari modul `backend/notifier.py` melalui port USB Serial dengan kecepatan **9600 baud**:
-- `LIGHT_GREEN\n` : Pekerja lulus APD lengkap $\rightarrow$ Nyalakan Lampu Hijau, Matikan Lampu Merah.
-- `LIGHT_RED\n` : Terjadi pelanggaran APD $\rightarrow$ Nyalakan Lampu Merah, Matikan Lampu Hijau.
-- `LIGHT_OFF\n` : Kondisi standby / gerbang kosong $\rightarrow$ Matikan kedua lampu.
+### Protokol Kendali yang Didukung:
+1. **Wireless HTTP REST (Rekomendasi Utama untuk ESP32)**:
+   - Backend memanggil URL lokal: `http://gate-k3.local/api/light?state=green` (atau IP ESP32).
+   - Non-blocking asinkron (tidak membebani inferensi AI/video stream).
+2. **Web Dashboard Bawaan**:
+   - Operator / teknisi dapat membuka `http://gate-k3.local` melalui browser HP / laptop untuk menguji lampu secara manual.
+3. **USB Serial UART (Fallback / Cadangan)**:
+   - Jika ingin menggunakan kabel USB, ESP32 tetap merespon perintah serial 9600 baud (`LIGHT_GREEN`, `LIGHT_RED`, `LIGHT_OFF`).
 
 ---
 
@@ -337,28 +344,37 @@ void selfTest() {
 
 ## 6. Konfigurasi pada Backend Python
 
-Modul kontroler serial sudah tertanam di [`backend/notifier.py`](file:///c:/Users/zenin/Desktop/PROJECTS/ppe_detection_vlm/backend/notifier.py). Anda hanya perlu mengaktifkannya di file `.env`.
+Modul kontroler sudah tertanam di [`backend/notifier.py`](file:///c:/Users/zenin/Desktop/PROJECTS/ppe_detection_vlm/backend/notifier.py) dan mendukung mode nirkabel (Wireless HTTP) maupun kabel (Serial USB).
 
-### Langkah 1: Install Paket `pyserial`
-Jalankan di terminal Anaconda:
-```bash
-pip install pyserial
-```
+### Opsi 1: Mode Wireless Wi-Fi (ESP32 DevKit V1 - Tanpa Kabel ke Laptop)
 
-### Langkah 2: Cek Nomor COM Port di Windows
-1. Buka **Device Manager** di Windows (`Win + X` $\rightarrow$ `Device Manager`).
-2. Periksa bagian **Ports (COM & LPT)**.
-3. Catat port mikrokontroler yang terdeteksi, misalnya: `USB-SERIAL CH340 (COM3)` atau `Arduino Nano (COM4)`.
+1. Buka file `backend/.env` dan ubah variabel IoT:
+   ```ini
+   # IoT Hardware Stage 2 - Wireless Mode
+   IOT_ENABLED=true
+   IOT_TYPE=http
+   IOT_HTTP_URL=http://gate-k3.local   # atau http://192.168.1.50 (IP ESP32 Anda)
+   ```
+2. Pastikan laptop server AI dan ESP32 terhubung ke jaringan Wi-Fi / Hotspot yang sama.
+3. Selesai! Backend AI akan otomatis mengirimkan sinyal kendali lampu via Wi-Fi tanpa perlu kabel USB sama sekali.
 
-### Langkah 3: Update `backend/.env`
-Buka file `backend/.env` dan ubah variabel IoT:
-```ini
-# IoT Hardware Stage 2
-IOT_ENABLED=true
-IOT_TYPE=serial
-IOT_SERIAL_PORT=COM3     # Ganti sesuai COM port yang terdeteksi di Device Manager
-IOT_SERIAL_BAUD=9600
-```
+---
+
+### Opsi 2: Mode Kabel USB Serial (Arduino / ESP32 via USB)
+
+1. Install paket `pyserial`:
+   ```bash
+   pip install pyserial
+   ```
+2. Cek nomor COM Port di Windows Device Manager (`Win + X` $\rightarrow$ `Device Manager` $\rightarrow$ `Ports (COM & LPT)`).
+3. Buka file `backend/.env` dan ubah:
+   ```ini
+   # IoT Hardware Stage 2 - Serial Mode
+   IOT_ENABLED=true
+   IOT_TYPE=serial
+   IOT_SERIAL_PORT=COM3     # Ganti sesuai nomor COM di Device Manager
+   IOT_SERIAL_BAUD=9600
+   ```
 
 ---
 
