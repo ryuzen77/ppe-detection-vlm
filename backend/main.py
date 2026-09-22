@@ -3,6 +3,7 @@ import time
 import json
 import threading
 from pathlib import Path
+from contextlib import asynccontextmanager
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -19,16 +20,13 @@ from audio_engine import audio_player
 from report_manager import report_mgr
 from api_monitor import api_monitor
 
-app = FastAPI(title="PPE Detection VLM Backend", version="1.0.0")
-
-# Enable CORS for decoupled frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+class GracefulStreamingResponse(StreamingResponse):
+    """StreamingResponse that catches asyncio.CancelledError on server shutdown (Ctrl+C)."""
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass
 
 class VideoCaptureService:
     """Manages camera video capture, inference, and MJPEG encoding."""
@@ -45,6 +43,16 @@ class VideoCaptureService:
         self.is_running = True
         self.thread = threading.Thread(target=self._capture_loop, daemon=True)
         self.thread.start()
+
+    def stop(self):
+        self.is_running = False
+        with self.lock:
+            if self.cap and self.cap.isOpened():
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
+        print("[VideoCapture] Camera released cleanly.")
 
     def _init_camera(self):
         print(f"[VideoCapture] Opening camera index {self.camera_index}...")
@@ -84,39 +92,46 @@ class VideoCaptureService:
         self._init_camera()
         prev_time = time.time()
 
-        while self.is_running:
-            frame = None
-            if not self.use_synthetic and self.cap and self.cap.isOpened():
-                ret, raw = self.cap.read()
-                if ret and raw is not None:
-                    frame = raw
+        try:
+            while self.is_running:
+                frame = None
+                if not self.use_synthetic and self.cap and self.cap.isOpened():
+                    ret, raw = self.cap.read()
+                    if ret and raw is not None:
+                        frame = raw
+                    else:
+                        time.sleep(0.03)
+                        continue
                 else:
-                    time.sleep(0.03)
-                    continue
-            else:
-                frame = self._generate_synthetic_frame(time.time())
-                time.sleep(0.033)
+                    frame = self._generate_synthetic_frame(time.time())
+                    time.sleep(0.033)
 
-            # Compute FPS
-            now = time.time()
-            dt = now - prev_time
-            prev_time = now
-            if dt > 0:
-                self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
+                # Compute FPS
+                now = time.time()
+                dt = now - prev_time
+                prev_time = now
+                if dt > 0:
+                    self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
 
-            # Run YOLO Person & Pose Detection
-            detections = detector.detect_and_track(frame)
+                # Run YOLO Person & Pose Detection
+                detections = detector.detect_and_track(frame)
 
-            # Update State Machine & Anti-spam logic
-            state_mgr.update_frame_detections(detections)
+                # Update State Machine & Anti-spam logic
+                state_mgr.update_frame_detections(detections)
 
-            # Draw HUD on frame for low-latency visual stream
-            annotated_frame = self._draw_hud(frame, detections)
+                # Draw HUD on frame for low-latency visual stream
+                annotated_frame = self._draw_hud(frame, detections)
 
-            # Encode to JPEG
-            _, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            with self.lock:
-                self.current_frame_bytes = buffer.tobytes()
+                # Encode to JPEG
+                _, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                with self.lock:
+                    self.current_frame_bytes = buffer.tobytes()
+        finally:
+            if self.cap and self.cap.isOpened():
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
 
     def _draw_hud(self, frame: np.ndarray, detections) -> np.ndarray:
         out = frame.copy()
@@ -184,9 +199,22 @@ class VideoCaptureService:
 
 video_service = VideoCaptureService()
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     video_service.start()
+    yield
+    video_service.stop()
+
+app = FastAPI(title="PPE Detection VLM Backend", version="1.0.0", lifespan=lifespan)
+
+# Enable CORS for decoupled frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- REST ENDPOINTS ---
 
@@ -286,7 +314,7 @@ async def video_stream(request: Request):
         except (asyncio.CancelledError, GeneratorExit):
             pass
 
-    return StreamingResponse(
+    return GracefulStreamingResponse(
         frame_generator(), 
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
@@ -337,4 +365,7 @@ if frontend_dir.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host=cfg.HOST, port=cfg.PORT, reload=False)
+    try:
+        uvicorn.run("main:app", host=cfg.HOST, port=cfg.PORT, reload=False)
+    except KeyboardInterrupt:
+        print("\n[Server] Shutdown signal (CTRL+C) received. Server stopped cleanly.")
