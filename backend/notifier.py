@@ -21,7 +21,11 @@ class IoTNotifier:
         if self.enabled and self.iot_type == "serial":
             try:
                 import serial
-                self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=1)
+                if cfg.IOT_SERIAL_PORT.startswith("rfc2217://") or cfg.IOT_SERIAL_PORT.startswith("socket://"):
+                    import serial.rfc2217
+                    self.serial_conn = serial.serial_for_url(cfg.IOT_SERIAL_PORT, baudrate=cfg.IOT_SERIAL_BAUD, timeout=1)
+                else:
+                    self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=1)
                 print(f"[IoTNotifier] Connected to Serial port {cfg.IOT_SERIAL_PORT}")
             except Exception as e:
                 print(f"[IoTNotifier] Serial connection failed: {e}")
