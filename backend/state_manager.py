@@ -230,6 +230,8 @@ class StateManager:
 
             return {
                 "timestamp": time.time(),
+                "frame_width": cfg.FRAME_WIDTH,
+                "frame_height": cfg.FRAME_HEIGHT,
                 "has_person": len(dets_data) > 0,
                 "active_track": active_track_data,
                 "detections": dets_data,

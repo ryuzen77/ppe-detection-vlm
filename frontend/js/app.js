@@ -55,18 +55,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Backend Endpoints
   const backendHost = window.location.hostname || 'localhost';
-  const backendPort = window.location.port || '8000';
+  let portSuffix = '';
+  if (window.location.port) {
+    portSuffix = `:${window.location.port}`;
+  } else if (window.location.protocol === 'file:' || backendHost === 'localhost' || backendHost === '127.0.0.1') {
+    portSuffix = ':8000';
+  }
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const httpProtocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 
-  const wsUrl = `${wsProtocol}//${backendHost}:${backendPort}/ws`;
-  const streamUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/stream`;
-  const resetUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/reset`;
-  const configKeyUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/config/gemini-key`;
-  const engineModeUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/config/engine-mode`;
-  const reportsUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/reports`;
-  const exportCsvUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/reports/export`;
-  const pingUrl = `${httpProtocol}//${backendHost}:${backendPort}/api/monitoring/ping`;
+  const wsUrl = `${wsProtocol}//${backendHost}${portSuffix}/ws`;
+  const streamUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/stream`;
+  const resetUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reset`;
+  const configKeyUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/gemini-key`;
+  const engineModeUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/engine-mode`;
+  const reportsUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports`;
+  const exportCsvUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports/export`;
+  const pingUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/monitoring/ping`;
 
   // Active state
   let currentEngineMode = 'HYBRID_AUTO';
@@ -99,7 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updateEngineModeUI(currentEngineMode);
       }
 
-      // 4. Render Canvas HUD with corridor guides
+      // 4. Render Canvas HUD with frame dimensions and corridor guides
+      if (telemetry.frame_width && telemetry.frame_height) {
+        hud.setFrameDimensions(telemetry.frame_width, telemetry.frame_height);
+      }
       if (telemetry.corridor) {
         hud.setCorridor(telemetry.corridor);
       }

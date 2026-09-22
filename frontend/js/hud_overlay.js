@@ -8,6 +8,8 @@ export class HUDOverlay {
     this.ctx = this.canvas.getContext('2d');
     this.latestDetections = [];
     this.corridor = { enabled: true, left_ratio: 0.28, right_ratio: 0.72 };
+    this.frameWidth = 1280;
+    this.frameHeight = 720;
     this.resizeCanvas();
     window.addEventListener('resize', () => this.resizeCanvas());
   }
@@ -15,6 +17,13 @@ export class HUDOverlay {
   resizeCanvas() {
     this.canvas.width = this.canvas.parentElement.clientWidth;
     this.canvas.height = this.canvas.parentElement.clientHeight;
+  }
+
+  setFrameDimensions(width, height) {
+    if (width > 0 && height > 0) {
+      this.frameWidth = width;
+      this.frameHeight = height;
+    }
   }
 
   setCorridor(corridor) {
@@ -32,8 +41,8 @@ export class HUDOverlay {
     const { width, height } = this.canvas;
     this.ctx.clearRect(0, 0, width, height);
 
-    const scaleX = width / 1280;
-    const scaleY = height / 720;
+    const scaleX = width / (this.frameWidth || 1280);
+    const scaleY = height / (this.frameHeight || 720);
 
     // 1. Draw Virtual Corridor guides if enabled
     if (this.corridor && this.corridor.enabled) {
