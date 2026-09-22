@@ -12,6 +12,7 @@ class AudioEngine:
         self.audio_dir = cfg.AUDIO_DIR
         self.queue: Queue = Queue()
         self.is_running = True
+        self.is_muted = False
         self.last_played_time = {}
 
         try:
@@ -27,6 +28,15 @@ class AudioEngine:
         self.worker = threading.Thread(target=self._process_queue, daemon=True)
         self.worker.start()
 
+    def set_muted(self, muted: bool) -> bool:
+        self.is_muted = bool(muted)
+        if self.is_muted and hasattr(self, 'channel') and self.channel:
+            try:
+                self.channel.stop()
+            except Exception:
+                pass
+        return self.is_muted
+
     def _process_queue(self):
         while self.is_running:
             try:
@@ -34,7 +44,7 @@ class AudioEngine:
             except Exception:
                 continue
 
-            if not self.enabled:
+            if not self.enabled or self.is_muted:
                 self.queue.task_done()
                 continue
 

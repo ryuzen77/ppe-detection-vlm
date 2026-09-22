@@ -8,10 +8,16 @@ export class HUDOverlay {
     this.ctx = this.canvas.getContext('2d');
     this.latestDetections = [];
     this.corridor = { enabled: true, left_ratio: 0.28, right_ratio: 0.72 };
+    this.guidesVisible = true;
     this.frameWidth = 1280;
     this.frameHeight = 720;
     this.resizeCanvas();
     window.addEventListener('resize', () => this.resizeCanvas());
+  }
+
+  setGuidesVisible(visible) {
+    this.guidesVisible = !!visible;
+    this.render();
   }
 
   resizeCanvas() {
@@ -44,8 +50,8 @@ export class HUDOverlay {
     const scaleX = width / (this.frameWidth || 1280);
     const scaleY = height / (this.frameHeight || 720);
 
-    // 1. Draw Virtual Corridor guides if enabled
-    if (this.corridor && this.corridor.enabled) {
+    // 1. Draw Virtual Corridor guides if enabled & visible
+    if (this.guidesVisible && this.corridor && this.corridor.enabled) {
       const cx1 = width * this.corridor.left_ratio;
       const cx2 = width * this.corridor.right_ratio;
 

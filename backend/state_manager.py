@@ -28,6 +28,7 @@ class PersonTrackInfo:
         self.last_seen = time.time()
         self.stable_frames = 0
         self.last_step_back_audio_time = 0.0
+        self.step_back_warning_count = 0
         self.vlm_result: Optional[APDInspectionResult] = None
         self.latest_crop: Optional[np.ndarray] = None
         self.analysis_timestamp: Optional[float] = None
@@ -69,8 +70,9 @@ class StateManager:
                 track.latest_crop = det.crop_img
                 track.bbox = det.bbox
 
-                # If outside inspection corridor, ignore for audio warning and VLM trigger
-                if not getattr(det, 'is_inside_corridor', True):
+                # Candidate filter: Must be inside inspection corridor
+                is_inside = getattr(det, 'is_inside_corridor', True)
+                if not is_inside:
                     track.stable_frames = 0
                     continue
 
@@ -88,13 +90,18 @@ class StateManager:
                     track.stable_frames = 0
                     
                     # Play voice prompt tailored to head vs feet clipping
-                    # Debounced so it doesn't spam speaker
-                    if (now - track.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
-                        audio_player.play_step_back(clip_type=track.clip_type)
-                        track.last_step_back_audio_time = now
+                    # Smart Limiter: Max repeats (default 2x) per person with debounce so it doesn't spam
+                    if track.step_back_warning_count < cfg.AUDIO_STEP_BACK_MAX_REPEATS:
+                        if (now - track.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
+                            audio_player.play_step_back(clip_type=track.clip_type)
+                            track.last_step_back_audio_time = now
+                            track.step_back_warning_count += 1
+                            notifier.set_incomplete(f"Peringatan: {det.reason}")
+                    else:
                         notifier.set_incomplete(f"Peringatan: {det.reason}")
                 else:
-                    # Full body confirmed inside corridor
+                    # Full body confirmed inside corridor - reset warning count
+                    track.step_back_warning_count = 0
                     track.stable_frames += 1
                     track.state = TrackState.STABILIZING
 

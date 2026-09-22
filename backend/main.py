@@ -242,12 +242,44 @@ async def update_gemini_key(request: Request):
         return {"status": "success", "is_live": vlm_analyzer.is_live_api()}
     return {"status": "error", "message": "API key cannot be empty"}
 
+# --- IOT HARDWARE TEST ENDPOINT ---
+
+@app.post("/api/iot/test")
+async def test_iot_light(request: Request):
+    """Allows manual operator testing of physical gate lights (green/red/off) from Settings tab."""
+    data = await request.json()
+    action = data.get("action", "off").lower()
+    if action == "green":
+        notifier.set_complete("Uji Coba Manual - Lampu Hijau")
+    elif action == "red":
+        notifier.set_incomplete("Uji Coba Manual - Lampu Merah")
+    else:
+        notifier.set_idle()
+    return {
+        "status": "success",
+        "action": action,
+        "light_state": notifier.current_state
+    }
+
+# --- AUDIO MUTE CONFIG ENDPOINTS ---
+
+@app.get("/api/config/audio")
+async def get_audio_config():
+    return {"muted": audio_player.is_muted}
+
+@app.post("/api/config/audio")
+async def set_audio_config(request: Request):
+    data = await request.json()
+    muted = data.get("muted", False)
+    is_muted = audio_player.set_muted(muted)
+    return {"status": "success", "muted": is_muted}
+
 # --- WORKER REPORT & AUDIT ENDPOINTS ---
 
 @app.get("/api/reports")
-async def get_worker_reports(limit: int = 50, offset: int = 0, status: str = "all"):
+async def get_worker_reports(limit: int = 50, offset: int = 0, status: str = "all", date: str = None):
     """Returns paginated worker inspection records with global compliance statistics."""
-    data = report_mgr.get_reports(limit=limit, offset=offset, status_filter=status)
+    data = report_mgr.get_reports(limit=limit, offset=offset, status_filter=status, date_filter=date)
     return data
 
 @app.get("/api/reports/snapshots/{filename}")
@@ -350,6 +382,7 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             telemetry = state_mgr.get_telemetry()
             telemetry["fps"] = round(video_service.fps, 1)
+            telemetry["audio_muted"] = audio_player.is_muted
             await websocket.send_json(telemetry)
             await asyncio.sleep(0.05)  # 20 Hz update rate
     except (WebSocketDisconnect, asyncio.CancelledError):

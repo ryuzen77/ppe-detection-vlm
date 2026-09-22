@@ -3,317 +3,540 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SAFEGUARD AI - Sistem Deteksi APD Real-Time</title>
-  <meta name="description" content="Sistem inspeksi kepatuhan APD (Helm, Rompi, Celana Panjang, Sepatu) otomatis berbasis YOLOv8 dan Gemini VLM dengan verifikasi full-body dan audio alert.">
+  <title>SAFEGUARD AI - Monitoring Kepatuhan APD</title>
+  <meta name="description" content="Sistem inspeksi kepatuhan APD (Helm, Rompi, Celana Panjang, Sepatu) otomatis berbasis YOLO26s-Pose dan Gemini VLM dengan verifikasi posisi adaptif.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-  <!-- Top Navigation Bar -->
-  <header class="app-header">
-    <div class="brand-wrapper">
-      <div class="brand-icon">🛡️</div>
-      <div>
-        <h1 class="brand-title">SAFEGUARD AI</h1>
-        <p class="brand-subtitle">Smart PPE Compliance Monitoring</p>
-      </div>
-    </div>
+  <!-- App Wrapper -->
+  <div class="app-layout">
 
-    <div class="header-telemetry">
-      <div class="telemetry-badge" id="ws-status-badge">
-        <span class="dot-indicator" id="ws-status-dot"></span>
-        <span id="ws-status-text">CONNECTING</span>
-      </div>
-
-      <div class="telemetry-badge">
-        <span>⚡</span>
-        <span id="fps-counter">-- FPS</span>
-      </div>
-
-      <!-- Real-Time API Monitor (Jalan vs Macet & Latensi) -->
-      <div class="telemetry-badge clickable" id="api-monitor-badge" title="Status Gemini Cloud API & Latensi. Klik untuk tes ping.">
-        <span class="dot-indicator" id="api-status-dot"></span>
-        <span id="api-status-text">API: MEMERIKSA...</span>
-      </div>
-
-      <!-- Mode Switcher (Online Cloud vs Offline Lokal GPU) -->
-      <button class="btn-mode-toggle" id="btn-mode-toggle" title="Beralih Mode: Online (Gemini Cloud) atau Offline (Lokal GPU RTX 4060)">
-        <span id="mode-icon">🌐</span>
-        <span id="mode-text">ONLINE: HYBRID</span>
-      </button>
-    </div>
-
-    <div class="header-actions">
-      <button class="btn-action btn-highlight" id="btn-open-reports">
-        📋 Laporan Pekerja
-      </button>
-      <button class="btn-action" id="btn-reset">
-        🔄 Reset
-      </button>
-      <button class="btn-action btn-primary" id="btn-settings">
-        ⚙️ Pengaturan
-      </button>
-    </div>
-  </header>
-
-  <!-- Main Dashboard Content -->
-  <main class="dashboard-grid">
-
-    <!-- Left Column: Video Feed & Vision Overlay -->
-    <section class="vision-panel" aria-label="Live Camera Feed">
-      <div class="panel-header">
-        <div class="panel-title">
-          <span>📹</span>
-          <span>Live Vision Feed (YOLO26s-Pose + ByteTrack)</span>
+    <!-- 1. Top Navigation Bar -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-badge-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00e699" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
         </div>
-        <span style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">RTX 4060 ACCELERATED</span>
-
-      </div>
-
-      <div class="video-viewport" id="viewport-container">
-        <!-- Live Video Stream -->
-        <img id="live-stream" class="live-stream-img" alt="Live Camera Video Stream" src="">
-
-        <!-- Inspection Boundaries -->
-        <div class="boundary-line-top"></div>
-        <div class="boundary-line-bottom"></div>
-
-        <!-- Real-Time HUD Overlay Canvas -->
-        <canvas id="hud-canvas" class="canvas-overlay"></canvas>
-      </div>
-
-      <div class="vision-footer">
-        <div class="legend-group">
-          <div class="legend-item">
-            <span class="legend-box green"></span>
-            <span>Subjek di Lorong (Full-Body)</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-box red"></span>
-            <span>Terpotong / Silakan Mundur</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-box" style="background:#888;"></span>
-            <span>Di Luar Jalur (Diabaikan)</span>
-          </div>
-        </div>
-        <div>
-          <span>Lorong: <strong>Virtual Corridor (Tengah)</strong></span>
+        <div class="brand-text">
+          <h1 class="brand-title">SAFEGUARD AI</h1>
+          <p class="brand-subtitle">Monitoring Kepatuhan APD</p>
         </div>
       </div>
 
+      <!-- Center Navigation Tabs -->
+      <nav class="header-nav" aria-label="Navigasi Utama">
+        <button class="nav-tab active" id="nav-tab-monitoring" data-target="view-monitoring">
+          <span class="nav-tab-icon">📹</span> Monitoring
+        </button>
+        <button class="nav-tab" id="nav-tab-reports" data-target="view-reports">
+          <span class="nav-tab-icon">📋</span> Laporan
+        </button>
+        <button class="nav-tab" id="nav-tab-settings" data-target="view-settings">
+          <span class="nav-tab-icon">⚙️</span> Pengaturan
+        </button>
+      </nav>
+
+      <!-- Right User Profile Pill -->
+      <div class="header-user">
+        <div class="user-pill" id="user-pill-btn" title="Akun Pengguna">
+          <span class="user-avatar">👤</span>
+          <span class="user-name">Operator</span>
+          <span class="user-chevron">⌄</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. System Status Ribbon -->
+    <section class="system-status-ribbon" aria-label="Status Sistem Real-time">
+      <div class="ribbon-item">
+        <span class="ribbon-icon">📹</span>
+        <span class="status-dot green" id="dot-camera"></span>
+        <span id="ribbon-camera-text">Kamera aktif</span>
+      </div>
+      <div class="ribbon-item">
+        <span class="ribbon-icon">🧠</span>
+        <span class="status-dot green" id="dot-ai"></span>
+        <span id="ribbon-ai-text">AI lokal aktif</span>
+      </div>
+      <div class="ribbon-item clickable" id="btn-ribbon-cloud" title="Klik untuk beralih mode Cloud Gemini / Lokal">
+        <span class="ribbon-icon">☁️</span>
+        <span id="ribbon-cloud-text">Cloud opsional: tidak terhubung</span>
+      </div>
+      <div class="ribbon-item">
+        <span class="ribbon-icon">📶</span>
+        <span id="fps-counter" class="fps-text">0,0 FPS</span>
+      </div>
     </section>
 
-    <!-- Right Column: Safety Status, Tower Light & APD Cards -->
-    <section class="status-panel" aria-label="Safety Status and APD Details">
+    <!-- ======================================================== -->
+    <!-- VIEW 1: MONITORING (TAMPILAN UTAMA SESUAI MOCKUP)        -->
+    <!-- ======================================================== -->
+    <main class="view-content active" id="view-monitoring">
+      <div class="monitoring-grid">
 
-      <!-- Hero Access Banner -->
-      <div class="hero-status-card state-idle" id="hero-status-card">
-        <!-- Industrial Tower Light -->
-        <div class="tower-light-wrapper">
-          <div class="tower-bulb red" id="tower-red" title="Lampu Merah: APD Tidak Lengkap / Ditolak"></div>
-          <div class="tower-bulb yellow" id="tower-yellow" title="Lampu Kuning: Peringatan Mundur"></div>
-          <div class="tower-bulb green" id="tower-green" title="Lampu Hijau: APD Lengkap / Diizinkan"></div>
-        </div>
+        <!-- Left Column: Video Viewport & Controls -->
+        <section class="vision-column">
+          <div class="vision-card">
+            
+            <!-- Video Header -->
+            <div class="vision-header">
+              <div class="vision-title-group">
+                <span class="vision-title-icon">📹</span>
+                <h2 class="vision-title-text">Kamera inspeksi</h2>
+              </div>
+              <div class="vision-meta-group">
+                <div class="select-camera-wrapper">
+                  <select id="camera-select" class="camera-select" aria-label="Pilih Kamera">
+                    <option value="0">Kamera 01</option>
+                  </select>
+                </div>
+                <span class="badge-live">
+                  <span class="pulse-dot"></span> LIVE
+                </span>
+              </div>
+            </div>
 
-        <div class="hero-info">
-          <p class="hero-label" id="hero-label">STATUS SISTEM</p>
-          <h2 class="hero-title" id="hero-title">STANDBY</h2>
-          <p class="hero-desc" id="hero-desc">Menunggu pekerja memasuki zona kamera...</p>
-        </div>
-      </div>
+            <!-- Video Viewport (Unmodified stream & canvas overlay) -->
+            <div class="video-viewport" id="viewport-container">
+              <div class="subject-tracking-badge" id="hud-subject-badge">Subjek #1</div>
+              <img id="live-stream" class="live-stream-img" alt="Live Camera Video Stream" src="">
+              <canvas id="hud-canvas" class="canvas-overlay"></canvas>
+            </div>
 
-      <!-- Active Tracking Meta Progress -->
-      <div class="track-info-card">
-        <div class="track-meta-row">
-          <span id="track-id-badge" style="font-weight:700; color:var(--text-primary);">ID: -</span>
-          <span id="track-status-text">Menunggu subjek di zona inspeksi</span>
-        </div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" id="stable-progress-fill"></div>
-        </div>
-      </div>
+            <!-- Video Bottom Toolbar -->
+            <div class="vision-toolbar">
+              <div class="toolbar-hint">
+                <span class="hint-icon">ℹ️</span>
+                <span>Area inspeksi ditandai garis putus-putus.</span>
+              </div>
 
-      <!-- 4 APD Compliance Cards -->
-      <div class="apd-grid">
+              <div class="toolbar-controls">
+                <!-- Toggle Panduan Posisi -->
+                <label class="switch-container" title="Sembunyikan / tampilkan panduan posisi di layar">
+                  <input type="checkbox" id="toggle-corridor-guide" checked>
+                  <span class="switch-slider"></span>
+                  <span class="switch-text">Panduan posisi</span>
+                </label>
 
-        <!-- 1. Helm Keselamatan -->
-        <article class="apd-card" id="card-helm">
-          <div class="apd-card-header">
-            <div class="apd-icon-circle">🪖</div>
-            <span class="apd-status-badge badge-neutral" id="badge-helm">STANDBY</span>
+                <!-- Toggle Suara Panduan -->
+                <label class="switch-container" title="Aktifkan atau bisukan suara panduan speaker">
+                  <input type="checkbox" id="toggle-audio-mute">
+                  <span class="switch-slider"></span>
+                  <span class="switch-text" id="audio-switch-label">🔊 Suara</span>
+                </label>
+
+                <!-- Accordion Detail Teknis -->
+                <button class="btn-toolbar-toggle" id="btn-toggle-tech-details">
+                  <span id="tech-chevron">⌄</span> Detail teknis
+                </button>
+
+                <!-- Tombol Mulai Ulang -->
+                <button class="btn-toolbar-action" id="btn-reset-inspection" title="Mulai ulang pelacakan subjek">
+                  <span>🔄</span> Mulai ulang
+                </button>
+              </div>
+            </div>
+
+            <!-- Expandable Technical Details Drawer -->
+            <div class="tech-drawer" id="tech-details-drawer">
+              <div class="tech-drawer-grid">
+                <div class="tech-item">
+                  <span class="tech-label">Engine Mode:</span>
+                  <span class="tech-val" id="tech-engine-mode">HYBRID_AUTO</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">VLM Latency:</span>
+                  <span class="tech-val" id="tech-latency-ms">0 ms</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">Active Track ID:</span>
+                  <span class="tech-val" id="tech-active-track">None</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">Stability Frames:</span>
+                  <span class="tech-val" id="tech-stability">0 / 2</span>
+                </div>
+              </div>
+            </div>
+
           </div>
-          <h3 class="apd-name">Helm Safety</h3>
-          <p class="apd-detail" id="detail-helm">Warna bebas, wajib helm keselamatan.</p>
-        </article>
+        </section>
 
-        <!-- 2. Rompi Keselamatan -->
-        <article class="apd-card" id="card-rompi">
-          <div class="apd-card-header">
-            <div class="apd-icon-circle">🦺</div>
-            <span class="apd-status-badge badge-neutral" id="badge-rompi">STANDBY</span>
+        <!-- Right Column: 3 Structured Cards Stack -->
+        <aside class="cards-column">
+
+          <!-- 1. Guidance Banner with 3-Step Stepper -->
+          <div class="card-guidance state-adjust" id="guidance-card">
+            <div class="guidance-body">
+              <div class="guidance-icon-circle" id="guidance-icon-circle">
+                <span id="guidance-icon-symbol">👤←</span>
+              </div>
+              <div class="guidance-copy">
+                <div class="guidance-tag" id="guidance-eyebrow">SESUAIKAN POSISI</div>
+                <h3 class="guidance-main-title" id="guidance-main-title">Mundur satu langkah</h3>
+                <p class="guidance-sub-text" id="guidance-sub-text">Kepala hingga kaki harus terlihat di kamera.</p>
+              </div>
+            </div>
+
+            <div class="guidance-pill-status" id="guidance-status-pill">
+              <span class="pill-info-icon">ℹ️</span>
+              <span id="guidance-pill-text">Pemeriksaan belum dimulai</span>
+            </div>
+
+            <!-- 3-Step Stepper -->
+            <div class="stepper-container">
+              <div class="step-node active" id="step-1">
+                <div class="step-bubble">1</div>
+                <div class="step-caption">Posisi</div>
+              </div>
+              <div class="step-connector" id="line-1-2"></div>
+              <div class="step-node" id="step-2">
+                <div class="step-bubble">2</div>
+                <div class="step-caption">APD</div>
+              </div>
+              <div class="step-connector" id="line-2-3"></div>
+              <div class="step-node" id="step-3">
+                <div class="step-bubble">3</div>
+                <div class="step-caption">Hasil</div>
+              </div>
+            </div>
           </div>
-          <h3 class="apd-name">Rompi Reflektif</h3>
-          <p class="apd-detail" id="detail-rompi">Wajib warna orange atau kuning.</p>
-        </article>
 
-        <!-- 3. Celana Panjang -->
-        <article class="apd-card" id="card-celana">
-          <div class="apd-card-header">
-            <div class="apd-icon-circle">👖</div>
-            <span class="apd-status-badge badge-neutral" id="badge-celana">STANDBY</span>
+          <!-- 2. APD Compliance Checklist Card -->
+          <div class="card-checklist" id="checklist-card">
+            <div class="checklist-header">
+              <div class="checklist-title-wrap">
+                <span class="checklist-header-icon">📋</span>
+                <h3 class="checklist-header-title">Kelengkapan APD</h3>
+              </div>
+              <span class="subject-chip" id="checklist-subject-chip">Subjek #1</span>
+            </div>
+
+            <div class="checklist-rows">
+              <!-- Item 1: Helm Safety -->
+              <div class="checklist-row" id="row-helm">
+                <div class="row-left">
+                  <span class="item-emoji">🪖</span>
+                  <span class="item-name">Helm safety</span>
+                </div>
+                <div class="row-badge status-pending" id="badge-helm">
+                  <span class="badge-icon">🕒</span>
+                  <span class="badge-text" id="text-helm">Belum dinilai</span>
+                </div>
+              </div>
+
+              <!-- Item 2: Rompi Reflektif -->
+              <div class="checklist-row" id="row-rompi">
+                <div class="row-left">
+                  <span class="item-emoji">🦺</span>
+                  <span class="item-name">Rompi reflektif</span>
+                </div>
+                <div class="row-badge status-pending" id="badge-rompi">
+                  <span class="badge-icon">🕒</span>
+                  <span class="badge-text" id="text-rompi">Belum dinilai</span>
+                </div>
+              </div>
+
+              <!-- Item 3: Celana Panjang -->
+              <div class="checklist-row" id="row-celana">
+                <div class="row-left">
+                  <span class="item-emoji">👖</span>
+                  <span class="item-name">Celana panjang</span>
+                </div>
+                <div class="row-badge status-pending" id="badge-celana">
+                  <span class="badge-icon">🕒</span>
+                  <span class="badge-text" id="text-celana">Belum dinilai</span>
+                </div>
+              </div>
+
+              <!-- Item 4: Sepatu Tertutup -->
+              <div class="checklist-row" id="row-sepatu">
+                <div class="row-left">
+                  <span class="item-emoji">👞</span>
+                  <span class="item-name">Sepatu tertutup</span>
+                </div>
+                <div class="row-badge status-pending" id="badge-sepatu">
+                  <span class="badge-icon">🕒</span>
+                  <span class="badge-text" id="text-sepatu">Belum dinilai</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="checklist-footnote" id="checklist-footnote">
+              <span class="footnote-icon">ℹ️</span>
+              <span id="checklist-footnote-text">Menunggu posisi tubuh sesuai.</span>
+            </div>
           </div>
-          <h3 class="apd-name">Celana Panjang</h3>
-          <p class="apd-detail" id="detail-celana">Wajib menutup hingga mata kaki.</p>
-        </article>
 
-        <!-- 4. Sepatu Tertutup -->
-        <article class="apd-card" id="card-sepatu">
-          <div class="apd-card-header">
-            <div class="apd-icon-circle">👟</div>
-            <span class="apd-status-badge badge-neutral" id="badge-sepatu">STANDBY</span>
+          <!-- 3. Recent Inspection History Card -->
+          <div class="card-recent-history" id="card-recent-history">
+            <div class="recent-header">
+              <div class="recent-title-wrap">
+                <span class="recent-icon">🕒</span>
+                <h3 class="recent-title">Riwayat pemeriksaan</h3>
+              </div>
+              <button class="btn-see-all" id="btn-see-all-reports">
+                Lihat semua <span>→</span>
+              </button>
+            </div>
+
+            <div class="recent-content" id="recent-content-area">
+              <!-- Empty State by default -->
+              <div class="recent-empty" id="recent-empty-state">
+                <div class="recent-empty-icon">📋</div>
+                <h4 class="recent-empty-title">Belum ada hasil pemeriksaan</h4>
+                <p class="recent-empty-desc">Hasil akan muncul setelah pemeriksaan selesai.</p>
+              </div>
+
+              <!-- List container when items exist -->
+              <div class="recent-list-group" id="recent-list-group" style="display:none;"></div>
+            </div>
           </div>
-          <h3 class="apd-name">Sepatu Tertutup</h3>
-          <p class="apd-detail" id="detail-sepatu">Bebas jenis sepatu, asal tertutup.</p>
-        </article>
+
+        </aside>
 
       </div>
+    </main>
 
-      <!-- Live Audit Log -->
-      <div class="audit-log-panel">
-        <h3 class="audit-title">Riwayat Pemeriksaan Terkini</h3>
-        <div class="log-list" id="audit-log-list">
-          <div style="color:var(--text-muted); font-size:0.8rem; padding:0.5rem;">Belum ada riwayat inspeksi</div>
-        </div>
-      </div>
+    <!-- ======================================================== -->
+    <!-- VIEW 2: LAPORAN (ARSIP AUDIT LENGKAP & EKSPOR CSV)       -->
+    <!-- ======================================================== -->
+    <main class="view-content" id="view-reports" style="display:none;">
+      <div class="reports-container">
+        
+        <!-- Reports Top Header & KPI Summary -->
+        <div class="reports-header-card">
+          <div class="reports-title-area">
+            <h2 class="reports-main-title">📊 Laporan & Arsip Pemeriksaan APD</h2>
+            <p class="reports-main-desc">Riwayat inspeksi pekerja gerbang K3, bukti foto snapshot, dan catatan ketidakpatuhan</p>
+          </div>
 
-    </section>
-
-  </main>
-
-  <!-- Modal Settings -->
-  <div class="modal-backdrop" id="settings-modal" role="dialog" aria-modal="true">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 class="modal-title">Konfigurasi Server & VLM</h2>
-        <button class="modal-close" id="btn-close-modal" aria-label="Tutup Modal">&times;</button>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="input-gemini-key">Google Gemini API Key (Server-Side)</label>
-        <input type="password" id="input-gemini-key" class="form-input" placeholder="Masukkan AIzaSy..." autocomplete="off">
-        <p class="form-help">Kunci ini disimpan aman di memori server dan file .env server, tidak diekspos ke client.</p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Status IoT Hardware (Tahap 2)</label>
-        <div style="font-size:0.85rem; color:var(--text-secondary); background:var(--bg-surface-elevated); padding:0.75rem; border-radius:var(--radius-sm);">
-          Modul <code>IoTNotifier</code> siap diaktifkan melalui <code>backend/.env</code> (Serial / Relay / Arduino).
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
-        <button class="btn-action btn-primary" id="btn-save-key">Simpan ke Server</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Laporan Pekerja (Audit K3) -->
-  <div class="modal-backdrop" id="reports-modal" role="dialog" aria-modal="true">
-    <div class="modal-card modal-card-wide">
-      <div class="modal-header">
-        <div style="display:flex; align-items:center; gap:0.75rem;">
-          <div style="font-size:1.6rem;">📋</div>
-          <div>
-            <h2 class="modal-title">Laporan Pemeriksaan APD Pekerja (Audit K3)</h2>
-            <p style="font-size:0.8rem; color:var(--text-secondary);">Riwayat kepatuhan pekerja, bukti foto snapshot, dan catatan pelanggaran APD</p>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-label">Total Pemeriksaan</span>
+              <span class="kpi-val" id="kpi-total">0</span>
+              <span class="kpi-sub">Total subjek diperiksa</span>
+            </div>
+            <div class="kpi-card kpi-success">
+              <span class="kpi-label">Lolos APD</span>
+              <span class="kpi-val" id="kpi-complete">0</span>
+              <span class="kpi-sub">Akses Diizinkan</span>
+            </div>
+            <div class="kpi-card kpi-danger">
+              <span class="kpi-label">Pelanggaran</span>
+              <span class="kpi-val" id="kpi-violations">0</span>
+              <span class="kpi-sub">Akses Ditolak</span>
+            </div>
+            <div class="kpi-card kpi-info">
+              <span class="kpi-label">Tingkat Kepatuhan</span>
+              <span class="kpi-val" id="kpi-rate">100%</span>
+              <span class="kpi-sub">Standar HSE K3</span>
+            </div>
           </div>
         </div>
-        <button class="modal-close" id="btn-close-reports" aria-label="Tutup Laporan">&times;</button>
-      </div>
 
-      <!-- KPI Summary Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <span class="kpi-label">Total Pekerja</span>
-          <span class="kpi-value" id="kpi-total">0</span>
-          <span class="kpi-sub">Total terinspeksi</span>
-        </div>
-        <div class="kpi-card kpi-green">
-          <span class="kpi-label">APD Lengkap</span>
-          <span class="kpi-value" id="kpi-complete">0</span>
-          <span class="kpi-sub">Akses Diizinkan</span>
-        </div>
-        <div class="kpi-card kpi-red">
-          <span class="kpi-label">Pelanggaran APD</span>
-          <span class="kpi-value" id="kpi-violations">0</span>
-          <span class="kpi-sub">Akses Ditolak</span>
-        </div>
-        <div class="kpi-card kpi-blue">
-          <span class="kpi-label">Tingkat Kepatuhan</span>
-          <span class="kpi-value" id="kpi-rate">100%</span>
-          <span class="kpi-sub">Standar HSE K3</span>
-        </div>
-      </div>
+        <!-- Toolbar: Filters & Actions -->
+        <div class="reports-filter-bar">
+          <div class="filter-left">
+            <div class="segmented-filters">
+              <button class="tab-filter-btn active" data-filter="all" id="filter-all">Semua Data</button>
+              <button class="tab-filter-btn" data-filter="complete" id="filter-complete">✅ Lengkap</button>
+              <button class="tab-filter-btn" data-filter="incomplete" id="filter-incomplete">⚠️ Pelanggaran</button>
+            </div>
+            
+            <div class="date-filter-group">
+              <label for="filter-date-input" class="date-label">📅 Tanggal:</label>
+              <input type="date" id="filter-date-input" class="date-picker-input">
+            </div>
+          </div>
 
-      <!-- Toolbar: Filter Tabs & Export Action -->
-      <div class="reports-toolbar">
-        <div class="filter-tabs">
-          <button class="tab-btn active" data-filter="all" id="filter-tab-all">Semua Data</button>
-          <button class="tab-btn" data-filter="complete" id="filter-tab-complete">✅ Lengkap</button>
-          <button class="tab-btn" data-filter="incomplete" id="filter-tab-incomplete">⚠️ Pelanggaran</button>
+          <div class="filter-right">
+            <button class="btn-action" id="btn-refresh-reports" title="Muat ulang data audit dari server">
+              🔄 Segarkan
+            </button>
+            <button class="btn-action btn-primary" id="btn-export-csv" title="Unduh spreadsheet CSV audit">
+              ⬇️ Unduh CSV
+            </button>
+          </div>
         </div>
 
-        <div style="display:flex; gap:0.5rem;">
-          <button class="btn-action" id="btn-refresh-reports" title="Muat ulang data audit">
-            🔄 Refresh
-          </button>
-          <button class="btn-action btn-primary" id="btn-export-csv" title="Unduh file CSV untuk laporan audit HSE">
-            ⬇️ Unduh CSV
-          </button>
+        <!-- Reports Data Table -->
+        <div class="reports-table-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:75px;">Bukti</th>
+                  <th>Waktu</th>
+                  <th>Subjek</th>
+                  <th>Status</th>
+                  <th>Checklist APD</th>
+                  <th>Sumber</th>
+                  <th>Catatan Pelanggaran</th>
+                </tr>
+              </thead>
+              <tbody id="reports-table-body">
+                <tr>
+                  <td colspan="7" class="table-loading-cell">
+                    Memuat data riwayat pemeriksaan pekerja...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ======================================================== -->
+    <!-- VIEW 3: PENGATURAN (KONFIGURASI KAMERA, APD, ESP32)     -->
+    <!-- ======================================================== -->
+    <main class="view-content" id="view-settings" style="display:none;">
+      <div class="settings-container">
+        
+        <div class="settings-header-card">
+          <h2 class="settings-main-title">⚙️ Pengaturan Sistem & Perangkat</h2>
+          <p class="settings-main-desc">Konfigurasi sumber video, aturan APD wajib, koneksi indikator gerbang ESP32, dan engine AI</p>
+        </div>
+
+        <div class="settings-grid">
+          
+          <!-- Card 1: Kamera & Area Inspeksi -->
+          <div class="settings-card">
+            <div class="card-section-title">
+              <span>📹</span>
+              <h3>Kamera & Area Inspeksi</h3>
+            </div>
+
+            <div class="form-row">
+              <label class="form-label" for="setting-camera-index">Pilihan Sumber Kamera</label>
+              <select id="setting-camera-index" class="form-control">
+                <option value="0">Kamera 0 (Default USB / Webcam)</option>
+                <option value="1">Kamera 1</option>
+                <option value="2">Kamera 2</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label class="form-checkbox-label">
+                <input type="checkbox" id="setting-corridor-filter" checked>
+                <span>Aktifkan Virtual Inspection Corridor (Lorong Tengah)</span>
+              </label>
+              <p class="form-help">Membatasi inspeksi hanya untuk 1 orang yang berada di tengah lorong.</p>
+            </div>
+          </div>
+
+          <!-- Card 2: Aturan APD Wajib -->
+          <div class="settings-card">
+            <div class="card-section-title">
+              <span>🛡️</span>
+              <h3>Aturan APD Wajib (Mandatory Checklist)</h3>
+            </div>
+            
+            <p class="form-help" style="margin-bottom:0.75rem;">Pilih item APD yang wajib dikenakan untuk mendapatkan akses lampu hijau:</p>
+            
+            <div class="checkbox-group">
+              <label class="form-checkbox-label">
+                <input type="checkbox" id="rule-helm" checked disabled>
+                <span>🪖 Helm Safety Proyek (Wajib)</span>
+              </label>
+              <label class="form-checkbox-label">
+                <input type="checkbox" id="rule-rompi" checked disabled>
+                <span>🦺 Rompi Reflektif Orange / Kuning (Wajib)</span>
+              </label>
+              <label class="form-checkbox-label">
+                <input type="checkbox" id="rule-celana" checked disabled>
+                <span>👖 Celana Panjang (Wajib)</span>
+              </label>
+              <label class="form-checkbox-label">
+                <input type="checkbox" id="rule-sepatu" checked disabled>
+                <span>👞 Sepatu Tertutup (Wajib)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 3: Indikator Gerbang Fisik (ESP32 / IoT) -->
+          <div class="settings-card">
+            <div class="card-section-title">
+              <span>💡</span>
+              <h3>Lampu Indikator Fisik Gerbang (ESP32 / IoT)</h3>
+            </div>
+
+            <div class="form-row">
+              <label class="form-label" for="setting-iot-type">Tipe Koneksi IoT</label>
+              <select id="setting-iot-type" class="form-control">
+                <option value="serial">USB Serial Cable (Demo Langsung ke Laptop)</option>
+                <option value="http">Nirkabel Wi-Fi (ESP32 DevKit V1 Standalone)</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label class="form-label" for="setting-iot-port">Port COM / URL ESP32</label>
+              <input type="text" id="setting-iot-port" class="form-control" value="COM3" placeholder="COM3 atau http://gate-k3.local">
+              <p class="form-help">Sesuaikan nomor COM port di Device Manager atau alamat IP ESP32.</p>
+            </div>
+
+            <div class="test-hardware-box">
+              <span style="font-size:0.85rem; font-weight:600; color:var(--text-secondary);">Uji Coba Lampu Fisik:</span>
+              <div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+                <button class="btn-test-light btn-test-green" id="btn-test-green">🟢 Tes Hijau</button>
+                <button class="btn-test-light btn-test-red" id="btn-test-red">🔴 Tes Merah</button>
+                <button class="btn-test-light btn-test-off" id="btn-test-off">⚪ Padam</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: AI Engine & Cloud API -->
+          <div class="settings-card">
+            <div class="card-section-title">
+              <span>🧠</span>
+              <h3>AI Engine & Google Gemini VLM</h3>
+            </div>
+
+            <div class="form-row">
+              <label class="form-label" for="setting-gemini-key">Google Gemini API Key (Server-Side)</label>
+              <input type="password" id="input-gemini-key" class="form-control" placeholder="Masukkan AIzaSy..." autocomplete="off">
+              <p class="form-help">Kunci tersimpan aman di server, tidak diekspos ke browser.</p>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+              <button class="btn-action" id="btn-ping-gemini">
+                📡 Uji Latensi API
+              </button>
+              <button class="btn-action btn-primary" id="btn-save-settings">
+                💾 Simpan Pengaturan
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
+    </main>
 
-      <!-- Reports Data Table -->
-      <div class="table-responsive">
-        <table class="report-table">
-          <thead>
-            <tr>
-              <th style="width:70px;">Foto</th>
-              <th>Waktu</th>
-              <th>Pekerja</th>
-              <th>Status</th>
-              <th>Checklist APD</th>
-              <th>Sumber</th>
-              <th>Catatan Pelanggaran</th>
-            </tr>
-          </thead>
-          <tbody id="reports-table-body">
-            <tr>
-              <td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">
-                Memuat data riwayat pemeriksaan pekerja...
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
   </div>
 
   <!-- Snapshot Full Preview Modal -->
-  <div class="modal-backdrop" id="snapshot-modal" role="dialog" aria-modal="true">
-    <div class="modal-card modal-card-sm" style="text-align:center;">
+  <div class="modal-backdrop" id="snapshot-modal" role="dialog" aria-modal="true" style="display:none;">
+    <div class="modal-card modal-card-sm">
       <div class="modal-header">
-        <h3 class="modal-title" id="snapshot-modal-title">Snapshot Inspeksi Pekerja</h3>
+        <h3 class="modal-title" id="snapshot-modal-title">Bukti Snapshot Inspeksi</h3>
         <button class="modal-close" id="btn-close-snapshot">&times;</button>
       </div>
-      <div style="margin:1rem 0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border-subtle); max-height:480px; display:flex; justify-content:center; background:#000;">
-        <img id="snapshot-modal-img" src="" alt="Worker Snapshot" style="max-height:460px; max-width:100%; object-fit:contain;">
+      <div class="modal-img-container">
+        <img id="snapshot-modal-img" src="" alt="Worker Snapshot">
       </div>
-      <p id="snapshot-modal-caption" style="font-size:0.85rem; color:var(--text-secondary);"></p>
+      <p id="snapshot-modal-caption" class="modal-caption"></p>
     </div>
   </div>
 
+  <!-- JS Module Scripts -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

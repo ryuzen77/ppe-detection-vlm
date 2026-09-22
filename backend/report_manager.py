@@ -145,7 +145,7 @@ class ReportManager:
             "inference_time_ms": inference_time_ms
         }
 
-    def get_reports(self, limit: int = 50, offset: int = 0, status_filter: str = "all") -> dict:
+    def get_reports(self, limit: int = 50, offset: int = 0, status_filter: str = "all", date_filter: Optional[str] = None) -> dict:
         """Retrieves paginated inspection records with summary statistics."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -161,12 +161,18 @@ class ReportManager:
             compliance_rate = round((complete_count / total_count * 100.0), 1) if total_count > 0 else 100.0
 
             # Filter query
-            where_clause = ""
+            conditions = []
             params = []
             if status_filter == "complete":
-                where_clause = "WHERE is_complete = 1"
+                conditions.append("is_complete = 1")
             elif status_filter == "incomplete":
-                where_clause = "WHERE is_complete = 0"
+                conditions.append("is_complete = 0")
+
+            if date_filter:
+                conditions.append("date_str = ?")
+                params.append(date_filter)
+
+            where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
             cursor.execute(f"""
                 SELECT COUNT(*) as filtered_total FROM worker_inspections {where_clause}
@@ -179,8 +185,8 @@ class ReportManager:
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
             """
-            params.extend([limit, offset])
-            cursor.execute(query, params)
+            query_params = list(params) + [limit, offset]
+            cursor.execute(query, query_params)
             rows = cursor.fetchall()
 
             records = []

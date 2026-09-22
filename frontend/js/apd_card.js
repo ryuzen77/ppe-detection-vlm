@@ -1,242 +1,294 @@
 /**
- * SAFEGUARD AI - APD Cards & Industrial Tower Light Component
+ * ===================================================================
+ * SAFEGUARD AI - APD Cards & Stepper Guidance Visualizer (60 FPS)
+ * Sesuai Desain Mockup Enterprise K3
+ * ===================================================================
  */
 
 export class APDVisualizer {
   constructor() {
-    // Hero status banner elements
-    this.heroCard = document.getElementById('hero-status-card');
-    this.heroTitle = document.getElementById('hero-title');
-    this.heroDesc = document.getElementById('hero-desc');
-    this.heroLabel = document.getElementById('hero-label');
+    // 1. Guidance Banner & Stepper Elements
+    this.guidanceCard = document.getElementById('guidance-card');
+    this.guidanceIcon = document.getElementById('guidance-icon-symbol');
+    this.guidanceEyebrow = document.getElementById('guidance-eyebrow');
+    this.guidanceTitle = document.getElementById('guidance-main-title');
+    this.guidanceSubText = document.getElementById('guidance-sub-text');
+    this.guidancePillText = document.getElementById('guidance-pill-text');
 
-    // Tower light bulbs
-    this.bulbRed = document.getElementById('tower-red');
-    this.bulbYellow = document.getElementById('tower-yellow');
-    this.bulbGreen = document.getElementById('tower-green');
+    this.step1 = document.getElementById('step-1');
+    this.step2 = document.getElementById('step-2');
+    this.step3 = document.getElementById('step-3');
+    this.line12 = document.getElementById('line-1-2');
+    this.line23 = document.getElementById('line-2-3');
 
-    // APD Cards
-    this.helmBadge = document.getElementById('badge-helm');
-    this.helmDetail = document.getElementById('detail-helm');
+    // 2. Checklist Elements
+    this.checklistSubjectChip = document.getElementById('checklist-subject-chip');
+    this.checklistFootnoteText = document.getElementById('checklist-footnote-text');
 
-    this.rompiBadge = document.getElementById('badge-rompi');
-    this.rompiDetail = document.getElementById('detail-rompi');
+    this.badgeHelm = document.getElementById('badge-helm');
+    this.textHelm = document.getElementById('text-helm');
 
-    this.celanaBadge = document.getElementById('badge-celana');
-    this.celanaDetail = document.getElementById('detail-celana');
+    this.badgeRompi = document.getElementById('badge-rompi');
+    this.textRompi = document.getElementById('text-rompi');
 
-    this.sepatuBadge = document.getElementById('badge-sepatu');
-    this.sepatuDetail = document.getElementById('detail-sepatu');
+    this.badgeCelana = document.getElementById('badge-celana');
+    this.textCelana = document.getElementById('text-celana');
 
-    // Audit Log List
-    this.logList = document.getElementById('audit-log-list');
+    this.badgeSepatu = document.getElementById('badge-sepatu');
+    this.textSepatu = document.getElementById('text-sepatu');
 
-    // Tracking progress elements
-    this.trackIdBadge = document.getElementById('track-id-badge');
-    this.trackStatusText = document.getElementById('track-status-text');
-    this.stableProgressFill = document.getElementById('stable-progress-fill');
+    // 3. Recent History Elements
+    this.recentEmptyState = document.getElementById('recent-empty-state');
+    this.recentListGroup = document.getElementById('recent-list-group');
+
+    // 4. Video Viewport Overlays & Tech Details
+    this.hudSubjectBadge = document.getElementById('hud-subject-badge');
+    this.techEngineMode = document.getElementById('tech-engine-mode');
+    this.techLatencyMs = document.getElementById('tech-latency-ms');
+    this.techActiveTrack = document.getElementById('tech-active-track');
+    this.techStability = document.getElementById('tech-stability');
   }
 
   update(telemetry) {
     const active = telemetry.active_track;
     const light = telemetry.light || { light_state: 'OFF', message: 'Standby' };
 
-    // 1. Update Tower Light
-    this.setTowerLight(light.light_state);
-
-    // 2. Update Active Track Meta & Progress
-    if (active && telemetry.has_person) {
-      this.trackIdBadge.textContent = `ID #${active.track_id}`;
-      this.trackStatusText.textContent = active.reason || active.state;
-      
-      const pct = Math.min((active.stable_frames / 4) * 100, 100);
-      this.stableProgressFill.style.width = `${pct}%`;
-      this.stableProgressFill.style.background = active.is_full_body ? 'var(--color-green)' : 'var(--color-amber)';
+    // Update Video Subject Badge
+    if (active && active.track_id) {
+      this.hudSubjectBadge.textContent = `Subjek #${active.track_id}`;
+      this.checklistSubjectChip.textContent = `Subjek #${active.track_id}`;
     } else {
-      this.trackIdBadge.textContent = 'ID: -';
-      this.trackStatusText.textContent = 'Menunggu subjek di zona inspeksi';
-      this.stableProgressFill.style.width = '0%';
+      this.hudSubjectBadge.textContent = 'Subjek: -';
+      this.checklistSubjectChip.textContent = 'Subjek: -';
     }
 
-    // 3. Update Hero Status Card
-    this.updateHeroStatus(active, light);
+    // Update Technical Details Drawer
+    if (this.techEngineMode) {
+      this.techEngineMode.textContent = telemetry.engine_mode || 'HYBRID_AUTO';
+    }
+    if (this.techActiveTrack) {
+      this.techActiveTrack.textContent = active ? `#${active.track_id}` : 'None';
+    }
+    if (this.techStability && active) {
+      this.techStability.textContent = `${active.stable_frames || 0} / 2`;
+    }
 
-    // 4. Update APD 4-Item Cards
+    // Update Guidance Card & Stepper
+    this.updateGuidance(active, light);
+
+    // Update APD 4-Item Checklist
     if (active && active.vlm_result) {
-      this.renderVLMResult(active.vlm_result);
-    } else if (active && !active.is_full_body) {
-      this.setCardsWarning();
+      this.renderChecklistResult(active.vlm_result);
+      if (this.techLatencyMs) {
+        this.techLatencyMs.textContent = `${active.vlm_result.inference_time_ms || 0} ms`;
+      }
     } else {
-      this.resetCards();
+      this.resetChecklist(active);
     }
 
-    // 5. Update Audit Log
+    // Update Recent History Log
     if (telemetry.history) {
-      this.renderAuditLog(telemetry.history);
+      this.renderRecentHistory(telemetry.history);
     }
   }
 
-  setTowerLight(state) {
-    this.bulbRed.classList.remove('active');
-    this.bulbYellow.classList.remove('active');
-    this.bulbGreen.classList.remove('active');
+  updateGuidance(active, light) {
+    // Reset stepper classes
+    this.step1.className = 'step-node';
+    this.step2.className = 'step-node';
+    this.step3.className = 'step-node';
+    this.line12.className = 'step-connector';
+    this.line23.className = 'step-connector';
 
-    if (state === 'GREEN') {
-      this.bulbGreen.classList.add('active');
-    } else if (state === 'RED') {
-      this.bulbRed.classList.add('active');
-    } else if (state === 'YELLOW' || state === 'STEP_BACK') {
-      this.bulbYellow.classList.add('active');
-    }
-  }
+    this.guidanceCard.className = 'card-guidance';
 
-  updateHeroStatus(active, light) {
-    this.heroCard.className = 'hero-status-card';
-
+    // State A: Standby (Tidak ada orang di lorong)
     if (!active || !active.track_id) {
-      this.heroCard.classList.add('state-idle');
-      this.heroLabel.textContent = 'STATUS SISTEM';
-      this.heroTitle.textContent = 'STANDBY';
-      this.heroDesc.textContent = 'Silakan berdiri di depan kamera hingga seluruh tubuh terlihat.';
+      this.guidanceCard.classList.add('state-adjust');
+      this.guidanceIcon.textContent = '👤';
+      this.guidanceEyebrow.textContent = 'PANDUAN OPERATOR';
+      this.guidanceTitle.textContent = 'Menunggu Pekerja';
+      this.guidanceSubText.textContent = 'Pekerja silakan berdiri di dalam lorong inspeksi.';
+      this.guidancePillText.textContent = 'Pemeriksaan belum dimulai';
+
+      this.step1.classList.add('active');
       return;
     }
 
+    // State B: Peringatan Posisi (Terpotong / Kaki belum terlihat)
     if (!active.is_full_body) {
-      this.heroCard.classList.add('state-amber');
-      this.heroLabel.textContent = 'PERINGATAN POSISI';
-      this.heroTitle.textContent = 'SILAKAN MUNDUR';
-      this.heroDesc.textContent = active.reason || 'Tubuh belum terlihat utuh dari kepala hingga sepatu.';
-      this.setTowerLight('YELLOW');
+      this.guidanceCard.classList.add('state-adjust');
+      this.guidanceEyebrow.textContent = 'SESUAIKAN POSISI';
+      
+      if (active.clip_type === 'HEAD_CLIPPED') {
+        this.guidanceIcon.textContent = '👤↓';
+        this.guidanceTitle.textContent = 'Mundur sedikit';
+        this.guidanceSubText.textContent = 'Kepala terlalu dekat dengan kamera.';
+      } else if (active.clip_type === 'FEET_CLIPPED') {
+        this.guidanceIcon.textContent = '👤←';
+        this.guidanceTitle.textContent = 'Mundur satu langkah';
+        this.guidanceSubText.textContent = 'Kepala hingga kaki harus terlihat di kamera.';
+      } else if (active.clip_type === 'TOO_FAR') {
+        this.guidanceIcon.textContent = '👤→';
+        this.guidanceTitle.textContent = 'Silakan mendekat';
+        this.guidanceSubText.textContent = 'Posisi Anda terlalu jauh dari kamera.';
+      } else {
+        this.guidanceIcon.textContent = '👤←';
+        this.guidanceTitle.textContent = 'Silakan mundur';
+        this.guidanceSubText.textContent = active.reason || 'Posisikan seluruh tubuh di dalam kamera.';
+      }
+
+      this.guidancePillText.textContent = 'Pemeriksaan belum dimulai (menunggu posisi pas)';
+      this.step1.classList.add('active');
       return;
     }
 
-    if (active.state === 'ANALYZING') {
-      this.heroCard.classList.add('state-amber');
-      this.heroLabel.textContent = 'MEMPROSES VLM';
-      this.heroTitle.textContent = 'MENGANALISA APD...';
-      this.heroDesc.textContent = 'AI sedang memverifikasi helm, rompi, celana, dan sepatu.';
+    // State C: Stabilizing / Sedang Menganalisis VLM (Step 2 Active)
+    if (active.state === 'ANALYZING' || active.state === 'STABILIZING') {
+      this.guidanceCard.classList.add('state-adjust');
+      this.guidanceIcon.textContent = '⚡';
+      this.guidanceEyebrow.textContent = 'PROSES PEMERIKSAAN';
+      this.guidanceTitle.textContent = 'Menganalisis APD...';
+      this.guidanceSubText.textContent = 'Posisi tubuh sudah pas. Mohon tetap tenang sejenak.';
+      this.guidancePillText.textContent = 'AI sedang memverifikasi helm, rompi, celana, dan sepatu';
+
+      this.step1.classList.add('complete');
+      this.line12.classList.add('active');
+      this.step2.classList.add('active');
       return;
     }
 
+    // State D: Hasil Analisis Selesai (Step 3 Active)
     if (active.vlm_result) {
       const res = active.vlm_result;
+      this.step1.classList.add('complete');
+      this.line12.classList.add('active');
+      this.step2.classList.add('complete');
+      this.line23.classList.add('active');
+      this.step3.classList.add('complete');
+
       if (res.is_complete) {
-        this.heroCard.classList.add('state-green');
-        this.heroLabel.textContent = 'HASIL VERIFIKASI';
-        this.heroTitle.textContent = 'AKSES DIIZINKAN';
-        this.heroDesc.textContent = 'Semua APD lengkap sesuai standar K3. Silakan masuk.';
+        this.guidanceCard.classList.add('state-success');
+        this.guidanceIcon.textContent = '✓';
+        this.guidanceEyebrow.textContent = 'HASIL PEMERIKSAAN';
+        this.guidanceTitle.textContent = 'Akses Diizinkan';
+        this.guidanceSubText.textContent = 'Seluruh APD wajib telah lengkap sesuai standar K3.';
+        this.guidancePillText.textContent = 'APD Lengkap - Gerbang dibuka';
       } else {
-        this.heroCard.classList.add('state-red');
-        this.heroLabel.textContent = 'HASIL VERIFIKASI';
-        this.heroTitle.textContent = 'AKSES DITOLAK';
+        this.guidanceCard.classList.add('state-danger');
+        this.guidanceIcon.textContent = '✕';
+        this.guidanceEyebrow.textContent = 'HASIL PEMERIKSAAN';
+        this.guidanceTitle.textContent = 'Akses Ditolak';
         const missing = res.missing_items.length > 0 ? res.missing_items.join(', ') : 'Kelengkapan APD belum sesuai';
-        this.heroDesc.textContent = `Belum memenuhi syarat: ${missing}.`;
+        this.guidanceSubText.textContent = `Belum memakai: ${missing}.`;
+        this.guidancePillText.textContent = 'Akses Ditolak - Lengkapi APD Anda';
       }
     }
   }
 
-  renderVLMResult(res) {
-    // 1. Helm (Warna bebas, asalkan safety helmet)
+  renderChecklistResult(res) {
+    // 1. Helm
     if (res.helm.detected) {
-      this.helmBadge.className = 'apd-status-badge badge-green';
-      this.helmBadge.textContent = 'TERDETEKSI';
-      this.helmDetail.textContent = res.helm.description || 'Helm keselamatan terpasang';
+      this.badgeHelm.className = 'row-badge status-ok';
+      this.badgeHelm.innerHTML = '<span class="badge-icon">✅</span> Terpasang';
     } else {
-      this.helmBadge.className = 'apd-status-badge badge-red';
-      this.helmBadge.textContent = 'TIDAK ADA';
-      this.helmDetail.textContent = 'Wajib memakai helm keselamatan';
+      this.badgeHelm.className = 'row-badge status-fail';
+      this.badgeHelm.innerHTML = '<span class="badge-icon">❌</span> Tidak Ada';
     }
 
-    // 2. Rompi (Wajib Orange / Kuning)
+    // 2. Rompi
     if (res.rompi.detected && res.rompi.is_valid_color) {
-      this.rompiBadge.className = 'apd-status-badge badge-green';
-      this.rompiBadge.textContent = 'VALID';
-      this.rompiDetail.textContent = `Rompi warna ${res.rompi.color} reflektif`;
+      this.badgeRompi.className = 'row-badge status-ok';
+      this.badgeRompi.innerHTML = `<span class="badge-icon">✅</span> ${res.rompi.color || 'OK'}`;
     } else if (res.rompi.detected && !res.rompi.is_valid_color) {
-      this.rompiBadge.className = 'apd-status-badge badge-red';
-      this.rompiBadge.textContent = 'WARNA TIDAK SAH';
-      this.rompiDetail.textContent = `Warna ${res.rompi.color} ditolak. Wajib orange atau kuning.`;
+      this.badgeRompi.className = 'row-badge status-fail';
+      this.badgeRompi.innerHTML = `<span class="badge-icon">❌</span> Bukan Hi-Vis`;
     } else {
-      this.rompiBadge.className = 'apd-status-badge badge-red';
-      this.rompiBadge.textContent = 'TIDAK ADA';
-      this.rompiDetail.textContent = 'Wajib memakai rompi orange atau kuning';
+      this.badgeRompi.className = 'row-badge status-fail';
+      this.badgeRompi.innerHTML = '<span class="badge-icon">❌</span> Tidak Ada';
     }
 
     // 3. Celana Panjang
     if (res.celana_panjang.detected) {
-      this.celanaBadge.className = 'apd-status-badge badge-green';
-      this.celanaBadge.textContent = 'MEMENUHI';
-      this.celanaDetail.textContent = res.celana_panjang.description || 'Celana panjang terpasang';
+      this.badgeCelana.className = 'row-badge status-ok';
+      this.badgeCelana.innerHTML = '<span class="badge-icon">✅</span> Panjang';
     } else {
-      this.celanaBadge.className = 'apd-status-badge badge-red';
-      this.celanaBadge.textContent = 'DITOLAK';
-      this.celanaDetail.textContent = 'Celana pendek tidak diizinkan';
+      this.badgeCelana.className = 'row-badge status-fail';
+      this.badgeCelana.innerHTML = '<span class="badge-icon">❌</span> Pendek';
     }
 
     // 4. Sepatu Tertutup
     if (res.sepatu_tertutup.detected && res.sepatu_tertutup.is_closed_shoes) {
-      this.sepatuBadge.className = 'apd-status-badge badge-green';
-      this.sepatuBadge.textContent = 'TERTUTUP';
-      this.sepatuDetail.textContent = res.sepatu_tertutup.description || 'Sepatu tertutup terpasang';
+      this.badgeSepatu.className = 'row-badge status-ok';
+      this.badgeSepatu.innerHTML = '<span class="badge-icon">✅</span> Tertutup';
     } else {
-      this.sepatuBadge.className = 'apd-status-badge badge-red';
-      this.sepatuBadge.textContent = 'TIDAK SAH';
-      this.sepatuDetail.textContent = 'Sandal atau telanjang kaki dilarang';
+      this.badgeSepatu.className = 'row-badge status-fail';
+      this.badgeSepatu.innerHTML = '<span class="badge-icon">❌</span> Terbuka/Sandal';
+    }
+
+    if (res.is_complete) {
+      this.checklistFootnoteText.textContent = 'Semua APD lengkap sesuai standar K3.';
+    } else {
+      const missingStr = res.missing_items.length > 0 ? res.missing_items.join(', ') : 'Belum lengkap';
+      this.checklistFootnoteText.textContent = `Belum memenuhi syarat: ${missingStr}`;
     }
   }
 
-  setCardsWarning() {
-    this.helmBadge.className = 'apd-status-badge badge-neutral';
-    this.helmBadge.textContent = 'MENUNGGU';
-    this.helmDetail.textContent = 'Mundur agar seluruh tubuh terlihat';
+  resetChecklist(active) {
+    this.badgeHelm.className = 'row-badge status-pending';
+    this.badgeHelm.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
 
-    this.rompiBadge.className = 'apd-status-badge badge-neutral';
-    this.rompiBadge.textContent = 'MENUNGGU';
-    this.rompiDetail.textContent = 'Mundur agar seluruh tubuh terlihat';
+    this.badgeRompi.className = 'row-badge status-pending';
+    this.badgeRompi.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
 
-    this.celanaBadge.className = 'apd-status-badge badge-neutral';
-    this.celanaBadge.textContent = 'MENUNGGU';
-    this.celanaDetail.textContent = 'Mundur agar seluruh tubuh terlihat';
+    this.badgeCelana.className = 'row-badge status-pending';
+    this.badgeCelana.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
 
-    this.sepatuBadge.className = 'apd-status-badge badge-neutral';
-    this.sepatuBadge.textContent = 'MENUNGGU';
-    this.sepatuDetail.textContent = 'Mundur agar seluruh tubuh terlihat';
+    this.badgeSepatu.className = 'row-badge status-pending';
+    this.badgeSepatu.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
+
+    if (active && !active.is_full_body) {
+      this.checklistFootnoteText.textContent = 'Menunggu posisi tubuh sesuai.';
+    } else if (active && active.state === 'ANALYZING') {
+      this.checklistFootnoteText.textContent = 'Sedang memindai kelengkapan APD...';
+    } else {
+      this.checklistFootnoteText.textContent = 'Menunggu subjek di area inspeksi.';
+    }
   }
 
-  resetCards() {
-    const reset = (badge, detail) => {
-      badge.className = 'apd-status-badge badge-neutral';
-      badge.textContent = 'STANDBY';
-      detail.textContent = 'Menunggu deteksi pekerja';
-    };
-    reset(this.helmBadge, this.helmDetail);
-    reset(this.rompiBadge, this.rompiDetail);
-    reset(this.celanaBadge, this.celanaDetail);
-    reset(this.sepatuBadge, this.sepatuDetail);
-  }
-
-  renderAuditLog(history) {
+  renderRecentHistory(history) {
     if (!history || history.length === 0) {
-      this.logList.innerHTML = '<div style="color:var(--text-muted); font-size:0.8rem; padding:0.5rem;">Belum ada riwayat inspeksi</div>';
+      this.recentEmptyState.style.display = 'block';
+      this.recentListGroup.style.display = 'none';
       return;
     }
 
-    this.logList.innerHTML = history.map(item => {
-      const badgeClass = item.is_complete ? 'badge-green' : 'badge-red';
-      const statusText = item.is_complete ? 'LENGKAP' : 'TIDAK LENGKAP';
-      const sourceIcon = item.inference_source === 'GEMINI_LIVE' ? '🌐' : '⚡';
-      const timeMs = item.inference_time_ms ? `${item.inference_time_ms}ms` : '';
-      return `
-        <div class="log-item">
-          <div style="display:flex; align-items:center; gap:0.6rem;">
-            <span class="log-time">${item.timestamp}</span>
-            <span style="font-weight:600;">Pekerja #${item.track_id}</span>
-            <span style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-mono);">${sourceIcon} ${timeMs}</span>
-          </div>
-          <span class="apd-status-badge ${badgeClass}">${statusText}</span>
-        </div>
-      `;
-    }).join('');
+    this.recentEmptyState.style.display = 'none';
+    this.recentListGroup.style.display = 'flex';
+    this.recentListGroup.innerHTML = '';
 
+    // Ambil maksimal 4 data terbaru
+    const recentSlice = history.slice(0, 4);
+    recentSlice.forEach(rec => {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'recent-item-card';
+
+      const statusBadge = rec.is_complete 
+        ? '<span style="color:var(--accent-teal); font-weight:700;">✅ Lengkap</span>'
+        : '<span style="color:var(--accent-red); font-weight:700;">❌ Pelanggaran</span>';
+
+      const missingText = rec.missing_items && rec.missing_items.length > 0 
+        ? rec.missing_items.join(', ')
+        : 'Lolos';
+
+      itemEl.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary);">#${rec.track_id}</span>
+          <span style="color:var(--text-muted); font-size:0.75rem;">${rec.timestamp}</span>
+        </div>
+        <div>${statusBadge}</div>
+      `;
+      this.recentListGroup.appendChild(itemEl);
+    });
   }
 }

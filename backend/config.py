@@ -62,7 +62,9 @@ class Config:
     # Cooldown in seconds before the same track ID can be re-evaluated
     TRACK_COOLDOWN_SECONDS: int = 300
     # Audio warning "Silakan mundur" debounce in seconds per person
-    AUDIO_STEP_BACK_DEBOUNCE_SECONDS: float = 3.5
+    AUDIO_STEP_BACK_DEBOUNCE_SECONDS: float = 6.0
+    # Maximum times the step-back voice prompt plays for the same person
+    AUDIO_STEP_BACK_MAX_REPEATS: int = 2
     # Stale track purge timeout in seconds
     TRACK_TIMEOUT_SECONDS: float = float(os.getenv("TRACK_TIMEOUT_SECONDS", "15.0"))
     # Standby reset delay when corridor is empty
