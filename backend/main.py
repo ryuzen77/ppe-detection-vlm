@@ -210,7 +210,7 @@ app = FastAPI(title="PPE Detection VLM Backend", version="1.0.0", lifespan=lifes
 # Enable CORS for decoupled frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cfg.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

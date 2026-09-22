@@ -29,6 +29,8 @@ class ReportManager:
     def _init_db(self):
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode = WAL;")
+            cursor.execute("PRAGMA synchronous = NORMAL;")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS worker_inspections (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -268,10 +270,17 @@ class ReportManager:
 
     def get_snapshot_path(self, filename: str) -> Optional[Path]:
         """Resolves snapshot image path safely to avoid path traversal."""
+        if not filename or "/" in filename or "\\" in filename or ".." in filename:
+            return None
         safe_name = os.path.basename(filename)
-        path = SNAPSHOTS_DIR / safe_name
-        if path.exists() and path.is_file():
-            return path
+        path = (SNAPSHOTS_DIR / safe_name).resolve()
+        snapshots_root = SNAPSHOTS_DIR.resolve()
+        try:
+            if path.is_relative_to(snapshots_root) and path.exists() and path.is_file():
+                return path
+        except AttributeError:
+            if str(path).startswith(str(snapshots_root)) and path.exists() and path.is_file():
+                return path
         return None
 
 report_mgr = ReportManager()
