@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFEGUARD AI - Sistem Deteksi APD Real-Time</title>
+  <meta name="description" content="Sistem inspeksi kepatuhan APD (Helm, Rompi, Celana Panjang, Sepatu) otomatis berbasis YOLOv8 dan Gemini VLM dengan verifikasi full-body dan audio alert.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-icon">🛡️</div>
+      <div>
+        <h1 class="brand-title">SAFEGUARD AI</h1>
+        <p class="brand-subtitle">Smart PPE Compliance Monitoring</p>
+      </div>
+    </div>
+
+    <div class="header-telemetry">
+      <div class="telemetry-badge" id="ws-status-badge">
+        <span class="dot-indicator" id="ws-status-dot"></span>
+        <span id="ws-status-text">CONNECTING</span>
+      </div>
+
+      <div class="telemetry-badge">
+        <span>⚡</span>
+        <span id="fps-counter">-- FPS</span>
+      </div>
+
+      <div class="telemetry-badge">
+        <span>🤖</span>
+        <span id="vlm-mode-badge">MEMUAT VLM...</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn-action" id="btn-reset">
+        🔄 Reset Pelacakan
+      </button>
+      <button class="btn-action btn-primary" id="btn-settings">
+        ⚙️ Pengaturan Server
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Content -->
+  <main class="dashboard-grid">
+
+    <!-- Left Column: Video Feed & Vision Overlay -->
+    <section class="vision-panel" aria-label="Live Camera Feed">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>📹</span>
+          <span>Live Vision Feed (YOLO26s-Pose + ByteTrack)</span>
+        </div>
+        <span style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">RTX 4060 ACCELERATED</span>
+
+      </div>
+
+      <div class="video-viewport" id="viewport-container">
+        <!-- Live Video Stream -->
+        <img id="live-stream" class="live-stream-img" alt="Live Camera Video Stream" src="">
+
+        <!-- Inspection Boundaries -->
+        <div class="boundary-line-top"></div>
+        <div class="boundary-line-bottom"></div>
+
+        <!-- Real-Time HUD Overlay Canvas -->
+        <canvas id="hud-canvas" class="canvas-overlay"></canvas>
+      </div>
+
+      <div class="vision-footer">
+        <div class="legend-group">
+          <div class="legend-item">
+            <span class="legend-box green"></span>
+            <span>Subjek di Lorong (Full-Body)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box red"></span>
+            <span>Terpotong / Silakan Mundur</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box" style="background:#888;"></span>
+            <span>Di Luar Jalur (Diabaikan)</span>
+          </div>
+        </div>
+        <div>
+          <span>Lorong: <strong>Virtual Corridor (Tengah)</strong></span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Column: Safety Status, Tower Light & APD Cards -->
+    <section class="status-panel" aria-label="Safety Status and APD Details">
+
+      <!-- Hero Access Banner -->
+      <div class="hero-status-card state-idle" id="hero-status-card">
+        <!-- Industrial Tower Light -->
+        <div class="tower-light-wrapper">
+          <div class="tower-bulb red" id="tower-red" title="Lampu Merah: APD Tidak Lengkap / Ditolak"></div>
+          <div class="tower-bulb yellow" id="tower-yellow" title="Lampu Kuning: Peringatan Mundur"></div>
+          <div class="tower-bulb green" id="tower-green" title="Lampu Hijau: APD Lengkap / Diizinkan"></div>
+        </div>
+
+        <div class="hero-info">
+          <p class="hero-label" id="hero-label">STATUS SISTEM</p>
+          <h2 class="hero-title" id="hero-title">STANDBY</h2>
+          <p class="hero-desc" id="hero-desc">Menunggu pekerja memasuki zona kamera...</p>
+        </div>
+      </div>
+
+      <!-- Active Tracking Meta Progress -->
+      <div class="track-info-card">
+        <div class="track-meta-row">
+          <span id="track-id-badge" style="font-weight:700; color:var(--text-primary);">ID: -</span>
+          <span id="track-status-text">Menunggu subjek di zona inspeksi</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="stable-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- 4 APD Compliance Cards -->
+      <div class="apd-grid">
+
+        <!-- 1. Helm Keselamatan -->
+        <article class="apd-card" id="card-helm">
+          <div class="apd-card-header">
+            <div class="apd-icon-circle">🪖</div>
+            <span class="apd-status-badge badge-neutral" id="badge-helm">STANDBY</span>
+          </div>
+          <h3 class="apd-name">Helm Safety</h3>
+          <p class="apd-detail" id="detail-helm">Warna bebas, wajib helm keselamatan.</p>
+        </article>
+
+        <!-- 2. Rompi Keselamatan -->
+        <article class="apd-card" id="card-rompi">
+          <div class="apd-card-header">
+            <div class="apd-icon-circle">🦺</div>
+            <span class="apd-status-badge badge-neutral" id="badge-rompi">STANDBY</span>
+          </div>
+          <h3 class="apd-name">Rompi Reflektif</h3>
+          <p class="apd-detail" id="detail-rompi">Wajib warna orange atau kuning.</p>
+        </article>
+
+        <!-- 3. Celana Panjang -->
+        <article class="apd-card" id="card-celana">
+          <div class="apd-card-header">
+            <div class="apd-icon-circle">👖</div>
+            <span class="apd-status-badge badge-neutral" id="badge-celana">STANDBY</span>
+          </div>
+          <h3 class="apd-name">Celana Panjang</h3>
+          <p class="apd-detail" id="detail-celana">Wajib menutup hingga mata kaki.</p>
+        </article>
+
+        <!-- 4. Sepatu Tertutup -->
+        <article class="apd-card" id="card-sepatu">
+          <div class="apd-card-header">
+            <div class="apd-icon-circle">👟</div>
+            <span class="apd-status-badge badge-neutral" id="badge-sepatu">STANDBY</span>
+          </div>
+          <h3 class="apd-name">Sepatu Tertutup</h3>
+          <p class="apd-detail" id="detail-sepatu">Bebas jenis sepatu, asal tertutup.</p>
+        </article>
+
+      </div>
+
+      <!-- Live Audit Log -->
+      <div class="audit-log-panel">
+        <h3 class="audit-title">Riwayat Pemeriksaan Terkini</h3>
+        <div class="log-list" id="audit-log-list">
+          <div style="color:var(--text-muted); font-size:0.8rem; padding:0.5rem;">Belum ada riwayat inspeksi</div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal Settings -->
+  <div class="modal-backdrop" id="settings-modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Konfigurasi Server & VLM</h2>
+        <button class="modal-close" id="btn-close-modal" aria-label="Tutup Modal">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="input-gemini-key">Google Gemini API Key (Server-Side)</label>
+        <input type="password" id="input-gemini-key" class="form-input" placeholder="Masukkan AIzaSy..." autocomplete="off">
+        <p class="form-help">Kunci ini disimpan aman di memori server dan file .env server, tidak diekspos ke client.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Status IoT Hardware (Tahap 2)</label>
+        <div style="font-size:0.85rem; color:var(--text-secondary); background:var(--bg-surface-elevated); padding:0.75rem; border-radius:var(--radius-sm);">
+          Modul <code>IoTNotifier</code> siap diaktifkan melalui <code>backend/.env</code> (Serial / Relay / Arduino).
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+        <button class="btn-action btn-primary" id="btn-save-key">Simpan ke Server</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

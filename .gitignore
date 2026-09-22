@@ -1,0 +1,19 @@
+# Environment variables & secrets (Server-side API keys)
+.env
+backend/.env
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+backend/__pycache__/
+
+# Model weights (Downloaded automatically by Ultralytics to prevent repo bloat)
+*.pt
+backend/*.pt
+
+# OS & Temp files
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+*.log

@@ -1,0 +1,83 @@
+import time
+from typing import Optional
+from config import cfg
+
+class LightState:
+    OFF = "OFF"
+    GREEN = "GREEN"
+    RED = "RED"
+
+class IoTNotifier:
+    """Modular IoT Hardware Controller for Physical Tower Lights / Relays.
+    
+    Can be connected to Arduino/ESP32 via Serial, or a smart relay via HTTP/MQTT.
+    Prepared for Stage 2 after system logic is fully validated.
+    """
+    def __init__(self):
+        self.enabled = cfg.IOT_ENABLED
+        self.iot_type = cfg.IOT_TYPE
+        self.serial_conn = None
+
+        if self.enabled and self.iot_type == "serial":
+            try:
+                import serial
+                self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=1)
+                print(f"[IoTNotifier] Connected to Serial port {cfg.IOT_SERIAL_PORT}")
+            except Exception as e:
+                print(f"[IoTNotifier] Serial connection failed: {e}")
+
+    def send_command(self, cmd: str):
+        if not self.enabled:
+            return
+        try:
+            if self.iot_type == "serial" and self.serial_conn:
+                self.serial_conn.write(f"{cmd}\n".encode())
+            elif self.iot_type == "http":
+                # Ready for HTTP relay webhook
+                pass
+        except Exception as e:
+            print(f"[IoTNotifier] Failed to send command '{cmd}': {e}")
+
+    def set_green(self):
+        self.send_command("LIGHT_GREEN")
+
+    def set_red(self):
+        self.send_command("LIGHT_RED")
+
+    def set_off(self):
+        self.send_command("LIGHT_OFF")
+
+
+class NotifierManager:
+    """Manages visual light status (UI state + optional IoT physical light)."""
+    def __init__(self):
+        self.current_state = LightState.OFF
+        self.last_change_time = time.time()
+        self.iot = IoTNotifier()
+        self.message = "Standby"
+
+    def set_complete(self, msg: str = "Akses Diizinkan - APD Lengkap"):
+        self.current_state = LightState.GREEN
+        self.message = msg
+        self.last_change_time = time.time()
+        self.iot.set_green()
+
+    def set_incomplete(self, msg: str = "Akses Ditolak - APD Tidak Lengkap"):
+        self.current_state = LightState.RED
+        self.message = msg
+        self.last_change_time = time.time()
+        self.iot.set_red()
+
+    def set_idle(self):
+        self.current_state = LightState.OFF
+        self.message = "Standby - Menunggu Pekerja"
+        self.iot.set_off()
+
+    def get_status(self) -> dict:
+        return {
+            "light_state": self.current_state,
+            "message": self.message,
+            "timestamp": self.last_change_time
+        }
+
+notifier = NotifierManager()
