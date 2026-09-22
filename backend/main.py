@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -16,6 +16,8 @@ from state_manager import state_mgr, TrackState
 from vlm_analyzer import vlm_analyzer
 from notifier import notifier
 from audio_engine import audio_player
+from report_manager import report_mgr
+from api_monitor import api_monitor
 
 app = FastAPI(title="PPE Detection VLM Backend", version="1.0.0")
 
@@ -211,6 +213,62 @@ async def update_gemini_key(request: Request):
         vlm_analyzer.update_api_key(new_key)
         return {"status": "success", "is_live": vlm_analyzer.is_live_api()}
     return {"status": "error", "message": "API key cannot be empty"}
+
+# --- WORKER REPORT & AUDIT ENDPOINTS ---
+
+@app.get("/api/reports")
+async def get_worker_reports(limit: int = 50, offset: int = 0, status: str = "all"):
+    """Returns paginated worker inspection records with global compliance statistics."""
+    data = report_mgr.get_reports(limit=limit, offset=offset, status_filter=status)
+    return data
+
+@app.get("/api/reports/snapshots/{filename}")
+async def get_worker_snapshot(filename: str):
+    """Serves an inspection snapshot crop image for a specific worker."""
+    path = report_mgr.get_snapshot_path(filename)
+    if path and path.exists():
+        return FileResponse(str(path), media_type="image/jpeg")
+    return JSONResponse(status_code=404, content={"error": "Snapshot image not found"})
+
+@app.get("/api/reports/export")
+async def export_worker_reports_csv():
+    """Generates and downloads a CSV audit report for HSE/K3 compliance."""
+    csv_data = report_mgr.export_csv_text()
+    today_str = time.strftime("%Y-%m-%d")
+    filename = f"laporan_inspeksi_apd_{today_str}.csv"
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Cache-Control": "no-cache"
+        }
+    )
+
+# --- API MONITORING & ENGINE MODE ENDPOINTS ---
+
+@app.get("/api/monitoring/status")
+async def get_monitoring_status():
+    """Returns real-time Gemini Cloud API health, ping latency, and engine mode."""
+    return api_monitor.get_status()
+
+@app.post("/api/monitoring/ping")
+async def ping_gemini_api():
+    """Initiates an on-demand latency test to Google Gemini API."""
+    res = vlm_analyzer.ping_api()
+    return res
+
+@app.post("/api/config/engine-mode")
+async def set_engine_mode(request: Request):
+    """Allows operator to toggle between Online (Cloud Gemini) and Offline (100% Local GPU RTX 4060)."""
+    data = await request.json()
+    mode = data.get("engine_mode", "HYBRID_AUTO")
+    new_mode = api_monitor.set_engine_mode(mode)
+    return {
+        "status": "success",
+        "engine_mode": new_mode,
+        "is_forced_local": new_mode == "FORCE_LOCAL"
+    }
 
 @app.get("/api/stream")
 async def video_stream(request: Request):

@@ -30,18 +30,28 @@
         <span id="fps-counter">-- FPS</span>
       </div>
 
-      <div class="telemetry-badge">
-        <span>🤖</span>
-        <span id="vlm-mode-badge">MEMUAT VLM...</span>
+      <!-- Real-Time API Monitor (Jalan vs Macet & Latensi) -->
+      <div class="telemetry-badge clickable" id="api-monitor-badge" title="Status Gemini Cloud API & Latensi. Klik untuk tes ping.">
+        <span class="dot-indicator" id="api-status-dot"></span>
+        <span id="api-status-text">API: MEMERIKSA...</span>
       </div>
+
+      <!-- Mode Switcher (Online Cloud vs Offline Lokal GPU) -->
+      <button class="btn-mode-toggle" id="btn-mode-toggle" title="Beralih Mode: Online (Gemini Cloud) atau Offline (Lokal GPU RTX 4060)">
+        <span id="mode-icon">🌐</span>
+        <span id="mode-text">ONLINE: HYBRID</span>
+      </button>
     </div>
 
     <div class="header-actions">
+      <button class="btn-action btn-highlight" id="btn-open-reports">
+        📋 Laporan Pekerja
+      </button>
       <button class="btn-action" id="btn-reset">
-        🔄 Reset Pelacakan
+        🔄 Reset
       </button>
       <button class="btn-action btn-primary" id="btn-settings">
-        ⚙️ Pengaturan Server
+        ⚙️ Pengaturan
       </button>
     </div>
   </header>
@@ -205,6 +215,102 @@
       <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
         <button class="btn-action btn-primary" id="btn-save-key">Simpan ke Server</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Laporan Pekerja (Audit K3) -->
+  <div class="modal-backdrop" id="reports-modal" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <div style="font-size:1.6rem;">📋</div>
+          <div>
+            <h2 class="modal-title">Laporan Pemeriksaan APD Pekerja (Audit K3)</h2>
+            <p style="font-size:0.8rem; color:var(--text-secondary);">Riwayat kepatuhan pekerja, bukti foto snapshot, dan catatan pelanggaran APD</p>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-close-reports" aria-label="Tutup Laporan">&times;</button>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Pekerja</span>
+          <span class="kpi-value" id="kpi-total">0</span>
+          <span class="kpi-sub">Total terinspeksi</span>
+        </div>
+        <div class="kpi-card kpi-green">
+          <span class="kpi-label">APD Lengkap</span>
+          <span class="kpi-value" id="kpi-complete">0</span>
+          <span class="kpi-sub">Akses Diizinkan</span>
+        </div>
+        <div class="kpi-card kpi-red">
+          <span class="kpi-label">Pelanggaran APD</span>
+          <span class="kpi-value" id="kpi-violations">0</span>
+          <span class="kpi-sub">Akses Ditolak</span>
+        </div>
+        <div class="kpi-card kpi-blue">
+          <span class="kpi-label">Tingkat Kepatuhan</span>
+          <span class="kpi-value" id="kpi-rate">100%</span>
+          <span class="kpi-sub">Standar HSE K3</span>
+        </div>
+      </div>
+
+      <!-- Toolbar: Filter Tabs & Export Action -->
+      <div class="reports-toolbar">
+        <div class="filter-tabs">
+          <button class="tab-btn active" data-filter="all" id="filter-tab-all">Semua Data</button>
+          <button class="tab-btn" data-filter="complete" id="filter-tab-complete">✅ Lengkap</button>
+          <button class="tab-btn" data-filter="incomplete" id="filter-tab-incomplete">⚠️ Pelanggaran</button>
+        </div>
+
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn-action" id="btn-refresh-reports" title="Muat ulang data audit">
+            🔄 Refresh
+          </button>
+          <button class="btn-action btn-primary" id="btn-export-csv" title="Unduh file CSV untuk laporan audit HSE">
+            ⬇️ Unduh CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Reports Data Table -->
+      <div class="table-responsive">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th style="width:70px;">Foto</th>
+              <th>Waktu</th>
+              <th>Pekerja</th>
+              <th>Status</th>
+              <th>Checklist APD</th>
+              <th>Sumber</th>
+              <th>Catatan Pelanggaran</th>
+            </tr>
+          </thead>
+          <tbody id="reports-table-body">
+            <tr>
+              <td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">
+                Memuat data riwayat pemeriksaan pekerja...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snapshot Full Preview Modal -->
+  <div class="modal-backdrop" id="snapshot-modal" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-sm" style="text-align:center;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="snapshot-modal-title">Snapshot Inspeksi Pekerja</h3>
+        <button class="modal-close" id="btn-close-snapshot">&times;</button>
+      </div>
+      <div style="margin:1rem 0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border-subtle); max-height:480px; display:flex; justify-content:center; background:#000;">
+        <img id="snapshot-modal-img" src="" alt="Worker Snapshot" style="max-height:460px; max-width:100%; object-fit:contain;">
+      </div>
+      <p id="snapshot-modal-caption" style="font-size:0.85rem; color:var(--text-secondary);"></p>
     </div>
   </div>
 

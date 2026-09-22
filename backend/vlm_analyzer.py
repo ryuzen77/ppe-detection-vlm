@@ -5,12 +5,14 @@ import time
 import io
 import cv2
 import numpy as np
+import threading
 from typing import Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pydantic import BaseModel, Field
 from PIL import Image
 
 from config import cfg
+from api_monitor import api_monitor
 
 class ItemDetail(BaseModel):
     detected: bool = Field(description="Apakah item APD terdeteksi digunakan dengan benar")
@@ -169,13 +171,19 @@ class LocalVisionAnalyzer:
 
 
 class VLMAnalyzer:
-    """Hybrid VLM Analyzer with instant Tier 1 Local Pre-check, optimized upload, and strict 2.0s timeout."""
+    """Hybrid VLM Analyzer with instant Tier 1 Local Pre-check, optimized upload,
+    strict 2.0s timeout, and Free-Tier Anti-Spam Concurrency Lock & Rate Limiter."""
     def __init__(self):
         self.api_key = cfg.GEMINI_API_KEY
         self.model_name = cfg.GEMINI_MODEL
         self.genai_client = None
         self.local_analyzer = LocalVisionAnalyzer()
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="VLM_Timeout_Guard")
+        
+        # Free Tier Anti-Spam Guards
+        self.api_lock = threading.Lock()
+        self.last_api_call_time: float = 0.0
+
         self._init_gemini()
 
     def _init_gemini(self):
@@ -192,11 +200,14 @@ class VLMAnalyzer:
                     system_instruction=SYSTEM_PROMPT
                 )
                 print(f"[VLMAnalyzer] Successfully connected to Gemini VLM ({self.model_name})")
+                api_monitor.status = "ONLINE"
             except Exception as e:
                 print(f"[VLMAnalyzer] Error configuring Gemini: {e}")
                 self.genai_client = None
+                api_monitor.record_error(str(e))
         else:
             self.genai_client = None
+            api_monitor.status = "OFFLINE"
             print("[VLMAnalyzer] GEMINI_API_KEY not set. Operating in HYBRID LOCAL GPU MODE.")
 
     def update_api_key(self, new_key: str):
@@ -206,6 +217,35 @@ class VLMAnalyzer:
 
     def is_live_api(self) -> bool:
         return self.genai_client is not None
+
+    def ping_api(self) -> dict:
+        """Sends a lightweight ping to verify API connectivity and measure round-trip latency."""
+        if not self.is_live_api():
+            return {
+                "status": "OFFLINE",
+                "latency_ms": 0,
+                "message": "API Key belum disetel atau offline"
+            }
+
+        start = time.time()
+        try:
+            resp = self.genai_client.generate_content("Ping. Jawab 'PONG'.")
+            dur_ms = round((time.time() - start) * 1000, 1)
+            api_monitor.record_success(dur_ms)
+            return {
+                "status": api_monitor.status,
+                "latency_ms": dur_ms,
+                "reply": resp.text.strip()[:30],
+                "message": "Koneksi Gemini API berhasil dan responsif"
+            }
+        except Exception as e:
+            dur_ms = round((time.time() - start) * 1000, 1)
+            api_monitor.record_error(str(e))
+            return {
+                "status": "ERROR",
+                "latency_ms": dur_ms,
+                "message": str(e)[:120]
+            }
 
     def _optimize_image_for_vlm(self, image_bgr: np.ndarray) -> Image.Image:
         """Resizes and compresses image to ~35KB for lightning-fast network upload."""
@@ -221,39 +261,83 @@ class VLMAnalyzer:
         return pil_img
 
     def analyze_person(self, person_crop_bgr: np.ndarray) -> APDInspectionResult:
-        """Hybrid tiered analysis: Runs local check in ~15ms, then Gemini with 2.0s strict timeout."""
+        """Hybrid tiered analysis: Runs local check in ~15ms, then Gemini with 2.0s strict timeout
+        and Free-Tier Concurrency Lock & Rate Limiting."""
         start_t = time.time()
         
         # 1. Tier 1: Local Real-Time GPU Analysis (~15ms)
         local_result = self.local_analyzer.analyze(person_crop_bgr)
 
-        # 2. If Gemini API is not configured or in offline mode, return instant local decision!
-        if not self.is_live_api():
-            local_result.inference_source = "OFFLINE_FALLBACK" if not self.api_key else "LOCAL_FAST_PASS"
+        # 2. Check if Operator Forced Offline Mode (100% Local GPU RTX 4060)
+        if api_monitor.engine_mode == "FORCE_LOCAL":
+            dur_ms = round((time.time() - start_t) * 1000, 1)
+            local_result.inference_source = "LOCAL_GPU"
+            local_result.inference_time_ms = dur_ms
+            local_result.notes = "[MODE OFFLINE AKTIF] Keputusan 100% diproses di GPU Lokal RTX 4060."
+            api_monitor.record_local_call(is_rate_guard=False)
             return local_result
 
-        # 3. Tier 2: Call Gemini with strict timeout (2.0s) so workers are NEVER stuck in queue
+        # 3. If Gemini API is not configured, return instant local decision!
+        if not self.is_live_api():
+            dur_ms = round((time.time() - start_t) * 1000, 1)
+            local_result.inference_source = "OFFLINE_FALLBACK" if not self.api_key else "LOCAL_FAST_PASS"
+            local_result.inference_time_ms = dur_ms
+            api_monitor.record_local_call(is_rate_guard=False)
+            return local_result
+
+        # 4. Free Tier Rate Limiter Guard (e.g., minimum 4.0s interval between Gemini calls)
+        now = time.time()
+        time_since_last = now - self.last_api_call_time
+        if time_since_last < cfg.FREE_TIER_MIN_INTERVAL_SECONDS:
+            dur_ms = round((time.time() - start_t) * 1000, 1)
+            print(f"[VLMAnalyzer] Anti-Spam Free Tier: Jeda baru {time_since_last:.1f}s (< {cfg.FREE_TIER_MIN_INTERVAL_SECONDS}s). Menggunakan Local GPU Fast-Pass.")
+            local_result.inference_source = "LOCAL_FAST_PASS (Free-Tier Rate Guard)"
+            local_result.inference_time_ms = dur_ms
+            local_result.notes = f"[PROTEKSI FREE TIER] Jeda {time_since_last:.1f}s < 4s, dialihkan aman ke GPU Lokal agar kuota tidak 429."
+            api_monitor.record_local_call(is_rate_guard=True)
+            return local_result
+
+        # 5. Free Tier Concurrency Lock (Mencegah spam paralel ganda ke Gemini)
+        acquired = self.api_lock.acquire(blocking=False)
+        if not acquired:
+            dur_ms = round((time.time() - start_t) * 1000, 1)
+            print("[VLMAnalyzer] Anti-Spam: API Lock sedang aktif. Dialihkan aman ke Local GPU.")
+            local_result.inference_source = "LOCAL_FAST_PASS (API Busy Lock Guard)"
+            local_result.inference_time_ms = dur_ms
+            local_result.notes = "[API SIBUK] Sedang melayani request lain, verifikasi diselesaikan via GPU Lokal."
+            api_monitor.record_local_call(is_rate_guard=True)
+            return local_result
+
+        # 6. Execute Gemini with Strict Timeout Guard (2.0s)
+        api_monitor.set_locked(True)
         try:
             future = self.executor.submit(self._call_gemini_api_internal, person_crop_bgr)
             gemini_result = future.result(timeout=cfg.GEMINI_TIMEOUT_SECONDS)
             dur_ms = round((time.time() - start_t) * 1000, 1)
             gemini_result.inference_source = "GEMINI_LIVE"
             gemini_result.inference_time_ms = dur_ms
+            self.last_api_call_time = time.time()
+            api_monitor.record_success(dur_ms)
             return gemini_result
         except TimeoutError:
-            print(f"[VLMAnalyzer] Gemini timed out (> {cfg.GEMINI_TIMEOUT_SECONDS}s). Using instant Local Fallback to prevent queue delay!")
+            print(f"[VLMAnalyzer] Gemini timed out (> {cfg.GEMINI_TIMEOUT_SECONDS}s). Menggunakan Local GPU Fallback!")
             dur_ms = round((time.time() - start_t) * 1000, 1)
-            local_result.inference_source = "OFFLINE_FALLBACK"
+            api_monitor.record_timeout(cfg.GEMINI_TIMEOUT_SECONDS)
+            local_result.inference_source = "OFFLINE_FALLBACK (API Timeout)"
             local_result.inference_time_ms = dur_ms
-            local_result.notes += f" [TIMEOUT {cfg.GEMINI_TIMEOUT_SECONDS}s: Keputusan diambil otomatis oleh Local GPU]"
+            local_result.notes = f"[TIMEOUT {cfg.GEMINI_TIMEOUT_SECONDS}s] API lambat/macet, keputusan otomatis diambil oleh GPU Lokal."
             return local_result
         except Exception as e:
             print(f"[VLMAnalyzer] Network error calling Gemini ({e}). Seamlessly using Local Fallback.")
             dur_ms = round((time.time() - start_t) * 1000, 1)
+            api_monitor.record_error(str(e))
             local_result.inference_source = "OFFLINE_FALLBACK"
             local_result.inference_time_ms = dur_ms
-            local_result.notes += " [OFFLINE: Internet terputus, keputusan otomatis oleh Local GPU]"
+            local_result.notes = f"[OFFLINE] Gangguan API ({str(e)[:50]}), keputusan otomatis diambil oleh GPU Lokal."
             return local_result
+        finally:
+            api_monitor.set_locked(False)
+            self.api_lock.release()
 
     def _call_gemini_api_internal(self, image_bgr: np.ndarray) -> APDInspectionResult:
         pil_img = self._optimize_image_for_vlm(image_bgr)

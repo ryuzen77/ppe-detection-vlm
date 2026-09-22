@@ -10,6 +10,8 @@ from detector import DetectionResult
 from vlm_analyzer import vlm_analyzer, APDInspectionResult
 from audio_engine import audio_player
 from notifier import notifier
+from report_manager import report_mgr
+from api_monitor import api_monitor
 
 class TrackState:
     INITIAL = "INITIAL"
@@ -125,6 +127,22 @@ class StateManager:
 
         try:
             result = vlm_analyzer.analyze_person(crop_img)
+
+            # Persist inspection to SQLite database and archive snapshot crop
+            saved_meta = report_mgr.save_inspection(
+                track_id=track_id,
+                is_complete=result.is_complete,
+                helm_data=result.helm.model_dump(),
+                rompi_data=result.rompi.model_dump(),
+                celana_data=result.celana_panjang.model_dump(),
+                sepatu_data=result.sepatu_tertutup.model_dump(),
+                missing_items=result.missing_items,
+                notes=result.notes,
+                inference_source=result.inference_source,
+                inference_time_ms=result.inference_time_ms,
+                crop_img=crop_img
+            )
+
             with self.lock:
                 if track_id in self.tracks:
                     track = self.tracks[track_id]
@@ -143,12 +161,12 @@ class StateManager:
                         "missing_items": result.missing_items,
                         "notes": result.notes,
                         "inference_source": result.inference_source,
-                        "inference_time_ms": result.inference_time_ms
+                        "inference_time_ms": result.inference_time_ms,
+                        "snapshot_filename": saved_meta.get("snapshot_filename", "")
                     }
                     self.inspection_history.insert(0, record)
                     if len(self.inspection_history) > 30:
                         self.inspection_history.pop()
-
 
                     if result.is_complete:
                         print(f"[StateManager] Track #{track_id}: APD LENGKAP! Green Light ON.")
@@ -217,8 +235,10 @@ class StateManager:
                     "right_ratio": cfg.CORRIDOR_RIGHT_RATIO
                 },
                 "light": notifier.get_status(),
-                "history": self.inspection_history[:5],
-                "is_live_gemini": vlm_analyzer.is_live_api()
+                "history": self.inspection_history[:8],
+                "is_live_gemini": vlm_analyzer.is_live_api(),
+                "api_monitor": api_monitor.get_status(),
+                "engine_mode": api_monitor.engine_mode
             }
 
 

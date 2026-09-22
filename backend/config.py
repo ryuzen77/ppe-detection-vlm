@@ -48,6 +48,7 @@ class Config:
     ENABLE_LOCAL_FAST_PASS: bool = True       # Tier 1 Local Engine di GPU RTX 4060 (~15ms)
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
     VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
+    FREE_TIER_MIN_INTERVAL_SECONDS: float = 4.0 # Jeda minimum antar panggilan API (Anti-Spam Free Tier 15 RPM)
 
     # Anti-Spam & Fast-Queue Settings
     # 2 frame berturut-turut cukup untuk memastikan subjek stabil (~66ms pada 30 FPS)

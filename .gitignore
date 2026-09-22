@@ -17,3 +17,7 @@ Thumbs.db
 ehthumbs.db
 [Dd]esktop.ini
 *.log
+
+# Generated worker audit records & snapshots
+backend/reports/*.db
+backend/reports/snapshots/*.jpg
