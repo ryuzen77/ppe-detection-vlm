@@ -12,9 +12,10 @@ Dokumen ini berisi panduan lengkap kebutuhan perangkat keras (hardware), spesifi
    - [Opsi B: Prototipe Meja Lab (LED Bulat Jumbo 10mm 5V)](#opsi-b-prototipe-meja-lab-led-bulat-jumbo-10mm-5v)
 3. [Daftar Kebutuhan Komponen (Bill of Materials & Biaya)](#3-daftar-kebutuhan-komponen-bill-of-materials--biaya)
 4. [Skema Rangkaian & Diagram Pengkabelan (Wiring Diagram)](#4-skema-rangkaian--diagram-pengkabelan-wiring-diagram)
-5. [Kode Firmware Mikrokontroler (Arduino / ESP32)](#5-kode-firmware-mikrokontroler-arduino--esp32)
-6. [Konfigurasi pada Backend Python](#6-konfigurasi-pada-backend-python)
-7. [Prosedur Pengujian & Troubleshooting](#7-prosedur-pengujian--troubleshooting)
+5. [Sistem Keamanan Kelistrikan & Proteksi Sirkuit (Protection Circuitry)](#5-sistem-keamanan-kelistrikan--proteksi-sirkuit-protection-circuitry)
+6. [Kode Firmware Mikrokontroler (Arduino / ESP32)](#6-kode-firmware-mikrokontroler-arduino--esp32)
+7. [Konfigurasi pada Backend Python](#7-konfigurasi-pada-backend-python)
+8. [Prosedur Pengujian & Troubleshooting](#8-prosedur-pengujian--troubleshooting)
 
 ---
 
@@ -117,22 +118,25 @@ Cocok untuk pengujian di atas meja kerja, presentasi, atau simulasi sebelum peng
 
 ## 3. Daftar Kebutuhan Komponen (Bill of Materials & Biaya)
 
-Berikut rincian perkiraan biaya untuk **Opsi A (Standar Lapangan/Gerbang Industri)**:
+Berikut rincian perkiraan biaya untuk **Opsi A (Standar Lapangan/Gerbang Industri)** lengkap dengan komponen proteksi kelistrikan:
 
-| No | Komponen | Spesifikasi Teknis | Jumlah | Estimasi Harga Satuan | Total |
+| No | Komponen | Spesifikasi Teknis & Fungsi | Jumlah | Estimasi Harga Satuan | Total |
 | :---: | :--- | :--- | :---: | :---: | :---: |
 | 1 | **Mikrokontroler** | Arduino Nano V3 CH340 + Kabel Mini USB | 1 unit | Rp 42.000 | Rp 42.000 |
 | 2 | **Lampu Bulat Hijau** | Industrial LED Pilot Lamp 22mm 12V DC (Green) | 1 unit | Rp 16.000 | Rp 16.000 |
 | 3 | **Lampu Bulat Merah** | Industrial LED Pilot Lamp 22mm 12V DC (Red) | 1 unit | Rp 16.000 | Rp 16.000 |
-| 4 | **Modul Driver** | 2-Channel Relay Module 5V Optocoupler | 1 unit | Rp 18.000 | Rp 18.000 |
-| 5 | **Power Supply Adaptor** | Adaptor AC 220V ke DC 12V 2A | 1 unit | Rp 35.000 | Rp 35.000 |
+| 4 | **Modul Driver** | 2-Channel Relay Module 5V with Optocoupler | 1 unit | Rp 18.000 | Rp 18.000 |
+| 5 | **Power Supply Adaptor** | Adaptor AC 220V ke DC 12V 2A Regulated | 1 unit | Rp 35.000 | Rp 35.000 |
 | 6 | **Jack DC Female** | DC Power Female Jack Socket Screw Terminal 5.5x2.1mm | 1 pcs | Rp 3.500 | Rp 3.500 |
-| 7 | **Box Enclosure** | Box Panel Outdoor Waterproof IP65 (misal uk. 150x100x70mm) | 1 unit | Rp 45.000 | Rp 45.000 |
-| 8 | **Kabel & Aksesoris** | Kabel jumper dupont, kabel serabut 2x0.75mm, terminal strip | 1 set | Rp 25.000 | Rp 25.000 |
-| **Total** | **Estimasi Biaya Keseluruhan** | | | | **± Rp 200.500** |
+| 7 | **Sekring (Fuse) + Holder** | Glass Fuse 5x20mm 1.5A/2A Fast-Blow + Inline Holder *(Proteksi Korsleting)* | 1 set | Rp 5.000 | Rp 5.000 |
+| 8 | **Dioda Proteksi** | Dioda Silikon 1N5408 (3A) *(Proteksi Polaritas Terbalik)* | 2 pcs | Rp 1.500 | Rp 3.000 |
+| 9 | **Resistor Proteksi** | Resistor 10k $\Omega$ 1/4W *(Pull-down anti-glitch pin D2/D3)* | 5 pcs | Rp 500 | Rp 2.500 |
+| 10 | **Box Enclosure** | Box Panel Outdoor Waterproof IP65 (misal uk. 150x100x70mm) | 1 unit | Rp 45.000 | Rp 45.000 |
+| 11 | **Kabel & Aksesoris** | Kabel jumper dupont, kabel serabut 2x0.75mm, terminal strip | 1 set | Rp 25.000 | Rp 25.000 |
+| **Total** | **Estimasi Biaya Keseluruhan** | *(Termasuk Komponen Proteksi Penuh)* | | | **± Rp 211.000** |
 
 > [!TIP]
-> Semua komponen di atas merupakan barang umum industri dan sangat mudah didapatkan di marketplace lokal (Tokopedia / Shopee / toko komponen elektronik).
+> Penambahan komponen proteksi kelistrikan (Sekring, Dioda, dan Resistor) hanya memerlukan biaya tambahan **± Rp 10.500**, namun sangat krusial untuk melindungi komputer/laptop server seharga belasan juta rupiah dari lonjakan arus dan percikan listrik lapangan.
 
 ---
 
@@ -143,9 +147,10 @@ Berikut rincian perkiraan biaya untuk **Opsi A (Standar Lapangan/Gerbang Industr
 - **Arduino GND** $\rightarrow$ **GND** Modul Relay
 - **Arduino Pin D2** $\rightarrow$ **IN1** Modul Relay (Kontrol Lampu Hijau)
 - **Arduino Pin D3** $\rightarrow$ **IN2** Modul Relay (Kontrol Lampu Merah)
+- *(Proteksi Tambahan)*: Pasang **Resistor 10k $\Omega$** dari Pin D2 ke GND, dan dari Pin D3 ke GND (sebagai pull-down anti-glitch).
 
-### Pengkabelan Relay ke Lampu Pilot 12V & Adaptor:
-- **Adaptor (+) 12V** $\rightarrow$ Sambungkan ke Terminal **COM (Common)** pada Relay 1 dan Relay 2.
+### Pengkabelan Relay ke Lampu Pilot 12V & Adaptor (Dengan Proteksi Fuse & Dioda):
+- **Adaptor (+) 12V** $\rightarrow$ Masuk ke **Fuse (Sekring 1.5A/2A)** $\rightarrow$ Masuk Anoda **Dioda 1N5408** $\rightarrow$ Sambungkan ke Terminal **COM (Common)** Relay 1 dan Relay 2.
 - **Relay 1 Terminal NO (Normally Open)** $\rightarrow$ Terminal (+) Lampu Hijau.
 - **Relay 2 Terminal NO (Normally Open)** $\rightarrow$ Terminal (+) Lampu Merah.
 - **Adaptor (-) GND 12V** $\rightarrow$ Sambungkan langsung ke Terminal (-) Lampu Hijau dan Terminal (-) Lampu Merah.
@@ -153,20 +158,20 @@ Berikut rincian perkiraan biaya untuk **Opsi A (Standar Lapangan/Gerbang Industr
 ```
        ADAPTOR 12V DC
       ┌───────────────┐
-      │  (+) 12V DC   │─────────┬────────────────────────┐
-      │  (-) GND      │───┐     │                        │
-      └───────────────┘   │     │                        │
-                          │     ▼                        ▼
-                          │  [RELAY 1 (COM)]          [RELAY 2 (COM)]
-                          │  [RELAY 1 (NO) ]          [RELAY 2 (NO) ]
-                          │         │                        │
-                          │         ▼ (+)                    ▼ (+)
-                          │   ┌───────────────┐        ┌───────────────┐
-                          │   │  LAMPU BULAT  │        │  LAMPU BULAT  │
-                          │   │  HIJAU (12V)  │        │  MERAH (12V)  │
-                          │   └───────┬───────┘        └───────┬───────┘
-                          │           │ (-)                    │ (-)
-                          └───────────┴────────────────────────┘
+      │  (+) 12V DC   │───[ FUSE 2A ]───[ DIODA 1N5408 ]──┬──────────────────────┐
+      │  (-) GND      │───┐                               │                      │
+      └───────────────┘   │                               │                      │
+                          │                               ▼                      ▼
+                          │                        [RELAY 1 (COM)]        [RELAY 2 (COM)]
+                          │                        [RELAY 1 (NO) ]        [RELAY 2 (NO) ]
+                          │                               │                      │
+                          │                               ▼ (+)                  ▼ (+)
+                          │                         ┌───────────────┐      ┌───────────────┐
+                          │                         │  LAMPU BULAT  │      │  LAMPU BULAT  │
+                          │                         │  HIJAU (12V)  │      │  MERAH (12V)  │
+                          │                         └───────┬───────┘      └───────┬───────┘
+                          │                                 │ (-)                  │ (-)
+                          └─────────────────────────────────┴──────────────────────┘
 ```
 
 > [!NOTE]
@@ -174,7 +179,52 @@ Berikut rincian perkiraan biaya untuk **Opsi A (Standar Lapangan/Gerbang Industr
 
 ---
 
-## 5. Kode Firmware Mikrokontroler (Arduino / ESP32)
+## 5. Sistem Keamanan Kelistrikan & Proteksi Sirkuit (Protection Circuitry)
+
+Di lingkungan lapangan nyata (pabrik, konstruksi, atau gate outdoor), terdapat berbagai risiko kelistrikan yang **wajib dimitigasi**:
+
+### 1. Resistor Pembatas Arus (Current Limiting Resistor)
+* **Kapan Dibutuhkan?**
+  * **Jika menggunakan LED Bulat Biasa (5mm / 10mm raw LED)**: **WAJIB MUTLAK** dipasang resistor seri (220 $\Omega$ s/d 1k $\Omega$). Jika tidak ada resistor, LED akan langsung dialiri arus tak terbatas, meledak, atau terbakar dalam hitungan detik.
+  * **Jika menggunakan Industrial Pilot Lamp Ø22mm 12V (AD16-22DS)**: **TIDAK PERLU** menambah resistor eksternal karena di dalam rumah lampu pilot industri tersebut sudah tertanam resistor ballast dan sirkuit penyearah internal dari pabrikan.
+
+### 2. Resistor Pull-Down / Pull-Up (10k $\Omega$) — Pencegah Kedip Palsu (Anti-Glitch Boot)
+* **Kelemahan Tanpa Resistor**:
+  Ketika komputer pertama kali dinyalakan atau Arduino sedang di-reset/booting, semua pin GPIO mikrokontroler berada dalam status *High-Impedance (Floating)* selama 1–2 detik. Tanpa resistor acuan, pin melayang ini dapat menangkap gelombang elektromagnetik sekitar dan memicu relay berderik (*chattering*) atau lampu berkedip sekilas.
+* **Solusi Pengaman**:
+  Pasang resistor **10k $\Omega$** dari Pin D2 ke GND dan dari Pin D3 ke GND. Ini menjaga tegangan pin tetap stabil di 0V (LOW) sampai Arduino siap memberikan logika perintah yang pasti.
+
+### 3. Proteksi Arus Lebih & Korsleting (Fast-Blow Glass Fuse 1.5A - 2A)
+* **Kelemahan Tanpa Sekring**:
+  Kabel 12V yang ditarik ke tiang gerbang besi rentan terjepit daun pintu, terkelupas, digigit hama, atau terkena air hujan. Jika terjadi hubungan singkat (*short circuit*), kabel dapat meleleh, adaptor meledak, atau menimbulkan bahaya kebakaran.
+* **Solusi Pengaman**:
+  Pasang sebuah **Fuse Kaca 1.5A atau 2A (Fast-Blow)** tepat pada kabel positif (+) 12V yang keluar dari adaptor power supply. Jika terjadi korsleting, sekring langsung putus dalam milidetik dan melindungi adaptor serta kabel.
+
+### 4. Dioda Proteksi Polaritas Terbalik (Reverse Polarity Protection - 1N5408)
+* **Kelemahan Tanpa Dioda**:
+  Kesalahan teknisi saat memasang kabel adaptor (kutub positif tertukar dengan negatif) akan langsung merusak lampu pilot atau modul relay.
+* **Solusi Pengaman**:
+  Pasang dioda silikon berkemampuan 3 Ampere (**1N5408**) secara seri di jalur positif (+) adaptor sebelum masuk ke terminal COM relay. Dioda hanya mengalirkan arus satu arah sehingga jika kutub terbalik, tidak ada arus yang mengalir.
+
+### 5. Isolasi Optocoupler Penuh (Melepas Jumper JD-VCC pada Modul Relay)
+* **Kelemahan Tanpa Isolasi Penuh**:
+  Pada modul relay 2-channel standar, terdapat jumper kecil bertuliskan **VCC - JD-VCC**. Jika jumper ini dibiarkan terpasang, arus elektromagnetik koil relay (~70mA per channel) dan lonjakan induktif (*flyback spike*) akan disedot langsung dari port USB komputer/laptop. Ini sering menyebabkan USB PC mendadak *freeze*, *blue screen*, atau mikrokontroler hang/reset sendiri.
+* **Solusi Pengaman (Optoisolasi Total)**:
+  1. **Cabut jumper JD-VCC**.
+  2. Sambungkan pin **VCC** ke 5V Arduino (hanya untuk menyalakan LED optocoupler internal berdaya mikro < 5mA).
+  3. Sambungkan pin **JD-VCC** ke sumber 5V terpisah (atau adaptor terpisah).
+  4. Jangan sambungkan GND Arduino ke GND power relay. Dengan cara ini, sirkuit komputer dan sirkuit beban relay **terpisah secara optik (galvanic isolation)** 100%.
+
+### 6. Proteksi Port USB Komputer dari Ground Loop & Listrik Statis Gerbang
+* **Kelemahan Lapangan**:
+  Tiang gerbang berbahan besi dapat mengalirkan listrik statis (*ESD*) akibat gesekan debu atau perbedaan potensial tanah (*ground loop*). Arus bocor ini dapat merambat melalui kabel USB dan membakar IC USB Host pada motherboard komputer/laptop RTX 4060.
+* **Solusi Pengaman**:
+  * Gunakan kabel USB yang memiliki **Ferrite Bead (silinder cincin hitam di ujung kabel)** sebagai peredam noise frekuensi tinggi.
+  * Untuk instalasi permanen luar ruangan, pasang **USB Isolator Module (berbasis ADuM3160, harga ~Rp 45.000)** di antara port USB PC dan Arduino. Modul ini memberikan isolasi hingga 1500V, menjamin laptop/PC aman total dari segala gangguan kelistrikan gerbang.
+
+---
+
+## 6. Kode Firmware Mikrokontroler (Arduino / ESP32)
 
 Salin kode C++ berikut ke dalam **Arduino IDE**, pilih board **Arduino Nano** (atau Uno), lalu unggah (*Upload*):
 
