@@ -364,8 +364,35 @@ if frontend_dir.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 if __name__ == "__main__":
+    import contextlib
+    import signal
     import uvicorn
+    from uvicorn.server import HANDLED_SIGNALS
+
+    class GracefulServer(uvicorn.Server):
+        """Custom Uvicorn Server that suppresses Windows SIGINT/CancelledError traceback on Ctrl+C."""
+        @contextlib.contextmanager
+        def capture_signals(self):
+            original_handlers = {}
+            for sig in HANDLED_SIGNALS:
+                try:
+                    original_handlers[sig] = signal.signal(sig, self.handle_exit)
+                except (ValueError, OSError):
+                    pass
+            try:
+                yield
+            finally:
+                for sig, handler in original_handlers.items():
+                    try:
+                        signal.signal(sig, handler)
+                    except (ValueError, OSError):
+                        pass
+                # Intentionally avoid re-raising SIGINT on Windows so event loop exits with zero error trace
+
+    config = uvicorn.Config("main:app", host=cfg.HOST, port=cfg.PORT, reload=False, log_level="info")
+    server = GracefulServer(config)
     try:
-        uvicorn.run("main:app", host=cfg.HOST, port=cfg.PORT, reload=False)
-    except KeyboardInterrupt:
-        print("\n[Server] Shutdown signal (CTRL+C) received. Server stopped cleanly.")
+        server.run()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    print("\n[Server] Shutdown selesai secara bersih. Sampai jumpa!")
