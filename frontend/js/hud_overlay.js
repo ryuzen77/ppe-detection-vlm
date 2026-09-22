@@ -61,6 +61,9 @@ export class HUDOverlay {
       this.ctx.stroke();
 
       this.ctx.setLineDash([]); // Reset dash
+
+      // Draw Industrial Footprint Standoff Guide Zone at corridor bottom
+      this.drawFootprintZone(width, height, cx1, cx2);
     }
 
     if (!this.latestDetections || this.latestDetections.length === 0) {
@@ -81,10 +84,18 @@ export class HUDOverlay {
       if (isInside) {
         if (det.is_full_body) {
           color = '#00e699';
-          statusLabel = 'FULL BODY';
+          statusLabel = 'POSISI PAS (FULL BODY)';
         } else {
           color = '#ff3366';
-          statusLabel = 'MUNDUR';
+          if (det.clip_type === 'HEAD_CLIPPED') {
+            statusLabel = 'MUNDUR SEDIKIT (KEPALA)';
+          } else if (det.clip_type === 'FEET_CLIPPED') {
+            statusLabel = 'MUNDUR 1 LANGKAH (KAKI)';
+          } else if (det.clip_type === 'TOO_FAR') {
+            statusLabel = 'SILAKAN MENDEKAT';
+          } else {
+            statusLabel = 'MUNDUR (TERPOTONG)';
+          }
         }
       }
 
@@ -99,6 +110,29 @@ export class HUDOverlay {
       // 3. Draw Track Badge
       this.drawTrackBadge(bx, by, det.track_id, statusLabel, color);
     }
+  }
+
+  drawFootprintZone(width, height, cx1, cx2) {
+    const zoneW = (cx2 - cx1) * 0.65;
+    const zoneH = Math.min(height * 0.16, 110);
+    const zoneX = cx1 + ((cx2 - cx1) - zoneW) / 2;
+    const zoneY = height - zoneH - 22;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(0, 230, 153, 0.45)';
+    this.ctx.fillStyle = 'rgba(0, 230, 153, 0.05)';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.setLineDash([6, 5]);
+
+    this.ctx.strokeRect(zoneX, zoneY, zoneW, zoneH);
+    this.ctx.fillRect(zoneX, zoneY, zoneW, zoneH);
+
+    this.ctx.setLineDash([]);
+    this.ctx.font = '600 11px "Outfit", sans-serif';
+    this.ctx.fillStyle = 'rgba(0, 230, 153, 0.9)';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('👣 AREA JEJAK KAKI (BERDIRI DI SINI)', zoneX + zoneW / 2, zoneY + zoneH / 2 + 4);
+    this.ctx.restore();
   }
 
   drawCornerBrackets(x, y, w, h, color) {

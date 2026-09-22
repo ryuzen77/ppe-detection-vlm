@@ -67,9 +67,14 @@ class AudioEngine:
             return
         self.queue.put((sound_name, min_interval))
 
-    def play_step_back(self):
-        """Audio cue: 'Silakan mundur sampai seluruh tubuh terlihat.'"""
-        self.play("mundur", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
+    def play_step_back(self, clip_type: str = "FEET_CLIPPED"):
+        """Audio cue tailored to which part of the body is clipped (head or feet)."""
+        if clip_type == "HEAD_CLIPPED":
+            self.play("mundur_kepala", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
+        elif clip_type == "FEET_CLIPPED":
+            self.play("mundur_kaki", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
+        else:
+            self.play("mundur", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
 
     def play_result(self, is_complete: bool, missing_items: list[str] = None):
         """Plays corresponding voice based on PPE detection result."""

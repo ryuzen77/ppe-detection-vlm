@@ -7,7 +7,7 @@ from config import cfg
 class DetectionResult:
     def __init__(self, track_id: int, bbox: list[int], is_full_body: bool, 
                  reason: str, is_inside_corridor: bool = True, keypoints=None, 
-                 crop_img=None, conf: float = 0.0):
+                 crop_img=None, conf: float = 0.0, clip_type: str = "OPTIMAL"):
         self.track_id = track_id
         self.bbox = bbox  # [x1, y1, x2, y2]
         self.is_full_body = is_full_body
@@ -16,6 +16,7 @@ class DetectionResult:
         self.keypoints = keypoints
         self.crop_img = crop_img
         self.conf = conf
+        self.clip_type = clip_type
 
 class PersonDetector:
     """YOLOv8-Small Pose Detector with tracking & robust Full-Body verification."""
@@ -26,7 +27,7 @@ class PersonDetector:
         print("[PersonDetector] Model loaded successfully.")
 
     def detect_and_track(self, frame: np.ndarray) -> list[DetectionResult]:
-        """Runs YOLO tracking and full-body filter on the current frame."""
+        """Runs YOLO tracking and height-adaptive full-body filter on the current frame."""
         h, w = frame.shape[:2]
         results = self.model.track(
             source=frame,
@@ -73,51 +74,88 @@ class PersonDetector:
             # Check if person is inside the center inspection corridor
             is_inside_corridor = (corridor_x1 <= center_x <= corridor_x2) if cfg.ENABLE_CORRIDOR_FILTER else True
 
-            # Check Full-Body Conditions
+            # Anatomical Full-Body Verification (Adaptif terhadap Orang Tinggi & Pendek)
             is_full_body = True
             reason = "Full body terdeteksi sempurna"
+            clip_type = "OPTIMAL"
 
             if not is_inside_corridor:
                 is_full_body = False
-                reason = "Di luar jalur inspeksi (silakan ke tengah)"
+                reason = "Di luar jalur inspeksi (silakan berdiri di tengah)"
+                clip_type = "OUTSIDE_CORRIDOR"
 
-            # 1. Height ratio check (avoid people too far in background)
+            # 1. Height ratio bounds
             elif h_ratio < cfg.MIN_PERSON_HEIGHT_RATIO:
                 is_full_body = False
-                reason = "Terlalu jauh, silakan mendekat ke area inspeksi"
-
-            # 2. Border clipping check (approaching too close to camera)
-            elif y1 <= cfg.BORDER_MARGIN_TOP_PX:
+                reason = "Terlalu jauh, silakan mendekat ke area gerbang"
+                clip_type = "TOO_FAR"
+            elif h_ratio > cfg.MAX_PERSON_HEIGHT_RATIO:
                 is_full_body = False
-                reason = "Kepala terpotong di tepi atas"
-            elif y2 >= (h - cfg.BORDER_MARGIN_BOTTOM_PX):
-                is_full_body = False
-                reason = "Kaki terpotong di tepi bawah"
+                reason = "Terlalu dekat ke kamera (silakan mundur)"
+                clip_type = "TOO_CLOSE"
 
-            # 3. Pose Keypoints check (Head and Ankles/Feet)
+            # 2. Keypoint Anatomical Height-Adaptive Verification
             elif has_pose and keypoints_data is not None and idx < len(keypoints_data):
                 kpts = keypoints_data[idx]
+                
+                # Head / Face keypoints: 0=nose, 1=left eye, 2=right eye, 5=left shoulder, 6=right shoulder
                 nose_conf = kpts[0][2]
-                left_ankle_conf = kpts[15][2]
-                right_ankle_conf = kpts[16][2]
-                left_knee_conf = kpts[13][2]
-                right_knee_conf = kpts[14][2]
+                nose_y = kpts[0][1]
+                l_eye_conf = kpts[1][2]
+                r_eye_conf = kpts[2][2]
+                l_sh_conf = kpts[5][2]
+                r_sh_conf = kpts[6][2]
 
-                # Head visibility check
-                if nose_conf < cfg.KEYPOINT_CONF_THRESHOLD and kpts[1][2] < cfg.KEYPOINT_CONF_THRESHOLD:
+                # Leg / Feet keypoints: 13=left knee, 14=right knee, 15=left ankle, 16=right ankle
+                l_ankle_conf = kpts[15][2]
+                r_ankle_conf = kpts[16][2]
+                l_knee_conf = kpts[13][2]
+                r_knee_conf = kpts[14][2]
+
+                # Calculate head scale from shoulder-to-nose distance (for tall person headroom validation)
+                sh_y_candidates = []
+                if l_sh_conf >= cfg.KEYPOINT_CONF_THRESHOLD: sh_y_candidates.append(kpts[5][1])
+                if r_sh_conf >= cfg.KEYPOINT_CONF_THRESHOLD: sh_y_candidates.append(kpts[6][1])
+                sh_y = float(np.mean(sh_y_candidates)) if sh_y_candidates else (y1 + box_h * 0.20)
+
+                head_scale = max(sh_y - nose_y, box_h * 0.12) if (nose_conf >= cfg.KEYPOINT_CONF_THRESHOLD and sh_y > nose_y) else (box_h * 0.15)
+                expected_helmet_top = nose_y - 0.65 * head_scale
+
+                # Check A: Head / Hard Hat clipping
+                # For tall workers, ensure helmet headroom exists above the nose
+                if y1 <= 5 or expected_helmet_top < 0 or (nose_conf < cfg.KEYPOINT_CONF_THRESHOLD and l_eye_conf < cfg.KEYPOINT_CONF_THRESHOLD and r_eye_conf < cfg.KEYPOINT_CONF_THRESHOLD):
                     is_full_body = False
-                    reason = "Kepala/Wajah belum terlihat jelas"
+                    reason = "Kepala/Helm terpotong (silakan mundur sedikit)"
+                    clip_type = "HEAD_CLIPPED"
 
-                # Feet / Ankle visibility check
-                ankles_visible = (left_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD or 
-                                  right_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD)
-                knees_visible = (left_knee_conf >= cfg.KEYPOINT_CONF_THRESHOLD or 
-                                 right_knee_conf >= cfg.KEYPOINT_CONF_THRESHOLD)
+                # Check B: Feet / Shoes clipping
+                ankles_visible = (l_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD or r_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD)
+                knees_visible = (l_knee_conf >= cfg.KEYPOINT_CONF_THRESHOLD or r_knee_conf >= cfg.KEYPOINT_CONF_THRESHOLD)
 
-                if not ankles_visible:
-                    if not knees_visible or y2 >= (h - cfg.BORDER_MARGIN_BOTTOM_PX * 2):
+                ankle_y_max = 0.0
+                if l_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[15][1]))
+                if r_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[16][1]))
+
+                if y2 >= (h - cfg.BORDER_MARGIN_BOTTOM_PX) or (ankle_y_max > 0 and ankle_y_max >= (h - 8)):
+                    is_full_body = False
+                    reason = "Kaki/Sepatu terpotong (silakan mundur satu langkah)"
+                    clip_type = "FEET_CLIPPED"
+                elif not ankles_visible:
+                    if not knees_visible or y2 >= (h - 30):
                         is_full_body = False
-                        reason = "Kaki/Sepatu terpotong atau belum terlihat"
+                        reason = "Kaki belum terlihat (silakan mundur satu langkah)"
+                        clip_type = "FEET_CLIPPED"
+
+            # Fallback if no pose keypoints available
+            else:
+                if y1 <= cfg.BORDER_MARGIN_TOP_PX:
+                    is_full_body = False
+                    reason = "Kepala/Helm terpotong di tepi atas"
+                    clip_type = "HEAD_CLIPPED"
+                elif y2 >= (h - cfg.BORDER_MARGIN_BOTTOM_PX):
+                    is_full_body = False
+                    reason = "Kaki terpotong di tepi bawah"
+                    clip_type = "FEET_CLIPPED"
 
             # Extract crop for VLM (add slight margin around bbox for context)
             margin_y = int(box_h * 0.05)
@@ -137,8 +175,11 @@ class PersonDetector:
                 is_inside_corridor=is_inside_corridor,
                 keypoints=kpts_to_save,
                 crop_img=crop_img,
-                conf=float(conf)
+                conf=float(conf),
+                clip_type=clip_type
             ))
+
+        return detections
 
         return detections
 

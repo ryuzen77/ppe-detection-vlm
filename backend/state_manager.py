@@ -33,6 +33,7 @@ class PersonTrackInfo:
         self.analysis_timestamp: Optional[float] = None
         self.is_full_body_now = False
         self.current_reason = ""
+        self.clip_type = "OPTIMAL"
         self.bbox: list[int] = [0, 0, 0, 0]
 
 class StateManager:
@@ -64,6 +65,7 @@ class StateManager:
                 track.last_seen = now
                 track.is_full_body_now = det.is_full_body
                 track.current_reason = det.reason
+                track.clip_type = getattr(det, 'clip_type', 'OPTIMAL')
                 track.latest_crop = det.crop_img
                 track.bbox = det.bbox
 
@@ -85,12 +87,12 @@ class StateManager:
                     track.state = TrackState.STEP_BACK_WARNING
                     track.stable_frames = 0
                     
-                    # Play voice prompt: "Silakan mundur sampai seluruh tubuh terlihat."
+                    # Play voice prompt tailored to head vs feet clipping
                     # Debounced so it doesn't spam speaker
                     if (now - track.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
-                        audio_player.play_step_back()
+                        audio_player.play_step_back(clip_type=track.clip_type)
                         track.last_step_back_audio_time = now
-                        notifier.set_incomplete("Peringatan: Silakan mundur sampai seluruh tubuh terlihat")
+                        notifier.set_incomplete(f"Peringatan: {det.reason}")
                 else:
                     # Full body confirmed inside corridor
                     track.stable_frames += 1
@@ -208,6 +210,7 @@ class StateManager:
                     "is_full_body": d.is_full_body,
                     "is_inside_corridor": getattr(d, 'is_inside_corridor', True),
                     "reason": d.reason,
+                    "clip_type": getattr(d, 'clip_type', 'OPTIMAL'),
                     "conf": round(d.conf, 2),
                     "keypoints": d.keypoints
                 })
@@ -220,6 +223,7 @@ class StateManager:
                     "state": t.state,
                     "is_full_body": t.is_full_body_now,
                     "reason": t.current_reason,
+                    "clip_type": t.clip_type,
                     "stable_frames": t.stable_frames,
                     "vlm_result": t.vlm_result.model_dump() if t.vlm_result else None
                 }

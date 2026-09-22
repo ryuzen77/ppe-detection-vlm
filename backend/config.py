@@ -31,14 +31,15 @@ class Config:
     CORRIDOR_LEFT_RATIO: float = 0.28   # Batas kiri lorong (~358px pada 1280px)
     CORRIDOR_RIGHT_RATIO: float = 0.72  # Batas kanan lorong (~922px pada 1280px)
 
-    # Full Body Filter Rules
-    # Margin in pixels from frame borders (if person touches top/bottom border within this margin, considered clipped)
-    BORDER_MARGIN_TOP_PX: int = 35
-    BORDER_MARGIN_BOTTOM_PX: int = 40
-    # Minimum person height ratio relative to frame height (to ignore far background people)
-    MIN_PERSON_HEIGHT_RATIO: float = 0.40
-    # Required keypoints visibility confidence
-    KEYPOINT_CONF_THRESHOLD: float = 0.4
+    # Full Body Filter Rules (Toleransi Adaptif Tinggi Badan Pekerja)
+    # Margin fleksibel pada tepi frame (orang tinggi vs orang pendek)
+    BORDER_MARGIN_TOP_PX: int = 15
+    BORDER_MARGIN_BOTTOM_PX: int = 15
+    # Rentang tinggi orang relatif terhadap frame (35% s/d 96%)
+    MIN_PERSON_HEIGHT_RATIO: float = 0.35
+    MAX_PERSON_HEIGHT_RATIO: float = 0.96
+    # Ambang kepercayaan deteksi keypoint pose tubuh (mata, bahu, lutut, kaki)
+    KEYPOINT_CONF_THRESHOLD: float = 0.35
 
     # Gemini VLM & Hybrid Engine Settings (Server-side only)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

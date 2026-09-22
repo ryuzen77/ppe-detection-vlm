@@ -7,6 +7,9 @@ AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 PROMPTS = {
     "mundur": "Silakan mundur sampai seluruh tubuh terlihat.",
+    "mundur_kepala": "Silakan mundur sedikit, kepala terlalu dekat.",
+    "mundur_kaki": "Silakan mundur satu langkah sampai kaki terlihat.",
+    "posisi_pas": "Posisi tubuh sudah tepat. Mohon tunggu analisa APD.",
     "lengkap": "APD lengkap. Akses diizinkan. Silakan masuk.",
     "tidak_lengkap": "Peringatan! APD Anda tidak lengkap. Akses ditolak.",
     "kurang_helm": "Peringatan! Anda belum memakai helm keselamatan.",
