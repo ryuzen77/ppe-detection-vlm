@@ -1,6 +1,7 @@
 import time
 from typing import Optional
-from config import cfg
+from .config import cfg
+from . import messages
 
 class LightState:
     OFF = "OFF"
@@ -23,9 +24,9 @@ class IoTNotifier:
                 import serial
                 if cfg.IOT_SERIAL_PORT.startswith("rfc2217://") or cfg.IOT_SERIAL_PORT.startswith("socket://"):
                     import serial.rfc2217
-                    self.serial_conn = serial.serial_for_url(cfg.IOT_SERIAL_PORT, baudrate=cfg.IOT_SERIAL_BAUD, timeout=1)
+                    self.serial_conn = serial.serial_for_url(cfg.IOT_SERIAL_PORT, baudrate=cfg.IOT_SERIAL_BAUD, timeout=cfg.IOT_SERIAL_TIMEOUT_SECONDS)
                 else:
-                    self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=1)
+                    self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=cfg.IOT_SERIAL_TIMEOUT_SECONDS)
                 print(f"[IoTNotifier] Connected to Serial port {cfg.IOT_SERIAL_PORT}")
             except Exception as e:
                 print(f"[IoTNotifier] Serial connection failed: {e}")
@@ -54,7 +55,7 @@ class IoTNotifier:
         url = f"{base_url}/api/light?state={state}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "SafeguardAI/1.0"})
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
+            with urllib.request.urlopen(req, timeout=cfg.IOT_HTTP_TIMEOUT_SECONDS) as resp:
                 pass
         except Exception as e:
             print(f"[IoTNotifier] Wireless HTTP to ESP32 failed ({url}): {e}")
@@ -75,15 +76,15 @@ class NotifierManager:
         self.current_state = LightState.OFF
         self.last_change_time = time.time()
         self.iot = IoTNotifier()
-        self.message = "Standby"
+        self.message = messages.LIGHT_BOOT
 
-    def set_complete(self, msg: str = "Akses Diizinkan - APD Lengkap"):
+    def set_complete(self, msg: str = messages.LIGHT_GRANTED_DEFAULT):
         self.current_state = LightState.GREEN
         self.message = msg
         self.last_change_time = time.time()
         self.iot.set_green()
 
-    def set_incomplete(self, msg: str = "Akses Ditolak - APD Tidak Lengkap"):
+    def set_incomplete(self, msg: str = messages.LIGHT_DENIED_DEFAULT):
         self.current_state = LightState.RED
         self.message = msg
         self.last_change_time = time.time()
@@ -91,7 +92,7 @@ class NotifierManager:
 
     def set_idle(self):
         self.current_state = LightState.OFF
-        self.message = "Standby - Menunggu Pekerja"
+        self.message = messages.LIGHT_IDLE
         self.iot.set_off()
 
     def get_status(self) -> dict:

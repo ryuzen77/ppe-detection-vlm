@@ -4,16 +4,18 @@ import time
 import cv2
 import numpy as np
 
-# Ensure backend directory is in sys.path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
+# Akar repo dimasukkan ke sys.path supaya paket `backend` bisa diimpor, baik
+# lewat `python -m backend.test_lifecycle` maupun `python backend/test_lifecycle.py`.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 
-from config import cfg
-from detector import DetectionResult
-from state_manager import state_mgr, TrackState
-from notifier import notifier
-from audio_engine import audio_player
-from vlm_analyzer import vlm_analyzer
+from backend.config import cfg
+from backend.detector import DetectionResult
+from backend.state_manager import state_mgr, TrackState
+from backend.notifier import notifier
+from backend.audio_engine import audio_player
+from backend.vlm_analyzer import vlm_analyzer
+from backend import ppe_rules
 
 def create_synthetic_person_crop(has_vest: bool = True) -> np.ndarray:
     """Creates a synthetic cropped person image for testing."""
@@ -110,10 +112,9 @@ def run_lifecycle_simulation():
     print(f"   Status State: {active3['state']}")
     print(f"   Sumber Inferensi: {vlm_res['inference_source']} ({vlm_res['inference_time_ms']} ms)")
     print(f"   Detail APD:")
-    print(f"     - Helm: {vlm_res['helm']['detected']} ({vlm_res['helm']['description']})")
-    print(f"     - Rompi: {vlm_res['rompi']['detected']} (Warna: {vlm_res['rompi']['color']}, Valid: {vlm_res['rompi']['is_valid_color']})")
-    print(f"     - Celana: {vlm_res['celana_panjang']['detected']} ({vlm_res['celana_panjang']['description']})")
-    print(f"     - Sepatu: {vlm_res['sepatu_tertutup']['detected']} (Tertutup: {vlm_res['sepatu_tertutup']['is_closed_shoes']})")
+    for item in ppe_rules.get_active_items():
+        hasil = vlm_res["items"].get(item.key, {})
+        print(f"     - {item.label}: {item.is_satisfied(hasil)} ({hasil.get('description', 'tidak dinilai')})")
     print(f"   Hasil Akhir: {'LENGKAP (AKSES DIIZINKAN)' if vlm_res['is_complete'] else 'TIDAK LENGKAP'}")
     print(f"   Lampu Indikator: {info3['light']['light_state']} ({info3['light']['message']})")
 

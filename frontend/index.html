@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SAFEGUARD AI - Monitoring Kepatuhan APD</title>
-  <meta name="description" content="Sistem inspeksi kepatuhan APD (Helm, Rompi, Celana Panjang, Sepatu) otomatis berbasis YOLO26s-Pose dan Gemini VLM dengan verifikasi posisi adaptif.">
+  <meta name="description" content="Sistem inspeksi kepatuhan APD otomatis berbasis YOLO26s-Pose dan Gemini VLM dengan verifikasi posisi adaptif.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -93,7 +93,7 @@
               <div class="vision-meta-group">
                 <div class="select-camera-wrapper">
                   <select id="camera-select" class="camera-select" aria-label="Pilih Kamera">
-                    <option value="0">Kamera 01</option>
+                    <option value="">Memuat...</option>
                   </select>
                 </div>
                 <span class="badge-live">
@@ -218,55 +218,8 @@
               <span class="subject-chip" id="checklist-subject-chip">Subjek #1</span>
             </div>
 
-            <div class="checklist-rows">
-              <!-- Item 1: Helm Safety -->
-              <div class="checklist-row" id="row-helm">
-                <div class="row-left">
-                  <span class="item-emoji">🪖</span>
-                  <span class="item-name">Helm safety</span>
-                </div>
-                <div class="row-badge status-pending" id="badge-helm">
-                  <span class="badge-icon">🕒</span>
-                  <span class="badge-text" id="text-helm">Belum dinilai</span>
-                </div>
-              </div>
-
-              <!-- Item 2: Rompi Reflektif -->
-              <div class="checklist-row" id="row-rompi">
-                <div class="row-left">
-                  <span class="item-emoji">🦺</span>
-                  <span class="item-name">Rompi reflektif</span>
-                </div>
-                <div class="row-badge status-pending" id="badge-rompi">
-                  <span class="badge-icon">🕒</span>
-                  <span class="badge-text" id="text-rompi">Belum dinilai</span>
-                </div>
-              </div>
-
-              <!-- Item 3: Celana Panjang -->
-              <div class="checklist-row" id="row-celana">
-                <div class="row-left">
-                  <span class="item-emoji">👖</span>
-                  <span class="item-name">Celana panjang</span>
-                </div>
-                <div class="row-badge status-pending" id="badge-celana">
-                  <span class="badge-icon">🕒</span>
-                  <span class="badge-text" id="text-celana">Belum dinilai</span>
-                </div>
-              </div>
-
-              <!-- Item 4: Sepatu Tertutup -->
-              <div class="checklist-row" id="row-sepatu">
-                <div class="row-left">
-                  <span class="item-emoji">👞</span>
-                  <span class="item-name">Sepatu tertutup</span>
-                </div>
-                <div class="row-badge status-pending" id="badge-sepatu">
-                  <span class="badge-icon">🕒</span>
-                  <span class="badge-text" id="text-sepatu">Belum dinilai</span>
-                </div>
-              </div>
-            </div>
+            <!-- Baris diisi APDVisualizer dari katalog `GET /api/ppe-rules` -->
+            <div class="checklist-rows" id="checklist-rows"></div>
 
             <div class="checklist-footnote" id="checklist-footnote">
               <span class="footnote-icon">ℹ️</span>
@@ -418,10 +371,22 @@
             <div class="form-row">
               <label class="form-label" for="setting-camera-index">Pilihan Sumber Kamera</label>
               <select id="setting-camera-index" class="form-control">
-                <option value="0">Kamera 0 (Default USB / Webcam)</option>
-                <option value="1">Kamera 1</option>
-                <option value="2">Kamera 2</option>
+                <option value="">Memuat daftar kamera...</option>
               </select>
+              <p class="form-help" id="camera-active-info">—</p>
+            </div>
+
+            <div class="form-row">
+              <button class="btn-action" id="btn-scan-cameras">
+                🔄 Pindai kamera
+              </button>
+              <button class="btn-action" id="btn-release-camera" style="margin-left:0.5rem;">
+                ⏏️ Lepas &amp; pilih ulang
+              </button>
+              <p class="form-help" id="camera-scan-status">
+                Pemindaian mengukur resolusi dan laju frame nyata tiap kamera. Perlu beberapa detik per perangkat.
+              </p>
+              <p class="form-help" id="camera-quality-note" style="display:none; color:var(--accent-amber);"></p>
             </div>
 
             <div class="form-row">
@@ -439,27 +404,12 @@
               <span>🛡️</span>
               <h3>Aturan APD Wajib (Mandatory Checklist)</h3>
             </div>
-            
-            <p class="form-help" style="margin-bottom:0.75rem;">Pilih item APD yang wajib dikenakan untuk mendapatkan akses lampu hijau:</p>
-            
-            <div class="checkbox-group">
-              <label class="form-checkbox-label">
-                <input type="checkbox" id="rule-helm" checked disabled>
-                <span>🪖 Helm Safety Proyek (Wajib)</span>
-              </label>
-              <label class="form-checkbox-label">
-                <input type="checkbox" id="rule-rompi" checked disabled>
-                <span>🦺 Rompi Reflektif Orange / Kuning (Wajib)</span>
-              </label>
-              <label class="form-checkbox-label">
-                <input type="checkbox" id="rule-celana" checked disabled>
-                <span>👖 Celana Panjang (Wajib)</span>
-              </label>
-              <label class="form-checkbox-label">
-                <input type="checkbox" id="rule-sepatu" checked disabled>
-                <span>👞 Sepatu Tertutup (Wajib)</span>
-              </label>
-            </div>
+
+            <p class="form-help" style="margin-bottom:0.75rem;">Hidupkan item APD yang wajib dikenakan untuk mendapatkan lampu hijau. Item yang dimatikan tidak diperiksa sama sekali.</p>
+
+            <!-- Diisi dari katalog `GET /api/ppe-rules` -->
+            <div class="checkbox-group" id="ppe-rule-list"></div>
+            <p class="form-help" id="ppe-rule-status" aria-live="polite"></p>
           </div>
 
           <!-- Card 3: Indikator Gerbang Fisik (ESP32 / IoT) -->
@@ -506,6 +456,12 @@
               <p class="form-help">Kunci tersimpan aman di server, tidak diekspos ke browser.</p>
             </div>
 
+            <div class="form-row">
+              <label class="form-label" for="input-admin-token">Token Admin (opsional)</label>
+              <input type="password" id="input-admin-token" class="form-control" placeholder="Kosongkan jika server tanpa ADMIN_TOKEN" autocomplete="off">
+              <p class="form-help">Isi hanya jika server dijalankan dengan <code>ADMIN_TOKEN</code>. Tersimpan di browser ini saja dan dikirim sebagai header pada perintah yang mengubah state.</p>
+            </div>
+
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
               <button class="btn-action" id="btn-ping-gemini">
                 📡 Uji Latensi API
@@ -533,6 +489,27 @@
         <img id="snapshot-modal-img" src="" alt="Worker Snapshot">
       </div>
       <p id="snapshot-modal-caption" class="modal-caption"></p>
+    </div>
+  </div>
+
+  <!-- Dialog Pemilihan Sumber Kamera (tampil saat belum ada kamera dipilih) -->
+  <div class="modal-backdrop" id="camera-picker-modal" role="dialog" aria-modal="true" style="display:none;">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">📹 Pilih Sumber Kamera</h3>
+      </div>
+      <p class="modal-caption" style="text-align:left; margin-bottom:0.85rem;">
+        Video belum tersambung. Pilih kamera yang akan dipakai untuk inspeksi,
+        lalu tekan <strong>Gunakan kamera ini</strong>.
+      </p>
+      <div id="camera-picker-list" class="camera-picker-list">
+        <p class="form-help">Memuat daftar kamera...</p>
+      </div>
+      <p class="form-help" id="camera-picker-status" style="margin-top:0.6rem;"></p>
+      <div class="camera-picker-actions">
+        <button class="btn-action" id="btn-picker-scan">🔄 Pindai kemampuan</button>
+        <button class="btn-action btn-primary" id="btn-picker-confirm" disabled>Gunakan kamera ini</button>
+      </div>
     </div>
   </div>
 

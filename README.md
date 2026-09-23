@@ -11,35 +11,39 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 * **Model Pose Estimation:** `YOLO26s-Pose` (Ultralytics) terakselerasi **NVIDIA CUDA** pada **NVIDIA GeForce RTX 4060 Laptop GPU** (~4–7 ms per frame).
 * **Multi-Object Tracking:** `ByteTrack` untuk pelacakan ID subjek pekerja secara konsisten tanpa tumpang tindih.
 * **Keypoints Analysis:** Evaluasi 17 titik sendi tubuh (mata, bahu, pinggul, lutut, dan pergelangan kaki) untuk memastikan postur pekerja utuh dari kepala hingga kaki sebelum analisis APD dipicu.
+* **Pemilihan Sumber di Awal:** Saat server menyala, tidak ada kamera yang dibuka sama sekali. Dashboard menampilkan dialog pemilihan berisi nama asli tiap perangkat, dan video baru tersambung setelah operator memilih — tidak ada kamera yang terlanjur dipakai lalu diganti. Kamera yang terakhir dipakai hanya disorot sebagai bawaan, bukan disambung otomatis.
+* **Pemilihan Mode Kamera:** Kamera dibuka seketika dengan permintaan bawaan yang terbukti lancar di berbagai perangkat, lalu tombol **Pindai kamera** mengukur seluruh mode dan memilih yang terbaik. Dua temuan pengukuran mendasari rancangan ini: (1) laju frame bergantung pada angka yang **diminta**, bukan hasilnya — meminta 848×480 menghasilkan 19,9 FPS sedangkan meminta 854×480 menghasilkan 29,7 FPS walau frame-nya sama-sama 848×480; (2) sebagian kamera USB baru mencapai laju stabilnya ~3,5 detik setelah dibuka (1 FPS di detik pertama, 26 FPS di detik keempat), sehingga pengukuran yang akurat tidak mungkin dilakukan secara instan.
+* **Kelancaran di Atas Rasio:** Mode dipilih dengan mengutamakan laju frame. Kamera USB penguji hanya mampu 7 FPS pada 16:9 tetapi 25 FPS pada 4:3, dan sistem memilih yang 4:3 — frame 4:3 aman karena overlay canvas menyesuaikan diri terhadap letterbox.
+* **Pemulihan Kamera:** Kamera yang tercabut terdeteksi dalam ~1 detik, dilaporkan di ribbon dashboard, dan disambung ulang otomatis tanpa membekukan aliran video.
 * **Corridor & Fast-Pass Engine:** OpenCV (`cv2`) untuk Virtual Inspection Corridor, segmentasi warna HSV reflektif rompi (*Hi-Vis Orange/Yellow*), dan ekstraksi area kepala/kaki.
 
 ### 2. Vision-Language Model (VLM & Cloud Layer)
-* **Model VLM:** `Google Gemini 2.5 Flash` via Google GenAI SDK.
-* **Hybrid Auto / Local Fallback:** Jika jaringan internet terputus atau mode offline diaktifkan, sistem secara otomatis beralih ke analisis lokal GPU RTX 4060 (100% *air-gapped* tanpa dependensi cloud).
+* **Model VLM:** `Google Gemini 2.5 Flash` via SDK `google-generativeai`.
+* **Hybrid Auto / Local Fallback:** Jika jaringan terputus, API lambat, atau mode offline diaktifkan, sistem beralih otomatis ke *engine* lokal berbasis heuristik warna OpenCV (HSV) yang berjalan di CPU — tanpa dependensi cloud, tetapi dengan akurasi yang jauh lebih rendah daripada VLM. Keputusan yang berasal dari jalur ini ditandai eksplisit di dashboard dan di kolom CSV audit.
 * **Prompt Engineering K3:** Inferensi terstruktur yang mengembalikan format JSON standar untuk helm, rompi hi-vis, celana panjang, dan sepatu tertutup.
-* **API Anti-Spam Cache:** Membatasi inferensi tepat **1 frame per subjek unik** untuk mencegah pemborosan kuota API.
+* **API Anti-Spam Cache:** Membatasi inferensi tepat **1 frame per subjek unik**, dengan jeda minimum 4 detik antar panggilan dan kunci konkurensi, untuk mencegah pemborosan kuota API dan galat 429.
 
 ### 3. Backend & Layanan Komunikasi
 * **Runtime:** Python 3.10 (Conda Environment).
 * **Web Framework:** `FastAPI` (REST API asinkron) & `Uvicorn` (dengan integrasi *Graceful Server Shutdown*).
-* **Real-time Telemetry:** `WebSocket` murni (frekuensi transmisi ~20 Hz) untuk streaming bounding box, status APD, FPS, dan status cloud ke antarmuka pengguna dengan latensi <10 ms.
-* **Video Pipeline:** MJPEG Multi-part HTTP Video Streaming dengan *non-blocking threading* dan *frame lock*.
+* **Real-time Telemetry:** `WebSocket` murni (interval 50 ms, ~20 Hz) untuk streaming bounding box, status APD, FPS, dan status cloud ke antarmuka pengguna.
+* **Video Pipeline:** MJPEG Multi-part HTTP Video Streaming. Pembacaan kamera dan inferensi YOLO berjalan di dua thread terpisah sehingga frame yang tertahan di buffer driver dibuang, bukan menumpuk jadi latensi.
 * **Database & Penyimpanan:** `SQLite3` (mode WAL - *Write-Ahead Logging*) untuk pencatatan riwayat audit pekerja, serta penyimpanan crop bukti foto snapshot JPEG otomatis.
 
 ### 4. Audio Engine & Panduan Suara
 * **Playback Engine:** `pygame.mixer` (multi-threaded, non-blocking audio queue).
-* **Voice Generation:** Microsoft Edge-TTS dengan profil suara Bahasa Indonesia alami (`id-ID-ArdiNeural`).
+* **Voice Generation:** gTTS (Google Text-to-Speech) berbahasa Indonesia, dibangkitkan sekali lewat `python -m backend.generate_audio` menjadi berkas MP3 statis.
 * **Smart Voice Limiter:** Pembatas otomatis maksimal 2 kali peringatan per orang untuk mencegah kebisingan berlebih (*anti-audio spam*), disertai sakelar *Mute* di web dashboard.
 
 ### 5. Frontend & UI/UX
 * **Arsitektur:** Single Page Application (SPA) 3-Tab tanpa reload halaman.
 * **Teknologi:** Vanilla HTML5, Vanilla Modern CSS3 (Dark Navy Slate Theme, CSS Custom Properties / Tokens, Glassmorphism, Micro-animations), dan Vanilla JavaScript (ES6+ Modules).
-* **HUD Overlay:** HTML5 `<canvas>` rendering 60 FPS untuk rendering garis batas koridor neon, bounding box dinamis, dan zona jejak kaki (*footprint standoff guide*).
+* **HUD Overlay:** HTML5 `<canvas>` yang digambar ulang setiap paket telemetri (~20 Hz) untuk garis batas koridor neon, bounding box dinamis, dan zona jejak kaki (*footprint standoff guide*). Overlay disejajarkan dengan kotak video hasil `object-fit: contain`, sehingga tetap presisi walau kamera mengirim rasio selain 16:9.
 * **Desain Responsif:** Disesuaikan untuk monitor pos operator gerbang K3 maupun laptop pengawas.
 
 ### 6. IoT & Kontrol Gerbang Fisik
 * **Mikrokontroler:** `ESP32 DevKit V1` (C++ / Arduino framework).
-* **Protokol Komunikasi:** USB Serial Cable (Baud rate 115200) untuk demo langsung ke laptop, serta dukungan wireless HTTP REST client.
+* **Protokol Komunikasi:** USB Serial Cable (baud rate **9600**) untuk demo langsung ke laptop, serta dukungan wireless HTTP REST client.
 * **Perangkat Keras:** Modul Relay 5V / Optocoupler, Tower Light Indikator Industri (Merah / Hijau / Buzzer), atau Solenoid Door Lock.
 * **Simulasi Virtual:** Integrasi siap pakai dengan simulator perangkat keras **Wokwi** (`diagram.json`).
 
@@ -79,10 +83,12 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 * **Ekspor CSV:** Unduh spreadsheet audit riwayat kepatuhan pekerja untuk arsip HSE K3.
 
 ### 3. Menu Pengaturan
-* **Kamera & Koridor:** Pilihan indeks kamera fisik (Webcam/USB) dan sakelar batas koridor tengah.
+* **Kamera & Koridor:** Daftar kamera dengan **nama perangkat asli** (webcam bawaan maupun USB), tombol **Pindai kamera** untuk mengukur resolusi dan laju frame nyata tiap perangkat, serta sakelar batas koridor tengah. Pergantian kamera berlaku langsung tanpa menjalankan ulang server. Pilihan disimpan berdasarkan **nama**, bukan indeks, karena mencolokkan kamera USB menggeser nomor perangkat lain.
 * **Aturan APD Wajib:** Checklist konfigurasi item APD yang diwajibkan untuk membuka gerbang.
+* **Lepas & Pilih Ulang:** Tombol untuk melepas kamera yang sedang dipakai dan kembali ke dialog pemilihan tanpa menjalankan ulang server.
 * **Pengujian Lampu Gerbang (IoT):** Tombol uji coba manual indikator fisik (**🟢 Tes Hijau**, **🔴 Tes Merah**, **⚪ Padam**).
 * **Google Gemini API Key:** Input kunci API tersimpan aman di *server-side* dengan tombol uji latensi (*Ping*).
+* **Token Admin (opsional):** Diisi hanya jika server dijalankan dengan `ADMIN_TOKEN`. Tersimpan di browser operator dan dilampirkan sebagai header pada setiap perintah yang mengubah state server.
 
 ---
 
@@ -90,7 +96,8 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 
 ```
 ppe_detection_vlm/
-├── backend/
+├── backend/                      # Paket Python; jalankan dengan `python -m backend`
+│   ├── __main__.py               # Titik masuk tunggal (memanggil `main.run()`)
 │   ├── config.py                 # Konfigurasi server, batas koridor, dan threshold
 │   ├── detector.py               # YOLO26s-Pose inference, ByteTrack & Full-Body Gatekeeper
 │   ├── vlm_analyzer.py           # Gemini 2.5 Flash VLM client & Hybrid Local GPU Engine
@@ -98,10 +105,14 @@ ppe_detection_vlm/
 │   ├── audio_engine.py           # Non-blocking audio queue player & Mute controller
 │   ├── notifier.py               # Pengendali sinyal lampu gerbang & IoT Hardware Bridge
 │   ├── report_manager.py         # SQLite3 audit repository & Snapshot JPEG manager
+│   ├── camera_manager.py         # Enumerasi perangkat, probing mode, & pemilihan resolusi
 │   ├── api_monitor.py            # Real-time latency monitor & engine mode switcher
 │   ├── main.py                   # FastAPI REST backend, WebSocket /ws, & Static Server
+│   ├── generate_audio.py         # Pembangkit berkas MP3 panduan suara (gTTS)
+│   ├── test_lifecycle.py         # Uji alur state machine dengan crop sintetis
 │   ├── requirements.txt          # Dependensi Python library
 │   ├── .env                      # File variabel lingkungan lokal
+│   ├── .env.example              # Contoh variabel lingkungan
 │   ├── audio/                    # File suara instruksi K3 (MP3)
 │   └── reports/
 │       ├── audit.db              # Database SQLite3 riwayat pemeriksaan
@@ -120,6 +131,9 @@ ppe_detection_vlm/
 ├── iot/
 │   ├── esp32_gate_controller/
 │   │   └── esp32_gate_controller.ino  # Firmware Arduino/C++ ESP32 USB & Wi-Fi
+│   ├── arduino_gate_controller/
+│   │   └── arduino_gate_controller.ino # Firmware alternatif Arduino Uno/Nano
+│   ├── test_serial_lights.py     # Uji manual perintah lampu lewat serial
 │   └── wokwi_simulation/
 │       ├── diagram.json          # Rangkaian diagram sirkuit Wokwi
 │       ├── sketch.ino            # Kode simulasi Wokwi
@@ -132,6 +146,21 @@ ppe_detection_vlm/
 
 ---
 
+## ⚠️ Batasan yang Diketahui
+
+Bagian ini sengaja dicantumkan agar klaim sistem dapat dipertanggungjawabkan.
+
+* **Engine lokal bukan model AI.** `LocalVisionAnalyzer` adalah heuristik warna OpenCV (segmentasi HSV, rasio piksel) yang berjalan di CPU — bukan model *deep learning* dan bukan inferensi GPU. Hanya deteksi pose YOLO26s yang berjalan di CUDA. Akurasinya jauh di bawah Gemini VLM, terutama untuk helm dan alas kaki. Keputusan dari jalur ini selalu ditandai "Engine lokal — akurasi terbatas" di dashboard.
+* **Anti-spoofing hanya pada jalur Gemini.** Penolakan foto di layar ponsel atau cetakan kertas ditegakkan lewat instruksi prompt VLM. Jalur lokal tidak memilikinya, sehingga dalam mode offline sistem dapat tertipu oleh foto.
+* **Tanpa autentikasi secara bawaan.** Endpoint yang mengubah state dilindungi hanya jika `ADMIN_TOKEN` diisi pada `.env`. Tanpa itu, siapa pun yang dapat menjangkau host ini di jaringan bisa mengganti API key atau menyalakan lampu gerbang.
+* **Data pribadi pada snapshot.** `backend/reports/snapshots/` menyimpan potongan foto wajah pekerja tanpa batas waktu, dan `audit.db` menyimpan riwayat inspeksinya. Perlakukan sebagai data pribadi: batasi akses direktori tersebut dan tetapkan kebijakan retensi sebelum dipakai di lapangan.
+* **Penamaan kamera khusus Windows.** Nama perangkat diambil lewat DirectShow (`pygrabber`). Di platform lain daftar tetap berfungsi, tetapi hanya menampilkan label generik `Kamera 0`, `Kamera 1`, dan seterusnya.
+* **Resolusi rendah menurunkan ketelitian VLM.** Mode dipilih dengan prioritas kelancaran, sehingga potongan gambar yang dikirim ke Gemini bisa lebih kecil dari batas 640 px. Dashboard menampilkan peringatan saat ini terjadi. Untuk mengutamakan ketelitian, set `CAMERA_AUTO_MODE=false` lalu tentukan `FRAME_WIDTH`/`FRAME_HEIGHT` sendiri di `.env`.
+* **Pemindaian kamera menghentikan video sementara.** Kamera yang sedang aktif terkunci oleh aliran video, jadi untuk mengukurnya sistem melepas perangkat itu lebih dulu. Selama proses (~15–25 detik per kamera) dashboard menampilkan layar tunggu. Lakukan pemindaian sebelum demo dimulai, bukan di tengahnya.
+* **Satu subjek per inspeksi.** Koridor virtual dirancang untuk satu orang di tengah frame; beberapa orang sekaligus dalam koridor tidak ditangani secara eksplisit.
+
+---
+
 ## 🚀 Panduan Menjalankan Sistem
 
 ### 1. Prasyarat Lingkungan
@@ -141,11 +170,15 @@ conda activate apd_detection
 ```
 
 ### 2. Menjalankan Server Backend
-Jalankan file server utama:
+Dari akar repositori, jalankan paket `backend`:
 ```powershell
-python backend/main.py
+python -m backend
 ```
 *(Atau Anda cukup menjalankan berkas `start_system.bat`)*
+
+`backend/` adalah paket Python dengan impor relatif, sehingga harus dijalankan sebagai modul dari akar repo. Menjalankan `python backend/main.py` secara langsung tidak lagi didukung. Jalur `.env`, bobot model, audio, dan laporan diselesaikan relatif terhadap direktori `backend/`, bukan direktori kerja terminal.
+
+Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m backend.test_lifecycle` untuk uji alur state machine.
 
 Server akan otomatis memuat model YOLO26s-Pose di GPU CUDA dan melayani aplikasi di `http://0.0.0.0:8000`.
 
@@ -155,7 +188,9 @@ Buka browser (Google Chrome, Microsoft Edge, atau Brave) dan navigasikan ke:
 http://localhost:8000
 ```
 
-Untuk menghentikan server, tekan **`Ctrl + C`** di jendela terminal. Sistem akan melepaskan kamera dan menutup seluruh koneksi secara bersih.
+Saat pertama dibuka, dashboard menampilkan dialog **Pilih Sumber Kamera**. Video belum tersambung sampai Anda memilih salah satu perangkat.
+
+Untuk menghentikan server, tekan **`Ctrl + C`** sekali di jendela terminal. Sistem melepaskan kamera dan menutup seluruh koneksi dalam ~1 detik, termasuk aliran video dan WebSocket yang masih terbuka di browser.
 
 ---
 

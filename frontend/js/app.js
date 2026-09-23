@@ -8,6 +8,14 @@
 import { TelemetryWebSocket } from './websocket.js';
 import { HUDOverlay } from './hud_overlay.js';
 import { APDVisualizer } from './apd_card.js';
+import { loadCatalog, replaceCatalog, activeItems, assessItem } from './ppe_catalog.js';
+
+/** Meloloskan teks untuk disisipkan ke dalam template HTML. */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML.replace(/"/g, '&quot;');
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   // --- 1. DOM ELEMENT REFERENCES ---
@@ -39,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Video Viewport & Canvas
   const canvasElement = document.getElementById('hud-canvas');
   const liveVideoImg = document.getElementById('live-stream');
-  const hudSubjectBadge = document.getElementById('hud-subject-badge');
 
   // Video Toolbar Controls
   const toggleCorridorGuide = document.getElementById('toggle-corridor-guide');
@@ -51,10 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnResetInspection = document.getElementById('btn-reset-inspection');
 
   // Technical Drawer Fields
+  // Hanya engine mode yang diurus di sini; field teknis lain milik APDVisualizer.
   const techEngineMode = document.getElementById('tech-engine-mode');
-  const techLatencyMs = document.getElementById('tech-latency-ms');
-  const techActiveTrack = document.getElementById('tech-active-track');
-  const techStability = document.getElementById('tech-stability');
 
   // Reports View Elements
   const kpiTotal = document.getElementById('kpi-total');
@@ -77,11 +82,31 @@ document.addEventListener('DOMContentLoaded', () => {
   const snapshotImg = document.getElementById('snapshot-modal-img');
   const snapshotCaption = document.getElementById('snapshot-modal-caption');
 
+  // Camera Source Elements
+  const cameraSelectHeader = document.getElementById('camera-select');
+  const cameraSelectSettings = document.getElementById('setting-camera-index');
+  const btnScanCameras = document.getElementById('btn-scan-cameras');
+  const cameraScanStatus = document.getElementById('camera-scan-status');
+  const cameraActiveInfo = document.getElementById('camera-active-info');
+  const cameraQualityNote = document.getElementById('camera-quality-note');
+  const settingCorridorFilter = document.getElementById('setting-corridor-filter');
+  const ppeRuleList = document.getElementById('ppe-rule-list');
+  const ppeRuleStatus = document.getElementById('ppe-rule-status');
+  const btnReleaseCamera = document.getElementById('btn-release-camera');
+
+  // Dialog Pemilihan Sumber Kamera
+  const pickerModal = document.getElementById('camera-picker-modal');
+  const pickerList = document.getElementById('camera-picker-list');
+  const pickerStatus = document.getElementById('camera-picker-status');
+  const btnPickerScan = document.getElementById('btn-picker-scan');
+  const btnPickerConfirm = document.getElementById('btn-picker-confirm');
+
   // Settings View Elements
   const btnTestGreen = document.getElementById('btn-test-green');
   const btnTestRed = document.getElementById('btn-test-red');
   const btnTestOff = document.getElementById('btn-test-off');
   const inputGeminiKey = document.getElementById('input-gemini-key');
+  const inputAdminToken = document.getElementById('input-admin-token');
   const btnPingGemini = document.getElementById('btn-ping-gemini');
   const btnSaveSettings = document.getElementById('btn-save-settings');
 
@@ -98,6 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const wsUrl = `${wsProtocol}//${backendHost}${portSuffix}/ws`;
   const streamUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/stream`;
+  const ppeRulesUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/ppe-rules`;
+  const ppeRulesActiveUrl = `${ppeRulesUrl}/active`;
   const resetUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reset`;
   const configKeyUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/gemini-key`;
   const engineModeUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/engine-mode`;
@@ -106,8 +133,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const pingUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/monitoring/ping`;
   const iotTestUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/iot/test`;
   const audioConfigUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/audio`;
+  const camerasUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/cameras`;
+  const cameraScanUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/cameras/scan`;
+  const cameraConfigUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/camera`;
+  const corridorConfigUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/corridor`;
+
+  // --- ADMIN TOKEN (opsional) ---
+  // Hanya relevan kalau server dijalankan dengan ADMIN_TOKEN. Disimpan di
+  // browser ini saja dan dilampirkan pada perintah yang mengubah state server.
+  const ADMIN_TOKEN_STORAGE_KEY = 'safeguard_admin_token';
+
+  function getAdminToken() {
+    try {
+      return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function jsonHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getAdminToken();
+    if (token) headers['X-Admin-Token'] = token;
+    return headers;
+  }
+
+  function authHeaders() {
+    const token = getAdminToken();
+    return token ? { 'X-Admin-Token': token } : {};
+  }
+
+  if (inputAdminToken) {
+    inputAdminToken.value = getAdminToken();
+  }
 
   // Active Controller State
+  let wsConnected = false;
   let currentEngineMode = 'HYBRID_AUTO';
   let currentStatusFilter = 'all';
   let currentDateFilter = '';
@@ -120,6 +181,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Canvas HUD and Visualizer
   const hud = new HUDOverlay(canvasElement);
   const visualizer = new APDVisualizer();
+
+  // Checklist baru bisa digambar setelah katalog APD dari backend tiba
+  loadCatalog(ppeRulesUrl)
+    .then((items) => {
+      visualizer.setCatalog(activeItems(items));
+      renderPpeRuleSettings(items);
+    })
+    .catch((err) => console.error('[Katalog APD] Gagal memuat /api/ppe-rules:', err));
 
   // --- 3. TAB NAVIGATION CONTROLLER ---
   function switchTab(targetTab) {
@@ -179,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         await fetch(audioConfigUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: jsonHeaders(),
           body: JSON.stringify({ muted: isMuted })
         });
       } catch (err) {
@@ -204,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         btnResetInspection.disabled = true;
         btnResetInspection.innerHTML = '<span>⏳</span> Mereset...';
-        await fetch(resetUrl, { method: 'POST' });
+        await fetch(resetUrl, { method: 'POST', headers: authHeaders() });
         setTimeout(() => {
           btnResetInspection.disabled = false;
           btnResetInspection.innerHTML = '<span>🔄</span> Mulai ulang';
@@ -232,6 +301,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
+      // 0b. Status kamera sebenarnya (bukan status WebSocket)
+      if (telemetry.camera) {
+        updateCameraRibbon(telemetry.camera);
+        if (telemetry.camera.status === 'IDLE') {
+          showPicker();
+        } else if (pickerVisible && telemetry.camera.status === 'OK') {
+          hidePicker();
+        }
+      }
+
       // 1. Update FPS Display
       if (fpsText && telemetry.fps !== undefined) {
         fpsText.textContent = `${Number(telemetry.fps).toFixed(1).replace('.', ',')} FPS`;
@@ -246,28 +325,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (techEngineMode) techEngineMode.textContent = currentEngineMode;
       }
 
-      // 3. Update Technical Drawer Fields
-      if (techLatencyMs) {
-        techLatencyMs.textContent = telemetry.vlm_latency_ms ? `${telemetry.vlm_latency_ms} ms` : '0 ms';
-      }
-      const activeDet = (telemetry.detections || []).find(d => d.track_id === telemetry.active_track_id);
-      if (techActiveTrack) {
-        techActiveTrack.textContent = telemetry.active_track_id ? `#${telemetry.active_track_id}` : 'None';
-      }
-      if (techStability) {
-        const stabCount = activeDet ? (activeDet.stability_count || 0) : 0;
-        techStability.textContent = `${stabCount} / 2`;
-      }
-
-      // Update Subject Tracking Badge in Video Viewport
-      if (hudSubjectBadge) {
-        if (telemetry.active_track_id) {
-          hudSubjectBadge.textContent = `Subjek #${telemetry.active_track_id}`;
-          hudSubjectBadge.style.display = 'block';
-        } else {
-          hudSubjectBadge.textContent = 'Menunggu Subjek';
-        }
-      }
+      // 3. Technical Drawer, badge subjek, dan checklist APD seluruhnya diurus
+      //    APDVisualizer.update() di langkah 5 — satu-satunya tempat yang membaca
+      //    bentuk payload `active_track` yang benar dari backend.
 
       // 4. Render Canvas HUD with Frame Dimensions & Corridor Guides
       if (telemetry.frame_width && telemetry.frame_height) {
@@ -282,17 +342,46 @@ document.addEventListener('DOMContentLoaded', () => {
       visualizer.update(telemetry);
     },
     (status) => {
-      if (dotCamera && ribbonCameraText) {
-        if (status === 'connected') {
-          dotCamera.className = 'status-dot green';
-          ribbonCameraText.textContent = 'Kamera aktif';
-        } else {
-          dotCamera.className = 'status-dot red';
-          ribbonCameraText.textContent = 'Kamera terputus';
-        }
+      wsConnected = status === 'connected';
+      if (!wsConnected && dotCamera && ribbonCameraText) {
+        dotCamera.className = 'status-dot red';
+        ribbonCameraText.textContent = 'Server terputus';
       }
     }
   );
+
+  // Ribbon kamera mencerminkan kondisi perangkat, bukan koneksi WebSocket —
+  // dulu keduanya tertukar sehingga tertulis "Kamera aktif" saat kamera dicabut.
+  function updateCameraRibbon(camera) {
+    if (!dotCamera || !ribbonCameraText || !wsConnected) return;
+
+    const name = camera.name || `Kamera ${camera.index}`;
+    switch (camera.status) {
+      case 'OK':
+        dotCamera.className = 'status-dot green';
+        ribbonCameraText.textContent = `${name} — ${camera.width}×${camera.height}`;
+        break;
+      case 'OPENING':
+        dotCamera.className = 'status-dot amber';
+        ribbonCameraText.textContent = `Membuka ${name}...`;
+        break;
+      case 'IDLE':
+        dotCamera.className = 'status-dot amber';
+        ribbonCameraText.textContent = 'Kamera belum dipilih';
+        break;
+      case 'OPTIMIZING':
+        dotCamera.className = 'status-dot amber';
+        ribbonCameraText.textContent = `Mengukur mode terbaik ${name}...`;
+        break;
+      case 'LOST':
+        dotCamera.className = 'status-dot red';
+        ribbonCameraText.textContent = 'Kamera terputus — menyambung ulang';
+        break;
+      default:
+        dotCamera.className = 'status-dot amber';
+        ribbonCameraText.textContent = 'Tidak ada kamera (mode simulasi)';
+    }
+  }
 
   // Update Cloud Status in Top Ribbon
   function updateRibbonCloudUI(monitor, isLiveGemini) {
@@ -323,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await fetch(engineModeUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: jsonHeaders(),
           body: JSON.stringify({ engine_mode: nextMode })
         });
         const data = await res.json();
@@ -399,6 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (kpiRate) kpiRate.textContent = `${data.compliance_rate || 100}%`;
 
       const records = data.page_records || [];
+      const catalog = await loadCatalog(ppeRulesUrl);
       if (records.length === 0) {
         reportsTableBody.innerHTML = `
           <tr>
@@ -430,21 +520,19 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
         }
 
-        // APD Badges
-        const helmBadge = rec.helm_detected 
-          ? '<span class="apd-mini-badge apd-mini-ok">🪖 Helm ✓</span>' 
-          : '<span class="apd-mini-badge apd-mini-bad">🪖 Helm ✗</span>';
-        const rompiBadge = rec.rompi_valid 
-          ? `<span class="apd-mini-badge apd-mini-ok">🦺 Rompi (${rec.rompi_color || 'Ok'}) ✓</span>` 
-          : '<span class="apd-mini-badge apd-mini-bad">🦺 Rompi ✗</span>';
-        const celanaBadge = rec.celana_detected 
-          ? '<span class="apd-mini-badge apd-mini-ok">👖 Celana ✓</span>' 
-          : '<span class="apd-mini-badge apd-mini-bad">👖 Celana ✗</span>';
-        const sepatuBadge = rec.sepatu_closed 
-          ? '<span class="apd-mini-badge apd-mini-ok">👞 Sepatu ✓</span>' 
-          : '<span class="apd-mini-badge apd-mini-bad">👞 Sepatu ✗</span>';
+        // APD Badges: hanya item yang dinilai pada inspeksi ini. Item yang saat
+        // itu dimatikan operator tidak ada di `rec.items` dan tidak ditampilkan.
+        const recItems = rec.items || {};
+        const apdBadges = catalog.filter((item) => item.key in recItems).map((item) => {
+          const { ok, text } = assessItem(item, recItems[item.key]);
+          const name = escapeHtml(item.short_label);
+          const detail = ok && item.reports_color && text !== item.ok_label ? ` (${escapeHtml(text)})` : '';
+          return ok
+            ? `<span class="apd-mini-badge apd-mini-ok">${item.icon} ${name}${detail} ✓</span>`
+            : `<span class="apd-mini-badge apd-mini-bad" title="${escapeHtml(text)}">${item.icon} ${name} ✗</span>`;
+        });
 
-        const sourceIcon = (rec.inference_source || '').includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ GPU Lokal';
+        const sourceIcon = (rec.inference_source || '').includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ Heuristik lokal';
         const notesText = rec.missing_items && rec.missing_items.length > 0 
           ? `<span style="color:var(--accent-red); font-weight:500;">Kurang: ${rec.missing_items.join(', ')}</span>`
           : `<span style="color:var(--accent-green); font-weight:500;">Kepatuhan 100% K3</span>`;
@@ -461,9 +549,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </td>
             <td>${statusBadge}</td>
             <td>
-              <div style="display:flex; flex-direction:column; gap:3px;">
-                <div>${helmBadge} ${rompiBadge}</div>
-                <div>${celanaBadge} ${sepatuBadge}</div>
+              <div style="display:flex; flex-wrap:wrap; gap:3px;">
+                ${apdBadges.join(' ')}
               </div>
             </td>
             <td style="font-family:var(--font-mono); font-size:0.75rem; color:var(--text-secondary);">
@@ -513,6 +600,395 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- 6b. SUMBER KAMERA (USB / WEBCAM BAWAAN) ---
+
+  let cameraScanPoll = null;
+
+  function modeLabel(mode) {
+    if (!mode) return 'mode belum diketahui';
+    const fps = mode.fps ? ` @${Math.round(mode.fps)} FPS` : '';
+    return `${mode.width}×${mode.height}${fps}`;
+  }
+
+  function fillCameraSelect(selectEl, devices, activeIndex) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+
+    if (!devices.length) {
+      selectEl.innerHTML = '<option value="">Tidak ada kamera terdeteksi</option>';
+      return;
+    }
+
+    devices.forEach((dev) => {
+      const opt = document.createElement('option');
+      opt.value = String(dev.index);
+      // Nama asli perangkat penting: indeks saja menyesatkan, misalnya indeks 1
+      // bisa berupa kamera virtual, bukan kamera fisik kedua.
+      let label = dev.name || `Kamera ${dev.index}`;
+      if (dev.selected_mode) {
+        label += ` — ${modeLabel(dev.selected_mode)}`;
+      } else if (dev.scanned === false) {
+        // Belum diukur bukan berarti bermasalah — kamera USB yang baru dicolok
+        // tetap bisa dipilih tanpa harus memindai lebih dulu.
+        label += ' — belum dipindai';
+      } else if (!dev.available) {
+        label += ' — tidak tersedia';
+      }
+      opt.textContent = label;
+      opt.disabled = dev.scanned !== false && !dev.available && dev.index !== activeIndex;
+      if (dev.index === activeIndex) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  async function loadCameras() {
+    try {
+      const res = await fetch(camerasUrl);
+      const data = await res.json();
+      const devices = data.devices || [];
+      const active = data.active || {};
+
+      fillCameraSelect(cameraSelectHeader, devices, active.index);
+      fillCameraSelect(cameraSelectSettings, devices, active.index);
+
+      if (cameraActiveInfo) {
+        cameraActiveInfo.textContent = active.name
+          ? `Aktif: ${active.name} — ${active.width}×${active.height} (${active.status})`
+          : '—';
+      }
+
+      if (cameraQualityNote) {
+        if (data.quality_warning) {
+          cameraQualityNote.style.display = '';
+          cameraQualityNote.textContent =
+            '⚠️ Resolusi kamera rendah. Video lebih lancar, tetapi potongan gambar yang '
+            + 'dikirim ke AI lebih kecil sehingga penilaian helm dan sepatu bisa kurang teliti.';
+        } else {
+          cameraQualityNote.style.display = 'none';
+        }
+      }
+
+      if (cameraScanStatus && data.last_scan_time && data.last_scan_time !== '-') {
+        cameraScanStatus.textContent = data.scanning
+          ? '⏳ Memindai kamera...'
+          : `Pemindaian terakhir pukul ${data.last_scan_time}.`;
+      }
+
+      return data;
+    } catch (e) {
+      console.error('Gagal memuat daftar kamera:', e);
+      return null;
+    }
+  }
+
+  async function switchCamera(index) {
+    if (index === '' || index === null || index === undefined) return;
+    try {
+      const res = await fetch(cameraConfigUrl, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ index: Number(index) })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Gagal berpindah kamera: ${data.message || res.status}`);
+        return;
+      }
+      // Pergantian dikerjakan di sisi server; aliran MJPEG dimuat ulang setelah
+      // kamera baru sempat terbuka, dengan pembeda cache agar benar-benar segar.
+      setTimeout(() => {
+        if (liveVideoImg) liveVideoImg.src = `${streamUrl}?t=${Date.now()}`;
+        loadCameras();
+      }, 2500);
+    } catch (e) {
+      alert(`Gagal mengirim permintaan pindah kamera: ${e}`);
+    }
+  }
+
+  if (cameraSelectHeader) {
+    cameraSelectHeader.addEventListener('change', (e) => switchCamera(e.target.value));
+  }
+  if (cameraSelectSettings) {
+    cameraSelectSettings.addEventListener('change', (e) => switchCamera(e.target.value));
+  }
+
+  if (btnScanCameras) {
+    btnScanCameras.addEventListener('click', async () => {
+      try {
+        btnScanCameras.disabled = true;
+        btnScanCameras.textContent = '⏳ Memindai...';
+        if (cameraScanStatus) cameraScanStatus.textContent = 'Mengukur kemampuan setiap kamera...';
+
+        await fetch(cameraScanUrl, { method: 'POST', headers: authHeaders() });
+
+        // Probing berjalan di latar server, jadi hasilnya ditunggu dengan polling
+        if (cameraScanPoll) clearInterval(cameraScanPoll);
+        cameraScanPoll = setInterval(async () => {
+          const data = await loadCameras();
+          if (data && !data.scanning) {
+            clearInterval(cameraScanPoll);
+            cameraScanPoll = null;
+            btnScanCameras.disabled = false;
+            btnScanCameras.textContent = '🔄 Pindai kamera';
+          }
+        }, 1500);
+      } catch (e) {
+        btnScanCameras.disabled = false;
+        btnScanCameras.textContent = '🔄 Pindai kamera';
+        alert(`Gagal memulai pemindaian kamera: ${e}`);
+      }
+    });
+  }
+
+  // Sakelar Virtual Inspection Corridor
+  if (settingCorridorFilter) {
+    settingCorridorFilter.addEventListener('change', async (e) => {
+      try {
+        await fetch(corridorConfigUrl, {
+          method: 'POST',
+          headers: jsonHeaders(),
+          body: JSON.stringify({ enabled: e.target.checked })
+        });
+      } catch (err) {
+        console.error('Gagal mengubah pengaturan koridor:', err);
+      }
+    });
+  }
+
+  // Aturan APD Wajib: satu sakelar per item katalog
+  function renderPpeRuleSettings(items) {
+    if (!ppeRuleList) return;
+    ppeRuleList.innerHTML = '';
+
+    items.forEach((item) => {
+      const label = document.createElement('label');
+      label.className = 'form-checkbox-label';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = item.required;
+      input.dataset.key = item.key;
+      input.addEventListener('change', () => setPpeItemActive(input));
+
+      const text = document.createElement('span');
+      text.textContent = `${item.icon} ${item.label}`;
+      label.append(input, text);
+
+      // Tanpa pemeriksa lokal, item ini tidak bisa dinilai saat offline dan
+      // gerbang akan tertutup; operator perlu tahu sebelum menyalakannya.
+      if (!item.local_check) {
+        const note = document.createElement('span');
+        note.className = 'form-help';
+        note.style.marginTop = '0';
+        note.textContent = '— hanya bisa dinilai VLM; saat offline gerbang tertutup';
+        label.appendChild(note);
+      }
+      ppeRuleList.appendChild(label);
+    });
+  }
+
+  async function setPpeItemActive(input) {
+    const key = input.dataset.key;
+    const wanted = input.checked;
+    ppeRuleList.querySelectorAll('input').forEach((el) => { el.disabled = true; });
+    ppeRuleStatus.textContent = 'Menyimpan...';
+
+    try {
+      const res = await fetch(ppeRulesActiveUrl, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ active: { [key]: wanted } })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+      replaceCatalog(data.items);
+      visualizer.setCatalog(activeItems(data.items));
+      renderPpeRuleSettings(data.items);
+      ppeRuleStatus.textContent = 'Tersimpan. Berlaku untuk inspeksi berikutnya.';
+    } catch (err) {
+      input.checked = !wanted;
+      ppeRuleStatus.textContent = `Gagal menyimpan: ${err.message}`;
+    } finally {
+      ppeRuleList.querySelectorAll('input').forEach((el) => { el.disabled = false; });
+    }
+  }
+
+  // --- 6c. DIALOG PEMILIHAN SUMBER KAMERA ---
+  // Server sengaja tidak membuka kamera apa pun saat menyala, supaya tidak ada
+  // perangkat yang terlanjur dipakai lalu diganti. Operator memilih lebih dulu.
+
+  let pickerVisible = false;
+  let pickerChoice = null;
+  let pickerPoll = null;
+
+  function renderPickerList(devices, savedName) {
+    if (!pickerList) return;
+
+    if (!devices.length) {
+      pickerList.innerHTML = '<p class="form-help">Tidak ada kamera terdeteksi. '
+        + 'Colokkan kamera lalu tekan Pindai kemampuan.</p>';
+      if (btnPickerConfirm) btnPickerConfirm.disabled = true;
+      return;
+    }
+
+    // Kamera yang terakhir dipakai hanya disorot sebagai bawaan; video tetap
+    // tidak tersambung sebelum tombolnya ditekan.
+    if (pickerChoice === null) {
+      const saved = devices.find(function (d) { return savedName && d.name === savedName; });
+      pickerChoice = saved ? saved.index : devices[0].index;
+    }
+
+    pickerList.innerHTML = '';
+    devices.forEach(function (dev) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'camera-picker-item' + (dev.index === pickerChoice ? ' selected' : '');
+
+      const meta = dev.selected_mode
+        ? modeLabel(dev.selected_mode)
+        : (dev.scanned === false ? 'belum dipindai' : 'tidak tersedia');
+      const tanda = (savedName && dev.name === savedName) ? '  -  terakhir dipakai' : '';
+
+      const elName = document.createElement('span');
+      elName.className = 'picker-name';
+      elName.textContent = dev.name;
+
+      const elMeta = document.createElement('span');
+      elMeta.className = 'picker-meta';
+      elMeta.textContent = 'index ' + dev.index + '  -  ' + meta + tanda;
+
+      btn.appendChild(elName);
+      btn.appendChild(elMeta);
+      btn.addEventListener('click', function () {
+        pickerChoice = dev.index;
+        renderPickerList(devices, savedName);
+      });
+      pickerList.appendChild(btn);
+    });
+
+    if (btnPickerConfirm) btnPickerConfirm.disabled = false;
+  }
+
+  async function refreshPicker() {
+    try {
+      const res = await fetch(camerasUrl);
+      const data = await res.json();
+      renderPickerList(data.devices || [], data.saved ? data.saved.name : null);
+      if (pickerStatus) {
+        if (data.scanning) {
+          pickerStatus.textContent = 'Mengukur kemampuan kamera...';
+        } else if (data.last_scan_time && data.last_scan_time !== '-') {
+          pickerStatus.textContent = 'Pemindaian terakhir pukul ' + data.last_scan_time + '.';
+        } else {
+          pickerStatus.textContent = 'Pemindaian bersifat opsional; kamera tetap bisa langsung dipakai.';
+        }
+      }
+      return data;
+    } catch (e) {
+      if (pickerStatus) pickerStatus.textContent = 'Gagal memuat daftar kamera: ' + e;
+      return null;
+    }
+  }
+
+  function showPicker() {
+    if (pickerVisible || !pickerModal) return;
+    pickerVisible = true;
+    pickerChoice = null;
+    pickerModal.style.display = 'flex';
+    refreshPicker();
+  }
+
+  function hidePicker() {
+    if (!pickerModal) return;
+    pickerVisible = false;
+    pickerModal.style.display = 'none';
+  }
+
+  if (btnPickerConfirm) {
+    btnPickerConfirm.addEventListener('click', async function () {
+      if (pickerChoice === null) return;
+      btnPickerConfirm.disabled = true;
+      btnPickerConfirm.textContent = 'Menyambungkan...';
+      if (pickerStatus) pickerStatus.textContent = 'Membuka kamera...';
+
+      try {
+        await fetch(cameraConfigUrl, {
+          method: 'POST',
+          headers: jsonHeaders(),
+          body: JSON.stringify({ index: pickerChoice })
+        });
+
+        // Pembukaan kamera dikerjakan thread pembaca di server, jadi hasilnya
+        // ditunggu lewat polling sebelum dialog ditutup.
+        if (pickerPoll) clearInterval(pickerPoll);
+        let tries = 0;
+        pickerPoll = setInterval(async function () {
+          tries += 1;
+          const data = await refreshPicker();
+          const st = (data && data.active) ? data.active.status : null;
+          if (st === 'OK' || st === 'SYNTHETIC' || tries > 25) {
+            clearInterval(pickerPoll);
+            pickerPoll = null;
+            btnPickerConfirm.disabled = false;
+            btnPickerConfirm.textContent = 'Gunakan kamera ini';
+            if (st === 'SYNTHETIC') {
+              if (pickerStatus) {
+                pickerStatus.textContent = 'Kamera itu tidak dapat dibuka. Pilih sumber lain.';
+              }
+              return;
+            }
+            hidePicker();
+            if (liveVideoImg) liveVideoImg.src = streamUrl + '?t=' + Date.now();
+            loadCameras();
+          }
+        }, 1000);
+      } catch (e) {
+        btnPickerConfirm.disabled = false;
+        btnPickerConfirm.textContent = 'Gunakan kamera ini';
+        if (pickerStatus) pickerStatus.textContent = 'Gagal menyambungkan: ' + e;
+      }
+    });
+  }
+
+  if (btnPickerScan) {
+    btnPickerScan.addEventListener('click', async function () {
+      btnPickerScan.disabled = true;
+      btnPickerScan.textContent = 'Memindai...';
+      try {
+        await fetch(cameraScanUrl, { method: 'POST', headers: authHeaders() });
+        const iv = setInterval(async function () {
+          const data = await refreshPicker();
+          if (data && !data.scanning) {
+            clearInterval(iv);
+            btnPickerScan.disabled = false;
+            btnPickerScan.textContent = 'Pindai kemampuan';
+          }
+        }, 1500);
+      } catch (e) {
+        btnPickerScan.disabled = false;
+        btnPickerScan.textContent = 'Pindai kemampuan';
+      }
+    });
+  }
+
+  // Lepas kamera dan kembali ke dialog pemilihan
+  if (btnReleaseCamera) {
+    btnReleaseCamera.addEventListener('click', async function () {
+      try {
+        await fetch(cameraConfigUrl, {
+          method: 'POST',
+          headers: jsonHeaders(),
+          body: JSON.stringify({ index: null })
+        });
+      } catch (e) {
+        alert('Gagal melepas kamera: ' + e);
+      }
+    });
+  }
+
+  loadCameras();
+
   // --- 7. PENGATURAN (SETTINGS) CONTROLLER ---
 
   // Hardware Light Test Function
@@ -520,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch(iotTestUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonHeaders(),
         body: JSON.stringify({ action })
       });
       const data = await res.json();
@@ -540,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         btnPingGemini.disabled = true;
         btnPingGemini.textContent = '⏳ Menguji...';
-        const res = await fetch(pingUrl, { method: 'POST' });
+        const res = await fetch(pingUrl, { method: 'POST', headers: authHeaders() });
         const data = await res.json();
         if (data.status === 'ONLINE') {
           alert(`✅ Google Gemini API Cloud Terhubung!\nLatensi: ${data.latency_ms} ms\nStatus: ONLINE`);
@@ -559,9 +1035,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Save Settings (API Key & Preferences)
   if (btnSaveSettings) {
     btnSaveSettings.addEventListener('click', async () => {
+      // Token admin disimpan lokal di browser, tidak pernah dikirim ke server
+      // kecuali sebagai header pada perintah yang mengubah state.
+      if (inputAdminToken) {
+        try {
+          const token = inputAdminToken.value.trim();
+          if (token) {
+            localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+          } else {
+            localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+          }
+        } catch (e) {
+          console.warn('Tidak dapat menyimpan token admin di browser ini:', e);
+        }
+      }
+
       const key = inputGeminiKey ? inputGeminiKey.value.trim() : '';
       if (!key) {
-        alert('Pengaturan umum tersimpan. (Masukkan API key jika ingin memperbarui kunci Gemini)');
+        alert('Pengaturan tersimpan. (Masukkan API key jika ingin memperbarui kunci Gemini)');
         return;
       }
       try {
@@ -569,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSaveSettings.textContent = 'Menyimpan...';
         const res = await fetch(configKeyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: jsonHeaders(),
           body: JSON.stringify({ api_key: key })
         });
         const data = await res.json();

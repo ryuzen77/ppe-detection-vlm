@@ -857,6 +857,11 @@ body {
   border: 1px solid rgba(255, 51, 102, 0.25);
 }
 
+/* Lencana APD di tabel laporan: satu lencana tidak boleh terpotong di tengah */
+.apd-mini-badge {
+  white-space: nowrap;
+}
+
 .checklist-footnote {
   margin-top: 14px;
   padding: 8px 12px;
@@ -1367,4 +1372,71 @@ body {
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Penanda keputusan dari heuristik lokal (bukan VLM) pada footnote checklist */
+.confidence-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--accent-amber);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Dialog pemilihan sumber kamera */
+.camera-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.camera-picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.camera-picker-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.camera-picker-item.selected {
+  border-color: var(--accent-teal, #00e699);
+  background: rgba(0, 230, 153, 0.10);
+}
+
+.camera-picker-item .picker-name {
+  font-weight: 600;
+}
+
+.camera-picker-item .picker-meta {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.camera-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1rem;
 }

@@ -43,22 +43,43 @@ export class HUDOverlay {
     this.render();
   }
 
+  /**
+   * Video ditampilkan dengan `object-fit: contain`, jadi kalau rasio kamera tidak
+   * sama dengan rasio viewport akan muncul bilah hitam. Overlay harus memakai
+   * kotak video yang sebenarnya, bukan seluruh kanvas, agar tidak bergeser.
+   */
+  computeFit() {
+    const { width, height } = this.canvas;
+    const frameW = this.frameWidth || 1280;
+    const frameH = this.frameHeight || 720;
+    const scale = Math.min(width / frameW, height / frameH);
+    const drawW = frameW * scale;
+    const drawH = frameH * scale;
+    return {
+      scale,
+      drawW,
+      drawH,
+      offsetX: (width - drawW) / 2,
+      offsetY: (height - drawH) / 2
+    };
+  }
+
   render() {
     const { width, height } = this.canvas;
     this.ctx.clearRect(0, 0, width, height);
 
-    const scaleX = width / (this.frameWidth || 1280);
-    const scaleY = height / (this.frameHeight || 720);
+    const fit = this.computeFit();
+    const { scale, drawW, drawH, offsetX, offsetY } = fit;
 
     // 1. Draw Virtual Corridor guides if enabled & visible
     if (this.guidesVisible && this.corridor && this.corridor.enabled) {
-      const cx1 = width * this.corridor.left_ratio;
-      const cx2 = width * this.corridor.right_ratio;
+      const cx1 = offsetX + drawW * this.corridor.left_ratio;
+      const cx2 = offsetX + drawW * this.corridor.right_ratio;
 
       // Darken outside regions slightly
       this.ctx.fillStyle = 'rgba(10, 13, 20, 0.45)';
-      this.ctx.fillRect(0, 0, cx1, height);
-      this.ctx.fillRect(cx2, 0, width - cx2, height);
+      this.ctx.fillRect(offsetX, offsetY, cx1 - offsetX, drawH);
+      this.ctx.fillRect(cx2, offsetY, offsetX + drawW - cx2, drawH);
 
       // Vertical neon dashed lines
       this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
@@ -66,19 +87,19 @@ export class HUDOverlay {
       this.ctx.setLineDash([8, 6]);
 
       this.ctx.beginPath();
-      this.ctx.moveTo(cx1, 0);
-      this.ctx.lineTo(cx1, height);
+      this.ctx.moveTo(cx1, offsetY);
+      this.ctx.lineTo(cx1, offsetY + drawH);
       this.ctx.stroke();
 
       this.ctx.beginPath();
-      this.ctx.moveTo(cx2, 0);
-      this.ctx.lineTo(cx2, height);
+      this.ctx.moveTo(cx2, offsetY);
+      this.ctx.lineTo(cx2, offsetY + drawH);
       this.ctx.stroke();
 
       this.ctx.setLineDash([]); // Reset dash
 
       // Draw Industrial Footprint Standoff Guide Zone at corridor bottom
-      this.drawFootprintZone(width, height, cx1, cx2);
+      this.drawFootprintZone(offsetY + drawH, drawH, cx1, cx2);
     }
 
     if (!this.latestDetections || this.latestDetections.length === 0) {
@@ -87,10 +108,10 @@ export class HUDOverlay {
 
     for (const det of this.latestDetections) {
       const [x1, y1, x2, y2] = det.bbox;
-      const bx = x1 * scaleX;
-      const by = y1 * scaleY;
-      const bw = (x2 - x1) * scaleX;
-      const bh = (y2 - y1) * scaleY;
+      const bx = offsetX + x1 * scale;
+      const by = offsetY + y1 * scale;
+      const bw = (x2 - x1) * scale;
+      const bh = (y2 - y1) * scale;
 
       const isInside = det.is_inside_corridor !== undefined ? det.is_inside_corridor : true;
       let color = '#888888';
@@ -119,7 +140,7 @@ export class HUDOverlay {
 
       // 2. Draw Keypoints if inside corridor
       if (isInside && det.keypoints && Array.isArray(det.keypoints)) {
-        this.drawPoseSkeleton(det.keypoints, scaleX, scaleY, color);
+        this.drawPoseSkeleton(det.keypoints, fit, color);
       }
 
       // 3. Draw Track Badge
@@ -127,11 +148,11 @@ export class HUDOverlay {
     }
   }
 
-  drawFootprintZone(width, height, cx1, cx2) {
+  drawFootprintZone(videoBottom, drawH, cx1, cx2) {
     const zoneW = (cx2 - cx1) * 0.65;
-    const zoneH = Math.min(height * 0.16, 110);
+    const zoneH = Math.min(drawH * 0.16, 110);
     const zoneX = cx1 + ((cx2 - cx1) - zoneW) / 2;
-    const zoneY = height - zoneH - 22;
+    const zoneY = videoBottom - zoneH - 22;
 
     this.ctx.save();
     this.ctx.strokeStyle = 'rgba(0, 230, 153, 0.45)';
@@ -188,13 +209,13 @@ export class HUDOverlay {
     this.ctx.shadowBlur = 0;
   }
 
-  drawPoseSkeleton(kpts, sx, sy, color) {
+  drawPoseSkeleton(kpts, fit, color) {
     this.ctx.fillStyle = color;
     for (let i = 0; i < kpts.length; i++) {
       const [kx, ky, conf] = kpts[i];
       if (conf > 0.4) {
         this.ctx.beginPath();
-        this.ctx.arc(kx * sx, ky * sy, 3, 0, 2 * Math.PI);
+        this.ctx.arc(fit.offsetX + kx * fit.scale, fit.offsetY + ky * fit.scale, 3, 0, 2 * Math.PI);
         this.ctx.fill();
       }
     }

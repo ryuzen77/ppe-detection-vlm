@@ -5,6 +5,8 @@
  * ===================================================================
  */
 
+import { assessItem } from './ppe_catalog.js';
+
 export class APDVisualizer {
   constructor() {
     // 1. Guidance Banner & Stepper Elements
@@ -25,17 +27,10 @@ export class APDVisualizer {
     this.checklistSubjectChip = document.getElementById('checklist-subject-chip');
     this.checklistFootnoteText = document.getElementById('checklist-footnote-text');
 
-    this.badgeHelm = document.getElementById('badge-helm');
-    this.textHelm = document.getElementById('text-helm');
-
-    this.badgeRompi = document.getElementById('badge-rompi');
-    this.textRompi = document.getElementById('text-rompi');
-
-    this.badgeCelana = document.getElementById('badge-celana');
-    this.textCelana = document.getElementById('text-celana');
-
-    this.badgeSepatu = document.getElementById('badge-sepatu');
-    this.textSepatu = document.getElementById('text-sepatu');
+    // Baris checklist dibangun dari katalog APD lewat setCatalog()
+    this.checklistRows = document.getElementById('checklist-rows');
+    this.catalog = [];
+    this.rowBadges = {};
 
     // 3. Recent History Elements
     this.recentEmptyState = document.getElementById('recent-empty-state');
@@ -47,6 +42,53 @@ export class APDVisualizer {
     this.techLatencyMs = document.getElementById('tech-latency-ms');
     this.techActiveTrack = document.getElementById('tech-active-track');
     this.techStability = document.getElementById('tech-stability');
+  }
+
+  /** Membangun satu baris checklist per item katalog. */
+  setCatalog(items) {
+    this.catalog = items;
+    this.rowBadges = {};
+    this.checklistRows.innerHTML = '';
+
+    items.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'checklist-row';
+
+      const left = document.createElement('div');
+      left.className = 'row-left';
+      const emoji = document.createElement('span');
+      emoji.className = 'item-emoji';
+      emoji.textContent = item.icon;
+      const name = document.createElement('span');
+      name.className = 'item-name';
+      name.textContent = item.label;
+      left.append(emoji, name);
+
+      const badge = document.createElement('div');
+      row.append(left, badge);
+      this.checklistRows.appendChild(row);
+      this.rowBadges[item.key] = badge;
+      this._setBadge(badge, 'status-pending', '🕒', 'Belum dinilai');
+    });
+  }
+
+  /** Teks proses analisa, mis. "helm, rompi, celana, dan sepatu". */
+  _itemSummary() {
+    const names = this.catalog.map((item) => item.short_label.toLowerCase());
+    if (names.length <= 1) return names.join('');
+    return `${names.slice(0, -1).join(', ')}, dan ${names[names.length - 1]}`;
+  }
+
+  _setBadge(badge, statusClass, icon, text) {
+    badge.className = `row-badge ${statusClass}`;
+    badge.innerHTML = '';
+    const iconEl = document.createElement('span');
+    iconEl.className = 'badge-icon';
+    iconEl.textContent = icon;
+    const textEl = document.createElement('span');
+    textEl.className = 'badge-text';
+    textEl.textContent = text;
+    badge.append(iconEl, textEl);
   }
 
   update(telemetry) {
@@ -69,8 +111,10 @@ export class APDVisualizer {
     if (this.techActiveTrack) {
       this.techActiveTrack.textContent = active ? `#${active.track_id}` : 'None';
     }
-    if (this.techStability && active) {
-      this.techStability.textContent = `${active.stable_frames || 0} / 2`;
+    if (this.techStability) {
+      // Target diambil dari server (STABLE_FRAMES_REQUIRED), bukan ditulis tetap
+      const required = telemetry.stable_frames_required ?? '?';
+      this.techStability.textContent = `${active ? (active.stable_frames || 0) : 0} / ${required}`;
     }
 
     // Update Guidance Card & Stepper
@@ -84,6 +128,9 @@ export class APDVisualizer {
       }
     } else {
       this.resetChecklist(active);
+      if (this.techLatencyMs) {
+        this.techLatencyMs.textContent = '—';
+      }
     }
 
     // Update Recent History Log
@@ -150,7 +197,9 @@ export class APDVisualizer {
       this.guidanceEyebrow.textContent = 'PROSES PEMERIKSAAN';
       this.guidanceTitle.textContent = 'Menganalisis APD...';
       this.guidanceSubText.textContent = 'Posisi tubuh sudah pas. Mohon tetap tenang sejenak.';
-      this.guidancePillText.textContent = 'AI sedang memverifikasi helm, rompi, celana, dan sepatu';
+      this.guidancePillText.textContent = this.catalog.length > 0
+        ? `AI sedang memverifikasi ${this._itemSummary()}`
+        : 'AI sedang memverifikasi kelengkapan APD';
 
       this.step1.classList.add('complete');
       this.line12.classList.add('active');
@@ -186,66 +235,41 @@ export class APDVisualizer {
     }
   }
 
+  _escape(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   renderChecklistResult(res) {
-    // 1. Helm
-    if (res.helm.detected) {
-      this.badgeHelm.className = 'row-badge status-ok';
-      this.badgeHelm.innerHTML = '<span class="badge-icon">✅</span> Terpasang';
-    } else {
-      this.badgeHelm.className = 'row-badge status-fail';
-      this.badgeHelm.innerHTML = '<span class="badge-icon">❌</span> Tidak Ada';
-    }
+    const results = res.items || {};
+    this.catalog.forEach((item) => {
+      const { ok, text } = assessItem(item, results[item.key]);
+      const badge = this.rowBadges[item.key];
+      if (ok === null) {
+        this._setBadge(badge, 'status-pending', '❔', text);
+      } else {
+        this._setBadge(badge, ok ? 'status-ok' : 'status-fail', ok ? '✅' : '❌', text);
+      }
+    });
 
-    // 2. Rompi
-    if (res.rompi.detected && res.rompi.is_valid_color) {
-      this.badgeRompi.className = 'row-badge status-ok';
-      this.badgeRompi.innerHTML = `<span class="badge-icon">✅</span> ${res.rompi.color || 'OK'}`;
-    } else if (res.rompi.detected && !res.rompi.is_valid_color) {
-      this.badgeRompi.className = 'row-badge status-fail';
-      this.badgeRompi.innerHTML = `<span class="badge-icon">❌</span> Bukan Hi-Vis`;
-    } else {
-      this.badgeRompi.className = 'row-badge status-fail';
-      this.badgeRompi.innerHTML = '<span class="badge-icon">❌</span> Tidak Ada';
-    }
+    const summary = res.is_complete
+      ? 'Semua APD lengkap sesuai standar K3.'
+      : `Belum memenuhi syarat: ${res.missing_items.length > 0 ? res.missing_items.join(', ') : 'Belum lengkap'}`;
 
-    // 3. Celana Panjang
-    if (res.celana_panjang.detected) {
-      this.badgeCelana.className = 'row-badge status-ok';
-      this.badgeCelana.innerHTML = '<span class="badge-icon">✅</span> Panjang';
+    // Operator harus bisa membedakan keputusan VLM dari heuristik lokal yang kasar.
+    if (res.is_low_confidence) {
+      this.checklistFootnoteText.innerHTML =
+        `${this._escape(summary)} <span class="confidence-chip">⚠️ Engine lokal — akurasi terbatas</span>`;
     } else {
-      this.badgeCelana.className = 'row-badge status-fail';
-      this.badgeCelana.innerHTML = '<span class="badge-icon">❌</span> Pendek';
-    }
-
-    // 4. Sepatu Tertutup
-    if (res.sepatu_tertutup.detected && res.sepatu_tertutup.is_closed_shoes) {
-      this.badgeSepatu.className = 'row-badge status-ok';
-      this.badgeSepatu.innerHTML = '<span class="badge-icon">✅</span> Tertutup';
-    } else {
-      this.badgeSepatu.className = 'row-badge status-fail';
-      this.badgeSepatu.innerHTML = '<span class="badge-icon">❌</span> Terbuka/Sandal';
-    }
-
-    if (res.is_complete) {
-      this.checklistFootnoteText.textContent = 'Semua APD lengkap sesuai standar K3.';
-    } else {
-      const missingStr = res.missing_items.length > 0 ? res.missing_items.join(', ') : 'Belum lengkap';
-      this.checklistFootnoteText.textContent = `Belum memenuhi syarat: ${missingStr}`;
+      this.checklistFootnoteText.textContent = summary;
     }
   }
 
   resetChecklist(active) {
-    this.badgeHelm.className = 'row-badge status-pending';
-    this.badgeHelm.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
-
-    this.badgeRompi.className = 'row-badge status-pending';
-    this.badgeRompi.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
-
-    this.badgeCelana.className = 'row-badge status-pending';
-    this.badgeCelana.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
-
-    this.badgeSepatu.className = 'row-badge status-pending';
-    this.badgeSepatu.innerHTML = '<span class="badge-icon">🕒</span> Belum dinilai';
+    Object.values(this.rowBadges).forEach((badge) => {
+      this._setBadge(badge, 'status-pending', '🕒', 'Belum dinilai');
+    });
 
     if (active && !active.is_full_body) {
       this.checklistFootnoteText.textContent = 'Menunggu posisi tubuh sesuai.';

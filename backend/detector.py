@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import torch
-from config import cfg
+from .config import cfg
+from . import messages
 
 class DetectionResult:
     def __init__(self, track_id: int, bbox: list[int], is_full_body: bool, 
@@ -19,9 +20,12 @@ class DetectionResult:
         self.clip_type = clip_type
 
 class PersonDetector:
-    """YOLOv8-Small Pose Detector with tracking & robust Full-Body verification."""
+    """YOLO26-Small Pose Detector with tracking & robust Full-Body verification."""
     def __init__(self):
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        # Nama perangkat untuk HUD, supaya tidak menyebut GPU yang tidak terpasang
+        self.device_label = (torch.cuda.get_device_name(0).replace("NVIDIA GeForce ", "")
+                             if self.device.startswith("cuda") else "CPU")
         print(f"[PersonDetector] Initializing YOLO with model {cfg.YOLO_MODEL_PATH} on {self.device}...")
         self.model = YOLO(cfg.YOLO_MODEL_PATH)
         print("[PersonDetector] Model loaded successfully.")
@@ -29,6 +33,15 @@ class PersonDetector:
     def detect_and_track(self, frame: np.ndarray) -> list[DetectionResult]:
         """Runs YOLO tracking and height-adaptive full-body filter on the current frame."""
         h, w = frame.shape[:2]
+
+        # Ambang tepi dihitung dari tinggi frame agar perilaku gerbang full-body
+        # tetap sama ketika operator berpindah kamera / resolusi.
+        margin_top = max(int(h * cfg.BORDER_MARGIN_TOP_RATIO), 1)
+        margin_bottom = max(int(h * cfg.BORDER_MARGIN_BOTTOM_RATIO), 1)
+        head_touch_top = max(int(h * cfg.HEAD_TOUCH_TOP_RATIO), 1)
+        ankle_touch_bottom = max(int(h * cfg.ANKLE_TOUCH_BOTTOM_RATIO), 1)
+        knee_only_bottom = max(int(h * cfg.KNEE_ONLY_BOTTOM_RATIO), 1)
+
         results = self.model.track(
             source=frame,
             persist=True,
@@ -76,22 +89,22 @@ class PersonDetector:
 
             # Anatomical Full-Body Verification (Adaptif terhadap Orang Tinggi & Pendek)
             is_full_body = True
-            reason = "Full body terdeteksi sempurna"
+            reason = messages.POSE_OK
             clip_type = "OPTIMAL"
 
             if not is_inside_corridor:
                 is_full_body = False
-                reason = "Di luar jalur inspeksi (silakan berdiri di tengah)"
+                reason = messages.POSE_OUTSIDE_CORRIDOR
                 clip_type = "OUTSIDE_CORRIDOR"
 
             # 1. Height ratio bounds
             elif h_ratio < cfg.MIN_PERSON_HEIGHT_RATIO:
                 is_full_body = False
-                reason = "Terlalu jauh, silakan mendekat ke area gerbang"
+                reason = messages.POSE_TOO_FAR
                 clip_type = "TOO_FAR"
             elif h_ratio > cfg.MAX_PERSON_HEIGHT_RATIO:
                 is_full_body = False
-                reason = "Terlalu dekat ke kamera (silakan mundur)"
+                reason = messages.POSE_TOO_CLOSE
                 clip_type = "TOO_CLOSE"
 
             # 2. Keypoint Anatomical Height-Adaptive Verification
@@ -123,9 +136,9 @@ class PersonDetector:
 
                 # Check A: Head / Hard Hat clipping
                 # For tall workers, ensure helmet headroom exists above the nose
-                if y1 <= 5 or expected_helmet_top < 0 or (nose_conf < cfg.KEYPOINT_CONF_THRESHOLD and l_eye_conf < cfg.KEYPOINT_CONF_THRESHOLD and r_eye_conf < cfg.KEYPOINT_CONF_THRESHOLD):
+                if y1 <= head_touch_top or expected_helmet_top < 0 or (nose_conf < cfg.KEYPOINT_CONF_THRESHOLD and l_eye_conf < cfg.KEYPOINT_CONF_THRESHOLD and r_eye_conf < cfg.KEYPOINT_CONF_THRESHOLD):
                     is_full_body = False
-                    reason = "Kepala/Helm terpotong (silakan mundur sedikit)"
+                    reason = messages.POSE_HEAD_CLIPPED
                     clip_type = "HEAD_CLIPPED"
 
                 # Check B: Feet / Shoes clipping
@@ -136,25 +149,25 @@ class PersonDetector:
                 if l_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[15][1]))
                 if r_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[16][1]))
 
-                if y2 >= (h - cfg.BORDER_MARGIN_BOTTOM_PX) or (ankle_y_max > 0 and ankle_y_max >= (h - 8)):
+                if y2 >= (h - margin_bottom) or (ankle_y_max > 0 and ankle_y_max >= (h - ankle_touch_bottom)):
                     is_full_body = False
-                    reason = "Kaki/Sepatu terpotong (silakan mundur satu langkah)"
+                    reason = messages.POSE_FEET_CLIPPED
                     clip_type = "FEET_CLIPPED"
                 elif not ankles_visible:
-                    if not knees_visible or y2 >= (h - 30):
+                    if not knees_visible or y2 >= (h - knee_only_bottom):
                         is_full_body = False
-                        reason = "Kaki belum terlihat (silakan mundur satu langkah)"
+                        reason = messages.POSE_FEET_NOT_VISIBLE
                         clip_type = "FEET_CLIPPED"
 
             # Fallback if no pose keypoints available
             else:
-                if y1 <= cfg.BORDER_MARGIN_TOP_PX:
+                if y1 <= margin_top:
                     is_full_body = False
-                    reason = "Kepala/Helm terpotong di tepi atas"
+                    reason = messages.POSE_HEAD_CLIPPED_EDGE
                     clip_type = "HEAD_CLIPPED"
-                elif y2 >= (h - cfg.BORDER_MARGIN_BOTTOM_PX):
+                elif y2 >= (h - margin_bottom):
                     is_full_body = False
-                    reason = "Kaki terpotong di tepi bawah"
+                    reason = messages.POSE_FEET_CLIPPED_EDGE
                     clip_type = "FEET_CLIPPED"
 
             # Extract crop for VLM (add slight margin around bbox for context)
@@ -178,8 +191,6 @@ class PersonDetector:
                 conf=float(conf),
                 clip_type=clip_type
             ))
-
-        return detections
 
         return detections
 

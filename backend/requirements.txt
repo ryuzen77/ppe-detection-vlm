@@ -9,4 +9,7 @@ pygame>=2.5.0
 google-generativeai>=0.8.0
 python-dotenv>=1.0.0
 gTTS>=2.4.0
+pyserial>=3.5
+# Nama perangkat DirectShow untuk daftar kamera (Windows; impornya dijaga try/except)
+pygrabber>=0.2
 pillow>=10.0.0

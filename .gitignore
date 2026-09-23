@@ -18,6 +18,11 @@ ehthumbs.db
 [Dd]esktop.ini
 *.log
 
+# Pilihan kamera runtime (per-mesin)
+backend/camera_state.json
+backend/runtime_settings.json
+
 # Generated worker audit records & snapshots
 backend/reports/*.db
+backend/reports/*.bak
 backend/reports/snapshots/*.jpg

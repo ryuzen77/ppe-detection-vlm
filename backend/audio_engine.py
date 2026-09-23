@@ -4,7 +4,8 @@ import threading
 from pathlib import Path
 from queue import Queue
 import pygame
-from config import cfg
+from .config import cfg
+from . import ppe_rules
 
 class AudioEngine:
     """Thread-safe, non-blocking audio player using pygame.mixer."""
@@ -86,26 +87,26 @@ class AudioEngine:
         else:
             self.play("mundur", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
 
+    def result_sound(self, is_complete: bool, missing_items: list[str] = None) -> str:
+        """Nama suara untuk hasil inspeksi.
+
+        Satu item kurang → suara khusus item itu, diambil dari `audio_missing`
+        pada katalog. Lebih dari satu, alasan di luar katalog (mis. anti-spoofing),
+        atau berkas MP3 item belum dibangkitkan → peringatan umum, supaya pekerja
+        tidak pernah ditolak dalam diam.
+        """
+        if is_complete:
+            return "lengkap"
+        missing_items = missing_items or []
+        if len(missing_items) == 1:
+            item = ppe_rules.get_item_by_missing_label(missing_items[0])
+            if item is not None and (self.audio_dir / f"{item.audio_missing}.mp3").exists():
+                return item.audio_missing
+        return "tidak_lengkap"
+
     def play_result(self, is_complete: bool, missing_items: list[str] = None):
         """Plays corresponding voice based on PPE detection result."""
-        if is_complete:
-            self.play("lengkap", min_interval=3.0)
-        else:
-            missing_items = missing_items or []
-            if len(missing_items) == 1:
-                item = missing_items[0].lower()
-                if "helm" in item:
-                    self.play("kurang_helm", min_interval=3.0)
-                elif "rompi" in item:
-                    self.play("kurang_rompi", min_interval=3.0)
-                elif "celana" in item:
-                    self.play("kurang_celana", min_interval=3.0)
-                elif "sepatu" in item:
-                    self.play("kurang_sepatu", min_interval=3.0)
-                else:
-                    self.play("tidak_lengkap", min_interval=3.0)
-            else:
-                self.play("tidak_lengkap", min_interval=3.0)
+        self.play(self.result_sound(is_complete, missing_items), min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS)
 
     def stop(self):
         self.is_running = False

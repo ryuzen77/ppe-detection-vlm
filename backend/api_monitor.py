@@ -3,6 +3,8 @@ import threading
 from typing import Dict, Any, Optional
 from collections import deque
 
+from .config import cfg
+
 class APIMonitor:
     """Monitors Gemini Cloud API health, tracks real-time round-trip latency,
     detects degradation/jamming (macet), and manages Online vs Offline engine modes."""
@@ -16,7 +18,7 @@ class APIMonitor:
         # Status: "ONLINE", "DEGRADED", "OFFLINE"
         self.status: str = "INITIALIZING"
         self.latency_ms: float = 0.0
-        self.latency_history: deque = deque(maxlen=5)
+        self.latency_history: deque = deque(maxlen=cfg.API_LATENCY_HISTORY)
         self.avg_latency_ms: float = 0.0
 
         # Metrics
@@ -70,7 +72,7 @@ class APIMonitor:
             self.total_errors += 1
             self.consecutive_errors += 1
             self.last_checked_time = time.strftime("%H:%M:%S")
-            self.last_error_message = str(err_msg)[:120]
+            self.last_error_message = str(err_msg)[:cfg.ERROR_MESSAGE_MAX_CHARS]
             if "429" in err_msg or "quota" in err_msg.lower():
                 self.total_rate_limited += 1
                 self.status = "DEGRADED"

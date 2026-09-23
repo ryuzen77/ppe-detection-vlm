@@ -9,73 +9,209 @@ from typing import Optional, List, Dict, Any
 import cv2
 import numpy as np
 
+from . import ppe_rules
+from .config import cfg
+from . import messages
+
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
 SNAPSHOTS_DIR = REPORTS_DIR / "snapshots"
 DB_PATH = REPORTS_DIR / "audit.db"
+
+# Versi skema, disimpan di `PRAGMA user_version`.
+#   0 — skema awal: sebelas kolom tetap untuk helm, rompi, celana, dan sepatu
+#   1 — hasil per item disimpan generik di `items_json`, mengikuti `ppe_rules`
+SCHEMA_VERSION = 1
+
+_CREATE_TABLE_V1 = """
+    CREATE TABLE {name} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        track_id INTEGER NOT NULL,
+        timestamp TEXT NOT NULL,
+        date_str TEXT NOT NULL,
+        time_str TEXT NOT NULL,
+        is_complete INTEGER NOT NULL,
+        items_json TEXT NOT NULL DEFAULT '{{}}',
+        missing_items TEXT,
+        notes TEXT,
+        inference_source TEXT,
+        inference_time_ms REAL,
+        snapshot_filename TEXT
+    )
+"""
+
+_CREATE_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_timestamp ON worker_inspections(timestamp DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_is_complete ON worker_inspections(is_complete)",
+)
+
+
+def _legacy_row_to_items(row: sqlite3.Row) -> dict:
+    """Mengemas kolom per item skema versi 0 ke bentuk `items_json`.
+
+    Pemetaan ini sengaja ditulis tetap: ia menggambarkan skema lama yang sudah
+    tidak akan berubah, bukan katalog APD yang berlaku sekarang.
+    """
+    return {
+        "helm": {
+            "detected": bool(row["helm_detected"]),
+            "description": row["helm_desc"] or "",
+        },
+        "rompi": {
+            "detected": bool(row["rompi_detected"]),
+            "color": row["rompi_color"] or "",
+            "is_valid_color": bool(row["rompi_valid"]),
+            "description": row["rompi_desc"] or "",
+        },
+        "celana": {
+            "detected": bool(row["celana_detected"]),
+            "description": row["celana_desc"] or "",
+        },
+        "sepatu": {
+            "detected": bool(row["sepatu_detected"]),
+            "is_closed_shoes": bool(row["sepatu_closed"]),
+            "description": row["sepatu_desc"] or "",
+        },
+    }
+
+
+def _parse_json(text: Optional[str], default):
+    try:
+        return json.loads(text) if text else default
+    except Exception:
+        return default
+
 
 class ReportManager:
     """Manages SQLite database storage for worker inspection records,
     JPEG snapshot image archiving, compliance statistics, and CSV exports."""
 
-    def __init__(self):
-        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    def __init__(self, db_path: Path = DB_PATH, snapshots_dir: Path = SNAPSHOTS_DIR):
+        self.db_path = Path(db_path)
+        self.snapshots_dir = Path(snapshots_dir)
+        self.snapshots_dir.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(DB_PATH), timeout=10.0)
+        conn = sqlite3.connect(str(self.db_path), timeout=cfg.DB_TIMEOUT_SECONDS)
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA journal_mode = WAL;")
-            cursor.execute("PRAGMA synchronous = NORMAL;")
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS worker_inspections (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    track_id INTEGER NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    date_str TEXT NOT NULL,
-                    time_str TEXT NOT NULL,
-                    is_complete INTEGER NOT NULL,
-                    helm_detected INTEGER NOT NULL,
-                    helm_desc TEXT,
-                    rompi_detected INTEGER NOT NULL,
-                    rompi_color TEXT,
-                    rompi_valid INTEGER NOT NULL,
-                    rompi_desc TEXT,
-                    celana_detected INTEGER NOT NULL,
-                    celana_desc TEXT,
-                    sepatu_detected INTEGER NOT NULL,
-                    sepatu_closed INTEGER NOT NULL,
-                    sepatu_desc TEXT,
-                    missing_items TEXT,
-                    notes TEXT,
-                    inference_source TEXT,
-                    inference_time_ms REAL,
-                    snapshot_filename TEXT
+        conn = self._get_connection()
+        try:
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
+            self._migrate(conn)
+        finally:
+            conn.close()
+
+    def _migrate(self, conn: sqlite3.Connection):
+        """Membawa database ke `SCHEMA_VERSION` dalam satu transaksi.
+
+        Bila salah satu langkah gagal, seluruh perubahan dibatalkan dan database
+        tetap pada versi lamanya — tidak ada keadaan setengah jadi.
+        """
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version == SCHEMA_VERSION:
+            return
+        if version > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database {self.db_path} berversi skema {version}, lebih baru dari "
+                f"yang dikenali kode ini ({SCHEMA_VERSION}). Perbarui aplikasi."
+            )
+
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'worker_inspections'"
+        ).fetchone() is not None
+
+        if has_table:
+            self._backup_before_migration(version)
+
+        # Transaksi dikendalikan manual: modul sqlite3 tidak membungkus DDL
+        # dalam transaksi secara otomatis.
+        conn.isolation_level = None
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if not has_table:
+                conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections"))
+            else:
+                self._migrate_v0_to_v1(conn)
+            for sql in _CREATE_INDEXES:
+                conn.execute(sql)
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+
+    def _backup_before_migration(self, version: int):
+        """Salinan utuh database sebelum migrasi, di samping berkas aslinya."""
+        backup_path = self.db_path.with_name(f"{self.db_path.stem}.v{version}.bak")
+        if backup_path.exists():
+            return
+        src = self._get_connection()
+        dst = sqlite3.connect(str(backup_path))
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        print(f"[ReportManager] Cadangan sebelum migrasi skema: {backup_path.name}")
+
+    def _migrate_v0_to_v1(self, conn: sqlite3.Connection):
+        """Sebelas kolom per item → satu kolom `items_json`. Seluruh baris dipertahankan."""
+        old_seq = conn.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name = 'worker_inspections'"
+        ).fetchone()
+
+        conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections_v1"))
+        rows = conn.execute("SELECT * FROM worker_inspections ORDER BY id ASC").fetchall()
+        conn.executemany(
+            """
+            INSERT INTO worker_inspections_v1 (
+                id, track_id, timestamp, date_str, time_str, is_complete,
+                items_json, missing_items, notes, inference_source,
+                inference_time_ms, snapshot_filename
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    row["id"], row["track_id"], row["timestamp"], row["date_str"],
+                    row["time_str"], row["is_complete"],
+                    json.dumps(_legacy_row_to_items(row), ensure_ascii=False),
+                    row["missing_items"], row["notes"], row["inference_source"],
+                    row["inference_time_ms"], row["snapshot_filename"],
                 )
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON worker_inspections(timestamp DESC)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_is_complete ON worker_inspections(is_complete)")
-            conn.commit()
+                for row in rows
+            ],
+        )
+        conn.execute("DROP TABLE worker_inspections")
+        conn.execute("ALTER TABLE worker_inspections_v1 RENAME TO worker_inspections")
+
+        # Pertahankan penghitung AUTOINCREMENT agar id baris yang pernah dihapus
+        # tidak dipakai ulang.
+        if old_seq is not None:
+            conn.execute(
+                "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'worker_inspections'",
+                (old_seq[0],),
+            )
+        print(f"[ReportManager] Migrasi skema v0 -> v1: {len(rows)} baris dipindahkan.")
 
     def save_inspection(
         self,
         track_id: int,
         is_complete: bool,
-        helm_data: dict,
-        rompi_data: dict,
-        celana_data: dict,
-        sepatu_data: dict,
+        items: Dict[str, dict],
         missing_items: List[str],
         notes: str,
         inference_source: str,
         inference_time_ms: float,
         crop_img: Optional[np.ndarray] = None
     ) -> dict:
-        """Saves inspection snapshot to disk and inserts record into SQLite."""
+        """Saves inspection snapshot to disk and inserts record into SQLite.
+
+        `items` berisi hasil per item APD, dikunci `PPEItem.key`.
+        """
         now = time.localtime()
         iso_timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", now)
         date_str = time.strftime("%Y-%m-%d", now)
@@ -85,46 +221,29 @@ class ReportManager:
         snapshot_filename = ""
         if crop_img is not None and crop_img.size > 0:
             snapshot_filename = f"worker_{track_id}_{file_time_slug}.jpg"
-            save_path = SNAPSHOTS_DIR / snapshot_filename
+            save_path = self.snapshots_dir / snapshot_filename
             try:
-                # Save compressed snapshot JPEG (~30-50 KB)
-                cv2.imwrite(str(save_path), crop_img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                cv2.imwrite(str(save_path), crop_img, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.SNAPSHOT_JPEG_QUALITY])
             except Exception as e:
                 print(f"[ReportManager] Error saving snapshot image: {e}")
                 snapshot_filename = ""
-
-        missing_json = json.dumps(missing_items, ensure_ascii=False)
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO worker_inspections (
                     track_id, timestamp, date_str, time_str, is_complete,
-                    helm_detected, helm_desc,
-                    rompi_detected, rompi_color, rompi_valid, rompi_desc,
-                    celana_detected, celana_desc,
-                    sepatu_detected, sepatu_closed, sepatu_desc,
-                    missing_items, notes, inference_source, inference_time_ms,
-                    snapshot_filename
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    items_json, missing_items, notes, inference_source,
+                    inference_time_ms, snapshot_filename
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 track_id,
                 iso_timestamp,
                 date_str,
                 time_str,
                 1 if is_complete else 0,
-                1 if helm_data.get("detected", False) else 0,
-                helm_data.get("description", ""),
-                1 if rompi_data.get("detected", False) else 0,
-                rompi_data.get("color", ""),
-                1 if rompi_data.get("is_valid_color", False) else 0,
-                rompi_data.get("description", ""),
-                1 if celana_data.get("detected", False) else 0,
-                celana_data.get("description", ""),
-                1 if sepatu_data.get("detected", False) else 0,
-                1 if sepatu_data.get("is_closed_shoes", False) else 0,
-                sepatu_data.get("description", ""),
-                missing_json,
+                json.dumps(items, ensure_ascii=False),
+                json.dumps(missing_items, ensure_ascii=False),
                 notes,
                 inference_source,
                 inference_time_ms,
@@ -144,6 +263,14 @@ class ReportManager:
             "inference_source": inference_source,
             "inference_time_ms": inference_time_ms
         }
+
+    @staticmethod
+    def _row_to_record(row: sqlite3.Row) -> dict:
+        rec = dict(row)
+        rec["is_complete"] = bool(rec["is_complete"])
+        rec["missing_items"] = _parse_json(rec["missing_items"], [])
+        rec["items"] = _parse_json(rec.pop("items_json"), {})
+        return rec
 
     def get_reports(self, limit: int = 50, offset: int = 0, status_filter: str = "all", date_filter: Optional[str] = None) -> dict:
         """Retrieves paginated inspection records with summary statistics."""
@@ -187,23 +314,7 @@ class ReportManager:
             """
             query_params = list(params) + [limit, offset]
             cursor.execute(query, query_params)
-            rows = cursor.fetchall()
-
-            records = []
-            for row in rows:
-                rec = dict(row)
-                rec["is_complete"] = bool(rec["is_complete"])
-                rec["helm_detected"] = bool(rec["helm_detected"])
-                rec["rompi_detected"] = bool(rec["rompi_detected"])
-                rec["rompi_valid"] = bool(rec["rompi_valid"])
-                rec["celana_detected"] = bool(rec["celana_detected"])
-                rec["sepatu_detected"] = bool(rec["sepatu_detected"])
-                rec["sepatu_closed"] = bool(rec["sepatu_closed"])
-                try:
-                    rec["missing_items"] = json.loads(rec["missing_items"]) if rec["missing_items"] else []
-                except Exception:
-                    rec["missing_items"] = []
-                records.append(rec)
+            records = [self._row_to_record(row) for row in cursor.fetchall()]
 
             return {
                 "total_all": total_count,
@@ -214,28 +325,33 @@ class ReportManager:
                 "page_records": records
             }
 
+    @staticmethod
+    def _item_csv_text(item: ppe_rules.PPEItem, result: Optional[dict]) -> str:
+        """Isi sel CSV satu item APD, diturunkan dari definisinya."""
+        if result is None:
+            # Item yang ditambahkan ke katalog setelah baris ini tercatat
+            return messages.CSV_ITEM_NOT_ASSESSED
+        if item.is_satisfied(result):
+            color = result.get("color", "") if item.reports_color else ""
+            return messages.CSV_ITEM_OK_COLOR.format(color=color) if color else messages.CSV_ITEM_OK
+        if result.get("detected", False) and item.qualifier is not None:
+            return item.qualifier.fail_label.upper()
+        return item.fail_label.upper()
+
     def export_csv_text(self) -> str:
-        """Exports all inspection records to a standard CSV string for HSE/K3 audit."""
+        """Exports all inspection records to a standard CSV string for HSE/K3 audit.
+
+        Kolom per item APD dibangkitkan dari katalog `ppe_rules`.
+        """
         output = io.StringIO()
         writer = csv.writer(output)
+        items = ppe_rules.get_items()
 
-        # Header standard
-        writer.writerow([
-            "No",
-            "Tanggal",
-            "Waktu",
-            "ID Pekerja",
-            "Status Kelulusan",
-            "Helm",
-            "Rompi",
-            "Celana Panjang",
-            "Sepatu Tertutup",
-            "Item Kurang / Pelanggaran",
-            "Sumber Analisis",
-            "Waktu Proses (ms)",
-            "Catatan",
-            "Nama File Snapshot"
-        ])
+        writer.writerow(
+            messages.CSV_HEADER_LEADING
+            + [item.label for item in items]
+            + messages.CSV_HEADER_TRAILING
+        )
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -243,34 +359,17 @@ class ReportManager:
             rows = cursor.fetchall()
 
             for i, row in enumerate(rows, start=1):
-                missing_list = []
-                try:
-                    missing_list = json.loads(row["missing_items"]) if row["missing_items"] else []
-                except Exception:
-                    pass
+                missing_list = _parse_json(row["missing_items"], [])
+                results = _parse_json(row["items_json"], {})
+                status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
 
-                status_str = "LENGKAP (Akses Diizinkan)" if row["is_complete"] else "TIDAK LENGKAP (Ditolak)"
-                helm_str = "OK" if row["helm_detected"] else "TIDAK ADA"
-                rompi_str = f"OK ({row['rompi_color']})" if row["rompi_valid"] else "TIDAK SAH / TIDAK ADA"
-                celana_str = "OK" if row["celana_detected"] else "CELANA PENDEK"
-                sepatu_str = "OK" if row["sepatu_closed"] else "SANDAL / TERBUKA"
-
-                writer.writerow([
-                    i,
-                    row["date_str"],
-                    row["time_str"],
-                    f"Pekerja #{row['track_id']}",
-                    status_str,
-                    helm_str,
-                    rompi_str,
-                    celana_str,
-                    sepatu_str,
-                    "; ".join(missing_list) if missing_list else "-",
-                    row["inference_source"],
-                    row["inference_time_ms"],
-                    row["notes"],
-                    row["snapshot_filename"]
-                ])
+                writer.writerow(
+                    [i, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str]
+                    + [self._item_csv_text(item, results.get(item.key)) for item in items]
+                    + ["; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
+                       row["inference_source"], row["inference_time_ms"],
+                       row["notes"], row["snapshot_filename"]]
+                )
 
         return output.getvalue()
 
@@ -279,8 +378,8 @@ class ReportManager:
         if not filename or "/" in filename or "\\" in filename or ".." in filename:
             return None
         safe_name = os.path.basename(filename)
-        path = (SNAPSHOTS_DIR / safe_name).resolve()
-        snapshots_root = SNAPSHOTS_DIR.resolve()
+        path = (self.snapshots_dir / safe_name).resolve()
+        snapshots_root = self.snapshots_dir.resolve()
         try:
             if path.is_relative_to(snapshots_root) and path.exists() and path.is_file():
                 return path

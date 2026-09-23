@@ -5,13 +5,14 @@ from typing import Dict, Optional, List
 import cv2
 import numpy as np
 
-from config import cfg
-from detector import DetectionResult
-from vlm_analyzer import vlm_analyzer, APDInspectionResult
-from audio_engine import audio_player
-from notifier import notifier
-from report_manager import report_mgr
-from api_monitor import api_monitor
+from .config import cfg
+from . import messages
+from .detector import DetectionResult
+from .vlm_analyzer import vlm_analyzer, APDInspectionResult
+from .audio_engine import audio_player
+from .notifier import notifier
+from .report_manager import report_mgr
+from .api_monitor import api_monitor
 
 class TrackState:
     INITIAL = "INITIAL"
@@ -41,7 +42,7 @@ class StateManager:
     """Manages person tracking states, full-body step back voice triggers, and anti-spam API calls."""
     def __init__(self):
         self.tracks: Dict[int, PersonTrackInfo] = {}
-        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="VLM_Worker")
+        self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix="VLM_Worker")
         self.lock = threading.Lock()
         self.inspection_history: List[dict] = []
         self.active_person_id: Optional[int] = None
@@ -96,9 +97,9 @@ class StateManager:
                             audio_player.play_step_back(clip_type=track.clip_type)
                             track.last_step_back_audio_time = now
                             track.step_back_warning_count += 1
-                            notifier.set_incomplete(f"Peringatan: {det.reason}")
+                            notifier.set_incomplete(messages.LIGHT_POSITION_WARNING.format(reason=det.reason))
                     else:
-                        notifier.set_incomplete(f"Peringatan: {det.reason}")
+                        notifier.set_incomplete(messages.LIGHT_POSITION_WARNING.format(reason=det.reason))
                 else:
                     # Full body confirmed inside corridor - reset warning count
                     track.step_back_warning_count = 0
@@ -110,7 +111,7 @@ class StateManager:
                         track.state = TrackState.ANALYZING
                         crop_to_analyze = det.crop_img.copy() if det.crop_img is not None else None
                         print(f"[StateManager] Triggering Gemini VLM analysis for Track ID #{tid} (1 frame)...")
-                        audio_player.play("sedang_analisa", min_interval=2.0)
+                        audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
                         
                         self.executor.submit(self._run_vlm_analysis, tid, crop_to_analyze)
 
@@ -141,10 +142,7 @@ class StateManager:
             saved_meta = report_mgr.save_inspection(
                 track_id=track_id,
                 is_complete=result.is_complete,
-                helm_data=result.helm.model_dump(),
-                rompi_data=result.rompi.model_dump(),
-                celana_data=result.celana_panjang.model_dump(),
-                sepatu_data=result.sepatu_tertutup.model_dump(),
+                items={key: item.model_dump() for key, item in result.items.items()},
                 missing_items=result.missing_items,
                 notes=result.notes,
                 inference_source=result.inference_source,
@@ -163,10 +161,7 @@ class StateManager:
                         "track_id": track_id,
                         "timestamp": time.strftime("%H:%M:%S"),
                         "is_complete": result.is_complete,
-                        "helm": result.helm.model_dump(),
-                        "rompi": result.rompi.model_dump(),
-                        "celana": result.celana_panjang.model_dump(),
-                        "sepatu": result.sepatu_tertutup.model_dump(),
+                        "items": {key: item.model_dump() for key, item in result.items.items()},
                         "missing_items": result.missing_items,
                         "notes": result.notes,
                         "inference_source": result.inference_source,
@@ -179,12 +174,12 @@ class StateManager:
 
                     if result.is_complete:
                         print(f"[StateManager] Track #{track_id}: APD LENGKAP! Green Light ON.")
-                        notifier.set_complete("AKSES DIIZINKAN - APD LENGKAP")
+                        notifier.set_complete(messages.LIGHT_GRANTED)
                         audio_player.play_result(is_complete=True)
                     else:
                         print(f"[StateManager] Track #{track_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
                         missing_text = ", ".join(result.missing_items)
-                        notifier.set_incomplete(f"AKSES DITOLAK - Belum memakai: {missing_text}")
+                        notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=missing_text))
                         audio_player.play_result(is_complete=False, missing_items=result.missing_items)
 
         except Exception as e:
@@ -248,7 +243,10 @@ class StateManager:
                     "right_ratio": cfg.CORRIDOR_RIGHT_RATIO
                 },
                 "light": notifier.get_status(),
-                "history": self.inspection_history[:8],
+                "history": self.inspection_history[:cfg.TELEMETRY_HISTORY_RECORDS],
+                # Frontend butuh angka ini untuk indikator "stabil x / y";
+                # dulu ditulis tetap "/ 2" dan akan salah begitu config diubah.
+                "stable_frames_required": cfg.STABLE_FRAMES_REQUIRED,
                 "is_live_gemini": vlm_analyzer.is_live_api(),
                 "api_monitor": api_monitor.get_status(),
                 "engine_mode": api_monitor.engine_mode
