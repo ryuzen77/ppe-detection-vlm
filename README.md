@@ -127,7 +127,9 @@ ppe_detection_vlm/
 │   │   └── websocket.py          # Telemetri real-time /ws
 │   ├── generate_audio.py         # Pembangkit berkas MP3 panduan suara (gTTS)
 │   ├── requirements.txt          # Dependensi Python library
-│   ├── requirements-dev.txt      # + pytest, untuk pengembangan
+│   ├── requirements-dev.txt      # + pytest & websockets, untuk pengembangan
+│   ├── requirements.lock         # Versi terkunci (server), dibuat dengan uv
+│   ├── requirements-dev.lock     # Versi terkunci (server + tes)
 │   ├── .env                      # File variabel lingkungan lokal
 │   ├── .env.example              # Contoh variabel lingkungan
 │   ├── storage.py                # Menyiapkan DATA_DIR & memindahkan data dari tata letak lama
@@ -192,10 +194,21 @@ Bagian ini sengaja dicantumkan agar klaim sistem dapat dipertanggungjawabkan.
 ## 🚀 Panduan Menjalankan Sistem
 
 ### 1. Prasyarat Lingkungan
-Pastikan Conda environment `apd_detection` telah aktif:
+Python **3.12** dengan dependensi yang versinya dikunci di `backend/requirements.lock` (server) dan `backend/requirements-dev.lock` (server + pytest). Dibuat sekali dengan [uv](https://docs.astral.sh/uv/), dari akar repo:
 ```powershell
-conda activate apd_detection
+uv venv --python 3.12 "$env:USERPROFILE\.venvs\apd_py312"
+uv pip sync --python "$env:USERPROFILE\.venvs\apd_py312\Scripts\python.exe" --torch-backend cu132 backend\requirements-dev.lock
 ```
+`--torch-backend cu132` wajib: torch versi CUDA hanya ada di index PyTorch, sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi **sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, alih-alih diam-diam memasang torch versi CPU. Di Linux perintahnya sama, dengan jalur `bin/python`.
+
+`start_system.bat` memakai environment ini secara otomatis (lokasi bisa diganti lewat variabel `SAFEGUARD_VENV`).
+
+Memperbarui versi yang dikunci: ubah `requirements.txt` / `requirements-dev.txt`, hapus berkas `.lock` lama, lalu
+```powershell
+uv pip compile backend\requirements.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url -o backend\requirements.lock
+uv pip compile backend\requirements-dev.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url -o backend\requirements-dev.lock
+```
+Berkas `.lock` lama harus dihapus dulu karena uv mempertahankan versi yang sudah tercatat di dalamnya. Jangan menaruh `--extra-index-url` PyTorch di `requirements.txt`: index itu juga memuat salinan lama `urllib3`, `certifi`, `requests`, dan lain-lain, yang lalu ikut terpilih.
 
 ### 2. Menjalankan Server Backend
 Dari akar repositori, jalankan paket `backend`:
@@ -210,7 +223,7 @@ Dari PowerShell (termasuk terminal bawaan VS Code), tulis `.\start_system.bat`. 
 
 **Data runtime terpisah dari kode.** Audit, foto bukti, pilihan kamera, dan item APD aktif disimpan di `DATA_DIR`. Bawaannya folder `data/` di akar repo. Untuk produksi, isi `DATA_DIR` di `.env` dengan jalur absolut di luar repo, misalnya `C:\ProgramData\SafeguardAI`, supaya deploy ulang tidak menyentuh data. Data lama yang masih berada di `backend/` dipindah otomatis saat server pertama kali dijalankan; berkas yang bentrok dengan isi tujuan tidak ditimpa, melainkan dilaporkan di log.
 
-Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (pasang dulu `pip install -r backend/requirements-dev.txt`). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
+Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (environment dari `backend/requirements-dev.lock`, lihat bagian Prasyarat Lingkungan). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
 
 Server akan otomatis memuat model YOLO26s-Pose di GPU CUDA dan melayani aplikasi di `http://0.0.0.0:8000`.
 

@@ -2,3 +2,5 @@
 
 # Hanya untuk pengembangan: menjalankan tests/ dengan `python -m pytest`
 pytest>=8.0
+# Dipakai tes shutdown & integrasi untuk membuka koneksi WebSocket ke server
+websockets>=12.0
