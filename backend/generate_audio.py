@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 from gtts import gTTS
 
 from . import ppe_rules

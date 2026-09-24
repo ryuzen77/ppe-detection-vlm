@@ -1,0 +1,4 @@
+# Dikecualikan dari resolusi saat mengunci (uv pip compile --excludes lock-excludes.txt).
+# Ultralytics menuntut opencv-python; kita memakai opencv-python-headless yang
+# menyediakan modul cv2 yang sama tanpa ketergantungan GUI/libGL.
+opencv-python

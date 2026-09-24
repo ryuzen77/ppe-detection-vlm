@@ -1,6 +1,6 @@
 import time
 import threading
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from collections import deque
 
 from .config import cfg

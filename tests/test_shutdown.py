@@ -3,7 +3,8 @@
 Tanpa penanda SHUTTING_DOWN (shutdown.py) kedua endpoint itu berputar selamanya
 dan uvicorn menggantung di "Waiting for connections to close". Tes ini menjalankan
 server sungguhan (`python -m backend`) di proses dan port terpisah, lalu mengirim
-CTRL_BREAK_EVENT, yang ditangani uvicorn lewat jalur yang sama dengan Ctrl+C.
+sinyal berhenti: CTRL_BREAK_EVENT di Windows (jalur yang sama dengan Ctrl+C),
+SIGTERM di Linux/macOS (yang dikirim systemd dan Docker saat menghentikan layanan).
 """
 import os
 import signal
@@ -19,7 +20,12 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="CTRL_BREAK_EVENT khusus Windows")
+if sys.platform == "win32":
+    STOP_SIGNAL = signal.CTRL_BREAK_EVENT
+    POPEN_FLAGS = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+else:
+    STOP_SIGNAL = signal.SIGTERM
+    POPEN_FLAGS = {}
 
 
 def _free_port():
@@ -36,7 +42,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
            "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1"}
     proc = subprocess.Popen([sys.executable, "-m", "backend"], cwd=REPO_ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+                            **POPEN_FLAGS)
     output = []
     threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in proc.stdout],
                      daemon=True).start()
@@ -85,7 +91,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
         assert received[0] > 0, "Stream tidak mengalir sebelum sinyal dikirim"
 
         start = time.time()
-        os.kill(proc.pid, signal.CTRL_BREAK_EVENT)
+        os.kill(proc.pid, STOP_SIGNAL)
         try:
             code = proc.wait(timeout=15)
         except subprocess.TimeoutExpired:

@@ -102,6 +102,21 @@ class VideoCaptureService:
 
     def stop(self):
         self.is_running = False
+        # Thread harus benar-benar selesai sebelum interpreter menutup. Thread
+        # inferensi menjalankan YOLO terus-menerus (juga atas frame "menunggu
+        # kamera"); bila Python mulai finalisasi saat thread daemon itu masih di
+        # dalam torch, proses sesekali mati dengan "pybind11::handle::dec_ref()
+        # PyGILState_Check() failure" (kode keluar 134) — terukur 1 dari 20
+        # kali di Linux. Pembaca ditunggu sebelum kamera dilepas karena ia
+        # satu-satunya pemilik `self.cap`. Batas waktu mencegah shutdown
+        # menggantung bila pembaca sedang membuka/mengukur kamera.
+        for name, attr in (("inferensi", "thread"), ("pembaca kamera", "reader_thread")):
+            t = getattr(self, attr, None)  # belum ada bila start() tak pernah dipanggil
+            if t is not None and t.is_alive():
+                t.join(timeout=cfg.THREAD_STOP_TIMEOUT_SECONDS)
+                if t.is_alive():
+                    logger.warning(f"Thread {name} belum berhenti setelah "
+                                   f"{cfg.THREAD_STOP_TIMEOUT_SECONDS:.0f} dtk; shutdown dilanjutkan.")
         with self.lock:
             if self.cap and self.cap.isOpened():
                 try:
@@ -185,11 +200,7 @@ class VideoCaptureService:
                 mode = known["selected_mode"]
                 logger.info(f"Memakai mode hasil pemindaian untuk index {index}.")
 
-        self.cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
-        if not self.cap.isOpened():
-            logger.warning(f"CAP_DSHOW gagal untuk index {index}, mencoba backend bawaan...")
-            self._release_camera()
-            self.cap = cv2.VideoCapture(index)
+        self.cap = camera_manager.open_capture(index)
 
         if not self.cap.isOpened():
             self._release_camera()

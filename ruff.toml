@@ -1,0 +1,9 @@
+# Linter proyek. Jalankan dari akar repo: python -m ruff check .
+target-version = "py312"
+line-length = 120
+extend-exclude = ["picture_test", "iot/wokwi_simulation"]
+
+[lint]
+# F  = pyflakes: nama tak terdefinisi, impor/variabel tak terpakai, dll.
+# E9 = galat sintaks & I/O. Sengaja sempit: menangkap bug nyata, bukan gaya penulisan.
+select = ["F", "E9"]

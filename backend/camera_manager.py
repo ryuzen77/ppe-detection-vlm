@@ -13,8 +13,10 @@ tidak dipercaya karena sering berbeda jauh dari kenyataan.
 
 import logging
 import json
+import sys
 import threading
 import time
+from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Optional
 
@@ -23,6 +25,32 @@ import cv2
 from .config import cfg
 
 logger = logging.getLogger(__name__)
+
+# Backend OpenCV per OS. Backend bawaan kerap lebih lambat membuka perangkat atau
+# salah memilih API (mis. MSMF di Windows), jadi dipilih eksplisit; bila gagal,
+# `open_capture` jatuh ke backend bawaan.
+if sys.platform == "win32":
+    CAPTURE_BACKEND, CAPTURE_BACKEND_NAME = cv2.CAP_DSHOW, "DirectShow"
+elif sys.platform.startswith("linux"):
+    CAPTURE_BACKEND, CAPTURE_BACKEND_NAME = cv2.CAP_V4L2, "V4L2"
+elif sys.platform == "darwin":
+    CAPTURE_BACKEND, CAPTURE_BACKEND_NAME = cv2.CAP_AVFOUNDATION, "AVFoundation"
+else:
+    CAPTURE_BACKEND, CAPTURE_BACKEND_NAME = cv2.CAP_ANY, "bawaan"
+
+# Direktori sysfs perangkat video Linux (dapat diganti untuk pengujian)
+LINUX_V4L_SYSFS = Path("/sys/class/video4linux")
+
+
+def open_capture(index: int) -> cv2.VideoCapture:
+    """Membuka kamera dengan backend OS ini; jatuh ke backend bawaan OpenCV bila gagal."""
+    cap = cv2.VideoCapture(index, CAPTURE_BACKEND)
+    if cap.isOpened() or CAPTURE_BACKEND == cv2.CAP_ANY:
+        return cap
+    cap.release()
+    logger.warning(f"{CAPTURE_BACKEND_NAME} gagal untuk index {index}, mencoba backend bawaan...")
+    return cv2.VideoCapture(index)
+
 
 # Pilihan kamera operator disimpan supaya tidak perlu dipilih ulang setiap
 # server dijalankan — merepotkan saat gladi resik menjelang demo.
@@ -86,20 +114,54 @@ class CameraMode:
 
 
 def list_device_names() -> list[str]:
-    """Nama perangkat DirectShow, terurut sesuai indeks yang dipakai OpenCV.
+    """Nama perangkat, terurut sesuai indeks yang dipakai OpenCV (daftar[i] = kamera i).
 
-    `pygrabber` khusus Windows dan bukan dependensi keras: tanpa modul itu daftar
-    tetap terbentuk, hanya dengan label generik. Nama asli tetap diutamakan karena
-    indeks saja menyesatkan — pada mesin pengembangan indeks 1 adalah "OBS Virtual
-    Camera", bukan kamera fisik kedua.
+    Nama asli diutamakan karena indeks saja menyesatkan dan tidak stabil — pada
+    mesin pengembangan indeks 1 adalah "OBS Virtual Camera", bukan kamera fisik
+    kedua. Bila nama tidak bisa dibaca, daftar kosong dan pemanggil memakai label
+    generik "Kamera N".
     """
     try:
-        from pygrabber.dshow_graph import FilterGraph
+        if sys.platform == "win32":
+            # pygrabber khusus Windows dan bukan dependensi keras
+            from pygrabber.dshow_graph import FilterGraph
 
-        return list(FilterGraph().get_input_devices())
+            return list(FilterGraph().get_input_devices())
+        if sys.platform.startswith("linux"):
+            return linux_device_names()
+        return []
     except Exception as e:
         logger.warning(f"Nama perangkat tidak tersedia ({e}); memakai label generik.")
         return []
+
+
+def linux_device_names(sysfs: Optional[Path] = None) -> list[str]:
+    """Nama kamera V4L2 dari sysfs; posisi ke-N = /dev/videoN = indeks OpenCV N.
+
+    Satu kamera USB di Linux biasanya punya dua node: node video (atribut
+    `index` 0) dan node metadata. Node selain yang utama diberi label berbeda
+    supaya pencarian ulang berdasarkan nama (`resolve_saved_index`) tidak
+    tertukar ke node yang tidak bisa merekam. Nomor yang kosong diisi label
+    generik agar posisi tetap sama dengan indeks.
+    """
+    root = sysfs or LINUX_V4L_SYSFS
+    if not root.is_dir():
+        return []
+    nodes = {}
+    for d in root.iterdir():
+        suffix = d.name[len("video"):]
+        if not d.name.startswith("video") or not suffix.isdigit():
+            continue
+        n = int(suffix)
+        name_file = d / "name"
+        name = name_file.read_text(encoding="utf-8", errors="replace").strip() if name_file.exists() else ""
+        index_file = d / "index"
+        node_index = index_file.read_text().strip() if index_file.exists() else "0"
+        name = name or f"Kamera {n}"
+        nodes[n] = name if node_index in ("", "0") else f"{name} (node {n})"
+    if not nodes:
+        return []
+    return [nodes.get(n, f"Kamera {n}") for n in range(max(nodes) + 1)]
 
 
 def _keep_fastest(found: dict, mode: CameraMode):
@@ -127,7 +189,7 @@ def probe_modes(index: int, measure_seconds: float = 0.8) -> list[CameraMode]:
     """
     found: dict = {}
 
-    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+    cap = open_capture(index)
     if not cap.isOpened():
         cap.release()
         return []

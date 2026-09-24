@@ -1,7 +1,14 @@
 ultralytics>=8.0.0
+# Dipakai pelacak ByteTrack. Ultralytics memasangnya sendiri saat pelacakan pertama
+# (tanpa versi terkunci, butuh internet); dicantumkan agar ikut terkunci di .lock.
+lap>=0.5.12
 torch
 torchvision
-opencv-python>=4.8.0
+# Headless: server tidak membuka jendela, dan varian GUI butuh libGL yang tidak
+# ada di Linux server/container. Ultralytics menuntut opencv-python (GUI), jadi
+# paket itu dikecualikan saat mengunci lewat lock-excludes.txt (keduanya menulis
+# ke folder cv2 yang sama dan saling menimpa bila terpasang bersamaan).
+opencv-python-headless>=4.8.0
 fastapi>=0.100.0
 uvicorn>=0.23.0
 pydantic>=2.0.0
@@ -13,6 +20,6 @@ httpx>=0.27
 python-dotenv>=1.0.0
 gTTS>=2.4.0
 pyserial>=3.5
-# Nama perangkat DirectShow untuk daftar kamera (Windows; impornya dijaga try/except)
-pygrabber>=0.2
+# Nama perangkat DirectShow untuk daftar kamera (khusus Windows; Linux membaca sysfs)
+pygrabber>=0.2 ; sys_platform == 'win32'
 pillow>=10.0.0

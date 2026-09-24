@@ -127,7 +127,8 @@ ppe_detection_vlm/
 │   │   └── websocket.py          # Telemetri real-time /ws
 │   ├── generate_audio.py         # Pembangkit berkas MP3 panduan suara (gTTS)
 │   ├── requirements.txt          # Dependensi Python library
-│   ├── requirements-dev.txt      # + pytest & websockets, untuk pengembangan
+│   ├── requirements-dev.txt      # + pytest, websockets & ruff, untuk pengembangan
+│   ├── lock-excludes.txt         # Paket yang dikecualikan saat mengunci (opencv-python GUI)
 │   ├── requirements.lock         # Versi terkunci (server), dibuat dengan uv
 │   ├── requirements-dev.lock     # Versi terkunci (server + tes)
 │   ├── .env                      # File variabel lingkungan lokal
@@ -144,6 +145,10 @@ ppe_detection_vlm/
 │   └── reports/
 │       ├── audit.db              # Database SQLite3 riwayat pemeriksaan
 │       └── snapshots/            # Arsip bukti foto pekerja JPEG
+│
+├── scripts/check.py              # Pemeriksaan sebelum commit, sama dengan CI: ruff + pytest
+├── .github/workflows/ci.yml      # CI: ruff + pytest di Linux & Windows dari versi terkunci
+├── deploy/safeguard.service      # Unit systemd (Linux): menyala saat boot, bangkit ulang bila mati
 │
 ├── tests/                        # pytest: gerbang, engine lokal, kamera, migrasi DB & data
 │   └── conftest.py               # Isolasi: DATA_DIR sementara, tanpa Gemini, tanpa IoT
@@ -171,6 +176,8 @@ ppe_detection_vlm/
 │
 ├── IOT_HARDWARE_SPEC.md          # Spesifikasi teknis perangkat keras & wiring ESP32
 ├── start_system.bat              # Skrip 1-klik untuk menjalankan sistem di Windows
+├── start_system.sh               # Padanannya untuk Linux/macOS
+├── ruff.toml                     # Aturan linter
 └── README.md                     # Dokumentasi komprehensif proyek
 ```
 
@@ -184,7 +191,7 @@ Bagian ini sengaja dicantumkan agar klaim sistem dapat dipertanggungjawabkan.
 * **Anti-spoofing hanya pada jalur Gemini.** Penolakan foto di layar ponsel atau cetakan kertas ditegakkan lewat instruksi prompt VLM. Jalur lokal tidak memilikinya, sehingga dalam mode offline sistem dapat tertipu oleh foto.
 * **Tanpa autentikasi secara bawaan.** Endpoint yang mengubah state dilindungi hanya jika `ADMIN_TOKEN` diisi pada `.env`. Tanpa itu, siapa pun yang dapat menjangkau host ini di jaringan bisa mengganti API key atau menyalakan lampu gerbang.
 * **Data pribadi pada snapshot.** `DATA_DIR/reports/snapshots/` menyimpan potongan foto wajah pekerja tanpa batas waktu, dan `audit.db` menyimpan riwayat inspeksinya. Perlakukan sebagai data pribadi: batasi akses direktori tersebut dan tetapkan kebijakan retensi sebelum dipakai di lapangan.
-* **Penamaan kamera khusus Windows.** Nama perangkat diambil lewat DirectShow (`pygrabber`). Di platform lain daftar tetap berfungsi, tetapi hanya menampilkan label generik `Kamera 0`, `Kamera 1`, dan seterusnya.
+* **Nama kamera hanya di Windows dan Linux.** Windows membaca nama lewat DirectShow (`pygrabber`), Linux dari `/sys/class/video4linux` (node sekunder sebuah kamera USB diberi akhiran `(node N)`). Di macOS daftar tetap berfungsi, tetapi hanya menampilkan label generik `Kamera 0`, `Kamera 1`, dan seterusnya.
 * **Resolusi rendah menurunkan ketelitian VLM.** Mode dipilih dengan prioritas kelancaran, sehingga potongan gambar yang dikirim ke Gemini bisa lebih kecil dari batas 640 px. Dashboard menampilkan peringatan saat ini terjadi. Untuk mengutamakan ketelitian, set `CAMERA_AUTO_MODE=false` lalu tentukan `FRAME_WIDTH`/`FRAME_HEIGHT` sendiri di `.env`.
 * **Pemindaian kamera menghentikan video sementara.** Kamera yang sedang aktif terkunci oleh aliran video, jadi untuk mengukurnya sistem melepas perangkat itu lebih dulu. Selama proses (~15–25 detik per kamera) dashboard menampilkan layar tunggu. Lakukan pemindaian sebelum demo dimulai, bukan di tengahnya.
 * **Satu subjek per inspeksi.** Koridor virtual dirancang untuk satu orang di tengah frame; beberapa orang sekaligus dalam koridor tidak ditangani secara eksplisit.
@@ -199,29 +206,43 @@ Python **3.12** dengan dependensi yang versinya dikunci di `backend/requirements
 uv venv --python 3.12 "$env:USERPROFILE\.venvs\apd_py312"
 uv pip sync --python "$env:USERPROFILE\.venvs\apd_py312\Scripts\python.exe" --torch-backend cu132 backend\requirements-dev.lock
 ```
-`--torch-backend cu132` wajib: torch versi CUDA hanya ada di index PyTorch, sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi **sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, alih-alih diam-diam memasang torch versi CPU. Di Linux perintahnya sama, dengan jalur `bin/python`.
+`--torch-backend cu132` wajib: torch versi CUDA hanya ada di index PyTorch, sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi **sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, alih-alih diam-diam memasang torch versi CPU.
+
+Di Linux perintahnya sama, dengan jalur `~/.venvs/apd_py312/bin/python`. Suara butuh pustaka sistem, karena SDL di dalam pygame memuat driver audio dengan nama standar dan tidak memakai salinan yang dibawa wheel-nya:
+```bash
+# Debian 13 / Ubuntu 24.04+ / Kali
+sudo apt install libglib2.0-0t64 libpulse0 libasound2t64
+# Ubuntu 22.04 dan yang lebih lama
+sudo apt install libglib2.0-0 libpulse0 libasound2
+```
+`libglib2.0` wajib untuk modul mixer. `libpulse0` dipakai bila ada server PulseAudio/PipeWire (desktop, WSLg), `libasound2` untuk ALSA langsung di mesin gerbang tanpa server suara. Tanpa paket-paket ini sistem tetap berjalan, hanya tanpa suara (peringatan di log). OpenCV memakai varian `opencv-python-headless`, jadi tidak butuh `libGL`.
 
 `start_system.bat` memakai environment ini secara otomatis (lokasi bisa diganti lewat variabel `SAFEGUARD_VENV`).
 
 Memperbarui versi yang dikunci: ubah `requirements.txt` / `requirements-dev.txt`, hapus berkas `.lock` lama, lalu
 ```powershell
-uv pip compile backend\requirements.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url -o backend\requirements.lock
-uv pip compile backend\requirements-dev.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url -o backend\requirements-dev.lock
+cd backend
+uv pip compile requirements.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url --excludes lock-excludes.txt -o requirements.lock
+uv pip compile requirements-dev.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url --excludes lock-excludes.txt -o requirements-dev.lock
 ```
-Berkas `.lock` lama harus dihapus dulu karena uv mempertahankan versi yang sudah tercatat di dalamnya. Jangan menaruh `--extra-index-url` PyTorch di `requirements.txt`: index itu juga memuat salinan lama `urllib3`, `certifi`, `requests`, dan lain-lain, yang lalu ikut terpilih.
+Berkas `.lock` lama harus dihapus dulu karena uv mempertahankan versi yang sudah tercatat di dalamnya. Jangan menaruh `--extra-index-url` PyTorch di `requirements.txt`: index itu juga memuat salinan lama `urllib3`, `certifi`, `requests`, dan lain-lain, yang lalu ikut terpilih. `--excludes lock-excludes.txt` juga wajib: Ultralytics menuntut `opencv-python` (varian GUI), yang bila ikut terpasang menimpa folder `cv2` milik varian headless.
 
 ### 2. Menjalankan Server Backend
 Dari akar repositori, jalankan paket `backend`:
 ```powershell
 python -m backend
 ```
-*(Atau Anda cukup menjalankan berkas `start_system.bat`)*
+*(Atau Anda cukup menjalankan berkas `start_system.bat` di Windows, atau `./start_system.sh` di Linux/macOS)*
 
 Dari PowerShell (termasuk terminal bawaan VS Code), tulis `.\start_system.bat`. PowerShell tidak menjalankan skrip di folder aktif tanpa awalan `.\`. Hentikan server dengan `Ctrl+C` di jendela terminal tempat server berjalan; cmd lalu bertanya *Terminate batch job (Y/N)?*, jawab `Y`. `Ctrl+C` tidak sampai ke program bila server dijalankan dari panel **Output** VS Code; karena itu proyek ini menyetel `code-runner.runInTerminal` agar tombol Run Code memakai tab **Terminal**.
 
 `backend/` adalah paket Python dengan impor relatif, sehingga harus dijalankan sebagai modul dari akar repo. Menjalankan berkas di dalam `backend/` secara langsung (misalnya `python backend/app.py`) tidak didukung. Jalur `.env`, bobot model, dan audio diselesaikan relatif terhadap direktori `backend/`, bukan direktori kerja terminal.
 
 **Data runtime terpisah dari kode.** Audit, foto bukti, pilihan kamera, dan item APD aktif disimpan di `DATA_DIR`. Bawaannya folder `data/` di akar repo. Untuk produksi, isi `DATA_DIR` di `.env` dengan jalur absolut di luar repo, misalnya `C:\ProgramData\SafeguardAI`, supaya deploy ulang tidak menyentuh data. Data lama yang masih berada di `backend/` dipindah otomatis saat server pertama kali dijalankan; berkas yang bentrok dengan isi tujuan tidak ditimpa, melainkan dilaporkan di log.
+
+Di Linux, `start_system.sh` memakai `~/.venvs/apd_py312` (bisa diganti lewat `SAFEGUARD_VENV`) dan dihentikan dengan `Ctrl+C`. Untuk menyala otomatis saat boot, pasang `deploy/safeguard.service`; petunjuknya ada di dalam berkas itu. Server berhenti bersih saat menerima `SIGTERM` dari systemd.
+
+Sebelum commit, jalankan `python scripts/check.py` (ruff + seluruh pytest, sama dengan CI).
 
 Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (environment dari `backend/requirements-dev.lock`, lihat bagian Prasyarat Lingkungan). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
 

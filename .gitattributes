@@ -1,0 +1,5 @@
+# Skrip Linux wajib LF (CRLF membuat "/usr/bin/env: 'sh\r'" gagal), skrip Windows CRLF
+*.sh      text eol=lf
+*.service text eol=lf
+*.yml     text eol=lf
+*.bat     text eol=crlf

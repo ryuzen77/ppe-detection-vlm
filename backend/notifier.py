@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 from .config import cfg
 from . import messages
 
@@ -60,7 +59,8 @@ class IoTNotifier:
         url = f"{base_url}/api/light?state={state}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "SafeguardAI/1.0"})
-            with urllib.request.urlopen(req, timeout=cfg.IOT_HTTP_TIMEOUT_SECONDS) as resp:
+            # Isi balasan ESP32 tidak dipakai; cukup dipastikan permintaan diterima
+            with urllib.request.urlopen(req, timeout=cfg.IOT_HTTP_TIMEOUT_SECONDS):
                 pass
         except Exception as e:
             logger.warning(f"Wireless HTTP to ESP32 failed ({url}): {e}")

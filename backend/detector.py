@@ -1,7 +1,11 @@
+import os
 import logging
-import cv2
 import numpy as np
-from ultralytics import YOLO
+# Ultralytics memasang paket yang kurang secara otomatis saat berjalan (mis. `lap`
+# untuk pelacak). Dimatikan: semua dependensi berasal dari requirements.lock, dan
+# paket yang hilang harus gagal jelas, bukan diam-diam mengubah environment.
+os.environ.setdefault("YOLO_AUTOINSTALL", "false")
+from ultralytics import YOLO  # noqa: E402
 import torch
 from .config import cfg
 from . import messages

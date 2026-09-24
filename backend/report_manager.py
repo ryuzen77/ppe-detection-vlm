@@ -7,7 +7,7 @@ import os
 import csv
 import io
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 import cv2
 import numpy as np
 

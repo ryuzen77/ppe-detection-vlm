@@ -113,6 +113,7 @@ class Config:
     STATUS_FRAME_INTERVAL_SECONDS: float = 0.1   # Frame pesan saat kamera belum dipilih/terputus
     SYNTHETIC_FRAME_INTERVAL_SECONDS: float = 0.033  # Frame pengganti saat tidak ada kamera (~30 FPS)
     INFERENCE_POLL_SECONDS: float = 0.005        # Jeda saat inferensi menunggu frame baru
+    THREAD_STOP_TIMEOUT_SECONDS: float = 5.0     # Batas tunggu thread kamera/inferensi saat shutdown
     FPS_SMOOTHING: float = 0.1                   # Bobot frame terbaru pada rata-rata FPS (EMA)
 
     # Aliran video & telemetri ke dashboard

@@ -1,0 +1,41 @@
+# Lint + tes di Linux dan Windows dari dependensi terkunci.
+# Catatan: repo belum punya remote; workflow ini aktif begitu didorong ke GitHub.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/requirements-dev.lock
+
+      # libgthread (libglib2.0-0t64) dibutuhkan modul mixer pygame; tes tidak
+      # memutar suara, jadi libpulse0/libasound2t64 tidak perlu di CI.
+      # OpenCV memakai varian headless sehingga tidak butuh libGL.
+      - name: Pustaka sistem audio (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libglib2.0-0t64
+
+      # --torch-backend wajib: tanpa flag ini pin torch +cu132 gagal di-resolve
+      # (disengaja, supaya tidak diam-diam terpasang torch CPU).
+      - name: Pasang dependensi terkunci
+        run: uv pip sync --torch-backend cu132 backend/requirements-dev.lock
+
+      - name: Ruff
+        run: python -m ruff check .
+
+      - name: Pytest
+        run: python -m pytest -q

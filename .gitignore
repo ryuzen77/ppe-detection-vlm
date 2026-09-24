@@ -26,3 +26,6 @@ data/
 backend/camera_state.json
 backend/runtime_settings.json
 backend/reports/
+
+# Foto uji berisi orang sungguhan (data pribadi) - jangan pernah di-commit
+picture_test/

@@ -1,8 +1,6 @@
 import logging
-import os
 import time
 import threading
-from pathlib import Path
 from queue import Queue
 import pygame
 from .config import cfg

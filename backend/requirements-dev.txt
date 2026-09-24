@@ -4,3 +4,5 @@
 pytest>=8.0
 # Dipakai tes shutdown & integrasi untuk membuka koneksi WebSocket ke server
 websockets>=12.0
+# Linter & formatter (python -m ruff check .)
+ruff>=0.6

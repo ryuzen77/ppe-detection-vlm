@@ -21,10 +21,15 @@ from backend.audio_engine import audio_player
 from backend.vlm_analyzer import vlm_analyzer
 from backend.report_manager import report_mgr
 from backend.video.capture import video_service
+try:
+    mixer_on = bool(pygame.mixer.get_init())
+except NotImplementedError:
+    # Modul mixer tidak tersedia (pustaka sistem audio tidak ada) = pasti belum aktif
+    mixer_on = False
 print(json.dumps({
     "cuda_initialized": torch.cuda.is_initialized(),
     "yolo_loaded": detector.model is not None,
-    "mixer_initialized": bool(pygame.mixer.get_init()),
+    "mixer_initialized": mixer_on,
     "audio_thread": audio_player.worker is not None,
     "serial_open": notifier.iot.serial_conn is not None,
     "vlm_provider": vlm_analyzer.provider is not None,
