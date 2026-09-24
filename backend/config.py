@@ -205,8 +205,9 @@ class Config:
     ERROR_MESSAGE_MAX_CHARS: int = 120
 
     # Anti-Spam & Fast-Queue Settings
-    # 2 frame berturut-turut cukup untuk memastikan subjek stabil (~66ms pada 30 FPS)
-    STABLE_FRAMES_REQUIRED: int = 2
+    # Jumlah frame tubuh-utuh berturut-turut yang dikumpulkan sebelum analisa;
+    # dari kandidat ini SATU frame terbaik dikirim ke VLM (frame_quality, T25a).
+    STABLE_FRAMES_REQUIRED: int = int(_env("STABLE_FRAMES_REQUIRED", "3"))
     # Audio warning "Silakan mundur" debounce in seconds per person
     AUDIO_STEP_BACK_DEBOUNCE_SECONDS: float = 6.0
     # Maximum times the step-back voice prompt plays for the same person

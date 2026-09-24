@@ -8,6 +8,7 @@ import numpy as np
 from .config import cfg
 from . import messages
 from .detector import DetectionResult
+from . import frame_quality
 from .vlm_analyzer import vlm_analyzer, APDInspectionResult
 from .audio_engine import audio_player
 from .notifier import notifier
@@ -51,6 +52,10 @@ class GateSession:
         self.is_full_body_now = False
         self.current_reason = ""
         self.clip_type = "OPTIMAL"
+        # Frame tubuh-utuh berturut-turut yang sedang dikumpulkan (T25a)
+        self.candidates: List[frame_quality.FrameCandidate] = []
+        # Kotak tubuh frame sebelum kandidat pertama, untuk menilai gerakan
+        self.prev_bbox: Optional[list] = None
 
 
 class StateManager:
@@ -106,6 +111,9 @@ class StateManager:
             if not det.is_full_body:
                 session.state = TrackState.STEP_BACK_WARNING
                 session.stable_frames = 0
+                # Kandidat hanya dari rangkaian tubuh-utuh yang tidak terputus
+                session.candidates = []
+                session.prev_bbox = det.bbox
                 # Arahan posisi hanya lewat suara dan dashboard. LED merah khusus
                 # untuk APD tidak lengkap, jadi lampu tidak disentuh di sini.
                 # Smart Limiter: Max repeats (default 2x) per session with debounce so it doesn't spam
@@ -119,14 +127,27 @@ class StateManager:
             session.step_back_warning_count = 0
             session.stable_frames += 1
             session.state = TrackState.STABILIZING
+            if det.crop_img is not None:
+                session.candidates.append(frame_quality.FrameCandidate(
+                    crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id))
 
-            # Wait for stability before sending exactly 1 frame to the VLM
+            # Setelah STABLE_FRAMES_REQUIRED frame tubuh-utuh terkumpul, kirim SATU
+            # frame terbaik (paling tajam, paling diam, pose paling jelas) ke VLM
             if session.stable_frames >= cfg.STABLE_FRAMES_REQUIRED:
                 session.state = TrackState.ANALYZING
-                crop_to_analyze = det.crop_img.copy() if det.crop_img is not None else None
-                logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{det.track_id} (1 frame)...")
+                crop_to_analyze, track_id = None, det.track_id
+                if session.candidates:
+                    best = frame_quality.choose_best(session.candidates, session.prev_bbox)
+                    crop_to_analyze, track_id = best.crop, best.track_id
+                    logger.info(
+                        f"Sesi #{session.session_id}: frame terbaik #{session.candidates.index(best) + 1} dari "
+                        f"{len(session.candidates)} | skor " + ", ".join(
+                            f"{c.score:.2f} (tajam {c.sharpness:.0f}, gerak {c.motion:.3f}, pose {c.pose:.2f})"
+                            for c in session.candidates))
+                session.candidates = []
+                logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{track_id} (1 frame)...")
                 audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
-                self.executor.submit(self._run_vlm_analysis, session.session_id, det.track_id, crop_to_analyze)
+                self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze)
 
     def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray]):
         if crop_img is None:
