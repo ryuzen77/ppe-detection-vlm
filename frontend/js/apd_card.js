@@ -223,6 +223,14 @@ export class APDVisualizer {
         this.guidanceTitle.textContent = 'Akses Diizinkan';
         this.guidanceSubText.textContent = 'Seluruh APD wajib telah lengkap sesuai standar K3.';
         this.guidancePillText.textContent = 'APD Lengkap - Gerbang dibuka';
+      } else if (res.is_unverified) {
+        // VLM aktif tetapi tidak menjawab: ditolak tanpa menuduh item tertentu
+        this.guidanceCard.classList.add('state-danger');
+        this.guidanceIcon.textContent = '⚠';
+        this.guidanceEyebrow.textContent = 'HASIL PEMERIKSAAN';
+        this.guidanceTitle.textContent = 'Verifikasi Gagal';
+        this.guidanceSubText.textContent = 'APD tidak dapat diverifikasi. Keluar dari jalur, lalu masuk kembali untuk pemeriksaan ulang.';
+        this.guidancePillText.textContent = 'Akses Ditolak - Ulangi Pemeriksaan';
       } else {
         this.guidanceCard.classList.add('state-danger');
         this.guidanceIcon.textContent = '✕';
@@ -297,9 +305,12 @@ export class APDVisualizer {
       const itemEl = document.createElement('div');
       itemEl.className = 'recent-item-card';
 
+      const unverified = (rec.inference_source || '').startsWith('VLM_GAGAL');
       const statusBadge = rec.is_complete 
         ? '<span style="color:var(--accent-teal); font-weight:700;">✅ Lengkap</span>'
-        : '<span style="color:var(--accent-red); font-weight:700;">❌ Pelanggaran</span>';
+        : unverified
+          ? '<span style="color:var(--accent-red); font-weight:700;">⚠️ Tidak terverifikasi</span>'
+          : '<span style="color:var(--accent-red); font-weight:700;">❌ Pelanggaran</span>';
 
       const missingText = rec.missing_items && rec.missing_items.length > 0 
         ? rec.missing_items.join(', ')

@@ -18,7 +18,8 @@ SYSTEM_PROMPTS = {
     "posisi_pas": "Posisi tubuh sudah tepat. Mohon tunggu analisa APD.",
     "lengkap": "APD lengkap. Akses diizinkan. Silakan masuk.",
     "tidak_lengkap": "Peringatan! APD Anda tidak lengkap. Akses ditolak.",
-    "sedang_analisa": "Mohon tunggu sebentar, sedang menganalisa kelengkapan APD."
+    "sedang_analisa": "Mohon tunggu sebentar, sedang menganalisa kelengkapan APD.",
+    "verifikasi_gagal": "Verifikasi APD gagal. Silakan keluar dari jalur, lalu masuk kembali untuk pemeriksaan ulang."
 }
 
 

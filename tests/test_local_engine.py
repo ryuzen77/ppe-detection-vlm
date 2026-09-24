@@ -136,3 +136,29 @@ def test_pilihan_tersimpan_baru_berlaku_setelah_load_settings(catalog_defaults):
 
     ppe_rules.load_settings()
     assert "kacamata" in [i.key for i in ppe_rules.get_active_items()]
+
+
+def _balasan_tanpa_apd(missing_items):
+    items = {k: {"detected": False} for k in ("helm", "rompi", "celana", "sepatu")}
+    return {"items": items, "missing_items": missing_items, "notes": ""}
+
+
+def test_ejaan_nama_item_dari_model_tidak_menggandakan_daftar_kurang(catalog_defaults):
+    # Jawaban nyata gemini-3.5-flash-lite (T21): nama item huruf kecil + label katalog
+    data = _balasan_tanpa_apd(["Helm keselamatan", "Rompi keselamatan", "Celana panjang",
+                               "Sepatu tertutup", "Helm Keselamatan"])
+    result = VLMAnalyzer._parse_vlm_payload(data)
+    assert not result.is_complete
+    assert result.missing_items == [missing_label(k) for k in ("helm", "rompi", "celana", "sepatu")]
+
+
+@pytest.mark.parametrize("teks", [
+    ppe_rules.SPOOF_MISSING_LABEL,
+    "bukan orang fisik nyata (foto di layar ponsel)",
+    "BUKAN ORANG FISIK NYATA",
+])
+def test_penolakan_anti_spoofing_dikenali_dengan_ejaan_apa_pun(catalog_defaults, teks):
+    data = _balasan_lengkap(missing_items=[teks])
+    result = VLMAnalyzer._parse_vlm_payload(data)
+    assert not result.is_complete
+    assert result.missing_items == [ppe_rules.SPOOF_MISSING_LABEL]

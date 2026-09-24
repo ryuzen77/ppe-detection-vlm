@@ -175,7 +175,11 @@ class StateManager:
                     if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
                         self.inspection_history.pop()
 
-                    if result.is_complete:
+                    if result.is_unverified:
+                        logger.warning(f"Track #{track_id}: VLM tidak dapat memverifikasi APD. Red Light ON.")
+                        notifier.set_incomplete(messages.LIGHT_UNVERIFIED)
+                        audio_player.play("verifikasi_gagal", min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS)
+                    elif result.is_complete:
                         logger.info(f"Track #{track_id}: APD LENGKAP! Green Light ON.")
                         notifier.set_complete(messages.LIGHT_GRANTED)
                         audio_player.play_result(is_complete=True)

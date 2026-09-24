@@ -27,7 +27,7 @@ print(json.dumps({
     "mixer_initialized": bool(pygame.mixer.get_init()),
     "audio_thread": audio_player.worker is not None,
     "serial_open": notifier.iot.serial_conn is not None,
-    "gemini_client": vlm_analyzer.genai_client is not None,
+    "vlm_provider": vlm_analyzer.provider is not None,
     "db_opened": report_mgr._opened,
     "video_running": video_service.is_running,
 }))

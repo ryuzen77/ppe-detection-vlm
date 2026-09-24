@@ -119,3 +119,30 @@ def test_orang_di_luar_koridor_tidak_dianalisa(gerbang):
     time.sleep(0.2)
     assert len(state_mgr.inspection_history) == riwayat_awal
     assert _active() is None or _active()["vlm_result"] is None
+
+
+def test_vlm_gagal_menolak_dengan_pesan_verifikasi(gerbang, monkeypatch):
+    # VLM aktif tetapi selalu gagal: gerbang merah dengan pesan jujur, bukan
+    # "APD tidak lengkap" dan bukan keputusan engine lokal.
+    from backend.vlm_analyzer import vlm_analyzer
+    from backend.vlm_providers import VLMProvider
+
+    class SelaluGagal(VLMProvider):
+        name = "gagal"
+
+        def generate(self, *a):
+            raise RuntimeError("503")
+
+        def ping(self):
+            return ""
+
+    monkeypatch.setattr(cfg, "FREE_TIER_MIN_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr(vlm_analyzer, "provider", SelaluGagal("model"))
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(full_body=True)])
+
+    assert _wait_for(lambda: _active()["state"] == TrackState.ANALYZED)
+    hasil = _active()["vlm_result"]
+    assert hasil["is_unverified"] is True and hasil["is_complete"] is False
+    assert notifier.current_state == "RED"
+    assert notifier.message == messages.LIGHT_UNVERIFIED

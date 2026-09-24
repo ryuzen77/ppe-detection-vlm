@@ -1,20 +1,19 @@
 import logging
-import json
 import base64
 import os
 import time
-import io
 import cv2
 import numpy as np
 import threading
 from typing import Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pydantic import BaseModel, ConfigDict, Field
-from PIL import Image
 
 from .config import cfg
 from .api_monitor import api_monitor
+from . import messages
 from . import ppe_rules
+from .vlm_providers import create_provider
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +53,10 @@ class InspectionResult(BaseModel):
         default=False,
         description="True jika keputusan berasal dari heuristik lokal yang akurasinya terbatas",
     )
+    is_unverified: bool = Field(
+        default=False,
+        description="True jika VLM aktif tetapi gagal menjawab; pekerja ditolak tanpa penilaian item",
+    )
 
     def item(self, key: str) -> ItemResult:
         """Hasil satu item; item yang tidak dinilai dianggap tidak terdeteksi."""
@@ -63,6 +66,17 @@ class InspectionResult(BaseModel):
 # Nama lama dipertahankan sebagai alias supaya modul lain yang mengimpornya
 # tidak perlu diubah pada task ini.
 APDInspectionResult = InspectionResult
+
+
+_SPOOF_MARKER = "bukan orang fisik"
+
+
+def _is_spoof_rejection(missing_items) -> bool:
+    """Apakah model menolak subjek sebagai foto/layar, dengan ejaan apa pun."""
+    return any(isinstance(m, str) and _SPOOF_MARKER in m.casefold() for m in (missing_items or []))
+
+
+USER_PROMPT = "Periksa kelengkapan APD pekerja pada gambar ini sesuai instruksi K3. Berikan output JSON."
 
 
 def build_system_prompt(items=None) -> str:
@@ -313,9 +327,8 @@ class VLMAnalyzer:
     def __init__(self):
         self.api_key = cfg.GEMINI_API_KEY
         self.model_name = cfg.GEMINI_MODEL
-        self.genai_client = None
-        # Prompt yang tertanam pada `genai_client`; klien dibuat ulang bila berbeda
-        self._client_prompt = ""
+        # Adaptor penyedia VLM (lihat vlm_providers); None = tanpa VLM, engine lokal
+        self.provider = None
         self.local_analyzer = LocalVisionAnalyzer()
         self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix="VLM_Timeout_Guard")
         
@@ -330,32 +343,18 @@ class VLMAnalyzer:
     def _init_gemini(self):
         if self.api_key and self.api_key.strip():
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.api_key.strip())
-                self._build_client(build_system_prompt())
+                self.provider = create_provider("gemini", api_key=self.api_key.strip(), model=self.model_name,
+                                                thinking_level=cfg.GEMINI_THINKING_LEVEL)
                 logger.info(f"Successfully connected to Gemini VLM ({self.model_name})")
                 api_monitor.status = "ONLINE"
             except Exception as e:
                 logger.error(f"Error configuring Gemini: {e}")
-                self.genai_client = None
+                self.provider = None
                 api_monitor.record_error(str(e))
         else:
-            self.genai_client = None
+            self.provider = None
             api_monitor.status = "OFFLINE"
             logger.warning("GEMINI_API_KEY not set. Operating in LOCAL HEURISTIC MODE (akurasi terbatas).")
-
-    def _build_client(self, system_prompt: str):
-        """Membuat klien Gemini dengan prompt tertentu. Tidak ada panggilan jaringan."""
-        import google.generativeai as genai
-        self.genai_client = genai.GenerativeModel(
-            model_name=self.model_name,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0.1,
-            },
-            system_instruction=system_prompt
-        )
-        self._client_prompt = system_prompt
 
     def update_api_key(self, new_key: str):
         self.api_key = new_key.strip()
@@ -363,7 +362,7 @@ class VLMAnalyzer:
         self._init_gemini()
 
     def is_live_api(self) -> bool:
-        return self.genai_client is not None
+        return self.provider is not None
 
     def ping_api(self) -> dict:
         """Sends a lightweight ping to verify API connectivity and measure round-trip latency."""
@@ -376,13 +375,13 @@ class VLMAnalyzer:
 
         start = time.time()
         try:
-            resp = self.genai_client.generate_content("Ping. Jawab 'PONG'.")
+            reply = self.provider.ping()
             dur_ms = round((time.time() - start) * 1000, 1)
             api_monitor.record_success(dur_ms)
             return {
                 "status": api_monitor.status,
                 "latency_ms": dur_ms,
-                "reply": resp.text.strip()[:30],
+                "reply": reply[:30],
                 "message": "Koneksi Gemini API berhasil dan responsif"
             }
         except Exception as e:
@@ -394,22 +393,28 @@ class VLMAnalyzer:
                 "message": str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
             }
 
-    def _optimize_image_for_vlm(self, image_bgr: np.ndarray) -> Image.Image:
-        """Resizes and compresses image to ~35KB for lightning-fast network upload."""
+    def _optimize_image_for_vlm(self, image_bgr: np.ndarray) -> bytes:
+        """Resizes and compresses image to ~35KB JPEG for lightning-fast network upload."""
         h, w = image_bgr.shape[:2]
         max_dim = cfg.VLM_IMAGE_MAX_SIZE
         if max(h, w) > max_dim:
             scale = max_dim / float(max(h, w))
             image_bgr = cv2.resize(image_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-        # Compress to JPEG in memory
+        # Compress to JPEG in memory. Bytes JPEG ini yang dikirim apa adanya ke
+        # penyedia, tanpa didekode dan dikompres ulang.
         _, buffer = cv2.imencode('.jpg', image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])
-        pil_img = Image.open(io.BytesIO(buffer.tobytes()))
-        return pil_img
+        return buffer.tobytes()
 
     def analyze_person(self, person_crop_bgr: np.ndarray) -> APDInspectionResult:
-        """Hybrid tiered analysis: Runs local check in ~15ms, then Gemini with 2.0s strict timeout
-        and Free-Tier Concurrency Lock & Rate Limiting."""
+        """Keputusan APD untuk satu crop pekerja.
+
+        Tanpa VLM (tanpa API key, atau operator memilih mode offline) keputusan
+        diambil engine lokal dan ditandai akurasi terbatas. Dengan VLM aktif,
+        hanya VLM yang boleh memutuskan: panggilan dicoba hingga
+        `VLM_MAX_ATTEMPTS` kali dengan batas waktu per percobaan, dan bila semua
+        gagal pekerja ditolak sebagai "tidak dapat diverifikasi".
+        """
         start_t = time.time()
         
         # 1. Tier 1: Local Real-Time GPU Analysis (~15ms)
@@ -432,86 +437,79 @@ class VLMAnalyzer:
             api_monitor.record_local_call(is_rate_guard=False)
             return local_result
 
-        # 4. Free Tier Rate Limiter Guard (e.g., minimum 4.0s interval between Gemini calls)
-        now = time.time()
-        time_since_last = now - self.last_api_call_time
-        if time_since_last < cfg.FREE_TIER_MIN_INTERVAL_SECONDS:
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            logger.info(f"Anti-Spam Free Tier: Jeda baru {time_since_last:.1f}s (< {cfg.FREE_TIER_MIN_INTERVAL_SECONDS}s). Menggunakan Local GPU Fast-Pass.")
-            local_result.inference_source = "LOCAL_FAST_PASS (Free-Tier Rate Guard)"
-            local_result.inference_time_ms = dur_ms
-            local_result.notes = f"[PROTEKSI FREE TIER] Jeda {time_since_last:.1f}s < {cfg.FREE_TIER_MIN_INTERVAL_SECONDS}s, dialihkan ke heuristik lokal agar kuota tidak 429."
-            api_monitor.record_local_call(is_rate_guard=True)
-            return local_result
+        # 4. Satu inspeksi VLM pada satu waktu. Permintaan lain MENUNGGU gilirannya,
+        # tidak dialihkan ke heuristik lokal: selama VLM aktif, pekerja tidak boleh
+        # diloloskan atas dasar heuristik yang terbukti salah dua arah (T21).
+        lock_wait = cfg.VLM_MAX_ATTEMPTS * (cfg.GEMINI_TIMEOUT_SECONDS + cfg.FREE_TIER_MIN_INTERVAL_SECONDS) + 1.0
+        if not self.api_lock.acquire(timeout=lock_wait):
+            return self._unverified_result(start_t, attempts=0, reason="antrean VLM penuh")
 
-        # 5. Free Tier Concurrency Lock (Mencegah spam paralel ganda ke Gemini)
-        acquired = self.api_lock.acquire(blocking=False)
-        if not acquired:
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            logger.info("Anti-Spam: API Lock sedang aktif. Dialihkan aman ke Local GPU.")
-            local_result.inference_source = "LOCAL_FAST_PASS (API Busy Lock Guard)"
-            local_result.inference_time_ms = dur_ms
-            local_result.notes = "[API SIBUK] Sedang melayani request lain, verifikasi diselesaikan heuristik lokal."
-            api_monitor.record_local_call(is_rate_guard=True)
-            return local_result
-
-        # 6. Execute Gemini with Strict Timeout Guard (2.0s)
         api_monitor.set_locked(True)
         try:
-            future = self.executor.submit(self._call_gemini_api_internal, person_crop_bgr)
-            gemini_result = future.result(timeout=cfg.GEMINI_TIMEOUT_SECONDS)
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            gemini_result.inference_source = "GEMINI_LIVE"
-            gemini_result.inference_time_ms = dur_ms
-            gemini_result.is_low_confidence = False
-            api_monitor.record_success(dur_ms)
-            return gemini_result
-        except TimeoutError:
-            logger.warning(f"Gemini timed out (> {cfg.GEMINI_TIMEOUT_SECONDS}s). Menggunakan Local GPU Fallback!")
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            api_monitor.record_timeout(cfg.GEMINI_TIMEOUT_SECONDS)
-            local_result.inference_source = "OFFLINE_FALLBACK (API Timeout)"
-            local_result.inference_time_ms = dur_ms
-            local_result.notes = f"[TIMEOUT {cfg.GEMINI_TIMEOUT_SECONDS}s] API lambat/macet, keputusan dialihkan ke heuristik lokal."
-            return local_result
-        except Exception as e:
-            logger.warning(f"Network error calling Gemini ({e}). Seamlessly using Local Fallback.")
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            api_monitor.record_error(str(e))
-            local_result.inference_source = "OFFLINE_FALLBACK"
-            local_result.inference_time_ms = dur_ms
-            local_result.notes = f"[OFFLINE] Gangguan API ({str(e)[:50]}), keputusan dialihkan ke heuristik lokal."
-            return local_result
+            reason = ""
+            for attempt in range(1, cfg.VLM_MAX_ATTEMPTS + 1):
+                # 5. Jeda minimum antar panggilan (kuota free tier) ditunggu, bukan dilewati
+                wait = cfg.FREE_TIER_MIN_INTERVAL_SECONDS - (time.time() - self.last_api_call_time)
+                if wait > 0:
+                    logger.info(f"Menunggu jeda free tier {wait:.1f}s sebelum panggilan VLM (percobaan {attempt}).")
+                    time.sleep(wait)
+
+                # 6. Panggilan VLM dengan batas waktu ketat
+                call_start = time.time()
+                try:
+                    future = self.executor.submit(self._call_gemini_api_internal, person_crop_bgr)
+                    gemini_result = future.result(timeout=cfg.GEMINI_TIMEOUT_SECONDS)
+                    dur_ms = round((time.time() - start_t) * 1000, 1)
+                    gemini_result.inference_source = "GEMINI_LIVE"
+                    gemini_result.inference_time_ms = dur_ms
+                    gemini_result.is_low_confidence = False
+                    api_monitor.record_success(round((time.time() - call_start) * 1000, 1))
+                    return gemini_result
+                except TimeoutError:
+                    reason = f"timeout > {cfg.GEMINI_TIMEOUT_SECONDS:g} dtk"
+                    logger.warning(f"VLM timeout (> {cfg.GEMINI_TIMEOUT_SECONDS}s) pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}.")
+                    api_monitor.record_timeout(cfg.GEMINI_TIMEOUT_SECONDS)
+                except Exception as e:
+                    reason = f"galat: {str(e)[:60]}"
+                    logger.warning(f"VLM gagal pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}: {e}")
+                    api_monitor.record_error(str(e))
+                finally:
+                    # Dicatat per percobaan agar jeda free tier juga berlaku untuk
+                    # percobaan ulang dan panggilan yang gagal/timeout.
+                    self.last_api_call_time = time.time()
+
+            return self._unverified_result(start_t, attempts=cfg.VLM_MAX_ATTEMPTS, reason=reason)
         finally:
-            # Dicatat di finally agar panggilan yang timeout/gagal tetap dihitung
-            # oleh rate-guard free tier; kalau tidak, guard 4 detik bocor.
-            self.last_api_call_time = time.time()
             api_monitor.set_locked(False)
             self.api_lock.release()
+
+    @staticmethod
+    def _unverified_result(start_t: float, attempts: int, reason: str) -> InspectionResult:
+        """Penolakan saat VLM aktif tetapi tidak memberi jawaban.
+
+        Tidak memuat klaim per item: tidak ada yang benar-benar diperiksa.
+        """
+        return InspectionResult(
+            items={},
+            is_complete=False,
+            is_unverified=True,
+            missing_items=[messages.VLM_UNVERIFIED_LABEL],
+            notes=messages.VLM_UNVERIFIED_NOTES.format(attempts=attempts, reason=reason),
+            inference_source="VLM_GAGAL (API Timeout)" if reason.startswith("timeout") else "VLM_GAGAL",
+            inference_time_ms=round((time.time() - start_t) * 1000, 1),
+            is_low_confidence=False,
+        )
 
     def _call_gemini_api_internal(self, image_bgr: np.ndarray) -> APDInspectionResult:
         # Satu potret item aktif untuk seluruh panggilan ini, supaya prompt dan
         # penilaian jawaban memakai daftar yang sama walau operator mengubahnya
         # di tengah jalan.
         aktif = ppe_rules.get_active_items()
-        system_prompt = build_system_prompt(aktif)
-        if system_prompt != self._client_prompt:
-            self._build_client(system_prompt)
-
-        pil_img = self._optimize_image_for_vlm(image_bgr)
-        prompt = "Periksa kelengkapan APD pekerja pada gambar ini sesuai instruksi K3. Berikan output JSON."
-        response = self.genai_client.generate_content([prompt, pil_img])
-        
-        raw_text = response.text.strip()
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.startswith("```"):
-            raw_text = raw_text[3:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-
-        data = json.loads(raw_text)
+        data = self.provider.analyze(
+            self._optimize_image_for_vlm(image_bgr),
+            system_prompt=build_system_prompt(aktif),
+            user_prompt=USER_PROMPT,
+        )
         return self._parse_vlm_payload(data, aktif)
 
     @staticmethod
@@ -542,17 +540,15 @@ class VLMAnalyzer:
             {k: v.model_dump() for k, v in items.items()}, aktif
         )
 
-        # Alasan penolakan di luar katalog (mis. "Bukan Orang Fisik Nyata")
-        # tidak boleh hilang saat kelengkapan dihitung ulang. Label item yang
-        # sedang dimatikan tetap dikenali, supaya model yang menyebutnya tidak
-        # menolak pekerja atas item yang tidak diwajibkan.
-        label_dikenal = {i.missing_label for i in ppe_rules.get_items()}
-        tambahan = [
-            m for m in (data.get("missing_items") or [])
-            if isinstance(m, str) and m not in label_dikenal
-        ]
-        if tambahan:
-            missing = tambahan + missing
+        # Satu-satunya penolakan dari teks bebas model yang dihormati adalah
+        # anti-spoofing: aturan itu ada di prompt tetapi bukan item katalog, jadi
+        # tidak bisa dihitung ulang dari `items`. Nama item di `missing_items`
+        # sengaja diabaikan — sistem menghitungnya sendiri dari `items` — karena
+        # model menulisnya dengan ejaan yang berubah-ubah ("Helm keselamatan" vs
+        # "Helm Keselamatan") sehingga pencocokan teks menghasilkan duplikat, dan
+        # menyebut item yang sedang dimatikan tidak boleh menolak pekerja.
+        if _is_spoof_rejection(data.get("missing_items")):
+            missing = [ppe_rules.SPOOF_MISSING_LABEL] + missing
             is_complete = False
 
         return InspectionResult(

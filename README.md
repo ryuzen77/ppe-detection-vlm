@@ -1,7 +1,7 @@
 # 🛡️ SAFEGUARD AI: Real-Time PPE Compliance Inspection System
 > **Sistem Inspeksi Kepatuhan Alat Pelindung Diri (APD) Otomatis Berbasis YOLO26s-Pose, Google Gemini VLM, dan IoT Gerbang K3**
 
-Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkapan APD pekerja secara *real-time* di gerbang masuk area industri/proyek. Menggabungkan kecepatan **Computer Vision Edge AI (RTX 4060)** untuk verifikasi postur tubuh utuh (*Full-Body Gatekeeper*) dan kecerdasan **Vision-Language Model (Gemini 2.5 Flash)** untuk audit visual mendalam.
+Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkapan APD pekerja secara *real-time* di gerbang masuk area industri/proyek. Menggabungkan kecepatan **Computer Vision Edge AI (RTX 4060)** untuk verifikasi postur tubuh utuh (*Full-Body Gatekeeper*) dan kecerdasan **Vision-Language Model (Gemini 3.5 Flash-Lite)** untuk audit visual mendalam.
 
 ---
 
@@ -18,7 +18,7 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 * **Corridor & Fast-Pass Engine:** OpenCV (`cv2`) untuk Virtual Inspection Corridor, segmentasi warna HSV reflektif rompi (*Hi-Vis Orange/Yellow*), dan ekstraksi area kepala/kaki.
 
 ### 2. Vision-Language Model (VLM & Cloud Layer)
-* **Model VLM:** `Google Gemini 2.5 Flash` via SDK `google-generativeai`.
+* **Model VLM:** `Google Gemini 3.5 Flash-Lite` (bisa diganti lewat `GEMINI_MODEL`) via SDK `google-genai`, dipanggil lewat adaptor `backend/vlm_providers/` sehingga penyedia lain bisa ditambahkan tanpa menyentuh logika inspeksi.
 * **Hybrid Auto / Local Fallback:** Jika jaringan terputus, API lambat, atau mode offline diaktifkan, sistem beralih otomatis ke *engine* lokal berbasis heuristik warna OpenCV (HSV) yang berjalan di CPU — tanpa dependensi cloud, tetapi dengan akurasi yang jauh lebih rendah daripada VLM. Keputusan yang berasal dari jalur ini ditandai eksplisit di dashboard dan di kolom CSV audit.
 * **Prompt Engineering K3:** Inferensi terstruktur yang mengembalikan format JSON standar untuk helm, rompi hi-vis, celana panjang, dan sepatu tertutup.
 * **API Anti-Spam Cache:** Membatasi inferensi tepat **1 frame per subjek unik**, dengan jeda minimum 4 detik antar panggilan dan kunci konkurensi, untuk mencegah pemborosan kuota API dan galat 429.
@@ -100,7 +100,8 @@ ppe_detection_vlm/
 │   ├── __main__.py               # Titik masuk tunggal (memanggil `app.run()`)
 │   ├── config.py                 # Konfigurasi server, batas koridor, dan threshold
 │   ├── detector.py               # YOLO26s-Pose inference, ByteTrack & Full-Body Gatekeeper
-│   ├── vlm_analyzer.py           # Gemini 2.5 Flash VLM client & Hybrid Local GPU Engine
+│   ├── vlm_analyzer.py           # Klien VLM (timeout, rate-guard, fallback) & engine lokal
+│   ├── vlm_providers/            # Adaptor penyedia VLM (kontrak di base.py; gemini.py)
 │   ├── state_manager.py          # State Machine, Smart Voice Limiter & Anti-Spam Queue
 │   ├── audio_engine.py           # Non-blocking audio queue player & Mute controller
 │   ├── notifier.py               # Pengendali sinyal lampu gerbang & IoT Hardware Bridge

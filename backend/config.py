@@ -10,6 +10,17 @@ REPO_ROOT = BASE_DIR.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def _env(name: str, default: str = "") -> str:
+    """Nilai variabel lingkungan; kosong dianggap tidak diisi.
+
+    `.env` hasil salinan `.env.example` sering berisi baris seperti `GEMINI_MODEL=`.
+    `os.getenv` mengembalikan string kosong untuk baris itu, bukan nilai bawaan,
+    sehingga nama model, port, atau sakelar diam-diam menjadi kosong.
+    """
+    value = os.getenv(name)
+    return default if value is None or value.strip() == "" else value.strip()
+
+
 def _resolve_data_dir(value: str) -> Path:
     """Jalur relatif dihitung dari akar repo, bukan dari direktori kerja terminal."""
     path = Path(value).expanduser() if value else REPO_ROOT / "data"
@@ -18,13 +29,13 @@ def _resolve_data_dir(value: str) -> Path:
 
 class Config:
     # Server Settings
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    HOST: str = _env("HOST", "0.0.0.0")
+    PORT: int = int(_env("PORT", "8000"))
     # Default dibatasi ke localhost. `allow_origins=["*"]` bersama
     # `allow_credentials=True` ditolak browser sesuai spesifikasi CORS.
     CORS_ORIGINS: list[str] = [
         origin.strip()
-        for origin in os.getenv(
+        for origin in _env(
             "CORS_ORIGINS",
             "http://localhost:8000,http://127.0.0.1:8000"
         ).split(",")
@@ -33,13 +44,13 @@ class Config:
 
     # Guard opsional untuk endpoint yang mengubah state. Kosong = guard non-aktif,
     # supaya demo lokal tidak terhambat. Isi kalau server dipakai di jaringan bersama.
-    ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "")
+    ADMIN_TOKEN: str = _env("ADMIN_TOKEN", "")
 
     # Camera Settings (Webcam / USB Camera default: 0)
-    CAMERA_INDEX: int = int(os.getenv("CAMERA_INDEX", "0"))
-    FRAME_WIDTH: int = int(os.getenv("FRAME_WIDTH", "1280"))
-    FRAME_HEIGHT: int = int(os.getenv("FRAME_HEIGHT", "720"))
-    FPS: int = int(os.getenv("FPS", "30"))
+    CAMERA_INDEX: int = int(_env("CAMERA_INDEX", "0"))
+    FRAME_WIDTH: int = int(_env("FRAME_WIDTH", "1280"))
+    FRAME_HEIGHT: int = int(_env("FRAME_HEIGHT", "720"))
+    FPS: int = int(_env("FPS", "30"))
 
     # Pemilihan mode kamera otomatis. Setiap perangkat punya batas berbeda, jadi
     # resolusi diukur lalu dipilih, bukan dipaksa seragam. Kelancaran diutamakan:
@@ -49,8 +60,8 @@ class Config:
     # dulu lewat dashboard, baru video tersambung — tidak ada perangkat yang
     # terlanjur dibuka lalu diganti. Set true untuk langsung memakai pilihan
     # terakhir tanpa bertanya (mis. kios yang menyala sendiri).
-    CAMERA_AUTOSTART: bool = os.getenv("CAMERA_AUTOSTART", "false").lower() == "true"
-    CAMERA_AUTO_MODE: bool = os.getenv("CAMERA_AUTO_MODE", "true").lower() == "true"
+    CAMERA_AUTOSTART: bool = _env("CAMERA_AUTOSTART", "false").lower() == "true"
+    CAMERA_AUTO_MODE: bool = _env("CAMERA_AUTO_MODE", "true").lower() == "true"
     CAMERA_TARGET_FPS: float = 25.0        # Sudah dianggap cukup lancar
     # Permintaan bawaan saat kamera dibuka tanpa mode tersimpan. Dipilih karena
     # resolusi rendah hampir selalu berjalan penuh di kamera mana pun, dan
@@ -105,7 +116,7 @@ class Config:
     # Diselesaikan relatif terhadap BASE_DIR, bukan direktori kerja, agar berkas
     # bobot model ditemukan dari mana pun `python -m backend` dijalankan; jalur
     # absolut di YOLO_MODEL_PATH dipakai apa adanya.
-    YOLO_MODEL_PATH: str = str(BASE_DIR / os.getenv("YOLO_MODEL_PATH", "yolo26s-pose.pt"))
+    YOLO_MODEL_PATH: str = str(BASE_DIR / _env("YOLO_MODEL_PATH", "yolo26s-pose.pt"))
     YOLO_CONF: float = 0.60
     YOLO_IOU: float = 0.45
     TRACKER_TYPE: str = "bytetrack.yaml"
@@ -119,7 +130,7 @@ class Config:
 
     # HUD koridor & bounding box sudah digambar canvas di frontend (hud_overlay.js).
     # Biarkan False agar tidak ada overlay ganda; set True jika canvas tidak sejajar video.
-    ENABLE_SERVER_HUD: bool = os.getenv("ENABLE_SERVER_HUD", "false").lower() == "true"
+    ENABLE_SERVER_HUD: bool = _env("ENABLE_SERVER_HUD", "false").lower() == "true"
 
     # Full Body Filter Rules (Toleransi Adaptif Tinggi Badan Pekerja)
     # Margin fleksibel pada tepi frame (orang tinggi vs orang pendek)
@@ -138,8 +149,16 @@ class Config:
     KEYPOINT_CONF_THRESHOLD: float = 0.35
 
     # Gemini VLM & Hybrid Engine Settings (Server-side only)
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_API_KEY: str = _env("GEMINI_API_KEY", "")
+    # gemini-2.5-* sudah dibatasi Google untuk proyek baru (2026); 3.5 Flash-Lite
+    # adalah rekomendasi Google untuk proyek baru: tercepat & termurah
+    GEMINI_MODEL: str = _env("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    # minimal / low / medium / high. Kosong = tidak dikirim (untuk model tanpa dukungan)
+    GEMINI_THINKING_LEVEL: str = _env("GEMINI_THINKING_LEVEL", "minimal")
+    # Percobaan VLM per inspeksi saat VLM aktif. Bila semuanya gagal/timeout,
+    # pekerja DITOLAK sebagai "tidak dapat diverifikasi" — tidak pernah
+    # diloloskan atas dasar heuristik lokal (keputusan pengguna, T21).
+    VLM_MAX_ATTEMPTS: int = 2
     GEMINI_TIMEOUT_SECONDS: float = 8.0       # Subjek berdiri diam saat inspeksi, cukup longgar untuk panggilan bergambar
     ENABLE_LOCAL_FAST_PASS: bool = True       # Tier 1: heuristik warna OpenCV di CPU (~15ms)
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
@@ -166,11 +185,11 @@ class Config:
     AUDIO_RESULT_DEBOUNCE_SECONDS: float = 3.0
     AUDIO_ANALYZING_DEBOUNCE_SECONDS: float = 2.0
     # Stale track purge timeout in seconds
-    TRACK_TIMEOUT_SECONDS: float = float(os.getenv("TRACK_TIMEOUT_SECONDS", "15.0"))
+    TRACK_TIMEOUT_SECONDS: float = float(_env("TRACK_TIMEOUT_SECONDS", "15.0"))
     # Standby reset delay when corridor is empty
-    STANDBY_RESET_DELAY_SECONDS: float = float(os.getenv("STANDBY_RESET_DELAY_SECONDS", "4.0"))
+    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "4.0"))
     # Maximum history records kept in memory
-    MAX_HISTORY_RECORDS: int = int(os.getenv("MAX_HISTORY_RECORDS", "30"))
+    MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))
 
     # Local Fast-Pass Vision Thresholds (HSV & Area Ratios)
     HSV_ORANGE_LOWER: tuple[int, int, int] = (5, 80, 80)
@@ -208,7 +227,7 @@ class Config:
     # Data runtime: audit, foto bukti, dan pilihan operator. Disimpan di luar
     # direktori kode supaya deploy ulang (menimpa/menghapus backend/) tidak ikut
     # menghapusnya. Untuk produksi, arahkan DATA_DIR ke jalur absolut di luar repo.
-    DATA_DIR: Path = _resolve_data_dir(os.getenv("DATA_DIR", ""))
+    DATA_DIR: Path = _resolve_data_dir(_env("DATA_DIR", ""))
     REPORTS_DIR: Path = DATA_DIR / "reports"
     SNAPSHOTS_DIR: Path = REPORTS_DIR / "snapshots"
     DB_PATH: Path = REPORTS_DIR / "audit.db"
@@ -216,8 +235,8 @@ class Config:
     RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
 
     # Logging: konsol + berkas berotasi (5 MB x 5 berkas) di DATA_DIR/logs
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
-    LOG_TO_FILE: bool = os.getenv("LOG_TO_FILE", "true").lower() == "true"
+    LOG_LEVEL: str = _env("LOG_LEVEL", "INFO").upper()
+    LOG_TO_FILE: bool = _env("LOG_TO_FILE", "true").lower() == "true"
     LOG_DIR: Path = DATA_DIR / "logs"
     LOG_MAX_BYTES: int = 5 * 1024 * 1024
     LOG_BACKUP_COUNT: int = 5
@@ -232,12 +251,12 @@ class Config:
     AUDIO_VOLUME: float = 1.0
 
     # IoT / Hardware Output (Ready for Stage 2)
-    IOT_ENABLED: bool = os.getenv("IOT_ENABLED", "false").lower() == "true"
-    IOT_TYPE: str = os.getenv("IOT_TYPE", "serial")  # "serial", "http", or "mqtt"
-    IOT_SERIAL_PORT: str = os.getenv("IOT_SERIAL_PORT", "COM3")
+    IOT_ENABLED: bool = _env("IOT_ENABLED", "false").lower() == "true"
+    IOT_TYPE: str = _env("IOT_TYPE", "serial")  # "serial", "http", or "mqtt"
+    IOT_SERIAL_PORT: str = _env("IOT_SERIAL_PORT", "COM3")
     IOT_SERIAL_BAUD: int = 9600
     IOT_SERIAL_TIMEOUT_SECONDS: float = 1.0
     IOT_HTTP_TIMEOUT_SECONDS: float = 1.5
-    IOT_HTTP_URL: str = os.getenv("IOT_HTTP_URL", "http://192.168.1.50")
+    IOT_HTTP_URL: str = _env("IOT_HTTP_URL", "http://192.168.1.50")
 
 cfg = Config()

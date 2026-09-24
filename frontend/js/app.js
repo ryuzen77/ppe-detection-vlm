@@ -532,7 +532,9 @@ document.addEventListener('DOMContentLoaded', () => {
             : `<span class="apd-mini-badge apd-mini-bad" title="${escapeHtml(text)}">${item.icon} ${name} ✗</span>`;
         });
 
-        const sourceIcon = (rec.inference_source || '').includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ Heuristik lokal';
+        const source = rec.inference_source || '';
+        const sourceIcon = source.startsWith('VLM_GAGAL') ? '⚠️ VLM gagal (ditolak)'
+          : source.includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ Heuristik lokal';
         const notesText = rec.missing_items && rec.missing_items.length > 0 
           ? `<span style="color:var(--accent-red); font-weight:500;">Kurang: ${rec.missing_items.join(', ')}</span>`
           : `<span style="color:var(--accent-green); font-weight:500;">Kepatuhan 100% K3</span>`;
