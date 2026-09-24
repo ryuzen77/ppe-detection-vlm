@@ -22,7 +22,7 @@ a.start()
 p = a.provider
 print(json.dumps({
     "provider": cfg.VLM_PROVIDER, "model": cfg.VLM_MODEL, "is_local": cfg.VLM_IS_LOCAL,
-    "min_interval": cfg.VLM_MIN_INTERVAL_SECONDS, "live": a.is_live_api(),
+    "min_interval": cfg.VLM_MIN_INTERVAL_SECONDS, "timeout": cfg.VLM_TIMEOUT_SECONDS, "live": a.is_live_api(),
     "kelas": type(p).__name__ if p else None, "base_url": getattr(p, "base_url", None),
     "label": a.source_label, "info": a.provider_info(),
 }))
@@ -45,6 +45,7 @@ def test_env_lama_gemini_tetap_berfungsi(tmp_path):
     assert (r["provider"], r["model"], r["live"], r["kelas"]) == ("gemini", "gemini-3.8-flash", True, "GeminiProvider")
     assert r["label"] == "VLM_LIVE:gemini/gemini-3.8-flash"
     assert r["min_interval"] == 4.0, "Penyedia cloud menjaga kuota free tier"
+    assert r["timeout"] == 8.0
 
 
 def test_nama_vlm_baru_menang_atas_nama_lama(tmp_path):
@@ -58,11 +59,12 @@ def test_ganti_ke_ollama_hanya_lewat_env(tmp_path):
     r = _probe(tmp_path, VLM_PROVIDER="ollama")
     assert r["kelas"] == "OpenAICompatibleProvider"
     assert r["live"] is True, "Model lokal tidak butuh API key"
-    assert r["model"] == "qwen2.5vl:3b"
+    assert r["model"] == "qwen2.5vl:7b"
     assert r["base_url"] == "http://localhost:11434/v1"
     assert r["is_local"] is True and r["min_interval"] == 0.0, "Tanpa kuota, antrean tidak ditahan"
+    assert r["timeout"] == 12.0, "qwen2.5vl:7b lokal: p95 9,2 dtk (T26)"
     assert r["info"]["needs_key"] is False
-    assert r["label"] == "VLM_LIVE:ollama/qwen2.5vl:3b"
+    assert r["label"] == "VLM_LIVE:ollama/qwen2.5vl:7b"
 
 
 def test_penyedia_openai_compatible_dengan_base_url_sendiri(tmp_path):

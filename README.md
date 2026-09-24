@@ -18,7 +18,7 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 * **Corridor & Fast-Pass Engine:** OpenCV (`cv2`) untuk Virtual Inspection Corridor, segmentasi warna HSV reflektif rompi (*Hi-Vis Orange/Yellow*), dan ekstraksi area kepala/kaki.
 
 ### 2. Vision-Language Model (VLM & Cloud Layer)
-* **Model VLM (bebas penyedia):** dipilih lewat `VLM_PROVIDER` / `VLM_MODEL` di `backend/.env`, tanpa mengubah kode. Bawaan `Google Gemini 3.5 Flash-Lite` (SDK `google-genai`, ~1,5 dtk per inspeksi). Alternatif offline: model lokal lewat Ollama, mis. `qwen2.5vl:3b` (~3 dtk, tanpa API key). Juga didukung OpenRouter, Qwen (DashScope), DeepSeek (`deepseek-flash`), OpenAI, dan server vLLM. Semua penyedia memakai adaptor di `backend/vlm_providers/`; timeout, percobaan ulang, dan penilaian kelengkapan sama untuk semuanya. Model dipanaskan saat server menyala sehingga pekerja pertama tidak menunggu model dimuat.
+* **Model VLM (bebas penyedia):** dipilih lewat `VLM_PROVIDER` / `VLM_MODEL` di `backend/.env`, tanpa mengubah kode. Bawaan `Google Gemini 3.5 Flash-Lite` (SDK `google-genai`, ~1,5 dtk per inspeksi). Alternatif offline: model lokal lewat Ollama, bawaannya `qwen2.5vl:7b` (tanpa API key; dari evaluasi 84 foto berlabel dengan `tools/eval_vlm.py`: akurasi 94%, tidak meloloskan satu pun pekerja ber-APD kurang, median ~7,9 dtk, VRAM ~7,6 GB bersama YOLO; batas waktu lokal 12 dtk). Juga didukung OpenRouter, Qwen (DashScope), DeepSeek (`deepseek-flash`), OpenAI, dan server vLLM. Semua penyedia memakai adaptor di `backend/vlm_providers/`; timeout, percobaan ulang, dan penilaian kelengkapan sama untuk semuanya. Model dipanaskan saat server menyala sehingga pekerja pertama tidak menunggu model dimuat.
 * **Hybrid Auto / Local Fallback:** Jika jaringan terputus, API lambat, atau mode offline diaktifkan, sistem beralih otomatis ke *engine* lokal berbasis heuristik warna OpenCV (HSV) yang berjalan di CPU — tanpa dependensi cloud, tetapi dengan akurasi yang jauh lebih rendah daripada VLM. Keputusan yang berasal dari jalur ini ditandai eksplisit di dashboard dan di kolom CSV audit.
 * **Prompt Engineering K3:** Inferensi terstruktur yang mengembalikan format JSON standar untuk helm, rompi hi-vis, celana panjang, dan sepatu tertutup.
 * **API Anti-Spam Cache:** Membatasi inferensi tepat **1 frame per subjek unik**, dengan jeda minimum 4 detik antar panggilan dan kunci konkurensi, untuk mencegah pemborosan kuota API dan galat 429.
@@ -147,6 +147,7 @@ ppe_detection_vlm/
 │       └── snapshots/            # Arsip bukti foto pekerja JPEG
 │
 ├── scripts/check.py              # Pemeriksaan sebelum commit, sama dengan CI: ruff + pytest
+├── tools/eval_vlm.py             # Evaluasi akurasi & latensi VLM pada foto berlabel (hasil ke DATA_DIR/eval)
 ├── .github/workflows/ci.yml      # CI: ruff + pytest di Linux & Windows dari versi terkunci
 ├── deploy/safeguard.service      # Unit systemd (Linux): menyala saat boot, bangkit ulang bila mati
 │

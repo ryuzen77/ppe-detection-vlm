@@ -25,7 +25,9 @@ def _env(name: str, default: str = "") -> str:
 # menyebut modelnya sendiri karena daftar model vision mereka sering berganti.
 _DEFAULT_VLM_MODELS = {
     "gemini": "gemini-3.5-flash-lite",
-    "ollama": "qwen2.5vl:3b",       # Terukur T22: 10/10 tepat, ~3 dtk di RTX 4060 Laptop
+    # T26 (84 foto): satu-satunya model lokal yang tidak meloloskan APD kurang
+    # (0/58, akurasi 94%); qwen2.5vl:3b lebih cepat tetapi meloloskan 11/58.
+    "ollama": "qwen2.5vl:7b",
 }
 # Penyedia yang berjalan di mesin sendiri: tanpa API key dan tanpa kuota
 LOCAL_VLM_PROVIDERS = ("ollama", "vllm")
@@ -184,8 +186,9 @@ class Config:
     # diloloskan atas dasar heuristik lokal (keputusan pengguna, T21).
     VLM_MAX_ATTEMPTS: int = 2
     # Batas waktu per percobaan. Subjek berdiri diam saat inspeksi, jadi cukup
-    # longgar untuk panggilan bergambar (Gemini p95 ~2 dtk, Ollama lokal ~4 dtk).
-    VLM_TIMEOUT_SECONDS: float = float(_env("VLM_TIMEOUT_SECONDS", "8.0"))
+    # longgar untuk panggilan bergambar. Lokal lebih longgar: qwen2.5vl:7b di
+    # RTX 4060 Laptop median 7,9 / p95 9,2 dtk bersama YOLO (T26); Gemini p95 ~2 dtk.
+    VLM_TIMEOUT_SECONDS: float = float(_env("VLM_TIMEOUT_SECONDS", "12.0" if VLM_IS_LOCAL else "8.0"))
     # Batas pemanasan saat startup (memuat model lokal bisa ~40 dtk pertama kali)
     VLM_WARMUP_TIMEOUT_SECONDS: float = float(_env("VLM_WARMUP_TIMEOUT_SECONDS", "120"))
     ENABLE_LOCAL_FAST_PASS: bool = True       # Tier 1: heuristik warna OpenCV di CPU (~15ms)
