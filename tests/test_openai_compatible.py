@@ -145,7 +145,7 @@ def test_vllm_wajib_diberi_base_url():
 
 @pytest.fixture
 def analyzer(catalog_defaults, monkeypatch):
-    monkeypatch.setattr(cfg, "FREE_TIER_MIN_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.0)
     a = VLMAnalyzer()
     a.api_key = "kunci-uji"
     yield a
@@ -188,3 +188,35 @@ def test_jawaban_kosong_ditolak(server):
     server.reply = {"status": 200, "content": ""}
     with pytest.raises(RuntimeError, match="kosong"):
         _provider(server).analyze(b"x", "S", "U")
+
+
+# --- Pemanasan (T23) ------------------------------------------------------------------------
+
+def test_pemanasan_ollama_menahan_model_tetap_termuat(server):
+    p = create_provider("ollama", api_key="", model="qwen2.5vl:3b", base_url=server.base_url)
+    p.warm_up()
+    muat, ping = server.requests
+    assert muat["path"] == "/api/generate", "API asli Ollama, bukan /v1"
+    assert muat["body"] == {"model": "qwen2.5vl:3b", "keep_alive": -1}
+    assert ping["path"] == "/v1/chat/completions"
+
+
+def test_pemanasan_penyedia_cloud_cukup_ping(server):
+    _provider(server).warm_up()
+    assert [r["path"] for r in server.requests] == ["/v1/chat/completions"]
+
+
+def test_pemanasan_gagal_tidak_menghentikan_server(server, analyzer):
+    server.reply = {"status": 503, "content": "overloaded"}
+    analyzer.provider = _provider(server)
+    assert analyzer.warm_up() is None
+
+
+def test_pemanasan_berhasil_melaporkan_durasi(server, analyzer):
+    analyzer.provider = _provider(server)
+    assert analyzer.warm_up() >= 0
+
+
+def test_tanpa_penyedia_pemanasan_dilewati(analyzer):
+    analyzer.provider = None
+    assert analyzer.warm_up() is None

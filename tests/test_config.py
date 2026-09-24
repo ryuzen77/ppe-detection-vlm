@@ -22,4 +22,5 @@ def test_nilai_terisi_dipakai_tanpa_spasi_tepi(monkeypatch):
 
 
 def test_model_bawaan_bukan_generasi_yang_sudah_ditutup():
-    assert not config.Config.GEMINI_MODEL.startswith("gemini-2.5"), config.Config.GEMINI_MODEL
+    assert config.Config.VLM_PROVIDER == "gemini"
+    assert not config.Config.VLM_MODEL.startswith("gemini-2.5"), config.Config.VLM_MODEL

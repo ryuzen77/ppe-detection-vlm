@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SAFEGUARD AI - Monitoring Kepatuhan APD</title>
-  <meta name="description" content="Sistem inspeksi kepatuhan APD otomatis berbasis YOLO26s-Pose dan Gemini VLM dengan verifikasi posisi adaptif.">
+  <meta name="description" content="Sistem inspeksi kepatuhan APD otomatis berbasis YOLO26s-Pose dan VLM dengan verifikasi posisi adaptif.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -64,7 +64,7 @@
         <span class="status-dot green" id="dot-ai"></span>
         <span id="ribbon-ai-text">AI lokal aktif</span>
       </div>
-      <div class="ribbon-item clickable" id="btn-ribbon-cloud" title="Klik untuk beralih mode Cloud Gemini / Lokal">
+      <div class="ribbon-item clickable" id="btn-ribbon-cloud" title="Klik untuk beralih antara VLM dan engine lokal">
         <span class="ribbon-icon">☁️</span>
         <span id="ribbon-cloud-text">Cloud opsional: tidak terhubung</span>
       </div>
@@ -447,12 +447,18 @@
           <div class="settings-card">
             <div class="card-section-title">
               <span>🧠</span>
-              <h3>AI Engine & Google Gemini VLM</h3>
+              <h3>AI Engine & VLM</h3>
             </div>
 
             <div class="form-row">
-              <label class="form-label" for="setting-gemini-key">Google Gemini API Key (Server-Side)</label>
-              <input type="password" id="input-gemini-key" class="form-control" placeholder="Masukkan AIzaSy..." autocomplete="off">
+              <span class="form-label">Penyedia VLM aktif</span>
+              <p class="form-help" id="vlm-provider-info" style="margin-top:0;">Memuat...</p>
+              <p class="form-help">Penyedia dan model dipilih lewat <code>VLM_PROVIDER</code> / <code>VLM_MODEL</code> di <code>backend/.env</code>, lalu server dijalankan ulang.</p>
+            </div>
+
+            <div class="form-row" id="vlm-key-row">
+              <label class="form-label" for="input-vlm-key" id="label-vlm-key">API Key VLM (Server-Side)</label>
+              <input type="password" id="input-vlm-key" class="form-control" placeholder="Masukkan API key penyedia aktif" autocomplete="off">
               <p class="form-help">Kunci tersimpan aman di server, tidak diekspos ke browser.</p>
             </div>
 
@@ -463,7 +469,7 @@
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
-              <button class="btn-action" id="btn-ping-gemini">
+              <button class="btn-action" id="btn-ping-vlm">
                 📡 Uji Latensi API
               </button>
               <button class="btn-action btn-primary" id="btn-save-settings">

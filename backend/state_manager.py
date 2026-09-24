@@ -253,7 +253,8 @@ class StateManager:
                 # Frontend butuh angka ini untuk indikator "stabil x / y";
                 # dulu ditulis tetap "/ 2" dan akan salah begitu config diubah.
                 "stable_frames_required": cfg.STABLE_FRAMES_REQUIRED,
-                "is_live_gemini": vlm_analyzer.is_live_api(),
+                "is_live_vlm": vlm_analyzer.is_live_api(),
+                "vlm": vlm_analyzer.provider_info(),
                 "api_monitor": api_monitor.get_status(),
                 "engine_mode": api_monitor.engine_mode
             }

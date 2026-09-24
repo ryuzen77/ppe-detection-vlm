@@ -105,9 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnTestGreen = document.getElementById('btn-test-green');
   const btnTestRed = document.getElementById('btn-test-red');
   const btnTestOff = document.getElementById('btn-test-off');
-  const inputGeminiKey = document.getElementById('input-gemini-key');
+  const inputVlmKey = document.getElementById('input-vlm-key');
   const inputAdminToken = document.getElementById('input-admin-token');
-  const btnPingGemini = document.getElementById('btn-ping-gemini');
+  const btnPingVlm = document.getElementById('btn-ping-vlm');
+  const vlmProviderInfo = document.getElementById('vlm-provider-info');
+  const vlmKeyRow = document.getElementById('vlm-key-row');
+  const labelVlmKey = document.getElementById('label-vlm-key');
   const btnSaveSettings = document.getElementById('btn-save-settings');
 
   // --- 2. BACKEND API ENDPOINTS ---
@@ -126,7 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const ppeRulesUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/ppe-rules`;
   const ppeRulesActiveUrl = `${ppeRulesUrl}/active`;
   const resetUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reset`;
-  const configKeyUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/gemini-key`;
+  const configKeyUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/vlm-key`;
+  const vlmConfigUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/vlm`;
   const engineModeUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/engine-mode`;
   const reportsUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports`;
   const exportCsvUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports/export`;
@@ -318,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 2. Update Status Ribbon & Engine Mode
       if (telemetry.api_monitor) {
-        updateRibbonCloudUI(telemetry.api_monitor, telemetry.is_live_gemini);
+        updateRibbonCloudUI(telemetry.api_monitor, telemetry.is_live_vlm, telemetry.vlm);
       }
       if (telemetry.engine_mode && telemetry.engine_mode !== currentEngineMode) {
         currentEngineMode = telemetry.engine_mode;
@@ -384,23 +388,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Update Cloud Status in Top Ribbon
-  function updateRibbonCloudUI(monitor, isLiveGemini) {
+  function updateRibbonCloudUI(monitor, isLiveVlm, vlm) {
     if (!ribbonCloudText) return;
 
     if (monitor.engine_mode === 'FORCE_LOCAL') {
-      ribbonCloudText.textContent = 'Cloud: Mode Offline (Lokal GPU)';
+      ribbonCloudText.textContent = 'VLM: Mode Offline (heuristik lokal)';
       if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--accent-amber)';
       return;
     }
 
-    if (isLiveGemini && monitor.status === 'ONLINE') {
-      ribbonCloudText.textContent = `Cloud terhubung (Gemini ${monitor.latency_ms || 0}ms)`;
+    const where = vlm && vlm.is_local ? 'lokal' : 'cloud';
+    const name = vlm ? vlm.provider : 'VLM';
+    if (isLiveVlm && monitor.status === 'ONLINE') {
+      ribbonCloudText.textContent = `VLM ${where} terhubung (${name} ${monitor.latency_ms || 0}ms)`;
       if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--accent-green)';
     } else if (monitor.status === 'DEGRADED') {
-      ribbonCloudText.textContent = `Cloud lambat (${monitor.latency_ms || 0}ms)`;
+      ribbonCloudText.textContent = `VLM lambat (${name} ${monitor.latency_ms || 0}ms)`;
       if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--accent-amber)';
     } else {
-      ribbonCloudText.textContent = 'Cloud opsional: tidak terhubung';
+      ribbonCloudText.textContent = `VLM tidak terhubung (${name})`;
       if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--text-muted)';
     }
   }
@@ -418,7 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         currentEngineMode = data.engine_mode;
         if (techEngineMode) techEngineMode.textContent = currentEngineMode;
-        alert(`Mode Engine berhasil diubah ke: ${currentEngineMode === 'FORCE_LOCAL' ? 'Lokal GPU (100% Offline)' : 'Hybrid Cloud Gemini'}`);
+        alert(`Mode Engine berhasil diubah ke: ${currentEngineMode === 'FORCE_LOCAL' ? 'Heuristik lokal (offline)' : 'VLM + cadangan lokal'}`);
       } catch (e) {
         console.error('Failed to toggle engine mode:', e);
       }
@@ -533,7 +539,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const source = rec.inference_source || '';
+        // VLM_LIVE:<penyedia>/<model>; GEMINI_LIVE adalah label baris lama (sebelum T23)
         const sourceIcon = source.startsWith('VLM_GAGAL') ? '⚠️ VLM gagal (ditolak)'
+          : source.startsWith('VLM_LIVE:') ? `🌐 ${escapeHtml(source.slice('VLM_LIVE:'.length))}`
           : source.includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ Heuristik lokal';
         const notesText = rec.missing_items && rec.missing_items.length > 0 
           ? `<span style="color:var(--accent-red); font-weight:500;">Kurang: ${rec.missing_items.join(', ')}</span>`
@@ -1012,24 +1020,42 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnTestRed) btnTestRed.addEventListener('click', () => triggerLightTest('red'));
   if (btnTestOff) btnTestOff.addEventListener('click', () => triggerLightTest('off'));
 
-  // Test Cloud Gemini API Latency
-  if (btnPingGemini) {
-    btnPingGemini.addEventListener('click', async () => {
+  // Penyedia VLM aktif untuk tab Pengaturan (API key tidak pernah dikirim ke browser)
+  async function refreshVlmInfo() {
+    try {
+      const res = await fetch(vlmConfigUrl);
+      const vlm = await res.json();
+      if (vlmProviderInfo) {
+        const status = vlm.is_live ? '✅ aktif' : (vlm.needs_key && !vlm.has_key ? '⚠️ API key belum disetel' : '⚠️ tidak aktif');
+        vlmProviderInfo.textContent = `${vlm.provider} · ${vlm.model || '(model belum disetel)'} · ${vlm.is_local ? 'lokal' : 'cloud'} · ${status}`;
+      }
+      // Model lokal (Ollama/vLLM) tidak memakai API key
+      if (vlmKeyRow) vlmKeyRow.style.display = vlm.needs_key ? '' : 'none';
+      if (labelVlmKey) labelVlmKey.textContent = `API Key ${vlm.provider} (Server-Side)`;
+    } catch (e) {
+      if (vlmProviderInfo) vlmProviderInfo.textContent = 'Tidak dapat memuat info penyedia VLM';
+    }
+  }
+  refreshVlmInfo();
+
+  // Uji latensi ke penyedia VLM aktif
+  if (btnPingVlm) {
+    btnPingVlm.addEventListener('click', async () => {
       try {
-        btnPingGemini.disabled = true;
-        btnPingGemini.textContent = '⏳ Menguji...';
+        btnPingVlm.disabled = true;
+        btnPingVlm.textContent = '⏳ Menguji...';
         const res = await fetch(pingUrl, { method: 'POST', headers: authHeaders() });
         const data = await res.json();
         if (data.status === 'ONLINE') {
-          alert(`✅ Google Gemini API Cloud Terhubung!\nLatensi: ${data.latency_ms} ms\nStatus: ONLINE`);
+          alert(`✅ ${data.message}\nLatensi: ${data.latency_ms} ms\nStatus: ONLINE`);
         } else {
           alert(`⚠️ Hasil Ping API:\nStatus: ${data.status}\nLatensi: ${data.latency_ms} ms\nPesan: ${data.message || data.reply || '-'}`);
         }
       } catch (e) {
         alert(`❌ Gagal menghubungi endpoint ping: ${e}`);
       } finally {
-        btnPingGemini.disabled = false;
-        btnPingGemini.textContent = '📡 Uji Latensi API';
+        btnPingVlm.disabled = false;
+        btnPingVlm.textContent = '📡 Uji Latensi API';
       }
     });
   }
@@ -1052,9 +1078,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      const key = inputGeminiKey ? inputGeminiKey.value.trim() : '';
+      const key = inputVlmKey ? inputVlmKey.value.trim() : '';
       if (!key) {
-        alert('Pengaturan tersimpan. (Masukkan API key jika ingin memperbarui kunci Gemini)');
+        alert('Pengaturan tersimpan. (Masukkan API key jika ingin memperbarui kunci penyedia VLM)');
         return;
       }
       try {
@@ -1067,8 +1093,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const data = await res.json();
         if (data.status === 'success') {
-          alert('✅ Google Gemini API Key berhasil disimpan di server! Cloud VLM aktif.');
-          if (inputGeminiKey) inputGeminiKey.value = '';
+          alert(`✅ API key ${data.provider} tersimpan di server. VLM ${data.is_live ? 'aktif' : 'belum aktif'}.`);
+          if (inputVlmKey) inputVlmKey.value = '';
+          refreshVlmInfo();
         } else {
           alert('❌ Gagal menyimpan API Key: ' + data.message);
         }

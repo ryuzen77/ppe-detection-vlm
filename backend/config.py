@@ -21,6 +21,16 @@ def _env(name: str, default: str = "") -> str:
     return default if value is None or value.strip() == "" else value.strip()
 
 
+# Model bawaan per penyedia bila VLM_MODEL kosong. Penyedia cloud lain wajib
+# menyebut modelnya sendiri karena daftar model vision mereka sering berganti.
+_DEFAULT_VLM_MODELS = {
+    "gemini": "gemini-3.5-flash-lite",
+    "ollama": "qwen2.5vl:3b",       # Terukur T22: 10/10 tepat, ~3 dtk di RTX 4060 Laptop
+}
+# Penyedia yang berjalan di mesin sendiri: tanpa API key dan tanpa kuota
+LOCAL_VLM_PROVIDERS = ("ollama", "vllm")
+
+
 def _resolve_data_dir(value: str) -> Path:
     """Jalur relatif dihitung dari akar repo, bukan dari direktori kerja terminal."""
     path = Path(value).expanduser() if value else REPO_ROOT / "data"
@@ -148,22 +158,42 @@ class Config:
     # Ambang kepercayaan deteksi keypoint pose tubuh (mata, bahu, lutut, kaki)
     KEYPOINT_CONF_THRESHOLD: float = 0.35
 
-    # Gemini VLM & Hybrid Engine Settings (Server-side only)
-    GEMINI_API_KEY: str = _env("GEMINI_API_KEY", "")
-    # gemini-2.5-* sudah dibatasi Google untuk proyek baru (2026); 3.5 Flash-Lite
-    # adalah rekomendasi Google untuk proyek baru: tercepat & termurah
-    GEMINI_MODEL: str = _env("GEMINI_MODEL", "gemini-3.5-flash-lite")
-    # minimal / low / medium / high. Kosong = tidak dikirim (untuk model tanpa dukungan)
+    # --- VLM, bebas penyedia (T23) ---
+    # gemini, openai, openrouter, qwen, deepseek, ollama, vllm, openai-compatible.
+    # Nama lama GEMINI_API_KEY / GEMINI_MODEL tetap dibaca agar .env lama tidak rusak.
+    VLM_PROVIDER: str = _env("VLM_PROVIDER", "gemini").lower()
+    # GEMINI_API_KEY lama hanya berlaku untuk Gemini: tanpa syarat ini, beralih
+    # ke penyedia lain tanpa VLM_API_KEY akan mengirim kunci Gemini ke pihak lain.
+    VLM_API_KEY: str = _env("VLM_API_KEY", _env("GEMINI_API_KEY", "") if VLM_PROVIDER == "gemini" else "")
+    VLM_MODEL: str = _env(
+        "VLM_MODEL",
+        _env("GEMINI_MODEL", _DEFAULT_VLM_MODELS["gemini"]) if VLM_PROVIDER == "gemini"
+        else _DEFAULT_VLM_MODELS.get(VLM_PROVIDER, ""),
+    )
+    # Kosong = alamat bawaan penyedia (lihat vlm_providers/openai_compatible.py)
+    VLM_BASE_URL: str = _env("VLM_BASE_URL", "")
+    # Minta jawaban JSON lewat response_format (OpenAI-compatible); matikan untuk
+    # server yang tidak mengenalnya
+    VLM_JSON_MODE: bool = _env("VLM_JSON_MODE", "true").lower() == "true"
+    VLM_IS_LOCAL: bool = VLM_PROVIDER in LOCAL_VLM_PROVIDERS
+    # Khusus Gemini. minimal / low / medium / high; kosong = tidak dikirim.
     GEMINI_THINKING_LEVEL: str = _env("GEMINI_THINKING_LEVEL", "minimal")
     # Percobaan VLM per inspeksi saat VLM aktif. Bila semuanya gagal/timeout,
     # pekerja DITOLAK sebagai "tidak dapat diverifikasi" — tidak pernah
     # diloloskan atas dasar heuristik lokal (keputusan pengguna, T21).
     VLM_MAX_ATTEMPTS: int = 2
-    GEMINI_TIMEOUT_SECONDS: float = 8.0       # Subjek berdiri diam saat inspeksi, cukup longgar untuk panggilan bergambar
+    # Batas waktu per percobaan. Subjek berdiri diam saat inspeksi, jadi cukup
+    # longgar untuk panggilan bergambar (Gemini p95 ~2 dtk, Ollama lokal ~4 dtk).
+    VLM_TIMEOUT_SECONDS: float = float(_env("VLM_TIMEOUT_SECONDS", "8.0"))
+    # Batas pemanasan saat startup (memuat model lokal bisa ~40 dtk pertama kali)
+    VLM_WARMUP_TIMEOUT_SECONDS: float = float(_env("VLM_WARMUP_TIMEOUT_SECONDS", "120"))
     ENABLE_LOCAL_FAST_PASS: bool = True       # Tier 1: heuristik warna OpenCV di CPU (~15ms)
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
     VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
-    FREE_TIER_MIN_INTERVAL_SECONDS: float = 4.0 # Jeda minimum antar panggilan API (Anti-Spam Free Tier 15 RPM)
+    # Jeda minimum antar panggilan VLM untuk menjaga kuota (free tier Gemini
+    # 15 RPM). Model lokal tidak berkuota, jadi bawaannya 0 agar antrean tidak
+    # tertahan.
+    VLM_MIN_INTERVAL_SECONDS: float = float(_env("VLM_MIN_INTERVAL_SECONDS", "0" if VLM_IS_LOCAL else "4.0"))
     # Analisa VLM yang boleh berjalan bersamaan. Dipakai oleh DUA pool thread
     # (pemanggil di state_manager dan penjaga timeout di vlm_analyzer); keduanya
     # harus sama besar, kalau tidak panggilan bisa antre di penjaga timeout dan

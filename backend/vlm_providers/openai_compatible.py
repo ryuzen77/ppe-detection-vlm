@@ -60,6 +60,18 @@ class OpenAICompatibleProvider(VLMProvider):
             body["response_format"] = {"type": "json_object"}
         return self._chat(body)
 
+    def warm_up(self):
+        if self.name == "ollama":
+            # Ollama melepas model dari GPU setelah 5 menit menganggur, sehingga
+            # pekerja pertama setelah gerbang sepi menunggu ~38 dtk (terukur T22)
+            # dan ditolak karena timeout. keep_alive=-1 pada API asli Ollama
+            # memuat model sekarang dan menahannya selama server Ollama hidup.
+            root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+            response = self._client.post(f"{root}/api/generate", json={"model": self.model, "keep_alive": -1})
+            if response.status_code >= 400:
+                raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
+        self.ping()
+
     def ping(self) -> str:
         return self._chat({
             "model": self.model,

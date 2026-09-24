@@ -118,7 +118,7 @@ def _lengkap():
 @pytest.fixture
 def analyzer(catalog_defaults, monkeypatch):
     # Jeda free tier dimatikan supaya percobaan ulang tidak membuat tes lambat
-    monkeypatch.setattr(cfg, "FREE_TIER_MIN_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.0)
     a = VLMAnalyzer()
     a.api_key = "kunci-palsu"
     yield a
@@ -130,7 +130,7 @@ def test_jawaban_penyedia_menjadi_keputusan_vlm(analyzer):
     hasil = analyzer.analyze_person(person_crop(vest=False))
 
     # Keputusan dari VLM, bukan dari engine lokal yang melihat rompi hilang
-    assert hasil.inference_source == "GEMINI_LIVE"
+    assert hasil.inference_source == analyzer.source_label
     assert hasil.is_complete is True
     assert hasil.is_low_confidence is False
 
@@ -169,7 +169,7 @@ def test_galat_penyedia_dicoba_ulang_lalu_ditolak(analyzer):
 
 
 def test_penyedia_lambat_dicoba_ulang_lalu_ditolak(analyzer, monkeypatch):
-    monkeypatch.setattr(cfg, "GEMINI_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(cfg, "VLM_TIMEOUT_SECONDS", 0.2)
     analyzer.provider = FakeProvider(reply=_lengkap(), delay=1.0)
     start = time.time()
     hasil = analyzer.analyze_person(person_crop())
@@ -197,23 +197,23 @@ class FlakyProvider(FakeProvider):
 def test_percobaan_ulang_yang_berhasil_menjadi_keputusan_vlm(analyzer):
     analyzer.provider = FlakyProvider(reply=_lengkap())
     hasil = analyzer.analyze_person(person_crop())
-    assert hasil.inference_source == "GEMINI_LIVE"
+    assert hasil.inference_source == analyzer.source_label
     assert hasil.is_complete is True
     assert len(analyzer.provider.calls) == 2
 
 
 def test_jeda_free_tier_ditunggu_bukan_dialihkan_ke_lokal(analyzer, monkeypatch):
-    monkeypatch.setattr(cfg, "FREE_TIER_MIN_INTERVAL_SECONDS", 0.4)
+    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.4)
     analyzer.provider = FakeProvider(reply=_lengkap())
     analyzer.last_api_call_time = time.time()  # panggilan lain baru saja terjadi
     start = time.time()
     hasil = analyzer.analyze_person(person_crop(vest=False))
     assert time.time() - start >= 0.35
-    assert hasil.inference_source == "GEMINI_LIVE"
+    assert hasil.inference_source == analyzer.source_label
 
 
 def test_antrean_vlm_yang_tidak_kunjung_kosong_ditolak(analyzer, monkeypatch):
-    monkeypatch.setattr(cfg, "GEMINI_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(cfg, "VLM_TIMEOUT_SECONDS", 0.1)
     analyzer.provider = FakeProvider(reply=_lengkap())
     analyzer.api_lock.acquire()  # inspeksi lain memegang giliran terlalu lama
     try:

@@ -18,7 +18,9 @@ async def health_check():
     return {
         "status": "online",
         "fps": round(video_service.fps, 1),
-        "is_live_gemini": vlm_analyzer.is_live_api(),
+        "is_live_vlm": vlm_analyzer.is_live_api(),
+        "is_live_gemini": vlm_analyzer.is_live_api(),   # nama lama, untuk klien lama
+        "vlm": vlm_analyzer.provider_info(),
         "camera_selected": video_service.camera_index is not None,
         "camera_index": video_service.camera_index,
         "camera_name": video_service.camera_name,

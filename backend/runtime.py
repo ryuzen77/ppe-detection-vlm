@@ -34,6 +34,9 @@ def start():
     # 4. Model dimuat sebelum thread inferensi mulai meminta deteksi
     detector.load()
     vlm_analyzer.start()
+    # 5. VLM dipanaskan sebelum video berjalan: gerbang baru menerima pekerja
+    # setelah panggilan VLM pertama terbukti cepat
+    vlm_analyzer.warm_up()
     video_service.start()
     logger.info("Seluruh layanan siap. Data: %s", cfg.DATA_DIR)
 

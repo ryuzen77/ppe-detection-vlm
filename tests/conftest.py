@@ -15,8 +15,13 @@ _TEST_ROOT = tempfile.mkdtemp(prefix="safeguard_test_")
 
 # Audit, foto, dan pengaturan uji ditulis ke folder sementara, bukan data/
 os.environ["DATA_DIR"] = os.path.join(_TEST_ROOT, "data")
-# Tanpa API key: seluruh inspeksi lewat engine lokal, tidak ada kuota Gemini terpakai
-os.environ["GEMINI_API_KEY"] = ""
+# Tanpa API key: seluruh inspeksi lewat engine lokal, tidak ada kuota VLM terpakai.
+# Semua variabel VLM ditulis eksplisit supaya isi backend/.env tidak ikut terbaca
+# (load_dotenv tidak menimpa variabel yang sudah ada, termasuk yang kosong).
+os.environ["VLM_PROVIDER"] = "gemini"
+for _nama in ("VLM_API_KEY", "VLM_MODEL", "VLM_BASE_URL", "GEMINI_API_KEY", "GEMINI_MODEL",
+              "VLM_MIN_INTERVAL_SECONDS", "VLM_TIMEOUT_SECONDS"):
+    os.environ[_nama] = ""
 # Tidak membuka port serial / HTTP ke lampu gerbang sungguhan
 os.environ["IOT_ENABLED"] = "false"
 os.environ["ADMIN_TOKEN"] = ""

@@ -44,7 +44,8 @@ def test_impor_aplikasi_bebas_efek_samping(tmp_path):
         "IOT_ENABLED": "true",
         "IOT_TYPE": "serial",
         "IOT_SERIAL_PORT": "COM_TIDAK_ADA",
-        "GEMINI_API_KEY": "kunci-palsu",
+        "VLM_PROVIDER": "gemini",
+        "VLM_API_KEY": "kunci-palsu",
         "PYGAME_HIDE_SUPPORT_PROMPT": "1",
     }
     out = subprocess.run([sys.executable, "-c", _PROBE], cwd=REPO_ROOT, env=env,

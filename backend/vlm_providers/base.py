@@ -24,6 +24,14 @@ class VLMProvider(ABC):
     def ping(self) -> str:
         """Panggilan teks termurah untuk mengukur latensi. Mengembalikan jawaban model."""
 
+    def warm_up(self):
+        """Membuat panggilan pertama pekerja secepat panggilan berikutnya.
+
+        Bawaannya satu ping: membuka koneksi (TLS) dan, pada model lokal, memuat
+        bobot model ke GPU. Adaptor boleh menimpanya.
+        """
+        self.ping()
+
     def analyze(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> dict:
         """Memanggil model lalu mengurai jawabannya sebagai objek JSON."""
         return parse_json_reply(self.generate(image_jpeg, system_prompt, user_prompt))

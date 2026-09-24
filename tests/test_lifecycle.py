@@ -139,7 +139,7 @@ def test_vlm_gagal_menolak_dengan_pesan_verifikasi(gerbang, monkeypatch):
         def ping(self):
             return ""
 
-    monkeypatch.setattr(cfg, "FREE_TIER_MIN_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.0)
     monkeypatch.setattr(vlm_analyzer, "provider", SelaluGagal("model"))
     for _ in range(cfg.STABLE_FRAMES_REQUIRED):
         gerbang.update_frame_detections([_det(full_body=True)])

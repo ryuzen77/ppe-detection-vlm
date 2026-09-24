@@ -9,7 +9,7 @@ from typing import Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pydantic import BaseModel, ConfigDict, Field
 
-from .config import cfg
+from .config import cfg, LOCAL_VLM_PROVIDERS
 from .api_monitor import api_monitor
 from . import messages
 from . import ppe_rules
@@ -46,7 +46,7 @@ class InspectionResult(BaseModel):
     notes: str = Field(default="", description="Ringkasan hasil inspeksi dalam Bahasa Indonesia")
     inference_source: str = Field(
         default="LOCAL_FAST_PASS",
-        description="Sumber keputusan: GEMINI_LIVE, LOCAL_FAST_PASS, atau OFFLINE_FALLBACK",
+        description="Sumber keputusan: VLM_LIVE:<penyedia>/<model>, LOCAL_FAST_PASS, OFFLINE_FALLBACK, atau VLM_GAGAL",
     )
     inference_time_ms: float = Field(default=0.0, description="Durasi inferensi dalam milidetik")
     is_low_confidence: bool = Field(
@@ -325,8 +325,9 @@ class VLMAnalyzer:
     """Hybrid VLM Analyzer with instant Tier 1 Local Pre-check, optimized upload,
     strict 2.0s timeout, and Free-Tier Anti-Spam Concurrency Lock & Rate Limiter."""
     def __init__(self):
-        self.api_key = cfg.GEMINI_API_KEY
-        self.model_name = cfg.GEMINI_MODEL
+        self.provider_name = cfg.VLM_PROVIDER
+        self.api_key = cfg.VLM_API_KEY
+        self.model_name = cfg.VLM_MODEL
         # Adaptor penyedia VLM (lihat vlm_providers); None = tanpa VLM, engine lokal
         self.provider = None
         self.local_analyzer = LocalVisionAnalyzer()
@@ -337,29 +338,77 @@ class VLMAnalyzer:
         self.last_api_call_time: float = 0.0
 
     def start(self):
-        """Merakit klien Gemini dari katalog APD aktif. Dipanggil setelah pengaturan dimuat."""
-        self._init_gemini()
+        """Merakit adaptor penyedia VLM sesuai konfigurasi. Dipanggil saat startup."""
+        self._init_provider()
 
-    def _init_gemini(self):
-        if self.api_key and self.api_key.strip():
-            try:
-                self.provider = create_provider("gemini", api_key=self.api_key.strip(), model=self.model_name,
-                                                thinking_level=cfg.GEMINI_THINKING_LEVEL)
-                logger.info(f"Successfully connected to Gemini VLM ({self.model_name})")
-                api_monitor.status = "ONLINE"
-            except Exception as e:
-                logger.error(f"Error configuring Gemini: {e}")
-                self.provider = None
-                api_monitor.record_error(str(e))
-        else:
+    @property
+    def source_label(self) -> str:
+        """Label sumber keputusan untuk audit, mis. VLM_LIVE:gemini/gemini-3.5-flash-lite."""
+        return f"VLM_LIVE:{self.provider_name}/{self.model_name}"
+
+    def _provider_options(self) -> dict:
+        if self.provider_name == "gemini":
+            return {"thinking_level": cfg.GEMINI_THINKING_LEVEL}
+        return {"base_url": cfg.VLM_BASE_URL, "json_mode": cfg.VLM_JSON_MODE}
+
+    def _init_provider(self):
+        local = self.provider_name in LOCAL_VLM_PROVIDERS
+        if not (self.api_key and self.api_key.strip()) and not local:
             self.provider = None
             api_monitor.status = "OFFLINE"
-            logger.warning("GEMINI_API_KEY not set. Operating in LOCAL HEURISTIC MODE (akurasi terbatas).")
+            logger.warning(f"API key VLM ({self.provider_name}) belum disetel. "
+                           f"Operating in LOCAL HEURISTIC MODE (akurasi terbatas).")
+            return
+        if not self.model_name:
+            self.provider = None
+            api_monitor.status = "OFFLINE"
+            logger.error(f"VLM_MODEL wajib diisi untuk penyedia '{self.provider_name}'. VLM nonaktif.")
+            return
+        try:
+            self.provider = create_provider(self.provider_name, api_key=(self.api_key or "").strip(),
+                                            model=self.model_name, **self._provider_options())
+            logger.info(f"VLM siap: {self.provider_name} ({self.model_name})")
+            api_monitor.status = "ONLINE"
+        except Exception as e:
+            logger.error(f"Gagal menyiapkan VLM {self.provider_name}: {e}")
+            self.provider = None
+            api_monitor.record_error(str(e))
+
+    def warm_up(self) -> Optional[float]:
+        """Pemanasan VLM saat startup. Mengembalikan durasinya, atau None bila gagal/nonaktif.
+
+        Tanpa ini, pekerja pertama menanggung waktu buka koneksi (Gemini ~3 dtk)
+        atau memuat model lokal (Ollama ~38 dtk), yang melebihi batas waktu dan
+        membuatnya ditolak sebagai "tidak dapat diverifikasi".
+        """
+        if self.provider is None:
+            return None
+        start = time.time()
+        try:
+            self.executor.submit(self.provider.warm_up).result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
+        except Exception as e:
+            logger.warning(f"Pemanasan VLM {self.provider_name} gagal ({e}); pekerja pertama mungkin lebih lambat.")
+            return None
+        duration = time.time() - start
+        logger.info(f"Pemanasan VLM {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
+        return duration
 
     def update_api_key(self, new_key: str):
+        """Mengganti API key penyedia yang sedang aktif (dari dashboard)."""
         self.api_key = new_key.strip()
-        cfg.GEMINI_API_KEY = self.api_key
-        self._init_gemini()
+        cfg.VLM_API_KEY = self.api_key
+        self._init_provider()
+
+    def provider_info(self) -> dict:
+        """Penyedia aktif untuk dashboard. Tidak pernah menyertakan API key."""
+        return {
+            "provider": self.provider_name,
+            "model": self.model_name,
+            "is_local": self.provider_name in LOCAL_VLM_PROVIDERS,
+            "needs_key": self.provider_name not in LOCAL_VLM_PROVIDERS,
+            "has_key": bool(self.api_key and self.api_key.strip()),
+            "is_live": self.is_live_api(),
+        }
 
     def is_live_api(self) -> bool:
         return self.provider is not None
@@ -370,7 +419,7 @@ class VLMAnalyzer:
             return {
                 "status": "OFFLINE",
                 "latency_ms": 0,
-                "message": "API Key belum disetel atau offline"
+                "message": "VLM belum aktif (API key belum disetel atau model kosong)"
             }
 
         start = time.time()
@@ -382,7 +431,7 @@ class VLMAnalyzer:
                 "status": api_monitor.status,
                 "latency_ms": dur_ms,
                 "reply": reply[:30],
-                "message": "Koneksi Gemini API berhasil dan responsif"
+                "message": f"Koneksi VLM {self.provider_name} ({self.model_name}) berhasil dan responsif"
             }
         except Exception as e:
             dur_ms = round((time.time() - start) * 1000, 1)
@@ -429,7 +478,7 @@ class VLMAnalyzer:
             api_monitor.record_local_call(is_rate_guard=False)
             return local_result
 
-        # 3. If Gemini API is not configured, return instant local decision!
+        # 3. VLM belum dikonfigurasi: keputusan engine lokal seketika
         if not self.is_live_api():
             dur_ms = round((time.time() - start_t) * 1000, 1)
             local_result.inference_source = "OFFLINE_FALLBACK" if not self.api_key else "LOCAL_FAST_PASS"
@@ -440,7 +489,7 @@ class VLMAnalyzer:
         # 4. Satu inspeksi VLM pada satu waktu. Permintaan lain MENUNGGU gilirannya,
         # tidak dialihkan ke heuristik lokal: selama VLM aktif, pekerja tidak boleh
         # diloloskan atas dasar heuristik yang terbukti salah dua arah (T21).
-        lock_wait = cfg.VLM_MAX_ATTEMPTS * (cfg.GEMINI_TIMEOUT_SECONDS + cfg.FREE_TIER_MIN_INTERVAL_SECONDS) + 1.0
+        lock_wait = cfg.VLM_MAX_ATTEMPTS * (cfg.VLM_TIMEOUT_SECONDS + cfg.VLM_MIN_INTERVAL_SECONDS) + 1.0
         if not self.api_lock.acquire(timeout=lock_wait):
             return self._unverified_result(start_t, attempts=0, reason="antrean VLM penuh")
 
@@ -449,7 +498,7 @@ class VLMAnalyzer:
             reason = ""
             for attempt in range(1, cfg.VLM_MAX_ATTEMPTS + 1):
                 # 5. Jeda minimum antar panggilan (kuota free tier) ditunggu, bukan dilewati
-                wait = cfg.FREE_TIER_MIN_INTERVAL_SECONDS - (time.time() - self.last_api_call_time)
+                wait = cfg.VLM_MIN_INTERVAL_SECONDS - (time.time() - self.last_api_call_time)
                 if wait > 0:
                     logger.info(f"Menunggu jeda free tier {wait:.1f}s sebelum panggilan VLM (percobaan {attempt}).")
                     time.sleep(wait)
@@ -457,18 +506,18 @@ class VLMAnalyzer:
                 # 6. Panggilan VLM dengan batas waktu ketat
                 call_start = time.time()
                 try:
-                    future = self.executor.submit(self._call_gemini_api_internal, person_crop_bgr)
-                    gemini_result = future.result(timeout=cfg.GEMINI_TIMEOUT_SECONDS)
+                    future = self.executor.submit(self._call_vlm_internal, person_crop_bgr)
+                    vlm_result = future.result(timeout=cfg.VLM_TIMEOUT_SECONDS)
                     dur_ms = round((time.time() - start_t) * 1000, 1)
-                    gemini_result.inference_source = "GEMINI_LIVE"
-                    gemini_result.inference_time_ms = dur_ms
-                    gemini_result.is_low_confidence = False
+                    vlm_result.inference_source = self.source_label
+                    vlm_result.inference_time_ms = dur_ms
+                    vlm_result.is_low_confidence = False
                     api_monitor.record_success(round((time.time() - call_start) * 1000, 1))
-                    return gemini_result
+                    return vlm_result
                 except TimeoutError:
-                    reason = f"timeout > {cfg.GEMINI_TIMEOUT_SECONDS:g} dtk"
-                    logger.warning(f"VLM timeout (> {cfg.GEMINI_TIMEOUT_SECONDS}s) pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}.")
-                    api_monitor.record_timeout(cfg.GEMINI_TIMEOUT_SECONDS)
+                    reason = f"timeout > {cfg.VLM_TIMEOUT_SECONDS:g} dtk"
+                    logger.warning(f"VLM timeout (> {cfg.VLM_TIMEOUT_SECONDS}s) pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}.")
+                    api_monitor.record_timeout(cfg.VLM_TIMEOUT_SECONDS)
                 except Exception as e:
                     reason = f"galat: {str(e)[:60]}"
                     logger.warning(f"VLM gagal pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}: {e}")
@@ -500,7 +549,7 @@ class VLMAnalyzer:
             is_low_confidence=False,
         )
 
-    def _call_gemini_api_internal(self, image_bgr: np.ndarray) -> APDInspectionResult:
+    def _call_vlm_internal(self, image_bgr: np.ndarray) -> APDInspectionResult:
         # Satu potret item aktif untuk seluruh panggilan ini, supaya prompt dan
         # penilaian jawaban memakai daftar yang sama walau operator mengubahnya
         # di tengah jalan.
