@@ -2,8 +2,7 @@ import logging
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Optional, List
-import cv2
+from typing import Optional, List
 import numpy as np
 
 from .config import cfg
@@ -24,124 +23,121 @@ class TrackState:
     ANALYZING = "ANALYZING"
     ANALYZED = "ANALYZED"
 
-class PersonTrackInfo:
-    def __init__(self, track_id: int):
-        self.track_id = track_id
+
+class GateSession:
+    """Satu giliran pemeriksaan di gerbang, dari pekerja masuk jalur sampai jalur kosong.
+
+    Keputusan dikunci per sesi, BUKAN per ID pelacak: ByteTrack bisa memberi ID
+    baru saat orang yang sama tertutup sesaat atau membungkuk, dan bila keputusan
+    dikunci per ID, orang itu diperiksa ulang tanpa pernah meninggalkan gerbang
+    (panggilan VLM dan baris audit ganda, dan keputusan bisa berubah). Sesi baru
+    dimulai hanya setelah jalur inspeksi kosong selama STANDBY_RESET_DELAY_SECONDS.
+    """
+
+    _counter = 0
+
+    def __init__(self, track_id: int, now: float):
+        GateSession._counter += 1
+        self.session_id = GateSession._counter
+        self.track_id = track_id          # ID pelacak terkini, hanya untuk tampilan
         self.state = TrackState.INITIAL
-        self.first_seen = time.time()
-        self.last_seen = time.time()
+        self.started_at = now
+        self.last_seen = now
         self.stable_frames = 0
         self.last_step_back_audio_time = 0.0
         self.step_back_warning_count = 0
         self.vlm_result: Optional[APDInspectionResult] = None
-        self.latest_crop: Optional[np.ndarray] = None
         self.analysis_timestamp: Optional[float] = None
         self.is_full_body_now = False
         self.current_reason = ""
         self.clip_type = "OPTIMAL"
-        self.bbox: list[int] = [0, 0, 0, 0]
+
 
 class StateManager:
-    """Manages person tracking states, full-body step back voice triggers, and anti-spam API calls."""
+    """Mesin keadaan gerbang: arahan posisi, satu analisa VLM per sesi, dan keputusan lampu."""
     def __init__(self):
-        self.tracks: Dict[int, PersonTrackInfo] = {}
+        self.session: Optional[GateSession] = None
         self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix="VLM_Worker")
         self.lock = threading.Lock()
         self.inspection_history: List[dict] = []
-        self.active_person_id: Optional[int] = None
         self.latest_detections: List[DetectionResult] = []
+
+    @staticmethod
+    def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int]) -> DetectionResult:
+        """Subjek sesi: ID yang sama bila masih terlihat, bila tidak yang paling dekat (bbox tertinggi)."""
+        for det in candidates:
+            if det.track_id == current_id:
+                return det
+        return max(candidates, key=lambda d: d.bbox[3] - d.bbox[1])
 
     def update_frame_detections(self, detections: list[DetectionResult]):
         """Processes detections from the current frame."""
         now = time.time()
-        active_ids = set()
-        corridor_candidate_ids = []
 
         with self.lock:
             self.latest_detections = detections
-            for det in detections:
-                tid = det.track_id
-                active_ids.add(tid)
+            # Hanya orang di jalur inspeksi yang dihitung; orang yang lewat di
+            # luar jalur tidak memulai sesi dan tidak menahan reset.
+            in_lane = [d for d in detections if getattr(d, "is_inside_corridor", True)]
 
-                if tid not in self.tracks:
-                    self.tracks[tid] = PersonTrackInfo(tid)
-
-                track = self.tracks[tid]
-                track.last_seen = now
-                track.is_full_body_now = det.is_full_body
-                track.current_reason = det.reason
-                track.clip_type = getattr(det, 'clip_type', 'OPTIMAL')
-                track.latest_crop = det.crop_img
-                track.bbox = det.bbox
-
-                # Candidate filter: Must be inside inspection corridor
-                is_inside = getattr(det, 'is_inside_corridor', True)
-                if not is_inside:
-                    track.stable_frames = 0
-                    continue
-
-                corridor_candidate_ids.append(tid)
-
-                # Anti-spam: If already analyzed, DO NOT trigger API again
-                if track.state == TrackState.ANALYZED:
-                    continue
-
-                if track.state == TrackState.ANALYZING:
-                    continue
-
-                if not det.is_full_body:
-                    track.state = TrackState.STEP_BACK_WARNING
-                    track.stable_frames = 0
-                    
-                    # Play voice prompt tailored to head vs feet clipping
-                    # Smart Limiter: Max repeats (default 2x) per person with debounce so it doesn't spam
-                    if track.step_back_warning_count < cfg.AUDIO_STEP_BACK_MAX_REPEATS:
-                        if (now - track.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
-                            audio_player.play_step_back(clip_type=track.clip_type)
-                            track.last_step_back_audio_time = now
-                            track.step_back_warning_count += 1
-                            notifier.set_incomplete(messages.LIGHT_POSITION_WARNING.format(reason=det.reason))
-                    else:
-                        notifier.set_incomplete(messages.LIGHT_POSITION_WARNING.format(reason=det.reason))
-                else:
-                    # Full body confirmed inside corridor - reset warning count
-                    track.step_back_warning_count = 0
-                    track.stable_frames += 1
-                    track.state = TrackState.STABILIZING
-
-                    # Wait for stability before sending exactly 1 frame to Gemini VLM
-                    if track.stable_frames >= cfg.STABLE_FRAMES_REQUIRED:
-                        track.state = TrackState.ANALYZING
-                        crop_to_analyze = det.crop_img.copy() if det.crop_img is not None else None
-                        logger.info(f"Triggering Gemini VLM analysis for Track ID #{tid} (1 frame)...")
-                        audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
-                        
-                        self.executor.submit(self._run_vlm_analysis, tid, crop_to_analyze)
-
-            # Prioritize candidate inside the corridor as active person
-            if corridor_candidate_ids:
-                self.active_person_id = corridor_candidate_ids[0]
-            elif active_ids:
-                self.active_person_id = list(active_ids)[0]
-            else:
-                self.active_person_id = None
-                if (now - notifier.last_change_time) > cfg.STANDBY_RESET_DELAY_SECONDS and notifier.current_state != "OFF":
+            if not in_lane:
+                if self.session is not None and (now - self.session.last_seen) > cfg.STANDBY_RESET_DELAY_SECONDS:
+                    logger.info(f"Sesi #{self.session.session_id} selesai: jalur kosong. Gerbang standby.")
+                    self.session = None
                     notifier.set_idle()
+                return
 
+            session = self.session
+            if session is None:
+                session = self.session = GateSession(in_lane[0].track_id, now)
+                logger.info(f"Sesi #{session.session_id} dimulai.")
 
-            # Clean stale tracks (> TRACK_TIMEOUT_SECONDS absent)
-            stale_ids = [tid for tid, t in self.tracks.items() if (now - t.last_seen) > cfg.TRACK_TIMEOUT_SECONDS]
-            for tid in stale_ids:
-                del self.tracks[tid]
+            det = self._pick_subject(in_lane, session.track_id)
+            session.track_id = det.track_id
+            session.last_seen = now
+            session.is_full_body_now = det.is_full_body
+            session.current_reason = det.reason
+            session.clip_type = getattr(det, "clip_type", "OPTIMAL")
 
-    def _run_vlm_analysis(self, track_id: int, crop_img: Optional[np.ndarray]):
+            # Keputusan sesi terkunci sampai jalur kosong: tidak ada panggilan VLM kedua
+            if session.state in (TrackState.ANALYZING, TrackState.ANALYZED):
+                return
+
+            if not det.is_full_body:
+                session.state = TrackState.STEP_BACK_WARNING
+                session.stable_frames = 0
+                # Arahan posisi hanya lewat suara dan dashboard. LED merah khusus
+                # untuk APD tidak lengkap, jadi lampu tidak disentuh di sini.
+                # Smart Limiter: Max repeats (default 2x) per session with debounce so it doesn't spam
+                if session.step_back_warning_count < cfg.AUDIO_STEP_BACK_MAX_REPEATS:
+                    if (now - session.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
+                        audio_player.play_step_back(clip_type=session.clip_type)
+                        session.last_step_back_audio_time = now
+                        session.step_back_warning_count += 1
+                return
+
+            session.step_back_warning_count = 0
+            session.stable_frames += 1
+            session.state = TrackState.STABILIZING
+
+            # Wait for stability before sending exactly 1 frame to the VLM
+            if session.stable_frames >= cfg.STABLE_FRAMES_REQUIRED:
+                session.state = TrackState.ANALYZING
+                crop_to_analyze = det.crop_img.copy() if det.crop_img is not None else None
+                logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{det.track_id} (1 frame)...")
+                audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
+                self.executor.submit(self._run_vlm_analysis, session.session_id, det.track_id, crop_to_analyze)
+
+    def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray]):
         if crop_img is None:
+            self._retry_session(session_id)
             return
 
         try:
             result = vlm_analyzer.analyze_person(crop_img)
 
-            # Persist inspection to SQLite database and archive snapshot crop
+            # Pemeriksaan sudah terjadi, jadi selalu tercatat di audit, termasuk
+            # bila pekerjanya sudah pergi sebelum hasil tiba.
             saved_meta = report_mgr.save_inspection(
                 track_id=track_id,
                 is_complete=result.is_complete,
@@ -154,58 +150,60 @@ class StateManager:
             )
 
             with self.lock:
-                if track_id in self.tracks:
-                    track = self.tracks[track_id]
-                    track.vlm_result = result
-                    track.state = TrackState.ANALYZED
-                    track.analysis_timestamp = time.time()
+                record = {
+                    "track_id": track_id,
+                    "timestamp": time.strftime("%H:%M:%S"),
+                    "is_complete": result.is_complete,
+                    "items": {key: item.model_dump() for key, item in result.items.items()},
+                    "missing_items": result.missing_items,
+                    "notes": result.notes,
+                    "inference_source": result.inference_source,
+                    "inference_time_ms": result.inference_time_ms,
+                    "snapshot_filename": saved_meta.get("snapshot_filename", "")
+                }
+                self.inspection_history.insert(0, record)
+                if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
+                    self.inspection_history.pop()
 
-                    record = {
-                        "track_id": track_id,
-                        "timestamp": time.strftime("%H:%M:%S"),
-                        "is_complete": result.is_complete,
-                        "items": {key: item.model_dump() for key, item in result.items.items()},
-                        "missing_items": result.missing_items,
-                        "notes": result.notes,
-                        "inference_source": result.inference_source,
-                        "inference_time_ms": result.inference_time_ms,
-                        "snapshot_filename": saved_meta.get("snapshot_filename", "")
-                    }
-                    self.inspection_history.insert(0, record)
-                    if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
-                        self.inspection_history.pop()
+                session = self.session
+                if session is None or session.session_id != session_id:
+                    # Pekerja sudah meninggalkan jalur: lampu dan suara tidak
+                    # boleh ditujukan ke orang berikutnya.
+                    logger.info(f"Hasil sesi #{session_id} tiba setelah sesi berakhir; gerbang tidak diubah.")
+                    return
 
-                    if result.is_unverified:
-                        logger.warning(f"Track #{track_id}: VLM tidak dapat memverifikasi APD. Red Light ON.")
-                        notifier.set_incomplete(messages.LIGHT_UNVERIFIED)
-                        audio_player.play("verifikasi_gagal", min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS)
-                    elif result.is_complete:
-                        logger.info(f"Track #{track_id}: APD LENGKAP! Green Light ON.")
-                        notifier.set_complete(messages.LIGHT_GRANTED)
-                        audio_player.play_result(is_complete=True)
-                    else:
-                        logger.info(f"Track #{track_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
-                        missing_text = ", ".join(result.missing_items)
-                        notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=missing_text))
-                        audio_player.play_result(is_complete=False, missing_items=result.missing_items)
+                session.vlm_result = result
+                session.state = TrackState.ANALYZED
+                session.analysis_timestamp = time.time()
+
+                if result.is_unverified:
+                    logger.warning(f"Sesi #{session_id}: VLM tidak dapat memverifikasi APD. Red Light ON.")
+                    notifier.set_incomplete(messages.LIGHT_UNVERIFIED)
+                    audio_player.play("verifikasi_gagal", min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS)
+                elif result.is_complete:
+                    logger.info(f"Sesi #{session_id}: APD LENGKAP! Green Light ON.")
+                    notifier.set_complete(messages.LIGHT_GRANTED)
+                    audio_player.play_result(is_complete=True)
+                else:
+                    logger.info(f"Sesi #{session_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
+                    missing_text = ", ".join(result.missing_items)
+                    notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=missing_text))
+                    audio_player.play_result(is_complete=False, missing_items=result.missing_items)
 
         except Exception as e:
-            logger.exception(f"Error during VLM analysis for track #{track_id}: {e}")
-            with self.lock:
-                if track_id in self.tracks:
-                    self.tracks[track_id].state = TrackState.INITIAL
+            logger.exception(f"Error during VLM analysis for session #{session_id}: {e}")
+            self._retry_session(session_id)
 
-    def reset_track(self, track_id: int):
+    def _retry_session(self, session_id: int):
+        """Analisa tidak menghasilkan keputusan (galat internal): sesi boleh mencoba lagi."""
         with self.lock:
-            if track_id in self.tracks:
-                self.tracks[track_id].state = TrackState.INITIAL
-                self.tracks[track_id].stable_frames = 0
-                self.tracks[track_id].vlm_result = None
+            if self.session is not None and self.session.session_id == session_id:
+                self.session.state = TrackState.INITIAL
+                self.session.stable_frames = 0
 
     def reset_all(self):
         with self.lock:
-            self.tracks.clear()
-            self.active_person_id = None
+            self.session = None
             notifier.set_idle()
 
     def get_telemetry(self) -> dict:
@@ -225,16 +223,17 @@ class StateManager:
                 })
 
             active_track_data = None
-            if self.active_person_id is not None and self.active_person_id in self.tracks:
-                t = self.tracks[self.active_person_id]
+            s = self.session
+            if s is not None:
                 active_track_data = {
-                    "track_id": t.track_id,
-                    "state": t.state,
-                    "is_full_body": t.is_full_body_now,
-                    "reason": t.current_reason,
-                    "clip_type": t.clip_type,
-                    "stable_frames": t.stable_frames,
-                    "vlm_result": t.vlm_result.model_dump() if t.vlm_result else None
+                    "track_id": s.track_id,
+                    "session_id": s.session_id,
+                    "state": s.state,
+                    "is_full_body": s.is_full_body_now,
+                    "reason": s.current_reason,
+                    "clip_type": s.clip_type,
+                    "stable_frames": s.stable_frames,
+                    "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None
                 }
 
             return {

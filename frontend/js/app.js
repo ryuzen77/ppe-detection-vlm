@@ -512,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (rec.snapshot_filename) {
           const imgUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports/snapshots/${rec.snapshot_filename}`;
           snapshotHtml = `
-            <img src="${imgUrl}" class="worker-thumb" alt="Pekerja #${rec.track_id}"
+            <img src="${imgUrl}" class="worker-thumb thumb-preview-img" alt="Pekerja #${rec.track_id}"
                  title="Klik untuk melihat bukti foto snapshot"
                  data-full="${imgUrl}"
                  data-caption="Pekerja #${rec.track_id} - ${rec.date_str} ${rec.time_str} (${isComplete ? 'LOLOS' : 'PELANGGARAN'})"

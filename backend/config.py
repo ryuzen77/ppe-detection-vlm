@@ -184,10 +184,10 @@ class Config:
     # Jeda minimum suara hasil (lengkap / kurang item) dan suara "sedang menganalisa"
     AUDIO_RESULT_DEBOUNCE_SECONDS: float = 3.0
     AUDIO_ANALYZING_DEBOUNCE_SECONDS: float = 2.0
-    # Stale track purge timeout in seconds
-    TRACK_TIMEOUT_SECONDS: float = float(_env("TRACK_TIMEOUT_SECONDS", "15.0"))
-    # Standby reset delay when corridor is empty
-    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "4.0"))
+    # Lama jalur inspeksi harus kosong sebelum sesi gerbang berakhir dan sistem
+    # kembali ke tahap 1. Selama sesi berjalan keputusan terkunci; jeda ini juga
+    # menyerap orang yang tertutup sesaat agar tidak dianggap sudah pergi.
+    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "3.0"))
     # Maximum history records kept in memory
     MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))
 

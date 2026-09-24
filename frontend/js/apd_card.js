@@ -56,15 +56,19 @@ export class APDVisualizer {
 
       const left = document.createElement('div');
       left.className = 'row-left';
+      // Indikator di samping ikon: kuning = belum dinilai, hijau = ada, merah = tidak ada
+      const dot = document.createElement('span');
+      dot.setAttribute('role', 'img');
       const emoji = document.createElement('span');
       emoji.className = 'item-emoji';
       emoji.textContent = item.icon;
       const name = document.createElement('span');
       name.className = 'item-name';
       name.textContent = item.label;
-      left.append(emoji, name);
+      left.append(dot, emoji, name);
 
       const badge = document.createElement('div');
+      badge._dot = dot;
       row.append(left, badge);
       this.checklistRows.appendChild(row);
       this.rowBadges[item.key] = badge;
@@ -80,6 +84,11 @@ export class APDVisualizer {
   }
 
   _setBadge(badge, statusClass, icon, text) {
+    if (badge._dot) {
+      const tone = statusClass === 'status-ok' ? 'ok' : statusClass === 'status-fail' ? 'fail' : 'pending';
+      badge._dot.className = `apd-dot apd-dot-${tone}`;
+      badge._dot.setAttribute('aria-label', { ok: 'Ada', fail: 'Tidak ada', pending: 'Belum dinilai' }[tone]);
+    }
     badge.className = `row-badge ${statusClass}`;
     badge.innerHTML = '';
     const iconEl = document.createElement('span');

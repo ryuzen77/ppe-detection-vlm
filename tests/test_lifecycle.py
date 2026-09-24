@@ -1,7 +1,8 @@
 """Alur ujung ke ujung state machine gerbang: posisi, analisa, anti-spam, standby.
 
-Pengganti `backend/test_lifecycle.py`. Mengimpor `state_manager` ikut memuat YOLO
-(efek samping impor yang dijadwalkan dihapus di T16), jadi berkas ini paling lambat.
+Alur yang diharapkan pengguna (T24): tubuh belum utuh = API terkunci; satu analisa
+per sesi; keputusan terkunci sampai jalur inspeksi kosong; LED merah hanya untuk
+APD tidak lengkap.
 """
 import time
 
@@ -67,7 +68,8 @@ def test_alur_gerbang_lengkap(gerbang):
     assert active["state"] == TrackState.STEP_BACK_WARNING
     assert active["is_full_body"] is False
     assert active["vlm_result"] is None
-    assert notifier.current_state == "RED"
+    # LED merah khusus APD tidak lengkap; arahan posisi tidak menyalakannya
+    assert notifier.current_state == "OFF"
 
     # 2. Mundur hingga seluruh tubuh terlihat; analisa terpicu tepat saat stabil
     for i in range(1, cfg.STABLE_FRAMES_REQUIRED + 1):
@@ -98,6 +100,7 @@ def test_alur_gerbang_lengkap(gerbang):
     gerbang.update_frame_detections([])
     assert notifier.current_state == "OFF"
     assert notifier.message == messages.LIGHT_IDLE
+    assert _active() is None, "Sesi berakhir setelah jalur kosong"
 
 
 def test_apd_kurang_menutup_gerbang(gerbang):
@@ -118,7 +121,7 @@ def test_orang_di_luar_koridor_tidak_dianalisa(gerbang):
         gerbang.update_frame_detections([_det(full_body=True, is_inside_corridor=False)])
     time.sleep(0.2)
     assert len(state_mgr.inspection_history) == riwayat_awal
-    assert _active() is None or _active()["vlm_result"] is None
+    assert _active() is None, "Orang di luar jalur tidak memulai sesi"
 
 
 def test_vlm_gagal_menolak_dengan_pesan_verifikasi(gerbang, monkeypatch):
@@ -146,3 +149,98 @@ def test_vlm_gagal_menolak_dengan_pesan_verifikasi(gerbang, monkeypatch):
     assert hasil["is_unverified"] is True and hasil["is_complete"] is False
     assert notifier.current_state == "RED"
     assert notifier.message == messages.LIGHT_UNVERIFIED
+
+
+# --- Sesi gerbang (T24) ------------------------------------------------------------
+
+def _analisa_selesai(gerbang, crop=None, track_id=TRACK_ID):
+    extra = {"crop_img": crop} if crop is not None else {}
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(full_body=True, track_id=track_id, **extra)])
+    assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)
+
+
+def test_pergantian_id_pelacak_di_tengah_sesi_tidak_menganalisa_ulang(gerbang):
+    # Pekerja ditolak (tanpa rompi), lalu pelacak memberinya ID baru tanpa ia
+    # meninggalkan jalur. Ia tidak boleh diperiksa ulang lalu tiba-tiba lolos.
+    _analisa_selesai(gerbang, crop=person_crop(vest=False))
+    riwayat = len(state_mgr.inspection_history)
+    sesi = _active()["session_id"]
+    assert notifier.current_state == "RED"
+
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 5):
+        gerbang.update_frame_detections([_det(full_body=True, track_id=TRACK_ID + 1)])
+    time.sleep(0.2)
+
+    assert len(state_mgr.inspection_history) == riwayat, "Tidak boleh ada analisa kedua"
+    assert _active()["session_id"] == sesi
+    assert _active()["track_id"] == TRACK_ID + 1
+    assert notifier.current_state == "RED", "Keputusan tetap terkunci"
+
+
+def test_hilang_sesaat_kurang_dari_jeda_tetap_satu_sesi(gerbang):
+    _analisa_selesai(gerbang)
+    riwayat = len(state_mgr.inspection_history)
+    sesi = _active()["session_id"]
+
+    gerbang.update_frame_detections([])            # tertutup sesaat
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS / 3)
+    gerbang.update_frame_detections([])
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 2):
+        gerbang.update_frame_detections([_det(full_body=True)])
+    time.sleep(0.1)
+
+    assert _active()["session_id"] == sesi
+    assert len(state_mgr.inspection_history) == riwayat
+    assert notifier.current_state == "GREEN"
+
+
+def test_setelah_jalur_kosong_pekerja_berikutnya_diperiksa_dari_awal(gerbang):
+    _analisa_selesai(gerbang)
+    sesi_pertama = _active()["session_id"]
+    riwayat = len(state_mgr.inspection_history)
+
+    gerbang.update_frame_detections([])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([])
+    assert _active() is None and notifier.current_state == "OFF"
+
+    _analisa_selesai(gerbang, crop=person_crop(helmet=False))
+    assert _active()["session_id"] != sesi_pertama
+    assert len(state_mgr.inspection_history) == riwayat + 1
+    assert notifier.current_state == "RED"
+
+
+def test_orang_lewat_di_luar_jalur_tidak_menahan_reset(gerbang):
+    _analisa_selesai(gerbang)
+    orang_lewat = _det(full_body=True, track_id=77, is_inside_corridor=False)
+    gerbang.update_frame_detections([orang_lewat])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([orang_lewat])
+    assert _active() is None
+    assert notifier.current_state == "OFF"
+
+
+def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, monkeypatch):
+    from backend.vlm_analyzer import vlm_analyzer
+    asli = vlm_analyzer.analyze_person
+
+    def lambat(crop):
+        time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.4)
+        return asli(crop)
+
+    monkeypatch.setattr(vlm_analyzer, "analyze_person", lambat)
+    riwayat = len(state_mgr.inspection_history)
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(full_body=True)])
+
+    # Pekerja pergi sebelum hasil tiba; sesi berakhir
+    gerbang.update_frame_detections([])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([])
+    assert _active() is None
+
+    # Hasil tetap tercatat di audit, tetapi lampu tidak ditujukan ke siapa pun
+    assert _wait_for(lambda: len(state_mgr.inspection_history) == riwayat + 1)
+    time.sleep(0.1)
+    assert notifier.current_state == "OFF"
