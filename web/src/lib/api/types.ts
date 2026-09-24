@@ -1,0 +1,295 @@
+/**
+ * Bentuk data dari backend FastAPI.
+ *
+ * Ditulis tangan dari kode backend (state_manager.get_telemetry, api_monitor,
+ * vlm_analyzer.provider_info, report_manager, routes_*). Bila bentuk di backend
+ * berubah, ubah juga di sini — svelte-check lalu menunjukkan setiap pemakai
+ * yang ikut terdampak, hal yang dulu baru ketahuan saat dijalankan.
+ */
+
+// --- Katalog APD (GET /api/ppe-rules) --------------------------------------
+
+export interface PpeQualifier {
+  key: string
+  fail_label: string
+}
+
+export interface PpeItem {
+  key: string
+  label: string
+  short_label: string
+  icon: string
+  ok_label: string
+  fail_label: string
+  reports_color: boolean
+  /** Item sedang diwajibkan (diperiksa) */
+  required: boolean
+  qualifier: PpeQualifier | null
+}
+
+export interface PpeCatalog {
+  items: PpeItem[]
+}
+
+// --- Hasil inspeksi VLM ------------------------------------------------------
+
+/** Hasil satu item; qualifier (mis. is_valid_color, is_closed_shoes) ikut sebagai field tambahan. */
+export interface ItemResult {
+  detected: boolean
+  color: string
+  description: string
+  [qualifier: string]: boolean | string | undefined
+}
+
+export type DecidedBy = 'utama' | 'cadangan' | ''
+
+export interface InspectionResult {
+  items: Record<string, ItemResult>
+  is_complete: boolean
+  missing_items: string[]
+  notes: string
+  /** VLM_LIVE:<penyedia>/<model> (utama), VLM_CADANGAN:... (cadangan), VLM_GANGGUAN */
+  inference_source: string
+  inference_time_ms: number
+  decided_by: DecidedBy
+  /** Utama & cadangan gagal: TIDAK ada keputusan */
+  is_system_unavailable: boolean
+}
+
+// --- VLM utama & cadangan (GET /api/config/vlm) ---------------------------------
+
+export interface VlmEngineInfo {
+  role: 'utama' | 'cadangan'
+  provider: string
+  model: string
+  is_local: boolean
+  needs_key: boolean
+  has_key: boolean
+  is_live: boolean
+  timeout_s: number
+  error: string
+}
+
+export interface VlmInfo extends VlmEngineInfo {
+  backup: VlmEngineInfo | null
+  primary_down: boolean
+}
+
+// --- Kesehatan VLM (GET /api/monitoring/status, telemetry.api_monitor) ------------
+
+export type VlmMode = 'UTAMA' | 'CADANGAN' | 'GANGGUAN'
+
+export interface VlmEngineStats {
+  configured: boolean
+  provider: string
+  model: string
+  is_local: boolean
+  status: 'BELUM_DIPAKAI' | 'OK' | 'GAGAL'
+  latency_ms: number
+  avg_latency_ms: number
+  calls: number
+  failures: number
+  timeouts: number
+  rate_limited: number
+  consecutive_failures: number
+  last_error: string
+  last_checked: string
+}
+
+export interface MonitorStatus {
+  mode: VlmMode
+  primary_down: boolean
+  primary: VlmEngineStats
+  backup: VlmEngineStats
+  decisions_primary: number
+  decisions_backup: number
+  no_decisions: number
+  last_no_decision_reason: string
+  is_locked: boolean
+  latency_ms: number
+  avg_latency_ms: number
+}
+
+// --- Telemetri WebSocket (/ws) ---------------------------------------------------------
+
+export type ClipType = 'OPTIMAL' | 'HEAD_CLIPPED' | 'FEET_CLIPPED' | 'TOO_FAR' | 'TOO_CLOSE' | string
+
+export interface Detection {
+  track_id: number
+  bbox: [number, number, number, number]
+  is_full_body: boolean
+  is_inside_corridor: boolean
+  reason: string
+  clip_type: ClipType
+  conf: number
+  /** Keypoint pose [x, y, conf] per titik, atau null */
+  keypoints: number[][] | null
+}
+
+export type TrackState =
+  | 'INITIAL'
+  | 'STEP_BACK_WARNING'
+  | 'STABILIZING'
+  | 'ANALYZING'
+  | 'ANALYZED'
+  | 'WAITING_SYSTEM'
+
+export interface ActiveTrack {
+  track_id: number
+  session_id: number
+  state: TrackState
+  is_full_body: boolean
+  reason: string
+  clip_type: ClipType
+  stable_frames: number
+  /** Detik sampai pemeriksaan diulang; hanya saat WAITING_SYSTEM */
+  retry_in_s: number | null
+  vlm_result: InspectionResult | null
+}
+
+export type LightState = 'OFF' | 'GREEN' | 'RED'
+
+export interface LightStatus {
+  light_state: LightState
+  message: string
+  timestamp: number
+}
+
+export interface HistoryRecord {
+  track_id: number
+  timestamp: string
+  is_complete: boolean
+  items: Record<string, ItemResult>
+  missing_items: string[]
+  notes: string
+  inference_source: string
+  inference_time_ms: number
+  decided_by: DecidedBy
+  snapshot_filename: string
+}
+
+export type CameraState = 'IDLE' | 'OPENING' | 'OK' | 'OPTIMIZING' | 'LOST' | 'SYNTHETIC'
+
+export interface CameraMode {
+  width: number
+  height: number
+  fps: number
+  fourcc: string
+  req_width?: number
+  req_height?: number
+}
+
+export interface CameraStatus {
+  index: number | null
+  name: string
+  selected: boolean
+  status: CameraState
+  error: string
+  mode: CameraMode | null
+  optimizing: boolean
+  width: number
+  height: number
+  fps: number
+  is_synthetic: boolean
+}
+
+export interface Telemetry {
+  timestamp: number
+  frame_width: number
+  frame_height: number
+  has_person: boolean
+  active_track: ActiveTrack | null
+  detections: Detection[]
+  corridor: { enabled: boolean; left_ratio: number; right_ratio: number }
+  light: LightStatus
+  history: HistoryRecord[]
+  stable_frames_required: number
+  is_live_vlm: boolean
+  vlm: VlmInfo
+  api_monitor: MonitorStatus
+  fps: number
+  audio_muted: boolean
+  camera: CameraStatus
+}
+
+// --- Laporan (GET /api/reports) ----------------------------------------------------------
+
+export interface ReportRecord {
+  id: number
+  track_id: number
+  timestamp: string
+  date_str: string
+  time_str: string
+  is_complete: boolean
+  items: Record<string, ItemResult>
+  missing_items: string[]
+  notes: string
+  inference_source: string
+  inference_time_ms: number
+  snapshot_filename: string
+}
+
+export interface ReportsPage {
+  total_all: number
+  complete_count: number
+  violation_count: number
+  compliance_rate: number
+  backup_count: number
+  system_outages: number
+  filtered_total: number
+  page_records: ReportRecord[]
+}
+
+export type ReportStatusFilter = 'all' | 'complete' | 'incomplete'
+
+// --- Kamera (GET /api/cameras) -----------------------------------------------------------
+
+export interface CameraDevice {
+  index: number
+  name: string
+  available: boolean
+  scanned: boolean
+  in_use: boolean
+  modes: CameraMode[]
+  selected_mode: CameraMode | null
+}
+
+export interface CameraCatalog {
+  scanning: boolean
+  last_scan_time: number | null
+  devices: CameraDevice[]
+  saved: { index: number; name?: string; mode?: CameraMode | null } | null
+  active: CameraStatus
+  quality_warning: boolean
+}
+
+// --- Lain-lain -------------------------------------------------------------------------------
+
+export interface Health {
+  status: string
+  fps: number
+  is_live_vlm: boolean
+  vlm: VlmInfo
+  camera_selected: boolean
+  camera_index: number | null
+  camera_name: string
+  camera_status: CameraState
+  resolution: string
+  is_synthetic_camera: boolean
+}
+
+export interface PingEngineResult {
+  role: 'utama' | 'cadangan'
+  ok: boolean
+  latency_ms: number
+  error?: string
+}
+
+export interface PingResult {
+  status: 'ONLINE' | 'ERROR' | 'OFFLINE'
+  latency_ms: number
+  message: string
+  engines?: PingEngineResult[]
+}
+
+export type LightTestAction = 'green' | 'red' | 'off'

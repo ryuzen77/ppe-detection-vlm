@@ -3,3 +3,5 @@
 *.service text eol=lf
 *.yml     text eol=lf
 *.bat     text eol=crlf
+# Hasil build UI baru dicommit; LF di semua OS supaya CI dapat membandingkannya
+web/dist/** text eol=lf

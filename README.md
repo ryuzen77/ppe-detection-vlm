@@ -154,6 +154,11 @@ ppe_detection_vlm/
 ├── tests/                        # pytest: gerbang, failover VLM, kamera, migrasi DB & data
 │   └── conftest.py               # Isolasi: DATA_DIR sementara, tanpa Gemini, tanpa IoT
 │
+├── web/                          # UI baru (T33): Svelte 5 + TypeScript + Vite, disajikan di /app/
+│   ├── src/lib/api/              # Tipe data backend, klien REST & WebSocket (+ tes vitest)
+│   ├── src/lib/stores/           # Store reaktif telemetri (Svelte 5 runes)
+│   └── dist/                     # Hasil build, SENGAJA dicommit (gerbang tanpa Node.js)
+│
 ├── frontend/
 │   ├── index.html                # Tampilan utama Dashboard (Single Page App 3-Tab)
 │   ├── css/
@@ -243,7 +248,9 @@ Dari PowerShell (termasuk terminal bawaan VS Code), tulis `.\start_system.bat`. 
 
 Di Linux, `start_system.sh` memakai `~/.venvs/apd_py312` (bisa diganti lewat `SAFEGUARD_VENV`) dan dihentikan dengan `Ctrl+C`. Untuk menyala otomatis saat boot, pasang `deploy/safeguard.service`; petunjuknya ada di dalam berkas itu. Server berhenti bersih saat menerima `SIGTERM` dari systemd.
 
-Sebelum commit, jalankan `python scripts/check.py` (ruff + seluruh pytest, sama dengan CI).
+Sebelum commit, jalankan `python scripts/check.py` (ruff + seluruh pytest, sama dengan CI; bila Node.js terpasang juga cek tipe, tes, dan build UI baru).
+
+**Mengembangkan UI baru (`web/`)** butuh Node.js 24 di mesin pengembang saja; mesin gerbang tidak, karena hasil build `web/dist` ikut dicommit. Sekali: `cd web && npm ci`. Lalu `npm run dev` (Vite di http://localhost:5173/app/, API & WebSocket diteruskan ke backend di port 8000), `npm run check` (svelte-check + tsc), `npm test` (vitest). Setelah mengubah sumber, jalankan `npm run build` dan commit `web/dist`; CI menolak dist yang tidak sesuai sumbernya.
 
 Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (environment dari `backend/requirements-dev.lock`, lihat bagian Prasyarat Lingkungan). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
 
@@ -254,6 +261,8 @@ Buka browser (Google Chrome, Microsoft Edge, atau Brave) dan navigasikan ke:
 ```
 http://localhost:8000
 ```
+
+UI baru yang sedang dibangun (Svelte + TypeScript) terbuka di `http://localhost:8000/app/`. Selama migrasi, UI lama tetap di `/` sebagai cadangan.
 
 Saat pertama dibuka, dashboard menampilkan dialog **Pilih Sumber Kamera**. Video belum tersambung sampai Anda memilih salah satu perangkat.
 

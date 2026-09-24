@@ -71,8 +71,14 @@ class RevalidatingStaticFiles(StaticFiles):
         return response
 
 
-# Mount frontend directory if exists. Dipasang setelah semua router, karena
-# mount "/" menangkap setiap path yang belum dicocokkan sebelumnya.
+# UI baru (Svelte + TypeScript, T33): hasil build web/dist disajikan di /app/
+# selama migrasi. Dipasang sebelum "/" karena mount "/" menangkap semua path.
+web_dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
+if web_dist_dir.exists():
+    app.mount("/app", RevalidatingStaticFiles(directory=str(web_dist_dir), html=True), name="web")
+
+# UI lama tetap di "/" sebagai cadangan sampai UI baru lengkap. Dipasang setelah
+# semua router, karena mount "/" menangkap setiap path yang belum dicocokkan.
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/", RevalidatingStaticFiles(directory=str(frontend_dir), html=True), name="frontend")

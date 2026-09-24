@@ -39,3 +39,28 @@ jobs:
 
       - name: Pytest
         run: python -m pytest -q
+
+  # UI baru (Svelte + TypeScript). web/dist dicommit karena mesin gerbang tidak
+  # punya Node.js; job ini memastikan dist yang dicommit sama dengan sumbernya.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - name: Cek tipe (svelte-check + tsc)
+        run: npm run check
+      - name: Tes unit (vitest)
+        run: npm test
+      - run: npm run build
+      - name: web/dist sesuai sumber
+        run: git diff --exit-code -- dist || (echo "web/dist usang: jalankan 'npm run build' lalu commit" && exit 1)

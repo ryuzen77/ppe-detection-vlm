@@ -1,0 +1,12 @@
+/* Gaya dasar sementara. Sistem desain (warna, tipografi, ikon, font lokal)
+   dibuat pada tahap redesign UI/UX setelah fondasi stack ini. */
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #111316;
+  color: #e6e8eb;
+}
+
+body {
+  margin: 0;
+}

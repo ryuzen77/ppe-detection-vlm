@@ -29,3 +29,6 @@ backend/reports/
 
 # Foto uji berisi orang sungguhan (data pribadi) - jangan pernah di-commit
 picture_test/
+
+# Dependensi frontend baru (hasil build web/dist SENGAJA dilacak git: gerbang tanpa Node.js)
+web/node_modules/
