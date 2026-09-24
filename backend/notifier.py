@@ -110,6 +110,13 @@ class NotifierManager:
         self.last_change_time = time.time()
         self.iot.set_red()
 
+    def set_waiting(self, msg: str = messages.LIGHT_SYSTEM_WAIT):
+        """Sistem gangguan: belum ada keputusan. Lampu padam — merah khusus APD kurang."""
+        self.current_state = LightState.OFF
+        self.message = msg
+        self.last_change_time = time.time()
+        self.iot.set_off()
+
     def set_idle(self):
         self.current_state = LightState.OFF
         self.message = messages.LIGHT_IDLE

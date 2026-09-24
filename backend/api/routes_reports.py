@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .. import messages
 from ..report_manager import report_mgr
+from ..api_monitor import api_monitor
 
 router = APIRouter()
 
@@ -16,6 +17,9 @@ router = APIRouter()
 async def get_worker_reports(limit: int = 50, offset: int = 0, status: str = "all", date: str = None):
     """Returns paginated worker inspection records with global compliance statistics."""
     data = report_mgr.get_reports(limit=limit, offset=offset, status_filter=status, date_filter=date)
+    # Gangguan (utama & cadangan gagal) sengaja tidak masuk audit — tidak ada
+    # keputusan — jadi hitungannya berasal dari pemantau VLM sejak server menyala.
+    data["system_outages"] = api_monitor.get_status()["no_decisions"]
     return data
 
 @router.get("/api/reports/snapshots/{filename}")

@@ -16,7 +16,9 @@ Selama evaluasi, instans YOLO kedua berjalan ~25 FPS di latar belakang untuk
 meniru beban kamera, sehingga latensi & VRAM terukur dalam kondisi nyata.
 Tiap foto dikirim SEKALI tanpa percobaan ulang, dengan batas waktu longgar
 (EVAL_TIMEOUT_SECONDS) agar akurasi model lambat tetap terukur; porsi yang
-selesai di bawah VLM_TIMEOUT_SECONDS produksi dilaporkan terpisah.
+selesai di bawah batas waktu produksi (VLM_CLOUD/LOCAL_TIMEOUT_SECONDS) dilaporkan
+terpisah. Yang dievaluasi hanya VLM utama; cadangan dimatikan agar tidak ikut
+memakan VRAM dan mengacaukan pengukuran.
 """
 import csv
 import json
@@ -31,6 +33,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
+os.environ.setdefault("VLM_BACKUP_PROVIDER", "none")
 
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
@@ -223,7 +226,8 @@ def main():
         "lengkap_ditolak": sum(not r["pred_complete"] for r in com),
         "latensi_median_s": round(statistics.median(lat), 2) if lat else None,
         "latensi_p95_s": round(q[-1], 2) if lat else None,
-        "selesai_dalam_batas_produksi": f"{sum(x <= cfg.VLM_TIMEOUT_SECONDS for x in lat)}/{len(sent)} (<= {cfg.VLM_TIMEOUT_SECONDS:g} dtk)",
+        "selesai_dalam_batas_produksi": f"{sum(x <= analyzer.primary.timeout for x in lat)}/{len(sent)} "
+                                        f"(<= {analyzer.primary.timeout:g} dtk)",
         "vram_sebelum_mb": vram_before, "vram_puncak_mb": max(sampler.samples) if sampler.samples else None,
         "porsi_gpu_ollama": residency,
         "yolo_paralel_fps": round(load.frames / elapsed, 1),

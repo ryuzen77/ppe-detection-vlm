@@ -64,15 +64,23 @@
         <span class="status-dot green" id="dot-ai"></span>
         <span id="ribbon-ai-text">AI lokal aktif</span>
       </div>
-      <div class="ribbon-item clickable" id="btn-ribbon-cloud" title="Klik untuk beralih antara VLM dan engine lokal">
+      <div class="ribbon-item" id="btn-ribbon-cloud" title="VLM yang sedang memutuskan: utama, cadangan (otomatis), atau gangguan">
         <span class="ribbon-icon">☁️</span>
-        <span id="ribbon-cloud-text">Cloud opsional: tidak terhubung</span>
+        <span class="status-dot amber" id="dot-vlm"></span>
+        <span id="ribbon-cloud-text">VLM: memuat...</span>
       </div>
       <div class="ribbon-item">
         <span class="ribbon-icon">📶</span>
         <span id="fps-counter" class="fps-text">0,0 FPS</span>
       </div>
     </section>
+
+    <!-- Spanduk gangguan: utama & cadangan VLM sama-sama tidak menjawab -->
+    <div class="system-alert-banner" id="vlm-down-banner" role="alert" hidden>
+      <span>🔴</span>
+      <strong>Sistem gangguan:</strong>
+      <span id="vlm-down-text">VLM utama &amp; cadangan tidak menjawab. Pekerja diminta menunggu, pemeriksaan diulang otomatis.</span>
+    </div>
 
     <!-- ======================================================== -->
     <!-- VIEW 1: MONITORING (TAMPILAN UTAMA SESUAI MOCKUP)        -->
@@ -147,8 +155,8 @@
             <div class="tech-drawer" id="tech-details-drawer">
               <div class="tech-drawer-grid">
                 <div class="tech-item">
-                  <span class="tech-label">Engine Mode:</span>
-                  <span class="tech-val" id="tech-engine-mode">HYBRID_AUTO</span>
+                  <span class="tech-label">VLM aktif:</span>
+                  <span class="tech-val" id="tech-engine-mode">-</span>
                 </div>
                 <div class="tech-item">
                   <span class="tech-label">VLM Latency:</span>
@@ -290,6 +298,16 @@
               <span class="kpi-label">Tingkat Kepatuhan</span>
               <span class="kpi-val" id="kpi-rate">100%</span>
               <span class="kpi-sub">Standar HSE K3</span>
+            </div>
+            <div class="kpi-card kpi-warning">
+              <span class="kpi-label">Diputuskan Cadangan</span>
+              <span class="kpi-val" id="kpi-backup">0</span>
+              <span class="kpi-sub">VLM lokal saat utama gagal</span>
+            </div>
+            <div class="kpi-card kpi-danger">
+              <span class="kpi-label">Gangguan Sistem</span>
+              <span class="kpi-val" id="kpi-outages">0</span>
+              <span class="kpi-sub">Tanpa keputusan · sejak server menyala</span>
             </div>
           </div>
         </div>
@@ -451,9 +469,11 @@
             </div>
 
             <div class="form-row">
-              <span class="form-label">Penyedia VLM aktif</span>
+              <span class="form-label">VLM utama</span>
               <p class="form-help" id="vlm-provider-info" style="margin-top:0;">Memuat...</p>
-              <p class="form-help">Penyedia dan model dipilih lewat <code>VLM_PROVIDER</code> / <code>VLM_MODEL</code> di <code>backend/.env</code>, lalu server dijalankan ulang.</p>
+              <span class="form-label">VLM cadangan (otomatis saat utama gagal)</span>
+              <p class="form-help" id="vlm-backup-info" style="margin-top:0;">Memuat...</p>
+              <p class="form-help">Utama dipilih lewat <code>VLM_PROVIDER</code> / <code>VLM_MODEL</code>, cadangan lewat <code>VLM_BACKUP_PROVIDER</code> / <code>VLM_BACKUP_MODEL</code> di <code>backend/.env</code>, lalu server dijalankan ulang.</p>
             </div>
 
             <div class="form-row" id="vlm-key-row">

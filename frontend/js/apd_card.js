@@ -114,8 +114,8 @@ export class APDVisualizer {
     }
 
     // Update Technical Details Drawer
-    if (this.techEngineMode) {
-      this.techEngineMode.textContent = telemetry.engine_mode || 'HYBRID_AUTO';
+    if (this.techEngineMode && telemetry.api_monitor) {
+      this.techEngineMode.textContent = telemetry.api_monitor.mode || '-';
     }
     if (this.techActiveTrack) {
       this.techActiveTrack.textContent = active ? `#${active.track_id}` : 'None';
@@ -168,6 +168,23 @@ export class APDVisualizer {
       this.guidancePillText.textContent = 'Pemeriksaan belum dimulai';
 
       this.step1.classList.add('active');
+      return;
+    }
+
+    // State A2: Sistem gangguan — utama & cadangan VLM tidak menjawab. Belum ada
+    // keputusan: pekerja diminta menunggu, pemeriksaan diulang otomatis (T27).
+    if (active.state === 'WAITING_SYSTEM') {
+      this.guidanceCard.classList.add('state-adjust');
+      this.guidanceIcon.textContent = '⏳';
+      this.guidanceEyebrow.textContent = 'SISTEM GANGGUAN';
+      this.guidanceTitle.textContent = 'Mohon Tunggu';
+      this.guidanceSubText.textContent = 'Sistem pemeriksaan sedang gangguan. Bila sudah aktif, silakan berdiri di batas pemeriksaan.';
+      this.guidancePillText.textContent = active.retry_in_s != null
+        ? `Pemeriksaan diulang otomatis dalam ${Math.ceil(active.retry_in_s)} dtk`
+        : 'Pemeriksaan diulang otomatis';
+      this.step1.classList.add('complete');
+      this.line12.classList.add('active');
+      this.step2.classList.add('active');
       return;
     }
 
@@ -232,14 +249,6 @@ export class APDVisualizer {
         this.guidanceTitle.textContent = 'Akses Diizinkan';
         this.guidanceSubText.textContent = 'Seluruh APD wajib telah lengkap sesuai standar K3.';
         this.guidancePillText.textContent = 'APD Lengkap - Gerbang dibuka';
-      } else if (res.is_unverified) {
-        // VLM aktif tetapi tidak menjawab: ditolak tanpa menuduh item tertentu
-        this.guidanceCard.classList.add('state-danger');
-        this.guidanceIcon.textContent = '⚠';
-        this.guidanceEyebrow.textContent = 'HASIL PEMERIKSAAN';
-        this.guidanceTitle.textContent = 'Verifikasi Gagal';
-        this.guidanceSubText.textContent = 'APD tidak dapat diverifikasi. Keluar dari jalur, lalu masuk kembali untuk pemeriksaan ulang.';
-        this.guidancePillText.textContent = 'Akses Ditolak - Ulangi Pemeriksaan';
       } else {
         this.guidanceCard.classList.add('state-danger');
         this.guidanceIcon.textContent = '✕';
@@ -274,10 +283,10 @@ export class APDVisualizer {
       ? 'Semua APD lengkap sesuai standar K3.'
       : `Belum memenuhi syarat: ${res.missing_items.length > 0 ? res.missing_items.join(', ') : 'Belum lengkap'}`;
 
-    // Operator harus bisa membedakan keputusan VLM dari heuristik lokal yang kasar.
-    if (res.is_low_confidence) {
+    // Operator perlu tahu bila keputusan diambil VLM cadangan (utama gagal/terputus)
+    if (res.decided_by === 'cadangan') {
       this.checklistFootnoteText.innerHTML =
-        `${this._escape(summary)} <span class="confidence-chip">⚠️ Engine lokal — akurasi terbatas</span>`;
+        `${this._escape(summary)} <span class="backup-chip">🛟 Diputuskan VLM cadangan</span>`;
     } else {
       this.checklistFootnoteText.textContent = summary;
     }
@@ -288,7 +297,9 @@ export class APDVisualizer {
       this._setBadge(badge, 'status-pending', '🕒', 'Belum dinilai');
     });
 
-    if (active && !active.is_full_body) {
+    if (active && active.state === 'WAITING_SYSTEM') {
+      this.checklistFootnoteText.textContent = 'Belum dinilai: sistem gangguan, pemeriksaan diulang otomatis.';
+    } else if (active && !active.is_full_body) {
       this.checklistFootnoteText.textContent = 'Menunggu posisi tubuh sesuai.';
     } else if (active && active.state === 'ANALYZING') {
       this.checklistFootnoteText.textContent = 'Sedang memindai kelengkapan APD...';

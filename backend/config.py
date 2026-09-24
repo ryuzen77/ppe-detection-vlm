@@ -181,27 +181,41 @@ class Config:
     VLM_IS_LOCAL: bool = VLM_PROVIDER in LOCAL_VLM_PROVIDERS
     # Khusus Gemini. minimal / low / medium / high; kosong = tidak dikirim.
     GEMINI_THINKING_LEVEL: str = _env("GEMINI_THINKING_LEVEL", "minimal")
-    # Percobaan VLM per inspeksi saat VLM aktif. Bila semuanya gagal/timeout,
-    # pekerja DITOLAK sebagai "tidak dapat diverifikasi" — tidak pernah
-    # diloloskan atas dasar heuristik lokal (keputusan pengguna, T21).
-    VLM_MAX_ATTEMPTS: int = 2
-    # Batas waktu per percobaan. Subjek berdiri diam saat inspeksi, jadi cukup
-    # longgar untuk panggilan bergambar. Lokal lebih longgar: qwen2.5vl:7b di
-    # RTX 4060 Laptop median 7,9 / p95 9,2 dtk bersama YOLO (T26); Gemini p95 ~2 dtk.
-    VLM_TIMEOUT_SECONDS: float = float(_env("VLM_TIMEOUT_SECONDS", "12.0" if VLM_IS_LOCAL else "8.0"))
+
+    # --- VLM cadangan (T27) ---
+    # Dipakai OTOMATIS saat VLM utama gagal, di inspeksi yang sama. Bawaannya VLM
+    # lokal lewat Ollama bila utama berada di cloud; "none" = tanpa cadangan.
+    # Lokasi tanpa internet cukup menjadikan VLM lokal sebagai utama.
+    VLM_BACKUP_PROVIDER: str = _env("VLM_BACKUP_PROVIDER", "none" if VLM_IS_LOCAL else "ollama").lower()
+    VLM_BACKUP_MODEL: str = _env("VLM_BACKUP_MODEL", _DEFAULT_VLM_MODELS.get(VLM_BACKUP_PROVIDER, ""))
+    VLM_BACKUP_BASE_URL: str = _env("VLM_BACKUP_BASE_URL", "")
+    VLM_BACKUP_API_KEY: str = _env("VLM_BACKUP_API_KEY", "")
+
+    # Batas waktu satu panggilan, menurut letak modelnya. Cloud dibuat pendek
+    # (2x p95 Gemini ~2 dtk) supaya saat penyedia bermasalah pekerja cepat
+    # dialihkan ke cadangan; lokal longgar karena qwen2.5vl:7b di RTX 4060
+    # Laptop median 7,9 / p95 9,2 dtk bersama YOLO (T26). Batas yang sama
+    # dipasang pada klien HTTP, sehingga panggilan yang lewat batas benar-benar
+    # dibatalkan dan tidak menyandera thread (Gemini sempat menggantung ~60 dtk).
+    VLM_CLOUD_TIMEOUT_SECONDS: float = float(_env("VLM_CLOUD_TIMEOUT_SECONDS", "4.0"))
+    VLM_LOCAL_TIMEOUT_SECONDS: float = float(_env("VLM_LOCAL_TIMEOUT_SECONDS", "12.0"))
     # Batas pemanasan saat startup (memuat model lokal bisa ~40 dtk pertama kali)
     VLM_WARMUP_TIMEOUT_SECONDS: float = float(_env("VLM_WARMUP_TIMEOUT_SECONDS", "120"))
-    ENABLE_LOCAL_FAST_PASS: bool = True       # Tier 1: heuristik warna OpenCV di CPU (~15ms)
+    # Setelah sekian kegagalan utama berturut-turut, utama dianggap terputus:
+    # inspeksi langsung ke cadangan tanpa membuang waktu mencoba utama. Utama
+    # dicoba lagi pada pekerja nyata setelah jeda (tanpa panggilan uji berkala
+    # yang menghabiskan kuota harian free tier).
+    VLM_PRIMARY_FAILURES_BEFORE_DOWN: int = int(_env("VLM_PRIMARY_FAILURES_BEFORE_DOWN", "2"))
+    VLM_PRIMARY_RETRY_AFTER_SECONDS: float = float(_env("VLM_PRIMARY_RETRY_AFTER_SECONDS", "60"))
+    # Bila utama dan cadangan sama-sama gagal, pekerja TIDAK diputuskan: diminta
+    # menunggu, lalu diperiksa ulang otomatis setelah jeda ini selama masih di jalur.
+    VLM_SYSTEM_RETRY_SECONDS: float = float(_env("VLM_SYSTEM_RETRY_SECONDS", "15"))
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
     VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
-    # Jeda minimum antar panggilan VLM untuk menjaga kuota (free tier Gemini
-    # 15 RPM). Model lokal tidak berkuota, jadi bawaannya 0 agar antrean tidak
-    # tertahan.
-    VLM_MIN_INTERVAL_SECONDS: float = float(_env("VLM_MIN_INTERVAL_SECONDS", "0" if VLM_IS_LOCAL else "4.0"))
-    # Analisa VLM yang boleh berjalan bersamaan. Dipakai oleh DUA pool thread
-    # (pemanggil di state_manager dan penjaga timeout di vlm_analyzer); keduanya
-    # harus sama besar, kalau tidak panggilan bisa antre di penjaga timeout dan
-    # waktu antrenya ikut terhitung sebagai timeout.
+    # Jeda minimum antar panggilan ke VLM cloud untuk menjaga kuota (free tier
+    # Gemini 15 RPM). Model lokal tidak berkuota, jadi tanpa jeda.
+    VLM_MIN_INTERVAL_SECONDS: float = float(_env("VLM_MIN_INTERVAL_SECONDS", "4.0"))
+    # Analisa VLM yang boleh berjalan bersamaan (pool pemanggil di state_manager)
     VLM_MAX_CONCURRENT: int = 2
     # Riwayat latensi API untuk rata-rata di panel monitoring
     API_LATENCY_HISTORY: int = 5
@@ -219,45 +233,14 @@ class Config:
     # Jeda minimum suara hasil (lengkap / kurang item) dan suara "sedang menganalisa"
     AUDIO_RESULT_DEBOUNCE_SECONDS: float = 3.0
     AUDIO_ANALYZING_DEBOUNCE_SECONDS: float = 2.0
+    # Jeda pengulangan pengumuman "sistem sedang gangguan, mohon tunggu"
+    AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS: float = 20.0
     # Lama jalur inspeksi harus kosong sebelum sesi gerbang berakhir dan sistem
     # kembali ke tahap 1. Selama sesi berjalan keputusan terkunci; jeda ini juga
     # menyerap orang yang tertutup sesaat agar tidak dianggap sudah pergi.
     STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "3.0"))
     # Maximum history records kept in memory
     MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))
-
-    # Local Fast-Pass Vision Thresholds (HSV & Area Ratios)
-    HSV_ORANGE_LOWER: tuple[int, int, int] = (5, 80, 80)
-    HSV_ORANGE_UPPER: tuple[int, int, int] = (22, 255, 255)
-    HSV_YELLOW_LOWER: tuple[int, int, int] = (22, 70, 80)
-    HSV_YELLOW_UPPER: tuple[int, int, int] = (42, 255, 255)
-    HSV_SILVER_LOWER: tuple[int, int, int] = (0, 0, 210)
-    HSV_SILVER_UPPER: tuple[int, int, int] = (180, 60, 255)
-    HSV_SKIN_LOWER: tuple[int, int, int] = (0, 30, 60)
-    HSV_SKIN_UPPER: tuple[int, int, int] = (25, 170, 255)
-    HI_VIS_MIN_RATIO: float = 0.06
-    SKIN_MAX_RATIO: float = 0.18
-    # Pembagian crop tubuh untuk rompi (badan) dan celana (kaki), rasio tinggi crop.
-    # Batas bawah badan sekaligus batas atas kaki, jadi cukup satu nilai.
-    TORSO_ROI_TOP_RATIO: float = 0.20
-    TORSO_LEGS_SPLIT_RATIO: float = 0.55
-    LEGS_ROI_BOTTOM_RATIO: float = 0.88
-    # Helm: helm proyek berwarna solid & kontras, jadi dicari blob bersaturasi tinggi
-    # atau sangat terang di bagian atas ROI kepala.
-    HELMET_ROI_TOP_RATIO: float = 0.18        # Porsi atas crop yang dianggap area kepala
-    HELMET_CROWN_RATIO: float = 0.55          # Porsi atas ROI kepala yang dianggap "mahkota"
-    HELMET_CROWN_CENTER_RATIO: float = 0.50   # Porsi tengah (horizontal) tempat kepala berada
-    HELMET_MIN_COVERAGE: float = 0.35         # Cakupan minimum piksel helm pada mahkota
-    HELMET_MIN_SATURATION: int = 90           # Ambang saturasi helm berwarna
-    HELMET_MIN_VALUE_BRIGHT: int = 185        # Ambang kecerahan helm putih
-    HELMET_SKIN_MAX_RATIO: float = 0.35       # Kulit/rambut terlalu dominan => tidak berhelm
-
-    # Sepatu: sepatu tertutup tampak gelap & padat, sandal/telanjang kaki menampakkan kulit.
-    SHOE_ROI_BOTTOM_RATIO: float = 0.12       # Porsi bawah crop yang dianggap area alas kaki
-    SHOE_ROI_CENTER_RATIO: float = 0.60       # Porsi tengah (horizontal) tempat kaki berada
-    SHOE_MIN_DARK_RATIO: float = 0.22         # Cakupan minimum piksel gelap pada ROI sepatu
-    SHOE_MAX_VALUE_DARK: int = 95             # Ambang kecerahan piksel "gelap"
-    SHOE_SKIN_MAX_RATIO: float = 0.22         # Kulit terlalu dominan => sandal/telanjang kaki
 
     # Data runtime: audit, foto bukti, dan pilihan operator. Disimpan di luar
     # direktori kode supaya deploy ulang (menimpa/menghapus backend/) tidak ikut

@@ -27,7 +27,7 @@ PRESETS = {
 
 class OpenAICompatibleProvider(VLMProvider):
     def __init__(self, api_key: str, model: str, base_url: str, name: str = "openai",
-                 json_mode: bool = True, http_timeout: float = 60.0):
+                 json_mode: bool = True, http_timeout: float = 60.0, warmup_timeout: float = 120.0):
         super().__init__(model)
         if not base_url:
             raise ValueError(f"Penyedia '{name}' butuh base URL (VLM_BASE_URL).")
@@ -40,8 +40,11 @@ class OpenAICompatibleProvider(VLMProvider):
         if api_key:
             # Model lokal (Ollama/vLLM) umumnya tidak memakai kunci
             headers["Authorization"] = f"Bearer {api_key}"
-        # Batas waktu keras tetap diatur VLMAnalyzer; ini hanya pengaman koneksi.
+        # Batas waktu HTTP = batas waktu inspeksi (+ sedikit), supaya panggilan
+        # yang lewat batas dibatalkan dan tidak menyandera thread. Pemuatan model
+        # saat pemanasan jauh lebih lama, jadi memakai batasnya sendiri.
         self._client = httpx.Client(base_url=self.base_url, headers=headers, timeout=http_timeout)
+        self.warmup_timeout = warmup_timeout
 
     def generate(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> str:
         data_url = "data:image/jpeg;base64," + base64.b64encode(image_jpeg).decode("ascii")
@@ -67,7 +70,8 @@ class OpenAICompatibleProvider(VLMProvider):
             # dan ditolak karena timeout. keep_alive=-1 pada API asli Ollama
             # memuat model sekarang dan menahannya selama server Ollama hidup.
             root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
-            response = self._client.post(f"{root}/api/generate", json={"model": self.model, "keep_alive": -1})
+            response = self._client.post(f"{root}/api/generate", json={"model": self.model, "keep_alive": -1},
+                                         timeout=self.warmup_timeout)
             if response.status_code >= 400:
                 raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
         self.ping()

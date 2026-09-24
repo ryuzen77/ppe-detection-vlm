@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .. import messages
 from .. import ppe_rules
-from ..vlm_analyzer import vlm_analyzer
 from .deps import require_admin
 
 logger = logging.getLogger(__name__)
@@ -15,14 +14,8 @@ router = APIRouter()
 # --- KATALOG APD ---
 
 def _ppe_catalog_payload() -> dict:
-    """Katalog lengkap beserta status aktif dan ketersediaan pemeriksa lokal."""
-    local = vlm_analyzer.local_analyzer
-    return {
-        "items": [
-            {**item.to_public_dict(), "local_check": local.has_local_check(item.key)}
-            for item in ppe_rules.get_items()
-        ]
-    }
+    """Katalog lengkap beserta status aktif. Semua item dinilai VLM (utama atau cadangan)."""
+    return {"items": [item.to_public_dict() for item in ppe_rules.get_items()]}
 
 
 @router.get("/api/ppe-rules")

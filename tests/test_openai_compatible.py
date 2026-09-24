@@ -6,8 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from backend.config import cfg
-from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer
+from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
 from backend.vlm_providers import create_provider
 from backend.vlm_providers.openai_compatible import PRESETS, OpenAICompatibleProvider
 
@@ -144,12 +143,19 @@ def test_vllm_wajib_diberi_base_url():
 # --- Jalur VLMAnalyzer lengkap lewat HTTP ------------------------------------------------
 
 @pytest.fixture
-def analyzer(catalog_defaults, monkeypatch):
-    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.0)
+def analyzer(catalog_defaults):
     a = VLMAnalyzer()
-    a.api_key = "kunci-uji"
+
+    def pasang(provider):
+        """Utama = penyedia HTTP sungguhan ke server uji lokal; tanpa cadangan."""
+        engine = VLMEngine("utama", "openrouter", provider.model, api_key="kunci-uji")
+        engine.provider, engine.min_interval = provider, 0.0
+        a.primary, a.backup = engine, None
+
+    a.pasang = pasang
     yield a
-    a.executor.shutdown(wait=False)
+    if a.primary is not None:
+        a.primary.executor.shutdown(wait=False)
 
 
 def test_keputusan_vlm_lewat_penyedia_openai_compatible(server, analyzer):
@@ -159,21 +165,31 @@ def test_keputusan_vlm_lewat_penyedia_openai_compatible(server, analyzer):
         "celana": {"detected": True},
         "sepatu": {"detected": True, "is_closed_shoes": True},
     }, "missing_items": [], "notes": "rompi biru"})}
-    analyzer.provider = _provider(server)
+    analyzer.pasang(_provider(server))
 
     hasil = analyzer.analyze_person(person_crop())
+    assert hasil.decided_by == "utama"
     assert hasil.is_complete is False, "Kelengkapan dihitung sistem dari items, bukan klaim model"
     assert hasil.missing_items == ["Rompi Keselamatan Orange/Kuning"]
     assert server.requests[0]["body"]["messages"][1]["content"][0]["text"] == USER_PROMPT
 
 
-def test_penyedia_openai_compatible_gagal_dicoba_ulang_lalu_ditolak(server, analyzer):
+def test_penyedia_openai_compatible_gagal_tanpa_cadangan_tanpa_keputusan(server, analyzer):
     server.reply = {"status": 503, "content": "overloaded"}
-    analyzer.provider = _provider(server)
+    analyzer.pasang(_provider(server))
     hasil = analyzer.analyze_person(person_crop())
-    assert hasil.is_unverified is True
-    assert len(server.requests) == cfg.VLM_MAX_ATTEMPTS
+    assert hasil.is_system_unavailable is True and hasil.is_complete is False
+    assert len(server.requests) == 1, "Satu panggilan per VLM; kegagalan dialihkan, bukan diulang"
     assert "503" in hasil.notes
+
+
+def test_batas_waktu_http_terpisah_dari_pemanasan(server):
+    # Panggilan inspeksi dibatalkan di batas waktu aplikasi (+1 dtk), tetapi
+    # pemuatan model Ollama saat pemanasan boleh jauh lebih lama (T27).
+    p = create_provider("ollama", api_key="", model="m", base_url=server.base_url,
+                        http_timeout=13.0, warmup_timeout=120.0)
+    assert p._client.timeout.read == 13.0
+    assert p.warmup_timeout == 120.0
 
 
 def test_jawaban_kosong_hanya_berpikir_diberi_pesan_jelas(server):
@@ -208,15 +224,15 @@ def test_pemanasan_penyedia_cloud_cukup_ping(server):
 
 def test_pemanasan_gagal_tidak_menghentikan_server(server, analyzer):
     server.reply = {"status": 503, "content": "overloaded"}
-    analyzer.provider = _provider(server)
+    analyzer.pasang(_provider(server))
     assert analyzer.warm_up() is None
 
 
 def test_pemanasan_berhasil_melaporkan_durasi(server, analyzer):
-    analyzer.provider = _provider(server)
+    analyzer.pasang(_provider(server))
     assert analyzer.warm_up() >= 0
 
 
 def test_tanpa_penyedia_pemanasan_dilewati(analyzer):
-    analyzer.provider = None
+    assert analyzer.primary is None and analyzer.backup is None
     assert analyzer.warm_up() is None

@@ -171,6 +171,27 @@ def test_simpan_baca_dan_ekspor_csv(paths, catalog_defaults):
     assert kolom["Kacamata Safety"] == messages.CSV_ITEM_NOT_ASSESSED
 
 
+def test_statistik_menghitung_keputusan_vlm_cadangan(paths):
+    # T27: laporan membedakan keputusan oleh VLM cadangan. Baris lama (sebelum
+    # T27) dengan label lain tidak ikut terhitung.
+    db, snaps = paths
+    mgr = ReportManager(db_path=db, snapshots_dir=snaps).open()
+    for source in ("VLM_LIVE:gemini/gemini-3.5-flash-lite", "VLM_CADANGAN:ollama/qwen2.5vl:7b",
+                   "VLM_CADANGAN:ollama/qwen2.5vl:7b", "VLM_GAGAL", "LOCAL_FAST_PASS"):
+        mgr.save_inspection(track_id=1, is_complete=True, items={}, missing_items=[], notes="",
+                            inference_source=source, inference_time_ms=1.0, crop_img=None)
+    stats = mgr.get_reports()
+    assert stats["total_all"] == 5 and stats["backup_count"] == 2
+
+
+def test_label_vlm_cadangan_cocok_dengan_prefiks_laporan():
+    from backend.report_manager import BACKUP_SOURCE_PREFIX
+    from backend.vlm_analyzer import VLMEngine
+    engine = VLMEngine("cadangan", "ollama", "qwen2.5vl:7b")
+    assert engine.label.startswith(BACKUP_SOURCE_PREFIX)
+    engine.executor.shutdown(wait=False)
+
+
 @pytest.mark.parametrize("nama", ["../audit.db", "..\\audit.db", "sub/x.jpg", ""])
 def test_snapshot_menolak_path_traversal(paths, nama):
     db, snaps = paths

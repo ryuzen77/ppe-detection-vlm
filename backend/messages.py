@@ -16,7 +16,7 @@ LIGHT_DENIED_DEFAULT = "Akses Ditolak - APD Tidak Lengkap"
 LIGHT_GRANTED = "AKSES DIIZINKAN - APD LENGKAP"
 LIGHT_DENIED_MISSING = "AKSES DITOLAK - Belum memakai: {missing}"
 LIGHT_POSITION_WARNING = "Peringatan: {reason}"
-LIGHT_UNVERIFIED = "AKSES DITOLAK - APD tidak dapat diverifikasi, silakan ulangi"
+LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan otomatis"
 LIGHT_TEST_GREEN = "Uji Coba Manual - Lampu Hijau"
 LIGHT_TEST_RED = "Uji Coba Manual - Lampu Merah"
 
@@ -67,10 +67,10 @@ API_CAMERA_SWITCHING = "Berpindah ke kamera index {index}..."
 API_PPE_ACTIVE_FORMAT = 'Format: {"active": {"<kunci_item>": true/false}}'
 API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
 
-# --- Kegagalan verifikasi VLM ---
-VLM_UNVERIFIED_LABEL = "Tidak Dapat Diverifikasi (VLM gagal)"
-VLM_UNVERIFIED_NOTES = ("[VERIFIKASI GAGAL] VLM tidak memberi jawaban setelah {attempts} percobaan "
-                        "({reason}). Akses ditolak; pekerja diminta mengulang pemeriksaan.")
+# --- VLM tidak tersedia (utama & cadangan gagal) ---
+VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
+VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "
+                         "pekerja diminta menunggu dan diperiksa ulang otomatis.")
 
 # --- Ekspor CSV audit ---
 CSV_HEADER_LEADING = ["No", "Tanggal", "Waktu", "ID Pekerja", "Status Kelulusan"]

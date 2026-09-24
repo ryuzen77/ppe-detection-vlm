@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const ribbonAiText = document.getElementById('ribbon-ai-text');
   const btnRibbonCloud = document.getElementById('btn-ribbon-cloud');
   const ribbonCloudText = document.getElementById('ribbon-cloud-text');
+  const dotVlm = document.getElementById('dot-vlm');
+  const vlmDownBanner = document.getElementById('vlm-down-banner');
+  const vlmDownText = document.getElementById('vlm-down-text');
   const fpsText = document.getElementById('fps-counter');
 
   // Video Viewport & Canvas
@@ -66,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const kpiComplete = document.getElementById('kpi-complete');
   const kpiViolations = document.getElementById('kpi-violations');
   const kpiRate = document.getElementById('kpi-rate');
+  const kpiBackup = document.getElementById('kpi-backup');
+  const kpiOutages = document.getElementById('kpi-outages');
   const filterButtons = {
     all: document.getElementById('filter-all'),
     complete: document.getElementById('filter-complete'),
@@ -109,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputAdminToken = document.getElementById('input-admin-token');
   const btnPingVlm = document.getElementById('btn-ping-vlm');
   const vlmProviderInfo = document.getElementById('vlm-provider-info');
+  const vlmBackupInfo = document.getElementById('vlm-backup-info');
   const vlmKeyRow = document.getElementById('vlm-key-row');
   const labelVlmKey = document.getElementById('label-vlm-key');
   const btnSaveSettings = document.getElementById('btn-save-settings');
@@ -131,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reset`;
   const configKeyUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/vlm-key`;
   const vlmConfigUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/vlm`;
-  const engineModeUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/config/engine-mode`;
   const reportsUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports`;
   const exportCsvUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/reports/export`;
   const pingUrl = `${httpProtocol}//${backendHost}${portSuffix}/api/monitoring/ping`;
@@ -173,7 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Active Controller State
   let wsConnected = false;
-  let currentEngineMode = 'HYBRID_AUTO';
   let currentStatusFilter = 'all';
   let currentDateFilter = '';
 
@@ -320,13 +324,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fpsText.textContent = `${Number(telemetry.fps).toFixed(1).replace('.', ',')} FPS`;
       }
 
-      // 2. Update Status Ribbon & Engine Mode
+      // 2. Status VLM (utama / cadangan / gangguan)
       if (telemetry.api_monitor) {
-        updateRibbonCloudUI(telemetry.api_monitor, telemetry.is_live_vlm, telemetry.vlm);
-      }
-      if (telemetry.engine_mode && telemetry.engine_mode !== currentEngineMode) {
-        currentEngineMode = telemetry.engine_mode;
-        if (techEngineMode) techEngineMode.textContent = currentEngineMode;
+        updateRibbonCloudUI(telemetry.api_monitor, telemetry.vlm);
       }
 
       // 3. Technical Drawer, badge subjek, dan checklist APD seluruhnya diurus
@@ -387,48 +387,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Update Cloud Status in Top Ribbon
-  function updateRibbonCloudUI(monitor, isLiveVlm, vlm) {
-    if (!ribbonCloudText) return;
-
-    if (monitor.engine_mode === 'FORCE_LOCAL') {
-      ribbonCloudText.textContent = 'VLM: Mode Offline (heuristik lokal)';
-      if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--accent-amber)';
-      return;
-    }
-
-    const where = vlm && vlm.is_local ? 'lokal' : 'cloud';
-    const name = vlm ? vlm.provider : 'VLM';
-    if (isLiveVlm && monitor.status === 'ONLINE') {
-      ribbonCloudText.textContent = `VLM ${where} terhubung (${name} ${monitor.latency_ms || 0}ms)`;
-      if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--accent-green)';
-    } else if (monitor.status === 'DEGRADED') {
-      ribbonCloudText.textContent = `VLM lambat (${name} ${monitor.latency_ms || 0}ms)`;
-      if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--accent-amber)';
-    } else {
-      ribbonCloudText.textContent = `VLM tidak terhubung (${name})`;
-      if (btnRibbonCloud) btnRibbonCloud.style.color = 'var(--text-muted)';
-    }
+  // Status VLM di pita atas: 🟢 utama, 🟡 cadangan otomatis, 🔴 gangguan (T27).
+  // Tidak ada sakelar: peralihan ke cadangan terjadi otomatis di backend.
+  function describeEngine(engine, info) {
+    if (!info) return 'VLM';
+    const where = info.is_local ? 'lokal' : 'cloud';
+    const latency = engine && engine.latency_ms ? ` ${Math.round(engine.latency_ms)} ms` : '';
+    return `${info.provider} ${where}${latency}`;
   }
 
-  // Toggle Cloud vs Local Mode on Ribbon Click
-  if (btnRibbonCloud) {
-    btnRibbonCloud.addEventListener('click', async () => {
-      const nextMode = currentEngineMode === 'FORCE_LOCAL' ? 'HYBRID_AUTO' : 'FORCE_LOCAL';
-      try {
-        const res = await fetch(engineModeUrl, {
-          method: 'POST',
-          headers: jsonHeaders(),
-          body: JSON.stringify({ engine_mode: nextMode })
-        });
-        const data = await res.json();
-        currentEngineMode = data.engine_mode;
-        if (techEngineMode) techEngineMode.textContent = currentEngineMode;
-        alert(`Mode Engine berhasil diubah ke: ${currentEngineMode === 'FORCE_LOCAL' ? 'Heuristik lokal (offline)' : 'VLM + cadangan lokal'}`);
-      } catch (e) {
-        console.error('Failed to toggle engine mode:', e);
+  function updateRibbonCloudUI(monitor, vlm) {
+    if (!ribbonCloudText) return;
+    const backupInfo = vlm ? vlm.backup : null;
+    let dot = 'amber';
+    let text;
+
+    if (monitor.mode === 'UTAMA') {
+      dot = 'green';
+      text = `VLM utama: ${describeEngine(monitor.primary, vlm)}`;
+    } else if (monitor.mode === 'CADANGAN') {
+      dot = 'amber';
+      const why = !(monitor.primary && monitor.primary.configured) ? 'utama nonaktif'
+        : monitor.primary_down ? 'utama terputus' : 'utama gagal';
+      text = `VLM cadangan (${why}): ${describeEngine(monitor.backup, backupInfo)}`;
+    } else {
+      dot = 'red';
+      text = 'VLM gangguan: utama & cadangan tidak menjawab';
+    }
+    if (dotVlm) dotVlm.className = `status-dot ${dot}`;
+    ribbonCloudText.textContent = text;
+    if (techEngineMode) techEngineMode.textContent = monitor.mode;
+
+    // Spanduk hanya saat benar-benar tidak ada VLM yang bisa memutuskan
+    if (vlmDownBanner) {
+      const down = monitor.mode === 'GANGGUAN';
+      vlmDownBanner.hidden = !down;
+      if (down && vlmDownText) {
+        const reason = monitor.last_no_decision_reason ? ` (${monitor.last_no_decision_reason})` : '';
+        vlmDownText.textContent =
+          `VLM utama & cadangan tidak menjawab${reason}. Pekerja diminta menunggu, pemeriksaan diulang otomatis.`;
       }
-    });
+    }
   }
 
   // --- 6. INTEGRATED LAPORAN (REPORTS) CONTROLLER ---
@@ -492,6 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (kpiComplete) kpiComplete.textContent = data.complete_count || 0;
       if (kpiViolations) kpiViolations.textContent = data.violation_count || 0;
       if (kpiRate) kpiRate.textContent = `${data.compliance_rate || 100}%`;
+      if (kpiBackup) kpiBackup.textContent = data.backup_count || 0;
+      if (kpiOutages) kpiOutages.textContent = data.system_outages || 0;
 
       const records = data.page_records || [];
       const catalog = await loadCatalog(ppeRulesUrl);
@@ -539,10 +540,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const source = rec.inference_source || '';
-        // VLM_LIVE:<penyedia>/<model>; GEMINI_LIVE adalah label baris lama (sebelum T23)
+        // VLM_LIVE:<penyedia>/<model> = utama, VLM_CADANGAN:... = cadangan (T27).
+        // Label lama tetap terbaca: GEMINI_LIVE (sebelum T23), VLM_GAGAL (T21-T26),
+        // dan LOCAL_*/OFFLINE_FALLBACK dari heuristik OpenCV yang sudah dibuang.
         const sourceIcon = source.startsWith('VLM_GAGAL') ? '⚠️ VLM gagal (ditolak)'
           : source.startsWith('VLM_LIVE:') ? `🌐 ${escapeHtml(source.slice('VLM_LIVE:'.length))}`
-          : source.includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ Heuristik lokal';
+          : source.startsWith('VLM_CADANGAN:') ? `🛟 Cadangan: ${escapeHtml(source.slice('VLM_CADANGAN:'.length))}`
+          : source.includes('GEMINI') ? '🌐 Gemini VLM' : '⚡ Heuristik lokal (lama)';
         const notesText = rec.missing_items && rec.missing_items.length > 0 
           ? `<span style="color:var(--accent-red); font-weight:500;">Kurang: ${rec.missing_items.join(', ')}</span>`
           : `<span style="color:var(--accent-green); font-weight:500;">Kepatuhan 100% K3</span>`;
@@ -783,16 +787,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const text = document.createElement('span');
       text.textContent = `${item.icon} ${item.label}`;
       label.append(input, text);
-
-      // Tanpa pemeriksa lokal, item ini tidak bisa dinilai saat offline dan
-      // gerbang akan tertutup; operator perlu tahu sebelum menyalakannya.
-      if (!item.local_check) {
-        const note = document.createElement('span');
-        note.className = 'form-help';
-        note.style.marginTop = '0';
-        note.textContent = '— hanya bisa dinilai VLM; saat offline gerbang tertutup';
-        label.appendChild(note);
-      }
       ppeRuleList.appendChild(label);
     });
   }
@@ -1025,9 +1019,13 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch(vlmConfigUrl);
       const vlm = await res.json();
-      if (vlmProviderInfo) {
-        const status = vlm.is_live ? '✅ aktif' : (vlm.needs_key && !vlm.has_key ? '⚠️ API key belum disetel' : '⚠️ tidak aktif');
-        vlmProviderInfo.textContent = `${vlm.provider} · ${vlm.model || '(model belum disetel)'} · ${vlm.is_local ? 'lokal' : 'cloud'} · ${status}`;
+      const describe = (e) => {
+        const status = e.is_live ? '✅ aktif' : (e.needs_key && !e.has_key ? '⚠️ API key belum disetel' : `⚠️ tidak aktif${e.error ? ` (${e.error})` : ''}`);
+        return `${e.provider} · ${e.model || '(model belum disetel)'} · ${e.is_local ? 'lokal' : 'cloud'} · batas ${e.timeout_s} dtk · ${status}`;
+      };
+      if (vlmProviderInfo) vlmProviderInfo.textContent = describe(vlm);
+      if (vlmBackupInfo) {
+        vlmBackupInfo.textContent = vlm.backup ? describe(vlm.backup) : '— tidak ada (VLM_BACKUP_PROVIDER=none)';
       }
       // Model lokal (Ollama/vLLM) tidak memakai API key
       if (vlmKeyRow) vlmKeyRow.style.display = vlm.needs_key ? '' : 'none';
@@ -1046,11 +1044,9 @@ document.addEventListener('DOMContentLoaded', () => {
         btnPingVlm.textContent = '⏳ Menguji...';
         const res = await fetch(pingUrl, { method: 'POST', headers: authHeaders() });
         const data = await res.json();
-        if (data.status === 'ONLINE') {
-          alert(`✅ ${data.message}\nLatensi: ${data.latency_ms} ms\nStatus: ONLINE`);
-        } else {
-          alert(`⚠️ Hasil Ping API:\nStatus: ${data.status}\nLatensi: ${data.latency_ms} ms\nPesan: ${data.message || data.reply || '-'}`);
-        }
+        // Hasil per VLM: utama dan cadangan diuji terpisah
+        const icon = data.status === 'ONLINE' ? '✅' : '⚠️';
+        alert(`${icon} Uji latensi VLM\n${(data.message || '-').split('; ').join('\n')}`);
       } catch (e) {
         alert(`❌ Gagal menghubungi endpoint ping: ${e}`);
       } finally {

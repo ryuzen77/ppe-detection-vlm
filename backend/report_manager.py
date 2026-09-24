@@ -17,6 +17,9 @@ from . import messages
 
 logger = logging.getLogger(__name__)
 
+# Label sumber keputusan VLM cadangan (lihat VLMEngine.label)
+BACKUP_SOURCE_PREFIX = "VLM_CADANGAN:"
+
 # Jalur data diatur lewat DATA_DIR di config, di luar direktori kode
 DB_PATH = cfg.DB_PATH
 SNAPSHOTS_DIR = cfg.SNAPSHOTS_DIR
@@ -312,6 +315,11 @@ class ReportManager:
             violation_count = total_count - complete_count
             compliance_rate = round((complete_count / total_count * 100.0), 1) if total_count > 0 else 100.0
 
+            # Keputusan oleh VLM cadangan (utama gagal/terputus), T27
+            cursor.execute("SELECT COUNT(*) AS n FROM worker_inspections WHERE inference_source LIKE ?",
+                           (f"{BACKUP_SOURCE_PREFIX}%",))
+            backup_count = cursor.fetchone()["n"]
+
             # Filter query
             conditions = []
             params = []
@@ -346,6 +354,7 @@ class ReportManager:
                 "complete_count": complete_count,
                 "violation_count": violation_count,
                 "compliance_rate": compliance_rate,
+                "backup_count": backup_count,
                 "filtered_total": filtered_total,
                 "page_records": records
             }

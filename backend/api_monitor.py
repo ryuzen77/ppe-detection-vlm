@@ -1,110 +1,144 @@
+"""Kesehatan VLM utama & cadangan untuk dashboard (T27).
+
+Status gerbang yang ditampilkan operator:
+- UTAMA     : keputusan terakhir oleh VLM utama (hijau)
+- CADANGAN  : utama gagal/terputus, keputusan oleh VLM cadangan (kuning)
+- GANGGUAN  : tidak ada VLM yang menjawab; pekerja diminta menunggu (merah)
+"""
 import time
 import threading
-from typing import Dict, Any
+from typing import Any, Optional
 from collections import deque
 
 from .config import cfg
 
-class APIMonitor:
-    """Monitors Gemini Cloud API health, tracks real-time round-trip latency,
-    detects degradation/jamming (macet), and manages Online vs Offline engine modes."""
+MODE_PRIMARY = "UTAMA"
+MODE_BACKUP = "CADANGAN"
+MODE_DOWN = "GANGGUAN"
+
+
+class EngineStats:
+    """Catatan panggilan satu VLM (utama atau cadangan)."""
 
     def __init__(self):
-        self.lock = threading.Lock()
-        
-        # Engine Mode: "HYBRID_AUTO" (Cloud + Auto Fallback) or "FORCE_LOCAL" (100% Offline GPU)
-        self.engine_mode: str = "HYBRID_AUTO"
-
-        # Status: "ONLINE", "DEGRADED", "OFFLINE"
-        self.status: str = "INITIALIZING"
-        self.latency_ms: float = 0.0
+        self.info: Optional[dict] = None
+        self.status = "BELUM_DIPAKAI"      # BELUM_DIPAKAI / OK / GAGAL
+        self.latency_ms = 0.0
         self.latency_history: deque = deque(maxlen=cfg.API_LATENCY_HISTORY)
-        self.avg_latency_ms: float = 0.0
+        self.calls = 0
+        self.failures = 0
+        self.timeouts = 0
+        self.rate_limited = 0
+        self.consecutive_failures = 0
+        self.last_error = ""
+        self.last_checked = "-"
 
-        # Metrics
-        self.total_cloud_calls: int = 0
-        self.total_local_calls: int = 0
-        self.total_timeouts: int = 0
-        self.total_rate_limited: int = 0
-        self.total_errors: int = 0
-        self.consecutive_errors: int = 0
+    def as_dict(self) -> dict:
+        avg = round(sum(self.latency_history) / len(self.latency_history), 1) if self.latency_history else 0.0
+        return {
+            "configured": bool(self.info and self.info.get("is_live")),
+            "provider": (self.info or {}).get("provider", ""),
+            "model": (self.info or {}).get("model", ""),
+            "is_local": (self.info or {}).get("is_local", False),
+            "status": self.status,
+            "latency_ms": self.latency_ms,
+            "avg_latency_ms": avg,
+            "calls": self.calls,
+            "failures": self.failures,
+            "timeouts": self.timeouts,
+            "rate_limited": self.rate_limited,
+            "consecutive_failures": self.consecutive_failures,
+            "last_error": self.last_error,
+            "last_checked": self.last_checked,
+        }
 
-        self.last_checked_time: str = "-"
-        self.last_error_message: str = ""
-        self.is_locked: bool = False
 
-    def set_engine_mode(self, mode: str) -> str:
+class APIMonitor:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.engines = {"utama": EngineStats(), "cadangan": EngineStats()}
+        self.primary_down = False
+        self.mode = MODE_DOWN
+        self.decisions = {"utama": 0, "cadangan": 0}
+        self.no_decisions = 0
+        self.last_no_decision_reason = ""
+        self.is_locked = False
+
+    def set_engines(self, primary: Optional[dict], backup: Optional[dict], primary_down: bool):
         with self.lock:
-            if mode in ["HYBRID_AUTO", "FORCE_LOCAL"]:
-                self.engine_mode = mode
-                if mode == "FORCE_LOCAL":
-                    self.status = "OFFLINE_FORCED"
-                return self.engine_mode
-            return self.engine_mode
+            self.engines["utama"].info = primary
+            self.engines["cadangan"].info = backup
+            self.primary_down = primary_down
+            # Sebelum inspeksi pertama, mode mengikuti VLM mana yang siap
+            if sum(self.decisions.values()) == 0 and self.no_decisions == 0:
+                if primary and primary.get("is_live"):
+                    self.mode = MODE_PRIMARY
+                elif backup and backup.get("is_live"):
+                    self.mode = MODE_BACKUP
+                else:
+                    self.mode = MODE_DOWN
+            elif primary_down and self.mode == MODE_PRIMARY:
+                self.mode = MODE_BACKUP
 
-    def record_success(self, duration_ms: float):
+    def record_success(self, role: str, duration_ms: float):
         with self.lock:
-            self.total_cloud_calls += 1
-            self.consecutive_errors = 0
-            self.latency_ms = round(duration_ms, 1)
-            self.latency_history.append(self.latency_ms)
-            self.avg_latency_ms = round(sum(self.latency_history) / len(self.latency_history), 1)
-            self.last_checked_time = time.strftime("%H:%M:%S")
-            self.last_error_message = ""
+            s = self.engines[role]
+            s.calls += 1
+            s.consecutive_failures = 0
+            s.status = "OK"
+            s.latency_ms = round(duration_ms, 1)
+            s.latency_history.append(s.latency_ms)
+            s.last_checked = time.strftime("%H:%M:%S")
+            s.last_error = ""
 
-            # Classify condition: if latency > 1800ms, mark as DEGRADED (Macet / Lambat)
-            if self.latency_ms > 1800.0:
-                self.status = "DEGRADED"
-            else:
-                self.status = "ONLINE"
-
-    def record_timeout(self, timeout_sec: float):
+    def record_failure(self, role: str, err_msg: str, is_timeout: bool = False):
         with self.lock:
-            self.total_timeouts += 1
-            self.consecutive_errors += 1
-            self.latency_ms = round(timeout_sec * 1000, 1)
-            self.last_checked_time = time.strftime("%H:%M:%S")
-            self.last_error_message = f"Timeout > {timeout_sec}s (Macet, otomatis dialihkan ke GPU)"
-            self.status = "DEGRADED" if self.consecutive_errors < 3 else "OFFLINE"
-
-    def record_error(self, err_msg: str):
-        with self.lock:
-            self.total_errors += 1
-            self.consecutive_errors += 1
-            self.last_checked_time = time.strftime("%H:%M:%S")
-            self.last_error_message = str(err_msg)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+            s = self.engines[role]
+            s.calls += 1
+            s.failures += 1
+            s.consecutive_failures += 1
+            s.status = "GAGAL"
+            if is_timeout:
+                s.timeouts += 1
             if "429" in err_msg or "quota" in err_msg.lower():
-                self.total_rate_limited += 1
-                self.status = "DEGRADED"
-            else:
-                self.status = "OFFLINE"
+                s.rate_limited += 1
+            s.last_checked = time.strftime("%H:%M:%S")
+            s.last_error = str(err_msg)[:cfg.ERROR_MESSAGE_MAX_CHARS]
 
-    def record_local_call(self, is_rate_guard: bool = False):
+    def record_decision(self, role: Optional[str], reason: str = ""):
+        """Siapa yang memutuskan inspeksi terakhir; None = tidak ada keputusan."""
         with self.lock:
-            self.total_local_calls += 1
-            if is_rate_guard:
-                self.total_rate_limited += 1
+            if role is None:
+                self.no_decisions += 1
+                self.last_no_decision_reason = reason[:cfg.ERROR_MESSAGE_MAX_CHARS]
+                self.mode = MODE_DOWN
+            else:
+                self.decisions[role] += 1
+                self.mode = MODE_PRIMARY if role == "utama" else MODE_BACKUP
 
     def set_locked(self, locked: bool):
         with self.lock:
             self.is_locked = locked
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         with self.lock:
+            primary = self.engines["utama"].as_dict()
+            backup = self.engines["cadangan"].as_dict()
+            active = backup if self.mode == MODE_BACKUP else primary
             return {
-                "engine_mode": self.engine_mode,
-                "status": self.status,
-                "latency_ms": self.latency_ms,
-                "avg_latency_ms": self.avg_latency_ms,
+                "mode": self.mode,
+                "primary_down": self.primary_down,
+                "primary": primary,
+                "backup": backup,
+                "decisions_primary": self.decisions["utama"],
+                "decisions_backup": self.decisions["cadangan"],
+                "no_decisions": self.no_decisions,
+                "last_no_decision_reason": self.last_no_decision_reason,
                 "is_locked": self.is_locked,
-                "total_cloud_calls": self.total_cloud_calls,
-                "total_local_calls": self.total_local_calls,
-                "total_timeouts": self.total_timeouts,
-                "total_rate_limited": self.total_rate_limited,
-                "total_errors": self.total_errors,
-                "consecutive_errors": self.consecutive_errors,
-                "last_checked_time": self.last_checked_time,
-                "last_error_message": self.last_error_message
+                # Latensi VLM yang sedang dipakai, untuk laci teknis
+                "latency_ms": active["latency_ms"],
+                "avg_latency_ms": active["avg_latency_ms"],
             }
+
 
 api_monitor = APIMonitor()

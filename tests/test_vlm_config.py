@@ -22,14 +22,17 @@ a.start()
 p = a.provider
 print(json.dumps({
     "provider": cfg.VLM_PROVIDER, "model": cfg.VLM_MODEL, "is_local": cfg.VLM_IS_LOCAL,
-    "min_interval": cfg.VLM_MIN_INTERVAL_SECONDS, "timeout": cfg.VLM_TIMEOUT_SECONDS, "live": a.is_live_api(),
+    "min_interval": a.primary.min_interval, "timeout": a.primary.timeout, "live": a.is_live_api(),
+    "backup": a.backup.info() if a.backup else None,
     "kelas": type(p).__name__ if p else None, "base_url": getattr(p, "base_url", None),
     "label": a.source_label, "info": a.provider_info(),
 }))
 """
 
 _KOSONG = {k: "" for k in ("VLM_PROVIDER", "VLM_API_KEY", "VLM_MODEL", "VLM_BASE_URL", "GEMINI_API_KEY",
-                          "GEMINI_MODEL", "VLM_MIN_INTERVAL_SECONDS", "VLM_TIMEOUT_SECONDS")}
+                          "GEMINI_MODEL", "VLM_MIN_INTERVAL_SECONDS", "VLM_CLOUD_TIMEOUT_SECONDS",
+                          "VLM_LOCAL_TIMEOUT_SECONDS", "VLM_BACKUP_PROVIDER", "VLM_BACKUP_MODEL",
+                          "VLM_BACKUP_BASE_URL", "VLM_BACKUP_API_KEY")}
 
 
 def _probe(tmp_path, **env):
@@ -45,7 +48,10 @@ def test_env_lama_gemini_tetap_berfungsi(tmp_path):
     assert (r["provider"], r["model"], r["live"], r["kelas"]) == ("gemini", "gemini-3.8-flash", True, "GeminiProvider")
     assert r["label"] == "VLM_LIVE:gemini/gemini-3.8-flash"
     assert r["min_interval"] == 4.0, "Penyedia cloud menjaga kuota free tier"
-    assert r["timeout"] == 8.0
+    assert r["timeout"] == 4.0, "Cloud dipotong cepat supaya pekerja segera dialihkan ke cadangan"
+    assert r["backup"]["provider"] == "ollama" and r["backup"]["model"] == "qwen2.5vl:7b", \
+        "Utama cloud otomatis dicadangkan VLM lokal hasil evaluasi T26"
+    assert r["backup"]["timeout_s"] == 12.0
 
 
 def test_nama_vlm_baru_menang_atas_nama_lama(tmp_path):
@@ -63,6 +69,7 @@ def test_ganti_ke_ollama_hanya_lewat_env(tmp_path):
     assert r["base_url"] == "http://localhost:11434/v1"
     assert r["is_local"] is True and r["min_interval"] == 0.0, "Tanpa kuota, antrean tidak ditahan"
     assert r["timeout"] == 12.0, "qwen2.5vl:7b lokal: p95 9,2 dtk (T26)"
+    assert r["backup"] is None, "Utama sudah lokal: tanpa cadangan bawaan"
     assert r["info"]["needs_key"] is False
     assert r["label"] == "VLM_LIVE:ollama/qwen2.5vl:7b"
 
@@ -81,7 +88,9 @@ def test_penyedia_openai_compatible_dengan_base_url_sendiri(tmp_path):
 ])
 def test_konfigurasi_tidak_lengkap_membuat_vlm_nonaktif_bukan_crash(tmp_path, env, alasan):
     r = _probe(tmp_path, **env)
-    assert r["live"] is False, alasan
+    assert r["info"]["is_live"] is False and r["info"]["error"], alasan
+    # Gerbang tetap bisa memutuskan lewat cadangan lokal bawaan (bila utama cloud)
+    assert r["live"] is (r["backup"] is not None)
 
 
 def test_info_penyedia_tidak_pernah_memuat_api_key(tmp_path):
@@ -104,7 +113,7 @@ def klien(monkeypatch):
     from backend.app import app
     from backend.config import cfg
     from backend.vlm_analyzer import vlm_analyzer
-    for attr in ("provider", "api_key", "provider_name", "model_name"):
+    for attr in ("primary", "backup", "primary_failures", "primary_down_since"):
         monkeypatch.setattr(vlm_analyzer, attr, getattr(vlm_analyzer, attr))
     monkeypatch.setattr(cfg, "VLM_API_KEY", cfg.VLM_API_KEY)
     return TestClient(app), vlm_analyzer
@@ -113,7 +122,9 @@ def klien(monkeypatch):
 @pytest.mark.parametrize("url", ["/api/config/vlm-key", "/api/config/gemini-key"])
 def test_isi_api_key_dari_dashboard_mengaktifkan_vlm(klien, url):
     client, vlm = klien
-    vlm.provider_name, vlm.model_name = "gemini", "gemini-3.5-flash-lite"
+    from backend.vlm_analyzer import VLMEngine
+    vlm.primary, vlm.backup = VLMEngine("utama", "gemini", "gemini-3.5-flash-lite"), None
+    assert vlm.primary.build() is False, "Tanpa API key utama belum aktif"
     r = client.post(url, json={"api_key": "kunci-dari-dashboard"}).json()
     assert r["status"] == "success" and r["is_live"] is True and r["provider"] == "gemini"
     assert "kunci-dari-dashboard" not in json.dumps(r), "Kunci tidak boleh dikembalikan ke browser"

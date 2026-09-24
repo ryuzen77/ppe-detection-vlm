@@ -1,4 +1,4 @@
-"""API key VLM, pemantauan latensi, dan mode engine."""
+"""API key VLM dan kesehatan VLM utama & cadangan."""
 from fastapi import APIRouter, Depends, Request
 
 from .. import messages
@@ -30,27 +30,16 @@ async def update_vlm_key(request: Request):
 router.add_api_route("/api/config/gemini-key", update_vlm_key, methods=["POST"],
                      dependencies=[Depends(require_admin)])
 
-# --- API MONITORING & ENGINE MODE ENDPOINTS ---
+# --- PEMANTAUAN VLM ---
+# Tidak ada lagi sakelar mode engine: operator tidak mengubah cara gerbang
+# memutuskan saat berjalan; peralihan ke cadangan terjadi otomatis (T27).
 
 @router.get("/api/monitoring/status")
 async def get_monitoring_status():
-    """Kesehatan penyedia VLM, latensi ping, dan mode engine."""
+    """Kesehatan VLM utama & cadangan dan siapa yang sedang memutuskan."""
     return api_monitor.get_status()
 
 @router.post("/api/monitoring/ping", dependencies=[Depends(require_admin)])
 async def ping_vlm_api():
-    """Uji latensi sesaat ke penyedia VLM yang aktif."""
-    res = vlm_analyzer.ping_api()
-    return res
-
-@router.post("/api/config/engine-mode", dependencies=[Depends(require_admin)])
-async def set_engine_mode(request: Request):
-    """Beralih antara VLM (HYBRID_AUTO) dan heuristik lokal OpenCV (FORCE_LOCAL)."""
-    data = await request.json()
-    mode = data.get("engine_mode", "HYBRID_AUTO")
-    new_mode = api_monitor.set_engine_mode(mode)
-    return {
-        "status": "success",
-        "engine_mode": new_mode,
-        "is_forced_local": new_mode == "FORCE_LOCAL"
-    }
+    """Uji latensi sesaat ke VLM utama dan cadangan."""
+    return vlm_analyzer.ping_api()

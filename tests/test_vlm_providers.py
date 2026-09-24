@@ -8,7 +8,7 @@ import pytest
 
 from backend import messages, ppe_rules
 from backend.config import cfg
-from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer
+from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
 from backend.vlm_providers import VLMProvider, create_provider, parse_json_reply
 from backend.vlm_providers.gemini import GeminiProvider
 
@@ -115,26 +115,41 @@ def _lengkap():
     }, "missing_items": [], "notes": "lengkap"})
 
 
+def _engine(role, provider, local=False, timeout=None):
+    """VLM utama/cadangan dengan penyedia tiruan, tanpa jeda kuota."""
+    e = VLMEngine(role, "ollama" if local else "gemini", "model-palsu", api_key="kunci-palsu")
+    e.provider, e.min_interval = provider, 0.0
+    if timeout is not None:
+        e.timeout = timeout
+    return e
+
+
 @pytest.fixture
-def analyzer(catalog_defaults, monkeypatch):
-    # Jeda free tier dimatikan supaya percobaan ulang tidak membuat tes lambat
-    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.0)
+def analyzer(catalog_defaults):
     a = VLMAnalyzer()
-    a.api_key = "kunci-palsu"
+
+    def pasang(utama=None, cadangan=None, **opsi):
+        a.primary = _engine("utama", utama, timeout=opsi.get("timeout_utama")) if utama else None
+        a.backup = _engine("cadangan", cadangan, local=True, timeout=opsi.get("timeout_cadangan")) if cadangan else None
+        return a
+
+    a.pasang = pasang
     yield a
-    a.executor.shutdown(wait=False)
+    for e in (a.primary, a.backup):
+        if e is not None:
+            e.executor.shutdown(wait=False)
 
 
-def test_jawaban_penyedia_menjadi_keputusan_vlm(analyzer):
-    analyzer.provider = FakeProvider(reply=_lengkap())
-    hasil = analyzer.analyze_person(person_crop(vest=False))
+def test_jawaban_utama_menjadi_keputusan(analyzer):
+    utama = FakeProvider(reply=_lengkap())
+    hasil = analyzer.pasang(utama=utama, cadangan=FakeProvider(reply=_lengkap())).analyze_person(person_crop())
 
-    # Keputusan dari VLM, bukan dari engine lokal yang melihat rompi hilang
-    assert hasil.inference_source == analyzer.source_label
-    assert hasil.is_complete is True
-    assert hasil.is_low_confidence is False
+    assert hasil.inference_source == "VLM_LIVE:gemini/model-palsu" == analyzer.source_label
+    assert hasil.decided_by == "utama"
+    assert hasil.is_complete is True and hasil.is_system_unavailable is False
+    assert analyzer.backup.provider.calls == [], "Cadangan tidak disentuh selama utama menjawab"
 
-    (jpeg, system_prompt, user_prompt), = analyzer.provider.calls
+    (jpeg, system_prompt, user_prompt), = utama.calls
     assert user_prompt == USER_PROMPT
     assert cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR) is not None, "Gambar harus JPEG utuh"
     # Prompt menyebut item lewat kuncinya di bentuk JSON yang diminta
@@ -143,100 +158,158 @@ def test_jawaban_penyedia_menjadi_keputusan_vlm(analyzer):
 
 
 def test_prompt_mengikuti_item_aktif_tanpa_membuat_klien_ulang(analyzer, catalog_defaults):
-    analyzer.provider = FakeProvider(reply=_lengkap())
+    utama = FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=utama)
     catalog_defaults.set_active({"kacamata": True})
     analyzer.analyze_person(person_crop())
-    _, system_prompt, _ = analyzer.provider.calls[0]
+    _, system_prompt, _ = utama.calls[0]
     assert '"kacamata":' in system_prompt
 
 
-def _assert_ditolak_tidak_terverifikasi(hasil):
-    # Selama VLM aktif, kegagalan tidak boleh berubah jadi keputusan heuristik lokal
-    assert hasil.is_unverified is True
+def _assert_diputuskan_cadangan(hasil, analyzer):
+    assert hasil.decided_by == "cadangan"
+    assert hasil.inference_source == "VLM_CADANGAN:ollama/model-palsu"
+    assert hasil.is_complete is True and hasil.is_system_unavailable is False
+    assert len(analyzer.backup.provider.calls) == 1
+
+
+def test_utama_galat_cadangan_memutuskan_di_inspeksi_yang_sama(analyzer):
+    analyzer.pasang(utama=FakeProvider(error=RuntimeError("503 UNAVAILABLE")), cadangan=FakeProvider(reply=_lengkap()))
+    hasil = analyzer.analyze_person(person_crop())
+    _assert_diputuskan_cadangan(hasil, analyzer)
+    assert len(analyzer.primary.provider.calls) == 1, "Utama tidak diulang: pekerja langsung ke cadangan"
+
+
+def test_utama_lambat_dibatasi_waktu_lalu_cadangan_memutuskan(analyzer):
+    analyzer.pasang(utama=FakeProvider(reply=_lengkap(), delay=1.0), cadangan=FakeProvider(reply=_lengkap()),
+                    timeout_utama=0.2)
+    start = time.time()
+    hasil = analyzer.analyze_person(person_crop())
+    assert time.time() - start < 0.8, "Gerbang tidak menunggu utama melewati batas waktunya"
+    _assert_diputuskan_cadangan(hasil, analyzer)
+
+
+def test_jawaban_utama_rusak_dialihkan_ke_cadangan(analyzer):
+    analyzer.pasang(utama=FakeProvider(reply="maaf, saya tidak bisa"), cadangan=FakeProvider(reply=_lengkap()))
+    _assert_diputuskan_cadangan(analyzer.analyze_person(person_crop()), analyzer)
+
+
+def _assert_tanpa_keputusan(hasil):
+    # Tidak ada VLM yang menjawab: pekerja tidak diloloskan, tidak juga ditolak
+    assert hasil.is_system_unavailable is True
     assert hasil.is_complete is False
-    assert hasil.items == {}, "Tidak ada item yang benar-benar diperiksa"
-    assert hasil.missing_items == [messages.VLM_UNVERIFIED_LABEL]
-    assert hasil.inference_source.startswith("VLM_GAGAL")
+    assert hasil.items == {} and hasil.missing_items == [], "Tidak ada item yang benar-benar diperiksa"
+    assert hasil.inference_source == "VLM_GANGGUAN"
 
 
-def test_galat_penyedia_dicoba_ulang_lalu_ditolak(analyzer):
-    analyzer.provider = FakeProvider(error=RuntimeError("503 overloaded"))
-    # Orang ber-APD lengkap sekalipun tidak diloloskan tanpa verifikasi VLM
+def test_utama_dan_cadangan_gagal_tanpa_keputusan(analyzer):
+    analyzer.pasang(utama=FakeProvider(error=RuntimeError("503 UNAVAILABLE")),
+                    cadangan=FakeProvider(error=RuntimeError("connection refused")))
     hasil = analyzer.analyze_person(person_crop())
-    _assert_ditolak_tidak_terverifikasi(hasil)
-    assert len(analyzer.provider.calls) == cfg.VLM_MAX_ATTEMPTS == 2
-    assert "503" in hasil.notes
+    _assert_tanpa_keputusan(hasil)
+    assert "503" in hasil.notes and "connection refused" in hasil.notes
 
 
-def test_penyedia_lambat_dicoba_ulang_lalu_ditolak(analyzer, monkeypatch):
-    monkeypatch.setattr(cfg, "VLM_TIMEOUT_SECONDS", 0.2)
-    analyzer.provider = FakeProvider(reply=_lengkap(), delay=1.0)
+def test_tanpa_cadangan_utama_gagal_tanpa_keputusan(analyzer):
+    analyzer.pasang(utama=FakeProvider(error=RuntimeError("503 UNAVAILABLE")))
+    hasil = analyzer.analyze_person(person_crop())
+    _assert_tanpa_keputusan(hasil)
+    assert "cadangan: tidak tersedia" in hasil.notes
+
+
+def test_tanpa_vlm_sama_sekali_tanpa_keputusan(analyzer):
+    hasil = analyzer.pasang().analyze_person(person_crop())
+    _assert_tanpa_keputusan(hasil)
+    assert messages.VLM_NOT_CONFIGURED in hasil.notes
+
+
+def test_utama_dianggap_terputus_setelah_n_gagal_lalu_dicoba_lagi(analyzer, monkeypatch):
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_FAILURES_BEFORE_DOWN", 2)
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_RETRY_AFTER_SECONDS", 0.3)
+    utama = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    analyzer.pasang(utama=utama, cadangan=FakeProvider(reply=_lengkap()))
+
+    for _ in range(2):
+        assert analyzer.analyze_person(person_crop()).decided_by == "cadangan"
+    assert len(utama.calls) == 2 and analyzer.provider_info()["primary_down"] is True
+
+    # Terputus: pekerja berikutnya langsung ke cadangan tanpa membuang waktu di utama
+    assert analyzer.analyze_person(person_crop()).decided_by == "cadangan"
+    assert len(utama.calls) == 2
+
+    # Setelah jeda, utama dicoba lagi pada pekerja nyata; pulih = kembali memutuskan
+    time.sleep(0.35)
+    utama.error, utama.reply = None, _lengkap()
+    hasil = analyzer.analyze_person(person_crop())
+    assert hasil.decided_by == "utama" and len(utama.calls) == 3
+    assert analyzer.provider_info()["primary_down"] is False
+
+
+def test_jeda_kuota_hanya_untuk_vlm_cloud(analyzer):
+    analyzer.pasang(utama=FakeProvider(reply=_lengkap()))
+    analyzer.primary.min_interval = 0.4
+    analyzer.primary.last_call_time = time.time()  # panggilan lain baru saja terjadi
     start = time.time()
-    hasil = analyzer.analyze_person(person_crop())
-    assert time.time() - start < 0.9, "Tiap percobaan dibatasi timeout, gerbang tidak menunggu penyedia"
-    _assert_ditolak_tidak_terverifikasi(hasil)
-    assert hasil.inference_source == "VLM_GAGAL (API Timeout)"
-    assert len(analyzer.provider.calls) == 2
+    assert analyzer.analyze_person(person_crop()).decided_by == "utama"
+    assert time.time() - start >= 0.35, "Kuota free tier dijaga dengan menunggu, bukan dilewati"
+
+    lokal = VLMEngine("cadangan", "ollama", "m")
+    cloud = VLMEngine("utama", "gemini", "m", api_key="k")
+    assert lokal.min_interval == 0.0 and cloud.min_interval == cfg.VLM_MIN_INTERVAL_SECONDS
+    assert lokal.timeout == cfg.VLM_LOCAL_TIMEOUT_SECONDS and cloud.timeout == cfg.VLM_CLOUD_TIMEOUT_SECONDS
+    for e in (lokal, cloud):
+        e.executor.shutdown(wait=False)
 
 
-def test_jawaban_rusak_dicoba_ulang_lalu_ditolak(analyzer):
-    analyzer.provider = FakeProvider(reply="maaf, saya tidak bisa")
-    _assert_ditolak_tidak_terverifikasi(analyzer.analyze_person(person_crop()))
-
-
-class FlakyProvider(FakeProvider):
-    """Gagal pada panggilan pertama, berhasil pada berikutnya."""
-
-    def generate(self, image_jpeg, system_prompt, user_prompt):
-        self.calls.append((image_jpeg, system_prompt, user_prompt))
-        if len(self.calls) == 1:
-            raise RuntimeError("500 sementara")
-        return self.reply
-
-
-def test_percobaan_ulang_yang_berhasil_menjadi_keputusan_vlm(analyzer):
-    analyzer.provider = FlakyProvider(reply=_lengkap())
-    hasil = analyzer.analyze_person(person_crop())
-    assert hasil.inference_source == analyzer.source_label
-    assert hasil.is_complete is True
-    assert len(analyzer.provider.calls) == 2
-
-
-def test_jeda_free_tier_ditunggu_bukan_dialihkan_ke_lokal(analyzer, monkeypatch):
-    monkeypatch.setattr(cfg, "VLM_MIN_INTERVAL_SECONDS", 0.4)
-    analyzer.provider = FakeProvider(reply=_lengkap())
-    analyzer.last_api_call_time = time.time()  # panggilan lain baru saja terjadi
-    start = time.time()
-    hasil = analyzer.analyze_person(person_crop(vest=False))
-    assert time.time() - start >= 0.35
-    assert hasil.inference_source == analyzer.source_label
-
-
-def test_antrean_vlm_yang_tidak_kunjung_kosong_ditolak(analyzer, monkeypatch):
-    monkeypatch.setattr(cfg, "VLM_TIMEOUT_SECONDS", 0.1)
-    analyzer.provider = FakeProvider(reply=_lengkap())
+def test_antrean_vlm_yang_tidak_kunjung_kosong_tanpa_keputusan(analyzer):
+    utama = FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=utama, timeout_utama=0.1)
     analyzer.api_lock.acquire()  # inspeksi lain memegang giliran terlalu lama
     try:
-        _assert_ditolak_tidak_terverifikasi(analyzer.analyze_person(person_crop()))
-        assert analyzer.provider.calls == []
+        _assert_tanpa_keputusan(analyzer.analyze_person(person_crop()))
+        assert utama.calls == []
     finally:
         analyzer.api_lock.release()
 
 
-def test_mode_offline_pilihan_operator_tetap_memakai_engine_lokal(analyzer, monkeypatch):
-    from backend.api_monitor import api_monitor
-    monkeypatch.setattr(api_monitor, "engine_mode", "FORCE_LOCAL")
-    analyzer.provider = FakeProvider(reply=_lengkap())
-    hasil = analyzer.analyze_person(person_crop())
-    assert hasil.inference_source == "LOCAL_GPU"
-    assert hasil.is_low_confidence is True
-    assert analyzer.provider.calls == []
-
-
-def test_ping_lewat_penyedia(analyzer):
-    analyzer.provider = FakeProvider()
+def test_ping_menguji_utama_dan_cadangan(analyzer):
+    analyzer.pasang(utama=FakeProvider(), cadangan=FakeProvider(error=None))
     res = analyzer.ping_api()
-    assert res["reply"] == "PONG"
+    assert [r["role"] for r in res["engines"]] == ["utama", "cadangan"]
+    assert all(r["ok"] for r in res["engines"])
+
+
+def test_status_dashboard_mengikuti_siapa_yang_memutuskan(analyzer):
+    from backend.api_monitor import api_monitor
+    analyzer.pasang(utama=FakeProvider(error=RuntimeError("503")), cadangan=FakeProvider(reply=_lengkap()))
+    analyzer.analyze_person(person_crop())
+    assert api_monitor.get_status()["mode"] == "CADANGAN"
+    analyzer.primary.provider.error = None
+    analyzer.primary.provider.reply = _lengkap()
+    analyzer.analyze_person(person_crop())
+    assert api_monitor.get_status()["mode"] == "UTAMA"
+    analyzer.primary.provider.error = RuntimeError("503")
+    analyzer.backup.provider.error = RuntimeError("mati")
+    analyzer.analyze_person(person_crop())
+    assert api_monitor.get_status()["mode"] == "GANGGUAN"
+
+
+def test_klien_gemini_membatalkan_panggilan_lewat_batas_waktu(monkeypatch):
+    # Tanpa batas waktu HTTP, panggilan saat Google kelebihan beban menggantung
+    # ~60 dtk dan menyandera thread walau aplikasi berhenti menunggu (T27).
+    from google import genai
+    dibuat = {}
+
+    class ClientPalsu:
+        def __init__(self, **kwargs):
+            dibuat.update(kwargs)
+
+    monkeypatch.setattr(genai, "Client", ClientPalsu)
+    GeminiProvider(api_key="k", model="m", http_timeout=12.0)
+    assert dibuat["http_options"].timeout == 12000, "SDK google-genai memakai milidetik"
+    # Gemini menolak tenggat < 10 dtk (400 INVALID_ARGUMENT, terukur 24-09)
+    GeminiProvider(api_key="k", model="m", http_timeout=5.0)
+    assert dibuat["http_options"].timeout == 10000
 
 
 def test_thinking_level_dikirim_bila_disetel(monkeypatch):

@@ -15,11 +15,11 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 * **Pemilihan Mode Kamera:** Kamera dibuka seketika dengan permintaan bawaan yang terbukti lancar di berbagai perangkat, lalu tombol **Pindai kamera** mengukur seluruh mode dan memilih yang terbaik. Dua temuan pengukuran mendasari rancangan ini: (1) laju frame bergantung pada angka yang **diminta**, bukan hasilnya — meminta 848×480 menghasilkan 19,9 FPS sedangkan meminta 854×480 menghasilkan 29,7 FPS walau frame-nya sama-sama 848×480; (2) sebagian kamera USB baru mencapai laju stabilnya ~3,5 detik setelah dibuka (1 FPS di detik pertama, 26 FPS di detik keempat), sehingga pengukuran yang akurat tidak mungkin dilakukan secara instan.
 * **Kelancaran di Atas Rasio:** Mode dipilih dengan mengutamakan laju frame. Kamera USB penguji hanya mampu 7 FPS pada 16:9 tetapi 25 FPS pada 4:3, dan sistem memilih yang 4:3 — frame 4:3 aman karena overlay canvas menyesuaikan diri terhadap letterbox.
 * **Pemulihan Kamera:** Kamera yang tercabut terdeteksi dalam ~1 detik, dilaporkan di ribbon dashboard, dan disambung ulang otomatis tanpa membekukan aliran video.
-* **Corridor & Fast-Pass Engine:** OpenCV (`cv2`) untuk Virtual Inspection Corridor, segmentasi warna HSV reflektif rompi (*Hi-Vis Orange/Yellow*), dan ekstraksi area kepala/kaki.
+* **Corridor & pra-proses:** OpenCV (`cv2`) untuk Virtual Inspection Corridor, pemilihan frame terbaik (ketajaman, gerak, pose), serta pemotongan dan kompresi gambar sebelum dikirim ke VLM.
 
 ### 2. Vision-Language Model (VLM & Cloud Layer)
-* **Model VLM (bebas penyedia):** dipilih lewat `VLM_PROVIDER` / `VLM_MODEL` di `backend/.env`, tanpa mengubah kode. Bawaan `Google Gemini 3.5 Flash-Lite` (SDK `google-genai`, ~1,5 dtk per inspeksi). Alternatif offline: model lokal lewat Ollama, bawaannya `qwen2.5vl:7b` (tanpa API key; dari evaluasi 84 foto berlabel dengan `tools/eval_vlm.py`: akurasi 94%, tidak meloloskan satu pun pekerja ber-APD kurang, median ~7,9 dtk, VRAM ~7,6 GB bersama YOLO; batas waktu lokal 12 dtk). Juga didukung OpenRouter, Qwen (DashScope), DeepSeek (`deepseek-flash`), OpenAI, dan server vLLM. Semua penyedia memakai adaptor di `backend/vlm_providers/`; timeout, percobaan ulang, dan penilaian kelengkapan sama untuk semuanya. Model dipanaskan saat server menyala sehingga pekerja pertama tidak menunggu model dimuat.
-* **Hybrid Auto / Local Fallback:** Jika jaringan terputus, API lambat, atau mode offline diaktifkan, sistem beralih otomatis ke *engine* lokal berbasis heuristik warna OpenCV (HSV) yang berjalan di CPU — tanpa dependensi cloud, tetapi dengan akurasi yang jauh lebih rendah daripada VLM. Keputusan yang berasal dari jalur ini ditandai eksplisit di dashboard dan di kolom CSV audit.
+* **Model VLM (bebas penyedia):** dipilih lewat `VLM_PROVIDER` / `VLM_MODEL` di `backend/.env`, tanpa mengubah kode. Bawaan `Google Gemini 3.5 Flash-Lite` (SDK `google-genai`, ~1,5 dtk per inspeksi). Model lokal lewat Ollama, bawaannya `qwen2.5vl:7b` (tanpa API key; dari evaluasi 84 foto berlabel dengan `tools/eval_vlm.py`: akurasi 94%, tidak meloloskan satu pun pekerja ber-APD kurang, median ~7,9 dtk, VRAM ~7,6 GB bersama YOLO; batas waktu lokal 12 dtk). Juga didukung OpenRouter, Qwen (DashScope), DeepSeek (`deepseek-flash`), OpenAI, dan server vLLM. Semua penyedia memakai adaptor di `backend/vlm_providers/`; timeout, percobaan ulang, dan penilaian kelengkapan sama untuk semuanya. Model dipanaskan saat server menyala sehingga pekerja pertama tidak menunggu model dimuat.
+* **VLM utama + cadangan otomatis (T27):** Semua keputusan diambil VLM. Bila VLM utama galat, lewat batas waktu (cloud 4 dtk), atau jawabannya rusak, pekerja yang sama langsung diperiksa VLM cadangan (bawaan: `qwen2.5vl:7b` lewat Ollama, batas 12 dtk) — tanpa mengulang dari awal. Setelah 2 kegagalan berturut-turut, utama dilewati dan dicoba lagi pada pekerja nyata setelah 60 dtk. Bila utama dan cadangan sama-sama gagal, tidak ada keputusan: lampu tetap padam (merah khusus APD kurang), pekerja diminta menunggu lewat suara, lalu diperiksa ulang otomatis. Pita status dashboard menunjukkan 🟢 utama / 🟡 cadangan / 🔴 gangguan; audit mencatat model yang memutuskan (`VLM_LIVE:` utama, `VLM_CADANGAN:` cadangan). Tidak ada sakelar mode di dashboard: operator hanya menjalankan dan mengatur sistem. Heuristik warna OpenCV yang dulu menjadi cadangan sudah dibuang karena salah dua arah.
 * **Prompt Engineering K3:** Inferensi terstruktur yang mengembalikan format JSON standar untuk helm, rompi hi-vis, celana panjang, dan sepatu tertutup.
 * **API Anti-Spam Cache:** Membatasi inferensi tepat **1 frame per subjek unik**, dengan jeda minimum 4 detik antar panggilan dan kunci konkurensi, untuk mencegah pemborosan kuota API dan galat 429.
 
@@ -67,7 +67,7 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 * **Toolbar Kontrol:**
   * Sakelar **Panduan Posisi**: Sembunyikan atau tampilkan panduan batas lorong di layar.
   * Sakelar **Suara**: Membisukan (*Mute*) atau mengaktifkan suara panduan speaker secara instan.
-  * **Detail Teknis**: Accordion informasi engine mode, latensi inferensi, dan active track ID.
+  * **Detail Teknis**: Accordion informasi VLM yang sedang memutuskan (utama/cadangan/gangguan), latensi inferensi, dan active track ID.
   * **Mulai Ulang**: Tombol reset pelacakan subjek.
 * **Kartu Panduan Interaktif & Stepper 3-Tahap:**
   1. *Tahap 1 (Posisi)*: Memandu subjek berdiri tepat di tengah lorong hingga kepala sampai kaki terlihat.
@@ -100,14 +100,14 @@ ppe_detection_vlm/
 │   ├── __main__.py               # Titik masuk tunggal (memanggil `app.run()`)
 │   ├── config.py                 # Konfigurasi server, batas koridor, dan threshold
 │   ├── detector.py               # YOLO26s-Pose inference, ByteTrack & Full-Body Gatekeeper
-│   ├── vlm_analyzer.py           # Klien VLM (timeout, rate-guard, fallback) & engine lokal
+│   ├── vlm_analyzer.py           # VLM utama + cadangan: batas waktu, jeda kuota, pemutus sirkuit
 │   ├── vlm_providers/            # Adaptor penyedia VLM (kontrak di base.py; gemini.py)
 │   ├── state_manager.py          # State Machine, Smart Voice Limiter & Anti-Spam Queue
 │   ├── audio_engine.py           # Non-blocking audio queue player & Mute controller
 │   ├── notifier.py               # Pengendali sinyal lampu gerbang & IoT Hardware Bridge
 │   ├── report_manager.py         # SQLite3 audit repository & Snapshot JPEG manager
 │   ├── camera_manager.py         # Enumerasi perangkat, probing mode, & pemilihan resolusi
-│   ├── api_monitor.py            # Real-time latency monitor & engine mode switcher
+│   ├── api_monitor.py            # Kesehatan VLM utama & cadangan untuk pita status dashboard
 │   ├── app.py                    # Bootstrap FastAPI: middleware, router, frontend statis, server
 │   ├── shutdown.py               # Penanda berhenti bersama untuk stream & WebSocket
 │   ├── messages.py               # Seluruh teks operasional (lampu, HUD, API, CSV)
@@ -151,7 +151,7 @@ ppe_detection_vlm/
 ├── .github/workflows/ci.yml      # CI: ruff + pytest di Linux & Windows dari versi terkunci
 ├── deploy/safeguard.service      # Unit systemd (Linux): menyala saat boot, bangkit ulang bila mati
 │
-├── tests/                        # pytest: gerbang, engine lokal, kamera, migrasi DB & data
+├── tests/                        # pytest: gerbang, failover VLM, kamera, migrasi DB & data
 │   └── conftest.py               # Isolasi: DATA_DIR sementara, tanpa Gemini, tanpa IoT
 │
 ├── frontend/
@@ -188,8 +188,8 @@ ppe_detection_vlm/
 
 Bagian ini sengaja dicantumkan agar klaim sistem dapat dipertanggungjawabkan.
 
-* **Engine lokal bukan model AI.** `LocalVisionAnalyzer` adalah heuristik warna OpenCV (segmentasi HSV, rasio piksel) yang berjalan di CPU — bukan model *deep learning* dan bukan inferensi GPU. Hanya deteksi pose YOLO26s yang berjalan di CUDA. Akurasinya jauh di bawah Gemini VLM, terutama untuk helm dan alas kaki. Keputusan dari jalur ini selalu ditandai "Engine lokal — akurasi terbatas" di dashboard.
-* **Anti-spoofing hanya pada jalur Gemini.** Penolakan foto di layar ponsel atau cetakan kertas ditegakkan lewat instruksi prompt VLM. Jalur lokal tidak memilikinya, sehingga dalam mode offline sistem dapat tertipu oleh foto.
+* **Cadangan lokal butuh GPU yang cukup.** `qwen2.5vl:7b` ditahan di GPU sejak startup agar peralihan instan; bersama YOLO puncaknya ~7,6 GB dari 8 GB pada RTX 4060 Laptop, dan median ~7,9 dtk per pekerja (lebih lambat dari Gemini ~1,5 dtk). Ollama sesekali crash pada gambar tertentu (ollama/ollama#14170); inspeksi itu jatuh ke jalur gangguan dan diulang.
+* **Anti-spoofing bergantung pada VLM.** Penolakan foto di layar ponsel atau cetakan kertas ditegakkan lewat instruksi prompt, jadi ketangguhannya bergantung pada model yang sedang memutuskan (utama atau cadangan) dan belum dievaluasi terpisah.
 * **Tanpa autentikasi secara bawaan.** Endpoint yang mengubah state dilindungi hanya jika `ADMIN_TOKEN` diisi pada `.env`. Tanpa itu, siapa pun yang dapat menjangkau host ini di jaringan bisa mengganti API key atau menyalakan lampu gerbang.
 * **Data pribadi pada snapshot.** `DATA_DIR/reports/snapshots/` menyimpan potongan foto wajah pekerja tanpa batas waktu, dan `audit.db` menyimpan riwayat inspeksinya. Perlakukan sebagai data pribadi: batasi akses direktori tersebut dan tetapkan kebijakan retensi sebelum dipakai di lapangan.
 * **Nama kamera hanya di Windows dan Linux.** Windows membaca nama lewat DirectShow (`pygrabber`), Linux dari `/sys/class/video4linux` (node sekunder sebuah kamera USB diberi akhiran `(node N)`). Di macOS daftar tetap berfungsi, tetapi hanya menampilkan label generik `Kamera 0`, `Kamera 1`, dan seterusnya.

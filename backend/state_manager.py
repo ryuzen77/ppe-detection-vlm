@@ -9,7 +9,7 @@ from .config import cfg
 from . import messages
 from .detector import DetectionResult
 from . import frame_quality
-from .vlm_analyzer import vlm_analyzer, APDInspectionResult
+from .vlm_analyzer import vlm_analyzer, InspectionResult
 from .audio_engine import audio_player
 from .notifier import notifier
 from .report_manager import report_mgr
@@ -23,6 +23,9 @@ class TrackState:
     STABILIZING = "STABILIZING"
     ANALYZING = "ANALYZING"
     ANALYZED = "ANALYZED"
+    # Tidak ada VLM yang menjawab (utama & cadangan gagal): belum ada keputusan,
+    # pekerja diminta menunggu dan diperiksa ulang otomatis (T27)
+    WAITING_SYSTEM = "WAITING_SYSTEM"
 
 
 class GateSession:
@@ -47,7 +50,9 @@ class GateSession:
         self.stable_frames = 0
         self.last_step_back_audio_time = 0.0
         self.step_back_warning_count = 0
-        self.vlm_result: Optional[APDInspectionResult] = None
+        self.vlm_result: Optional[InspectionResult] = None
+        # Kapan pemeriksaan diulang setelah gangguan sistem (WAITING_SYSTEM)
+        self.retry_at = 0.0
         self.analysis_timestamp: Optional[float] = None
         self.is_full_body_now = False
         self.current_reason = ""
@@ -104,6 +109,16 @@ class StateManager:
             session.current_reason = det.reason
             session.clip_type = getattr(det, "clip_type", "OPTIMAL")
 
+            # Gangguan sistem: tunggu jeda, lalu kumpulkan frame dan periksa ulang
+            # orang yang sama selama ia masih di jalur
+            if session.state == TrackState.WAITING_SYSTEM:
+                if now < session.retry_at:
+                    return
+                logger.info(f"Sesi #{session.session_id}: mencoba ulang pemeriksaan setelah gangguan sistem.")
+                session.state = TrackState.INITIAL
+                session.stable_frames = 0
+                session.candidates = []
+
             # Keputusan sesi terkunci sampai jalur kosong: tidak ada panggilan VLM kedua
             if session.state in (TrackState.ANALYZING, TrackState.ANALYZED):
                 return
@@ -157,6 +172,10 @@ class StateManager:
         try:
             result = vlm_analyzer.analyze_person(crop_img)
 
+            if result.is_system_unavailable:
+                self._wait_for_system(session_id, result)
+                return
+
             # Pemeriksaan sudah terjadi, jadi selalu tercatat di audit, termasuk
             # bila pekerjanya sudah pergi sebelum hasil tiba.
             saved_meta = report_mgr.save_inspection(
@@ -180,6 +199,7 @@ class StateManager:
                     "notes": result.notes,
                     "inference_source": result.inference_source,
                     "inference_time_ms": result.inference_time_ms,
+                    "decided_by": result.decided_by,
                     "snapshot_filename": saved_meta.get("snapshot_filename", "")
                 }
                 self.inspection_history.insert(0, record)
@@ -197,11 +217,7 @@ class StateManager:
                 session.state = TrackState.ANALYZED
                 session.analysis_timestamp = time.time()
 
-                if result.is_unverified:
-                    logger.warning(f"Sesi #{session_id}: VLM tidak dapat memverifikasi APD. Red Light ON.")
-                    notifier.set_incomplete(messages.LIGHT_UNVERIFIED)
-                    audio_player.play("verifikasi_gagal", min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS)
-                elif result.is_complete:
+                if result.is_complete:
                     logger.info(f"Sesi #{session_id}: APD LENGKAP! Green Light ON.")
                     notifier.set_complete(messages.LIGHT_GRANTED)
                     audio_player.play_result(is_complete=True)
@@ -214,6 +230,26 @@ class StateManager:
         except Exception as e:
             logger.exception(f"Error during VLM analysis for session #{session_id}: {e}")
             self._retry_session(session_id)
+
+    def _wait_for_system(self, session_id: int, result: InspectionResult):
+        """Utama & cadangan gagal: tanpa keputusan, tanpa baris audit, tanpa LED merah.
+
+        Pekerja diminta menunggu lewat suara; bila ia masih di jalur setelah
+        VLM_SYSTEM_RETRY_SECONDS, pemeriksaan diulang otomatis. Gangguan cukup
+        dicatat di log (keputusan pengguna).
+        """
+        with self.lock:
+            session = self.session
+            if session is None or session.session_id != session_id:
+                return
+            session.state = TrackState.WAITING_SYSTEM
+            # vlm_result sengaja tidak diisi: tidak ada item yang dinilai, jadi
+            # dashboard menampilkan "belum dinilai" (kuning), bukan hasil kosong.
+            session.retry_at = time.time() + cfg.VLM_SYSTEM_RETRY_SECONDS
+            logger.warning(f"Sesi #{session_id}: sistem gangguan, pekerja diminta menunggu; "
+                           f"diperiksa ulang dalam {cfg.VLM_SYSTEM_RETRY_SECONDS:g} dtk.")
+            notifier.set_waiting()
+            audio_player.play("sistem_gangguan", min_interval=cfg.AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS)
 
     def _retry_session(self, session_id: int):
         """Analisa tidak menghasilkan keputusan (galat internal): sesi boleh mencoba lagi."""
@@ -254,6 +290,8 @@ class StateManager:
                     "reason": s.current_reason,
                     "clip_type": s.clip_type,
                     "stable_frames": s.stable_frames,
+                    "retry_in_s": max(0.0, round(s.retry_at - time.time(), 1))
+                    if s.state == TrackState.WAITING_SYSTEM else None,
                     "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None
                 }
 
@@ -277,7 +315,6 @@ class StateManager:
                 "is_live_vlm": vlm_analyzer.is_live_api(),
                 "vlm": vlm_analyzer.provider_info(),
                 "api_monitor": api_monitor.get_status(),
-                "engine_mode": api_monitor.engine_mode
             }
 
 

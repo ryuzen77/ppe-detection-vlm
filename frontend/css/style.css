@@ -1025,7 +1025,7 @@ body {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-top: 20px;
 }
@@ -1042,6 +1042,7 @@ body {
 .kpi-card.kpi-success { border-left: 4px solid var(--accent-teal); }
 .kpi-card.kpi-danger  { border-left: 4px solid var(--accent-red); }
 .kpi-card.kpi-info    { border-left: 4px solid var(--accent-cyan); }
+.kpi-card.kpi-warning { border-left: 4px solid var(--accent-amber); }
 
 .kpi-label { font-size: 0.8rem; color: var(--text-secondary); }
 .kpi-val { font-size: 1.8rem; font-weight: 800; font-family: var(--font-mono); margin: 4px 0; color: #ffffff; }
@@ -1398,8 +1399,8 @@ body {
   }
 }
 
-/* Penanda keputusan dari heuristik lokal (bukan VLM) pada footnote checklist */
-.confidence-chip {
+/* Penanda keputusan oleh VLM cadangan (utama gagal/terputus) pada footnote checklist */
+.backup-chip {
   display: inline-block;
   margin-left: 6px;
   padding: 2px 8px;
@@ -1410,6 +1411,23 @@ body {
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Spanduk gangguan: utama & cadangan VLM tidak menjawab */
+.system-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 51, 102, 0.12);
+  border: 1px solid rgba(255, 51, 102, 0.45);
+  color: var(--accent-red);
+  font-size: 0.85rem;
+}
+.system-alert-banner[hidden] {
+  display: none;
 }
 
 /* Dialog pemilihan sumber kamera */

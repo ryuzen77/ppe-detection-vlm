@@ -1,68 +1,15 @@
-"""Engine heuristik lokal (mode offline) dan penilaian kelengkapan dari katalog APD."""
+"""Aturan katalog APD dan penguraian balasan VLM menjadi keputusan kelengkapan.
+
+(Dipindah dari test_local_engine.py saat heuristik OpenCV dibuang di T27.)
+"""
 import pytest
 
 from backend import ppe_rules
-from backend.vlm_analyzer import LocalVisionAnalyzer, VLMAnalyzer
-
-from helpers import person_crop
-
-
-@pytest.fixture
-def engine(catalog_defaults):
-    return LocalVisionAnalyzer()
+from backend.vlm_analyzer import VLMAnalyzer
 
 
 def missing_label(key):
     return ppe_rules.get_item(key).missing_label
-
-
-# --- Heuristik per item ------------------------------------------------------
-
-def test_apd_lengkap_lolos(engine):
-    result = engine.analyze(person_crop())
-    assert result.is_complete
-    assert result.missing_items == []
-    assert result.is_low_confidence, "Keputusan engine lokal harus selalu ditandai akurasi terbatas"
-
-
-@pytest.mark.parametrize("kurang, key", [
-    ({"vest": False}, "rompi"),
-    ({"helmet": False}, "helm"),
-    ({"long_pants": False}, "celana"),
-    ({"closed_shoes": False}, "sepatu"),
-])
-def test_satu_item_kurang_hanya_item_itu_yang_gagal(engine, kurang, key):
-    result = engine.analyze(person_crop(**kurang))
-    assert not result.is_complete
-    assert result.missing_items == [missing_label(key)]
-
-
-def test_rompi_berwarna_valid_melaporkan_warnanya(engine):
-    rompi = engine.analyze(person_crop()).item("rompi")
-    assert rompi.detected and rompi.is_valid_color
-    assert rompi.color == "orange"
-
-
-# --- Item tanpa heuristik lokal ----------------------------------------------
-
-def test_item_tanpa_pemeriksa_lokal_menutup_gerbang(engine, catalog_defaults):
-    # Kacamata hanya bisa dinilai VLM. Saat dinyalakan dalam mode offline,
-    # pekerja harus ditolak, bukan diloloskan atas pemeriksaan yang tidak terjadi.
-    assert not engine.has_local_check("kacamata")
-    catalog_defaults.set_active({"kacamata": True})
-
-    result = engine.analyze(person_crop())
-    assert not result.is_complete
-    assert missing_label("kacamata") in result.missing_items
-    assert not result.item("kacamata").detected
-    assert "Kacamata" in result.notes
-
-
-def test_item_yang_dimatikan_tidak_diperiksa(engine, catalog_defaults):
-    catalog_defaults.set_active({"sepatu": False})
-    result = engine.analyze(person_crop(closed_shoes=False))
-    assert result.is_complete
-    assert "sepatu" not in result.items
 
 
 # --- Aturan katalog ------------------------------------------------------------

@@ -15,6 +15,9 @@ from .vlm_providers import create_provider
 
 logger = logging.getLogger(__name__)
 
+ROLE_PRIMARY = "utama"
+ROLE_BACKUP = "cadangan"
+
 class ItemResult(BaseModel):
     """Hasil pemeriksaan satu item APD.
 
@@ -43,17 +46,14 @@ class InspectionResult(BaseModel):
     )
     notes: str = Field(default="", description="Ringkasan hasil inspeksi dalam Bahasa Indonesia")
     inference_source: str = Field(
-        default="LOCAL_FAST_PASS",
-        description="Sumber keputusan: VLM_LIVE:<penyedia>/<model>, LOCAL_FAST_PASS, OFFLINE_FALLBACK, atau VLM_GAGAL",
+        default="",
+        description="Sumber keputusan: VLM_LIVE:<penyedia>/<model> (utama) atau VLM_CADANGAN:<penyedia>/<model>",
     )
-    inference_time_ms: float = Field(default=0.0, description="Durasi inferensi dalam milidetik")
-    is_low_confidence: bool = Field(
+    inference_time_ms: float = Field(default=0.0, description="Durasi inspeksi dalam milidetik")
+    decided_by: str = Field(default="", description="VLM yang memutuskan: 'utama' atau 'cadangan'")
+    is_system_unavailable: bool = Field(
         default=False,
-        description="True jika keputusan berasal dari heuristik lokal yang akurasinya terbatas",
-    )
-    is_unverified: bool = Field(
-        default=False,
-        description="True jika VLM aktif tetapi gagal menjawab; pekerja ditolak tanpa penilaian item",
+        description="True jika utama dan cadangan sama-sama gagal: TIDAK ada keputusan, pekerja diminta menunggu",
     )
 
     def item(self, key: str) -> ItemResult:
@@ -98,349 +98,344 @@ def build_system_prompt(items=None) -> str:
     )
 
 
-class LocalVisionAnalyzer:
-    """Heuristik visi komputer lokal berbasis OpenCV (~15ms di CPU).
+class VLMEngine:
+    """Satu VLM (utama atau cadangan): adaptor penyedia + batas waktu + jeda kuota.
 
-    Berfungsi sebagai Tier 1 Fast-Pass dan cadangan 100% offline bila internet mati.
-    Ini BUKAN model deep learning: keputusannya berasal dari segmentasi warna HSV
-    dan rasio piksel per ROI, sehingga akurasinya jauh di bawah VLM. Setiap hasil
-    ditandai `is_low_confidence=True` agar operator tahu asal keputusannya.
+    Batas waktu mengikuti letak model (cloud pendek, lokal longgar) dan dipasang
+    juga di klien HTTP, sehingga panggilan yang melewatinya benar-benar
+    dibatalkan alih-alih menggantung dan menyandera thread.
     """
-    def __init__(self):
-        # Satu-satunya tempat yang menghubungkan kunci katalog APD dengan kode
-        # pemeriksanya. Item yang tidak terdaftar di sini TIDAK lolos diam-diam;
-        # `analyze()` menandainya sebagai tidak terverifikasi, meneruskan prinsip
-        # yang sama dengan penanganan helm dan sepatu sebelumnya.
-        self._detectors = {
-            "helm": self._check_helm,
-            "rompi": self._check_rompi,
-            "celana": self._check_celana,
-            "sepatu": self._check_sepatu,
-        }
 
-    @staticmethod
-    def _center_band(roi: np.ndarray, ratio: float) -> np.ndarray:
-        """Memotong pita tengah horizontal dari sebuah ROI.
-
-        Kepala dan kaki berada di tengah crop, sedangkan tepi kiri/kanan berisi
-        latar belakang. Tanpa pemotongan ini, dinding terang atau lantai gelap
-        di belakang subjek ikut terhitung sebagai helm atau sepatu.
-        """
-        w = roi.shape[1]
-        band = max(int(w * ratio), 1)
-        x1 = max((w - band) // 2, 0)
-        return roi[:, x1:x1 + band]
-
-    @staticmethod
-    def _skin_ratio(hsv_roi: np.ndarray) -> float:
-        """Porsi piksel bernuansa kulit pada sebuah ROI."""
-        total = max(hsv_roi.shape[0] * hsv_roi.shape[1], 1)
-        skin_mask = cv2.inRange(hsv_roi, np.array(cfg.HSV_SKIN_LOWER), np.array(cfg.HSV_SKIN_UPPER))
-        return cv2.countNonZero(skin_mask) / total
-
-    def _detect_helmet(self, head_roi: np.ndarray) -> tuple[bool, float]:
-        """Mencari helm pada mahkota kepala: warna solid bersaturasi tinggi atau putih terang.
-
-        Mengembalikan (terdeteksi, rasio cakupan mahkota).
-        """
-        if head_roi is None or head_roi.size == 0:
-            return False, 0.0
-
-        hsv_head = cv2.cvtColor(head_roi, cv2.COLOR_BGR2HSV)
-        crown_h = max(int(head_roi.shape[0] * cfg.HELMET_CROWN_RATIO), 1)
-        hsv_crown = self._center_band(hsv_head[0:crown_h, :], cfg.HELMET_CROWN_CENTER_RATIO)
-        total_crown = max(hsv_crown.shape[0] * hsv_crown.shape[1], 1)
-
-        saturation = hsv_crown[:, :, 1]
-        value = hsv_crown[:, :, 2]
-
-        # Helm berwarna (saturasi tinggi) ATAU helm putih (sangat terang)
-        colored = saturation >= cfg.HELMET_MIN_SATURATION
-        bright = value >= cfg.HELMET_MIN_VALUE_BRIGHT
-        helmet_mask = np.logical_or(colored, bright)
-
-        # Kulit wajah juga bersaturasi, jadi dikurangkan agar tidak terhitung helm
-        skin_mask = cv2.inRange(hsv_crown, np.array(cfg.HSV_SKIN_LOWER), np.array(cfg.HSV_SKIN_UPPER)) > 0
-        helmet_mask = np.logical_and(helmet_mask, np.logical_not(skin_mask))
-
-        coverage = float(np.count_nonzero(helmet_mask)) / total_crown
-        skin_ratio = self._skin_ratio(self._center_band(hsv_head, cfg.HELMET_CROWN_CENTER_RATIO))
-
-        detected = coverage >= cfg.HELMET_MIN_COVERAGE and skin_ratio < cfg.HELMET_SKIN_MAX_RATIO
-        return detected, coverage
-
-    def _detect_closed_shoes(self, shoe_roi: np.ndarray) -> tuple[bool, float]:
-        """Mencari alas kaki tertutup: area gelap padat tanpa kulit dominan.
-
-        Mengembalikan (terdeteksi, rasio piksel gelap).
-        """
-        if shoe_roi is None or shoe_roi.size == 0:
-            return False, 0.0
-
-        hsv_shoe = self._center_band(cv2.cvtColor(shoe_roi, cv2.COLOR_BGR2HSV), cfg.SHOE_ROI_CENTER_RATIO)
-        total = max(hsv_shoe.shape[0] * hsv_shoe.shape[1], 1)
-
-        dark_ratio = float(np.count_nonzero(hsv_shoe[:, :, 2] <= cfg.SHOE_MAX_VALUE_DARK)) / total
-        skin_ratio = self._skin_ratio(hsv_shoe)
-
-        detected = dark_ratio >= cfg.SHOE_MIN_DARK_RATIO and skin_ratio < cfg.SHOE_SKIN_MAX_RATIO
-        return detected, dark_ratio
-
-    # ------------------------------------------------------------------
-    # Pemeriksa per item. Masing-masing menerima crop penuh dan definisi
-    # itemnya, lalu mengembalikan satu ItemResult. Nama field syarat tambahan
-    # diambil dari katalog (`item.qualifier.key`), bukan ditulis tetap, supaya
-    # item baru dengan syaratnya sendiri tidak memerlukan perubahan di sini.
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _with_qualifier(item, detected: bool, description: str, qualifier_value=None,
-                        color: str = "") -> ItemResult:
-        extra = {}
-        if item.qualifier is not None:
-            extra[item.qualifier.key] = bool(
-                detected if qualifier_value is None else qualifier_value
-            )
-        return ItemResult(detected=detected, color=color, description=description, **extra)
-
-    def _check_helm(self, image_bgr: np.ndarray, item) -> ItemResult:
-        """Helm proyek berwarna solid dan kontras terhadap rambut maupun kulit."""
-        h = image_bgr.shape[0]
-        head = image_bgr[0:max(int(h * cfg.HELMET_ROI_TOP_RATIO), 1), :]
-        detected, coverage = self._detect_helmet(head)
-        return self._with_qualifier(
-            item, detected,
-            f"Helm keselamatan terdeteksi (cakupan mahkota {coverage:.0%})" if detected
-            else "Helm tidak terverifikasi oleh engine lokal",
-            color="bebas",
-        )
-
-    def _check_rompi(self, image_bgr: np.ndarray, item) -> ItemResult:
-        """Rompi hi-vis dikenali dari porsi piksel orange/kuning dan pita reflektif."""
-        h = image_bgr.shape[0]
-        torso = image_bgr[int(h * cfg.TORSO_ROI_TOP_RATIO):int(h * cfg.TORSO_LEGS_SPLIT_RATIO), :]
-        hsv_torso = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV)
-
-        orange_px = cv2.countNonZero(
-            cv2.inRange(hsv_torso, np.array(cfg.HSV_ORANGE_LOWER), np.array(cfg.HSV_ORANGE_UPPER)))
-        yellow_px = cv2.countNonZero(
-            cv2.inRange(hsv_torso, np.array(cfg.HSV_YELLOW_LOWER), np.array(cfg.HSV_YELLOW_UPPER)))
-        silver_px = cv2.countNonZero(
-            cv2.inRange(hsv_torso, np.array(cfg.HSV_SILVER_LOWER), np.array(cfg.HSV_SILVER_UPPER)))
-
-        total_px = max(torso.shape[0] * torso.shape[1], 1)
-        hi_vis_ratio = (orange_px + yellow_px + silver_px) / total_px
-        detected = hi_vis_ratio > cfg.HI_VIS_MIN_RATIO
-        warna = "orange" if orange_px >= yellow_px else "kuning"
-
-        return self._with_qualifier(
-            item, detected,
-            f"Rompi keselamatan warna {warna} reflektif" if detected
-            else "Rompi tidak terdeteksi atau bukan orange/kuning",
-            color=warna if detected else "tidak sesuai",
-        )
-
-    def _check_celana(self, image_bgr: np.ndarray, item) -> ItemResult:
-        """Celana pendek menampakkan kulit di area kaki; rasio kulit jadi penandanya."""
-        h = image_bgr.shape[0]
-        legs = image_bgr[int(h * cfg.TORSO_LEGS_SPLIT_RATIO):int(h * cfg.LEGS_ROI_BOTTOM_RATIO), :]
-        skin_ratio = self._skin_ratio(cv2.cvtColor(legs, cv2.COLOR_BGR2HSV))
-        detected = skin_ratio < cfg.SKIN_MAX_RATIO
-        return self._with_qualifier(
-            item, detected,
-            "Celana panjang kerja terpasang" if detected
-            else "Terdeteksi celana pendek / lutut terbuka",
-        )
-
-    def _check_sepatu(self, image_bgr: np.ndarray, item) -> ItemResult:
-        """Sepatu tertutup tampak gelap dan padat; sandal menampakkan kulit."""
-        h = image_bgr.shape[0]
-        shoe_top = min(int(h * (1.0 - cfg.SHOE_ROI_BOTTOM_RATIO)), h - 1)
-        detected, dark_ratio = self._detect_closed_shoes(image_bgr[shoe_top:h, :])
-        return self._with_qualifier(
-            item, detected,
-            f"Alas kaki tertutup terdeteksi (area gelap {dark_ratio:.0%})" if detected
-            else "Sepatu tertutup tidak terverifikasi oleh engine lokal",
-        )
-
-    @staticmethod
-    def _unverified(item) -> ItemResult:
-        """Item tanpa heuristik lokal.
-
-        Dikembalikan sebagai TIDAK terdeteksi, bukan lolos. Menambah item APD di
-        katalog tanpa menyediakan pemeriksanya akan menutup gerbang di mode
-        offline — sengaja, karena kebalikannya berarti meloloskan pekerja atas
-        dasar pemeriksaan yang tidak pernah terjadi.
-        """
-        extra = {item.qualifier.key: False} if item.qualifier is not None else {}
-        return ItemResult(
-            detected=False,
-            description=f"{item.label} tidak dapat diperiksa engine lokal",
-            **extra,
-        )
-
-    def has_local_check(self, key: str) -> bool:
-        """Apakah item ini punya pemeriksa heuristik lokal (untuk mode offline)."""
-        return key in self._detectors
-
-    def analyze(self, image_bgr: np.ndarray) -> InspectionResult:
-        """Memeriksa seluruh item APD yang sedang aktif."""
-        start_t = time.time()
-
-        aktif = ppe_rules.get_active_items()
-        items = {}
-        tanpa_heuristik = []
-        for item in aktif:
-            pemeriksa = self._detectors.get(item.key)
-            if pemeriksa is None:
-                items[item.key] = self._unverified(item)
-                tanpa_heuristik.append(item.label)
-            else:
-                items[item.key] = pemeriksa(image_bgr, item)
-
-        # Kelengkapan diputuskan `ppe_rules.evaluate()`, aturan yang sama dengan
-        # prompt VLM, sehingga kedua jalur tidak bisa menyimpang satu sama lain.
-        is_complete, missing = ppe_rules.evaluate(
-            {k: v.model_dump() for k, v in items.items()}, aktif
-        )
-
-        catatan = "[ENGINE LOKAL - FAST PASS] Heuristik warna OpenCV, akurasi terbatas dibanding VLM."
-        if tanpa_heuristik:
-            catatan += " Tanpa pemeriksa lokal: " + ", ".join(tanpa_heuristik) + "."
-
-        return InspectionResult(
-            items=items,
-            is_complete=is_complete,
-            missing_items=missing,
-            notes=catatan,
-            inference_source="LOCAL_FAST_PASS",
-            inference_time_ms=round((time.time() - start_t) * 1000, 1),
-            is_low_confidence=True,
-        )
-
-
-class VLMAnalyzer:
-    """Hybrid VLM Analyzer with instant Tier 1 Local Pre-check, optimized upload,
-    strict 2.0s timeout, and Free-Tier Anti-Spam Concurrency Lock & Rate Limiter."""
-    def __init__(self):
-        self.provider_name = cfg.VLM_PROVIDER
-        self.api_key = cfg.VLM_API_KEY
-        self.model_name = cfg.VLM_MODEL
-        # Adaptor penyedia VLM (lihat vlm_providers); None = tanpa VLM, engine lokal
+    def __init__(self, role: str, provider_name: str, model: str, api_key: str = "", base_url: str = ""):
+        self.role = role
+        self.provider_name = (provider_name or "").strip().lower()
+        self.model_name = model or ""
+        self.api_key = (api_key or "").strip()
+        self.base_url = base_url or ""
+        self.is_local = self.provider_name in LOCAL_VLM_PROVIDERS
+        self.timeout = cfg.VLM_LOCAL_TIMEOUT_SECONDS if self.is_local else cfg.VLM_CLOUD_TIMEOUT_SECONDS
+        self.min_interval = 0.0 if self.is_local else cfg.VLM_MIN_INTERVAL_SECONDS
         self.provider = None
-        self.local_analyzer = LocalVisionAnalyzer()
-        self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix="VLM_Timeout_Guard")
-        
-        # Free Tier Anti-Spam Guards
-        self.api_lock = threading.Lock()
-        self.last_api_call_time: float = 0.0
-
-    def start(self):
-        """Merakit adaptor penyedia VLM sesuai konfigurasi. Dipanggil saat startup."""
-        self._init_provider()
+        self.error = ""
+        self.last_call_time = 0.0
+        self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT,
+                                           thread_name_prefix=f"VLM_{role}")
 
     @property
-    def source_label(self) -> str:
-        """Label sumber keputusan untuk audit, mis. VLM_LIVE:gemini/gemini-3.5-flash-lite."""
-        return f"VLM_LIVE:{self.provider_name}/{self.model_name}"
+    def label(self) -> str:
+        prefix = "VLM_LIVE" if self.role == ROLE_PRIMARY else "VLM_CADANGAN"
+        return f"{prefix}:{self.provider_name}/{self.model_name}"
 
-    def _provider_options(self) -> dict:
-        if self.provider_name == "gemini":
-            return {"thinking_level": cfg.GEMINI_THINKING_LEVEL}
-        return {"base_url": cfg.VLM_BASE_URL, "json_mode": cfg.VLM_JSON_MODE}
-
-    def _init_provider(self):
-        local = self.provider_name in LOCAL_VLM_PROVIDERS
-        if not (self.api_key and self.api_key.strip()) and not local:
-            self.provider = None
-            api_monitor.status = "OFFLINE"
-            logger.warning(f"API key VLM ({self.provider_name}) belum disetel. "
-                           f"Operating in LOCAL HEURISTIC MODE (akurasi terbatas).")
-            return
-        if not self.model_name:
-            self.provider = None
-            api_monitor.status = "OFFLINE"
-            logger.error(f"VLM_MODEL wajib diisi untuk penyedia '{self.provider_name}'. VLM nonaktif.")
-            return
-        try:
-            self.provider = create_provider(self.provider_name, api_key=(self.api_key or "").strip(),
-                                            model=self.model_name, **self._provider_options())
-            logger.info(f"VLM siap: {self.provider_name} ({self.model_name})")
-            api_monitor.status = "ONLINE"
-        except Exception as e:
-            logger.error(f"Gagal menyiapkan VLM {self.provider_name}: {e}")
-            self.provider = None
-            api_monitor.record_error(str(e))
+    def build(self) -> bool:
+        """Merakit adaptor penyedia. Tidak ada panggilan jaringan."""
+        self.provider = None
+        if not self.is_local and not self.api_key:
+            self.error = f"API key {self.provider_name} belum disetel"
+        elif not self.model_name:
+            self.error = f"model untuk penyedia '{self.provider_name}' belum diisi"
+        else:
+            try:
+                # Klien HTTP dibatalkan sedikit sesudah batas waktu aplikasi
+                http_timeout = self.timeout + 1.0
+                options = ({"thinking_level": cfg.GEMINI_THINKING_LEVEL, "http_timeout": http_timeout}
+                           if self.provider_name == "gemini" else
+                           {"base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE, "http_timeout": http_timeout,
+                            "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS})
+                self.provider = create_provider(self.provider_name, api_key=self.api_key,
+                                                model=self.model_name, **options)
+                self.error = ""
+            except Exception as e:
+                self.error = str(e)
+        if self.provider is None:
+            logger.warning(f"VLM {self.role} ({self.provider_name}) nonaktif: {self.error}")
+        else:
+            logger.info(f"VLM {self.role} siap: {self.provider_name} ({self.model_name}), "
+                        f"batas waktu {self.timeout:g} dtk")
+        return self.provider is not None
 
     def warm_up(self) -> Optional[float]:
-        """Pemanasan VLM saat startup. Mengembalikan durasinya, atau None bila gagal/nonaktif.
-
-        Tanpa ini, pekerja pertama menanggung waktu buka koneksi (Gemini ~3 dtk)
-        atau memuat model lokal (Ollama ~38 dtk), yang melebihi batas waktu dan
-        membuatnya ditolak sebagai "tidak dapat diverifikasi".
-        """
         if self.provider is None:
             return None
         start = time.time()
         try:
             self.executor.submit(self.provider.warm_up).result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
         except Exception as e:
-            logger.warning(f"Pemanasan VLM {self.provider_name} gagal ({e}); pekerja pertama mungkin lebih lambat.")
+            logger.warning(f"Pemanasan VLM {self.role} {self.provider_name} gagal ({e}).")
             return None
         duration = time.time() - start
-        logger.info(f"Pemanasan VLM {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
+        logger.info(f"Pemanasan VLM {self.role} {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
         return duration
 
-    def update_api_key(self, new_key: str):
-        """Mengganti API key penyedia yang sedang aktif (dari dashboard)."""
-        self.api_key = new_key.strip()
-        cfg.VLM_API_KEY = self.api_key
-        self._init_provider()
+    def call(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> dict:
+        """Satu panggilan dengan batas waktu keras. Galat & timeout dilempar ke pemanggil."""
+        wait = self.min_interval - (time.time() - self.last_call_time)
+        if wait > 0:
+            logger.info(f"Menunggu jeda kuota {wait:.1f} dtk sebelum panggilan VLM {self.role}.")
+            time.sleep(wait)
+        try:
+            future = self.executor.submit(self.provider.analyze, image_jpeg,
+                                          system_prompt=system_prompt, user_prompt=user_prompt)
+            return future.result(timeout=self.timeout)
+        finally:
+            # Dicatat untuk panggilan gagal juga, agar jeda kuota tetap berlaku
+            self.last_call_time = time.time()
 
-    def provider_info(self) -> dict:
-        """Penyedia aktif untuk dashboard. Tidak pernah menyertakan API key."""
+    def info(self) -> dict:
+        """Untuk dashboard. Tidak pernah menyertakan API key."""
         return {
+            "role": self.role,
             "provider": self.provider_name,
             "model": self.model_name,
-            "is_local": self.provider_name in LOCAL_VLM_PROVIDERS,
-            "needs_key": self.provider_name not in LOCAL_VLM_PROVIDERS,
-            "has_key": bool(self.api_key and self.api_key.strip()),
-            "is_live": self.is_live_api(),
+            "is_local": self.is_local,
+            "needs_key": not self.is_local,
+            "has_key": bool(self.api_key),
+            "is_live": self.provider is not None,
+            "timeout_s": self.timeout,
+            "error": self.error,
         }
 
+
+class VLMAnalyzer:
+    """Keputusan APD oleh VLM: utama dulu, cadangan otomatis bila utama gagal (T27).
+
+    - Utama gagal (galat, JSON rusak, atau lewat batas waktu) -> cadangan dipakai
+      di inspeksi yang SAMA; pekerja tidak perlu mengulang.
+    - Setelah VLM_PRIMARY_FAILURES_BEFORE_DOWN kegagalan berturut-turut, utama
+      dianggap terputus dan dilewati; dicoba lagi pada pekerja nyata setelah
+      VLM_PRIMARY_RETRY_AFTER_SECONDS (tanpa panggilan uji yang memakan kuota).
+    - Keduanya gagal -> TIDAK ada keputusan (`is_system_unavailable`): pekerja
+      tidak diloloskan dan tidak ditolak, melainkan diminta menunggu.
+    """
+
+    def __init__(self):
+        self.primary: Optional[VLMEngine] = None
+        self.backup: Optional[VLMEngine] = None
+        # Satu inspeksi pada satu waktu; permintaan lain menunggu gilirannya
+        self.api_lock = threading.Lock()
+        self.primary_failures = 0
+        self.primary_down_since: Optional[float] = None
+        self.primary_last_attempt = 0.0
+
+    def start(self):
+        """Merakit VLM utama & cadangan sesuai konfigurasi. Dipanggil saat startup."""
+        self.primary = VLMEngine(ROLE_PRIMARY, cfg.VLM_PROVIDER, cfg.VLM_MODEL, cfg.VLM_API_KEY, cfg.VLM_BASE_URL)
+        self.primary.build()
+        self.backup = None
+        if cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_PROVIDER != "none":
+            self.backup = VLMEngine(ROLE_BACKUP, cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL,
+                                    cfg.VLM_BACKUP_API_KEY, cfg.VLM_BACKUP_BASE_URL)
+            self.backup.build()
+        self.primary_failures = 0
+        self.primary_down_since = None
+        self._publish_status()
+
+    # --- Kompatibilitas: atribut penyedia utama dibaca tes, alat evaluasi, dan dashboard
+    @property
+    def provider(self):
+        return self.primary.provider if self.primary else None
+
+    @property
+    def provider_name(self) -> str:
+        return self.primary.provider_name if self.primary else cfg.VLM_PROVIDER
+
+    @property
+    def model_name(self) -> str:
+        return self.primary.model_name if self.primary else cfg.VLM_MODEL
+
+    @property
+    def api_key(self) -> str:
+        return self.primary.api_key if self.primary else ""
+
+    @property
+    def source_label(self) -> str:
+        """Label sumber keputusan utama untuk audit, mis. VLM_LIVE:gemini/gemini-3.5-flash-lite."""
+        return self.primary.label if self.primary else ""
+
+    def _engines(self) -> list[VLMEngine]:
+        return [e for e in (self.primary, self.backup) if e is not None and e.provider is not None]
+
     def is_live_api(self) -> bool:
-        return self.provider is not None
+        """Ada setidaknya satu VLM yang siap memutuskan."""
+        return bool(self._engines())
+
+    def warm_up(self) -> Optional[float]:
+        """Memanaskan utama DAN cadangan saat startup.
+
+        Cadangan juga dipanaskan (model lokal dimuat & ditahan di GPU) supaya
+        peralihan saat utama gagal tidak menunggu ~40 dtk pemuatan model.
+        Mengembalikan durasi pemanasan utama (None bila gagal/nonaktif).
+        """
+        result = self.primary.warm_up() if self.primary else None
+        if self.backup is not None:
+            self.backup.warm_up()
+        return result
+
+    def update_api_key(self, new_key: str):
+        """Mengganti API key VLM utama (dari dashboard)."""
+        cfg.VLM_API_KEY = new_key.strip()
+        if self.primary is None:
+            self.start()
+            return
+        self.primary.api_key = cfg.VLM_API_KEY
+        self.primary.build()
+        self.primary_failures = 0
+        self.primary_down_since = None
+        self._publish_status()
+
+    def provider_info(self) -> dict:
+        """VLM utama (bidang tingkat atas, bentuk lama) + cadangan. Tanpa API key."""
+        info = self.primary.info() if self.primary else {
+            "role": ROLE_PRIMARY, "provider": cfg.VLM_PROVIDER, "model": cfg.VLM_MODEL,
+            "is_local": cfg.VLM_IS_LOCAL, "needs_key": not cfg.VLM_IS_LOCAL, "has_key": False,
+            "is_live": False, "timeout_s": 0, "error": "belum dimulai"}
+        info["backup"] = self.backup.info() if self.backup else None
+        info["primary_down"] = self.primary_down_since is not None
+        return info
 
     def ping_api(self) -> dict:
-        """Sends a lightweight ping to verify API connectivity and measure round-trip latency."""
-        if not self.is_live_api():
-            return {
-                "status": "OFFLINE",
-                "latency_ms": 0,
-                "message": "VLM belum aktif (API key belum disetel atau model kosong)"
-            }
+        """Uji latensi utama dan cadangan."""
+        if not self._engines():
+            return {"status": "OFFLINE", "latency_ms": 0, "message": messages.VLM_NOT_CONFIGURED}
+        results = []
+        for engine in self._engines():
+            start = time.time()
+            try:
+                engine.executor.submit(engine.provider.ping).result(timeout=engine.timeout)
+                dur = round((time.time() - start) * 1000, 1)
+                results.append({"role": engine.role, "ok": True, "latency_ms": dur})
+            except Exception as e:
+                results.append({"role": engine.role, "ok": False,
+                                "latency_ms": round((time.time() - start) * 1000, 1),
+                                "error": str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]})
+        first = results[0]
+        message = "; ".join(
+            f"{r['role']}: {'OK ' + str(r['latency_ms']) + ' ms' if r['ok'] else 'gagal (' + r.get('error', '') + ')'}"
+            for r in results)
+        return {"status": "ONLINE" if first["ok"] else "ERROR", "latency_ms": first["latency_ms"],
+                "message": message, "engines": results}
 
-        start = time.time()
+    # --- Pemutus sirkuit utama
+    def _primary_allowed(self, now: float) -> bool:
+        if self.primary is None or self.primary.provider is None:
+            return False
+        if self.primary_failures < cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN:
+            return True
+        return now - self.primary_last_attempt >= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
+
+    def _primary_result(self, ok: bool, now: float):
+        if ok:
+            if self.primary_down_since is not None:
+                logger.info(f"VLM utama pulih setelah {now - self.primary_down_since:.0f} dtk.")
+            self.primary_failures = 0
+            self.primary_down_since = None
+            return
+        self.primary_failures += 1
+        if self.primary_failures >= cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN and self.primary_down_since is None:
+            self.primary_down_since = now
+            logger.warning(f"VLM utama dianggap terputus setelah {self.primary_failures} kegagalan berturut-turut; "
+                           f"inspeksi langsung ke cadangan, utama dicoba lagi setiap "
+                           f"{cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS:g} dtk.")
+
+    def _publish_status(self):
+        api_monitor.set_engines(
+            primary=self.primary.info() if self.primary else None,
+            backup=self.backup.info() if self.backup else None,
+            primary_down=self.primary_down_since is not None,
+        )
+
+    def _try(self, engine: VLMEngine, image_jpeg: bytes, aktif) -> InspectionResult:
+        call_start = time.time()
         try:
-            reply = self.provider.ping()
-            dur_ms = round((time.time() - start) * 1000, 1)
-            api_monitor.record_success(dur_ms)
-            return {
-                "status": api_monitor.status,
-                "latency_ms": dur_ms,
-                "reply": reply[:30],
-                "message": f"Koneksi VLM {self.provider_name} ({self.model_name}) berhasil dan responsif"
-            }
+            data = engine.call(image_jpeg, system_prompt=build_system_prompt(aktif), user_prompt=USER_PROMPT)
+            result = self._parse_vlm_payload(data, aktif)
+        except TimeoutError:
+            api_monitor.record_failure(engine.role, f"timeout > {engine.timeout:g} dtk", is_timeout=True)
+            raise
         except Exception as e:
-            dur_ms = round((time.time() - start) * 1000, 1)
-            api_monitor.record_error(str(e))
-            return {
-                "status": "ERROR",
-                "latency_ms": dur_ms,
-                "message": str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
-            }
+            api_monitor.record_failure(engine.role, str(e))
+            raise
+        api_monitor.record_success(engine.role, round((time.time() - call_start) * 1000, 1))
+        result.inference_source = engine.label
+        result.decided_by = engine.role
+        return result
 
-    def _optimize_image_for_vlm(self, image_bgr: np.ndarray) -> bytes:
+    @staticmethod
+    def _describe(e: Exception, engine: VLMEngine) -> str:
+        if isinstance(e, TimeoutError):
+            return f"timeout > {engine.timeout:g} dtk"
+        return f"galat: {str(e)[:80]}"
+
+    def analyze_person(self, person_crop_bgr: np.ndarray) -> InspectionResult:
+        """Keputusan APD untuk satu crop pekerja (lihat docstring kelas)."""
+        start_t = time.time()
+        if not self._engines():
+            return self._no_decision(start_t, messages.VLM_NOT_CONFIGURED)
+
+        lock_wait = sum(e.timeout + e.min_interval for e in self._engines()) + 1.0
+        if not self.api_lock.acquire(timeout=lock_wait):
+            return self._no_decision(start_t, "antrean VLM penuh")
+
+        api_monitor.set_locked(True)
+        try:
+            # Satu potret item aktif untuk seluruh inspeksi, supaya prompt dan
+            # penilaian jawaban memakai daftar yang sama walau operator mengubahnya.
+            aktif = ppe_rules.get_active_items()
+            image_jpeg = self._optimize_image_for_vlm(person_crop_bgr)
+            reasons = []
+
+            now = time.time()
+            if self._primary_allowed(now):
+                self.primary_last_attempt = now
+                try:
+                    result = self._try(self.primary, image_jpeg, aktif)
+                    self._primary_result(True, time.time())
+                    return self._finish(result, start_t)
+                except Exception as e:
+                    self._primary_result(False, time.time())
+                    reason = self._describe(e, self.primary)
+                    reasons.append(f"utama: {reason}")
+                    logger.warning(f"VLM utama gagal ({reason}); beralih ke cadangan.")
+            elif self.primary is not None and self.primary.provider is not None:
+                reasons.append("utama: dianggap terputus")
+
+            if self.backup is not None and self.backup.provider is not None:
+                try:
+                    return self._finish(self._try(self.backup, image_jpeg, aktif), start_t)
+                except Exception as e:
+                    reason = self._describe(e, self.backup)
+                    reasons.append(f"cadangan: {reason}")
+                    logger.warning(f"VLM cadangan gagal ({reason}).")
+            else:
+                reasons.append("cadangan: tidak tersedia")
+
+            return self._no_decision(start_t, "; ".join(reasons))
+        finally:
+            self._publish_status()
+            api_monitor.set_locked(False)
+            self.api_lock.release()
+
+    @staticmethod
+    def _finish(result: InspectionResult, start_t: float) -> InspectionResult:
+        result.inference_time_ms = round((time.time() - start_t) * 1000, 1)
+        api_monitor.record_decision(result.decided_by)
+        return result
+
+    @staticmethod
+    def _no_decision(start_t: float, reason: str) -> InspectionResult:
+        """Tidak ada VLM yang menjawab. Tanpa klaim per item dan tanpa keputusan."""
+        logger.warning(f"Inspeksi tanpa keputusan: {reason}")
+        api_monitor.record_decision(None, reason)
+        return InspectionResult(
+            items={},
+            is_complete=False,
+            is_system_unavailable=True,
+            notes=messages.VLM_NO_DECISION_NOTES.format(reason=reason),
+            inference_source="VLM_GANGGUAN",
+            inference_time_ms=round((time.time() - start_t) * 1000, 1),
+        )
+
+    @staticmethod
+    def _optimize_image_for_vlm(image_bgr: np.ndarray) -> bytes:
         """Resizes and compresses image to ~35KB JPEG for lightning-fast network upload."""
         h, w = image_bgr.shape[:2]
         max_dim = cfg.VLM_IMAGE_MAX_SIZE
@@ -453,106 +448,13 @@ class VLMAnalyzer:
         _, buffer = cv2.imencode('.jpg', image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])
         return buffer.tobytes()
 
-    def analyze_person(self, person_crop_bgr: np.ndarray) -> APDInspectionResult:
-        """Keputusan APD untuk satu crop pekerja.
+    def _call_vlm_internal(self, image_bgr: np.ndarray) -> InspectionResult:
+        """Satu panggilan langsung ke VLM utama tanpa batas waktu & tanpa cadangan.
 
-        Tanpa VLM (tanpa API key, atau operator memilih mode offline) keputusan
-        diambil engine lokal dan ditandai akurasi terbatas. Dengan VLM aktif,
-        hanya VLM yang boleh memutuskan: panggilan dicoba hingga
-        `VLM_MAX_ATTEMPTS` kali dengan batas waktu per percobaan, dan bila semua
-        gagal pekerja ditolak sebagai "tidak dapat diverifikasi".
+        Hanya untuk alat evaluasi (tools/eval_vlm.py), yang mengukur model apa adanya.
         """
-        start_t = time.time()
-        
-        # 1. Tier 1: Local Real-Time GPU Analysis (~15ms)
-        local_result = self.local_analyzer.analyze(person_crop_bgr)
-
-        # 2. Check if Operator Forced Offline Mode (heuristik lokal OpenCV)
-        if api_monitor.engine_mode == "FORCE_LOCAL":
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            local_result.inference_source = "LOCAL_GPU"
-            local_result.inference_time_ms = dur_ms
-            local_result.notes = "[MODE OFFLINE AKTIF] Keputusan diambil heuristik lokal OpenCV, akurasi terbatas."
-            api_monitor.record_local_call(is_rate_guard=False)
-            return local_result
-
-        # 3. VLM belum dikonfigurasi: keputusan engine lokal seketika
-        if not self.is_live_api():
-            dur_ms = round((time.time() - start_t) * 1000, 1)
-            local_result.inference_source = "OFFLINE_FALLBACK" if not self.api_key else "LOCAL_FAST_PASS"
-            local_result.inference_time_ms = dur_ms
-            api_monitor.record_local_call(is_rate_guard=False)
-            return local_result
-
-        # 4. Satu inspeksi VLM pada satu waktu. Permintaan lain MENUNGGU gilirannya,
-        # tidak dialihkan ke heuristik lokal: selama VLM aktif, pekerja tidak boleh
-        # diloloskan atas dasar heuristik yang terbukti salah dua arah (T21).
-        lock_wait = cfg.VLM_MAX_ATTEMPTS * (cfg.VLM_TIMEOUT_SECONDS + cfg.VLM_MIN_INTERVAL_SECONDS) + 1.0
-        if not self.api_lock.acquire(timeout=lock_wait):
-            return self._unverified_result(start_t, attempts=0, reason="antrean VLM penuh")
-
-        api_monitor.set_locked(True)
-        try:
-            reason = ""
-            for attempt in range(1, cfg.VLM_MAX_ATTEMPTS + 1):
-                # 5. Jeda minimum antar panggilan (kuota free tier) ditunggu, bukan dilewati
-                wait = cfg.VLM_MIN_INTERVAL_SECONDS - (time.time() - self.last_api_call_time)
-                if wait > 0:
-                    logger.info(f"Menunggu jeda free tier {wait:.1f}s sebelum panggilan VLM (percobaan {attempt}).")
-                    time.sleep(wait)
-
-                # 6. Panggilan VLM dengan batas waktu ketat
-                call_start = time.time()
-                try:
-                    future = self.executor.submit(self._call_vlm_internal, person_crop_bgr)
-                    vlm_result = future.result(timeout=cfg.VLM_TIMEOUT_SECONDS)
-                    dur_ms = round((time.time() - start_t) * 1000, 1)
-                    vlm_result.inference_source = self.source_label
-                    vlm_result.inference_time_ms = dur_ms
-                    vlm_result.is_low_confidence = False
-                    api_monitor.record_success(round((time.time() - call_start) * 1000, 1))
-                    return vlm_result
-                except TimeoutError:
-                    reason = f"timeout > {cfg.VLM_TIMEOUT_SECONDS:g} dtk"
-                    logger.warning(f"VLM timeout (> {cfg.VLM_TIMEOUT_SECONDS}s) pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}.")
-                    api_monitor.record_timeout(cfg.VLM_TIMEOUT_SECONDS)
-                except Exception as e:
-                    reason = f"galat: {str(e)[:60]}"
-                    logger.warning(f"VLM gagal pada percobaan {attempt}/{cfg.VLM_MAX_ATTEMPTS}: {e}")
-                    api_monitor.record_error(str(e))
-                finally:
-                    # Dicatat per percobaan agar jeda free tier juga berlaku untuk
-                    # percobaan ulang dan panggilan yang gagal/timeout.
-                    self.last_api_call_time = time.time()
-
-            return self._unverified_result(start_t, attempts=cfg.VLM_MAX_ATTEMPTS, reason=reason)
-        finally:
-            api_monitor.set_locked(False)
-            self.api_lock.release()
-
-    @staticmethod
-    def _unverified_result(start_t: float, attempts: int, reason: str) -> InspectionResult:
-        """Penolakan saat VLM aktif tetapi tidak memberi jawaban.
-
-        Tidak memuat klaim per item: tidak ada yang benar-benar diperiksa.
-        """
-        return InspectionResult(
-            items={},
-            is_complete=False,
-            is_unverified=True,
-            missing_items=[messages.VLM_UNVERIFIED_LABEL],
-            notes=messages.VLM_UNVERIFIED_NOTES.format(attempts=attempts, reason=reason),
-            inference_source="VLM_GAGAL (API Timeout)" if reason.startswith("timeout") else "VLM_GAGAL",
-            inference_time_ms=round((time.time() - start_t) * 1000, 1),
-            is_low_confidence=False,
-        )
-
-    def _call_vlm_internal(self, image_bgr: np.ndarray) -> APDInspectionResult:
-        # Satu potret item aktif untuk seluruh panggilan ini, supaya prompt dan
-        # penilaian jawaban memakai daftar yang sama walau operator mengubahnya
-        # di tengah jalan.
         aktif = ppe_rules.get_active_items()
-        data = self.provider.analyze(
+        data = self.primary.provider.analyze(
             self._optimize_image_for_vlm(image_bgr),
             system_prompt=build_system_prompt(aktif),
             user_prompt=USER_PROMPT,
