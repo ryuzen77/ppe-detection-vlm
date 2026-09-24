@@ -6,6 +6,7 @@ backend/.env
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 backend/__pycache__/
 
 # Model weights (Downloaded automatically by Ultralytics to prevent repo bloat)
@@ -18,11 +19,10 @@ ehthumbs.db
 [Dd]esktop.ini
 *.log
 
-# Pilihan kamera runtime (per-mesin)
+# Data runtime (audit, foto bukti, pilihan operator) - DATA_DIR bawaan
+data/
+
+# Lokasi data lama sebelum T12; dipindah otomatis ke DATA_DIR saat server jalan
 backend/camera_state.json
 backend/runtime_settings.json
-
-# Generated worker audit records & snapshots
-backend/reports/*.db
-backend/reports/*.bak
-backend/reports/snapshots/*.jpg
+backend/reports/

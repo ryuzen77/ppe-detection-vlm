@@ -1,7 +1,10 @@
+import logging
 import time
 from typing import Optional
 from .config import cfg
 from . import messages
+
+logger = logging.getLogger(__name__)
 
 class LightState:
     OFF = "OFF"
@@ -19,7 +22,9 @@ class IoTNotifier:
         self.iot_type = cfg.IOT_TYPE
         self.serial_conn = None
 
-        if self.enabled and self.iot_type == "serial":
+    def connect(self):
+        """Membuka port serial bila IoT serial aktif. Idempoten."""
+        if self.enabled and self.iot_type == "serial" and self.serial_conn is None:
             try:
                 import serial
                 if cfg.IOT_SERIAL_PORT.startswith("rfc2217://") or cfg.IOT_SERIAL_PORT.startswith("socket://"):
@@ -27,9 +32,9 @@ class IoTNotifier:
                     self.serial_conn = serial.serial_for_url(cfg.IOT_SERIAL_PORT, baudrate=cfg.IOT_SERIAL_BAUD, timeout=cfg.IOT_SERIAL_TIMEOUT_SECONDS)
                 else:
                     self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=cfg.IOT_SERIAL_TIMEOUT_SECONDS)
-                print(f"[IoTNotifier] Connected to Serial port {cfg.IOT_SERIAL_PORT}")
+                logger.info(f"Connected to Serial port {cfg.IOT_SERIAL_PORT}")
             except Exception as e:
-                print(f"[IoTNotifier] Serial connection failed: {e}")
+                logger.warning(f"Serial connection failed: {e}")
 
     def send_command(self, cmd: str):
         if not self.enabled:
@@ -41,7 +46,7 @@ class IoTNotifier:
                 import threading
                 threading.Thread(target=self._send_http, args=(cmd,), daemon=True).start()
         except Exception as e:
-            print(f"[IoTNotifier] Failed to send command '{cmd}': {e}")
+            logger.warning(f"Failed to send command '{cmd}': {e}")
 
     def _send_http(self, cmd: str):
         import urllib.request
@@ -58,7 +63,15 @@ class IoTNotifier:
             with urllib.request.urlopen(req, timeout=cfg.IOT_HTTP_TIMEOUT_SECONDS) as resp:
                 pass
         except Exception as e:
-            print(f"[IoTNotifier] Wireless HTTP to ESP32 failed ({url}): {e}")
+            logger.warning(f"Wireless HTTP to ESP32 failed ({url}): {e}")
+
+    def close(self):
+        if self.serial_conn is not None:
+            try:
+                self.serial_conn.close()
+            except Exception:
+                pass
+            self.serial_conn = None
 
     def set_green(self):
         self.send_command("LIGHT_GREEN")
@@ -77,6 +90,13 @@ class NotifierManager:
         self.last_change_time = time.time()
         self.iot = IoTNotifier()
         self.message = messages.LIGHT_BOOT
+
+    def start(self):
+        """Menyambungkan lampu gerbang fisik (bila IoT aktif)."""
+        self.iot.connect()
+
+    def stop(self):
+        self.iot.close()
 
     def set_complete(self, msg: str = messages.LIGHT_GRANTED_DEFAULT):
         self.current_state = LightState.GREEN

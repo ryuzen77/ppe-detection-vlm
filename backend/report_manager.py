@@ -1,4 +1,6 @@
+import logging
 import sqlite3
+import threading
 import json
 import time
 import os
@@ -13,9 +15,11 @@ from . import ppe_rules
 from .config import cfg
 from . import messages
 
-REPORTS_DIR = Path(__file__).resolve().parent / "reports"
-SNAPSHOTS_DIR = REPORTS_DIR / "snapshots"
-DB_PATH = REPORTS_DIR / "audit.db"
+logger = logging.getLogger(__name__)
+
+# Jalur data diatur lewat DATA_DIR di config, di luar direktori kode
+DB_PATH = cfg.DB_PATH
+SNAPSHOTS_DIR = cfg.SNAPSHOTS_DIR
 
 # Versi skema, disimpan di `PRAGMA user_version`.
 #   0 — skema awal: sebelas kolom tetap untuk helm, rompi, celana, dan sepatu
@@ -86,18 +90,39 @@ class ReportManager:
     JPEG snapshot image archiving, compliance statistics, and CSV exports."""
 
     def __init__(self, db_path: Path = DB_PATH, snapshots_dir: Path = SNAPSHOTS_DIR):
+        # Hanya mencatat jalur. Folder dan migrasi skema dikerjakan open(),
+        # supaya mengimpor modul ini tidak menyentuh disk.
         self.db_path = Path(db_path)
         self.snapshots_dir = Path(snapshots_dir)
-        self.snapshots_dir.mkdir(parents=True, exist_ok=True)
-        self._init_db()
+        self._opened = False
+        self._open_lock = threading.Lock()
 
-    def _get_connection(self) -> sqlite3.Connection:
+    def open(self) -> "ReportManager":
+        """Menyiapkan folder dan membawa skema ke versi terkini. Idempoten.
+
+        Dipanggil saat startup; akses pertama juga memanggilnya, jadi pemanggil
+        yang lupa tidak mendapati tabel yang belum ada.
+        """
+        with self._open_lock:
+            if not self._opened:
+                self.db_path.parent.mkdir(parents=True, exist_ok=True)
+                self.snapshots_dir.mkdir(parents=True, exist_ok=True)
+                self._init_db()
+                self._opened = True
+        return self
+
+    def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=cfg.DB_TIMEOUT_SECONDS)
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _get_connection(self) -> sqlite3.Connection:
+        if not self._opened:
+            self.open()
+        return self._connect()
+
     def _init_db(self):
-        conn = self._get_connection()
+        conn = self._connect()
         try:
             conn.execute("PRAGMA journal_mode = WAL;")
             conn.execute("PRAGMA synchronous = NORMAL;")
@@ -149,14 +174,14 @@ class ReportManager:
         backup_path = self.db_path.with_name(f"{self.db_path.stem}.v{version}.bak")
         if backup_path.exists():
             return
-        src = self._get_connection()
+        src = self._connect()
         dst = sqlite3.connect(str(backup_path))
         try:
             src.backup(dst)
         finally:
             dst.close()
             src.close()
-        print(f"[ReportManager] Cadangan sebelum migrasi skema: {backup_path.name}")
+        logger.info(f"Cadangan sebelum migrasi skema: {backup_path.name}")
 
     def _migrate_v0_to_v1(self, conn: sqlite3.Connection):
         """Sebelas kolom per item → satu kolom `items_json`. Seluruh baris dipertahankan."""
@@ -195,7 +220,7 @@ class ReportManager:
                 "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'worker_inspections'",
                 (old_seq[0],),
             )
-        print(f"[ReportManager] Migrasi skema v0 -> v1: {len(rows)} baris dipindahkan.")
+        logger.info(f"Migrasi skema v0 -> v1: {len(rows)} baris dipindahkan.")
 
     def save_inspection(
         self,
@@ -225,7 +250,7 @@ class ReportManager:
             try:
                 cv2.imwrite(str(save_path), crop_img, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.SNAPSHOT_JPEG_QUALITY])
             except Exception as e:
-                print(f"[ReportManager] Error saving snapshot image: {e}")
+                logger.error(f"Error saving snapshot image: {e}")
                 snapshot_filename = ""
 
         with self._get_connection() as conn:

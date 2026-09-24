@@ -2,7 +2,7 @@
 title SAFEGUARD AI - PPE Compliance Real-time System
 echo ========================================================
 echo  SAFEGUARD AI - PPE Detection Real-time System
-echo  Backend: FastAPI + YOLOv8s-Pose + Gemini VLM (Server-Side)
+echo  Backend: FastAPI + YOLO26s-Pose + Gemini VLM (Server-Side)
 echo  Frontend: Modern Real-time Dashboard (WebSocket)
 echo ========================================================
 echo.

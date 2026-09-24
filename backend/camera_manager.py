@@ -11,20 +11,22 @@ lalu laju frame sebenarnya dihitung. Nilai `CAP_PROP_FPS` yang dilaporkan driver
 tidak dipercaya karena sering berbeda jauh dari kenyataan.
 """
 
+import logging
 import json
 import threading
 import time
 from dataclasses import dataclass, asdict
-from pathlib import Path
 from typing import Optional
 
 import cv2
 
 from .config import cfg
 
+logger = logging.getLogger(__name__)
+
 # Pilihan kamera operator disimpan supaya tidak perlu dipilih ulang setiap
 # server dijalankan — merepotkan saat gladi resik menjelang demo.
-STATE_PATH = Path(__file__).resolve().parent / "camera_state.json"
+STATE_PATH = cfg.CAMERA_STATE_PATH
 
 # Daftar PERMINTAAN resolusi, bukan hasil. Driver DirectShow kerap mengembalikan
 # resolusi terdekat yang didukung, jadi hasil aktual selalu dibaca balik.
@@ -96,7 +98,7 @@ def list_device_names() -> list[str]:
 
         return list(FilterGraph().get_input_devices())
     except Exception as e:
-        print(f"[CameraManager] Nama perangkat tidak tersedia ({e}); memakai label generik.")
+        logger.warning(f"Nama perangkat tidak tersedia ({e}); memakai label generik.")
         return []
 
 
@@ -213,7 +215,7 @@ def load_saved_selection() -> Optional[dict]:
             if isinstance(data, dict) and "index" in data:
                 return data
     except Exception as e:
-        print(f"[CameraManager] Gagal membaca {STATE_PATH.name}: {e}")
+        logger.warning(f"Gagal membaca {STATE_PATH.name}: {e}")
     return None
 
 
@@ -225,12 +227,13 @@ def save_selection(index: int, mode: Optional[dict], name: str = ""):
     dari indeks 1 ke 2), sehingga indeks saja bisa menunjuk perangkat yang salah.
     """
     try:
+        STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         STATE_PATH.write_text(
             json.dumps({"index": int(index), "name": name, "mode": mode}, indent=2),
             encoding="utf-8",
         )
     except Exception as e:
-        print(f"[CameraManager] Gagal menyimpan {STATE_PATH.name}: {e}")
+        logger.warning(f"Gagal menyimpan {STATE_PATH.name}: {e}")
 
 
 def resolve_saved_index(saved: dict) -> Optional[int]:
@@ -257,12 +260,12 @@ def resolve_saved_index(saved: dict) -> Optional[int]:
 
     if name in names:
         new_index = names.index(name)
-        print(f"[CameraManager] '{name}' berpindah dari indeks {index} ke {new_index} "
-              f"(daftar perangkat berubah); mengikuti namanya.")
+        logger.info(f"'{name}' berpindah dari indeks {index} ke {new_index} "
+                    f"(daftar perangkat berubah); mengikuti namanya.")
         return new_index
 
-    print(f"[CameraManager] Kamera tersimpan '{name}' sudah tidak terhubung; "
-          f"kembali ke kamera bawaan.")
+    logger.warning(f"Kamera tersimpan '{name}' sudah tidak terhubung; "
+                   f"kembali ke kamera bawaan.")
     return None
 
 
@@ -333,7 +336,7 @@ class CameraManager:
                 self.devices = results
                 self.last_scan_time = time.strftime("%H:%M:%S")
         except Exception as e:
-            print(f"[CameraManager] Pemindaian gagal: {e}")
+            logger.exception(f"Pemindaian gagal: {e}")
         finally:
             with self.lock:
                 self.scanning = False

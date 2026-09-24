@@ -15,11 +15,14 @@ berjalan (lihat `get_active_items` dan `set_active`). Item yang dimatikan tidak
 diperiksa sama sekali: tidak masuk prompt VLM, checklist, maupun keputusan gerbang.
 """
 
+import logging
 import threading
 from dataclasses import dataclass, replace
 from typing import Optional
 
 from . import runtime_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -313,12 +316,21 @@ def _load_active_overrides() -> dict:
     if overrides and not any(
         overrides.get(item.key, item.required_default) for item in PPE_ITEMS
     ):
-        print("[PPERules] Pengaturan tersimpan mematikan semua item APD; memakai bawaan katalog.")
+        logger.warning("Pengaturan tersimpan mematikan semua item APD; memakai bawaan katalog.")
         return {}
     return overrides
 
 
-_active_overrides: dict = _load_active_overrides()
+# Kosong (= bawaan katalog) sampai load_settings() dipanggil saat startup, supaya
+# mengimpor modul ini tidak membaca disk sebelum DATA_DIR siap.
+_active_overrides: dict = {}
+
+
+def load_settings():
+    """Memuat pilihan item aktif dari runtime_settings.json."""
+    global _active_overrides
+    with _settings_lock:
+        _active_overrides = _load_active_overrides()
 
 
 def set_active(changes: dict) -> list[PPEItem]:

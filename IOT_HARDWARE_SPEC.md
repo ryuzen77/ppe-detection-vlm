@@ -31,7 +31,7 @@ Dengan beralih ke **ESP32 DevKit V1**, sistem dapat bekerja secara **100% Nirkab
                  ▼
 ┌────────────────────────────────────────────────────────┐
 │     Laptop / Edge Server AI (RTX 4060)                 │
-│  - backend/main.py & detector.py (YOLO-Pose)           │
+│  - backend/app.py & detector.py (YOLO-Pose)            │
 │  - backend/vlm_analyzer.py (Gemini VLM / Local)        │
 │  - backend/notifier.py (Wireless HTTP / Serial)        │
 └────────────────┬───────────────────────────────────────┘

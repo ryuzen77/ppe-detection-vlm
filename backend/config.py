@@ -3,10 +3,18 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parent
 
 # Jalur .env ditulis eksplisit supaya tidak bergantung pada direktori kerja
 # atau pada cara modul ini diimpor.
 load_dotenv(BASE_DIR / ".env")
+
+
+def _resolve_data_dir(value: str) -> Path:
+    """Jalur relatif dihitung dari akar repo, bukan dari direktori kerja terminal."""
+    path = Path(value).expanduser() if value else REPO_ROOT / "data"
+    return (path if path.is_absolute() else REPO_ROOT / path).resolve()
+
 
 class Config:
     # Server Settings
@@ -92,10 +100,11 @@ class Config:
     TELEMETRY_INTERVAL_SECONDS: float = 0.05     # Jeda antar pesan WebSocket (20 Hz)
     TELEMETRY_HISTORY_RECORDS: int = 8           # Riwayat inspeksi yang ikut tiap pesan telemetri
 
-    # Model Settings (Small version for speed & accuracy)
-    # Menggunakan yolo26s-pose.pt (YOLO26 Small Pose - Versi Terbaru)
-    # Diselesaikan relatif terhadap BASE_DIR agar `python backend/main.py` dan
-    # `cd backend && uvicorn main:app` sama-sama menemukan berkas bobot model.
+    # Model Settings. Harus model pose (keypoint dipakai gerbang full-body).
+    # Satu-satunya bobot yang disertakan: yolo26s-pose.pt (YOLO26 Small Pose).
+    # Diselesaikan relatif terhadap BASE_DIR, bukan direktori kerja, agar berkas
+    # bobot model ditemukan dari mana pun `python -m backend` dijalankan; jalur
+    # absolut di YOLO_MODEL_PATH dipakai apa adanya.
     YOLO_MODEL_PATH: str = str(BASE_DIR / os.getenv("YOLO_MODEL_PATH", "yolo26s-pose.pt"))
     YOLO_CONF: float = 0.60
     YOLO_IOU: float = 0.45
@@ -196,11 +205,29 @@ class Config:
     SHOE_MAX_VALUE_DARK: int = 95             # Ambang kecerahan piksel "gelap"
     SHOE_SKIN_MAX_RATIO: float = 0.22         # Kulit terlalu dominan => sandal/telanjang kaki
 
+    # Data runtime: audit, foto bukti, dan pilihan operator. Disimpan di luar
+    # direktori kode supaya deploy ulang (menimpa/menghapus backend/) tidak ikut
+    # menghapusnya. Untuk produksi, arahkan DATA_DIR ke jalur absolut di luar repo.
+    DATA_DIR: Path = _resolve_data_dir(os.getenv("DATA_DIR", ""))
+    REPORTS_DIR: Path = DATA_DIR / "reports"
+    SNAPSHOTS_DIR: Path = REPORTS_DIR / "snapshots"
+    DB_PATH: Path = REPORTS_DIR / "audit.db"
+    CAMERA_STATE_PATH: Path = DATA_DIR / "camera_state.json"
+    RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
+
+    # Logging: konsol + berkas berotasi (5 MB x 5 berkas) di DATA_DIR/logs
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+    LOG_TO_FILE: bool = os.getenv("LOG_TO_FILE", "true").lower() == "true"
+    LOG_DIR: Path = DATA_DIR / "logs"
+    LOG_MAX_BYTES: int = 5 * 1024 * 1024
+    LOG_BACKUP_COUNT: int = 5
+
     # Laporan & arsip foto
     SNAPSHOT_JPEG_QUALITY: int = 80           # Mutu foto bukti (~30-50 KB per foto)
     DB_TIMEOUT_SECONDS: float = 10.0          # Tunggu kunci SQLite sebelum menyerah
 
-    # Audio Settings
+    # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
+    # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.
     AUDIO_DIR: Path = BASE_DIR / "audio"
     AUDIO_VOLUME: float = 1.0
 

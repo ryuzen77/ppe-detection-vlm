@@ -1,9 +1,12 @@
+import logging
 import cv2
 import numpy as np
 from ultralytics import YOLO
 import torch
 from .config import cfg
 from . import messages
+
+logger = logging.getLogger(__name__)
 
 class DetectionResult:
     def __init__(self, track_id: int, bbox: list[int], is_full_body: bool, 
@@ -22,16 +25,26 @@ class DetectionResult:
 class PersonDetector:
     """YOLO26-Small Pose Detector with tracking & robust Full-Body verification."""
     def __init__(self):
+        # Model dan GPU baru disentuh di load(), bukan saat modul diimpor
+        self.model = None
+        self.device = ""
+        self.device_label = ""
+
+    def load(self):
+        """Memuat bobot YOLO ke GPU (atau CPU bila CUDA tidak ada). Idempoten."""
+        if self.model is not None:
+            return
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         # Nama perangkat untuk HUD, supaya tidak menyebut GPU yang tidak terpasang
         self.device_label = (torch.cuda.get_device_name(0).replace("NVIDIA GeForce ", "")
                              if self.device.startswith("cuda") else "CPU")
-        print(f"[PersonDetector] Initializing YOLO with model {cfg.YOLO_MODEL_PATH} on {self.device}...")
+        logger.info(f"Initializing YOLO with model {cfg.YOLO_MODEL_PATH} on {self.device}...")
         self.model = YOLO(cfg.YOLO_MODEL_PATH)
-        print("[PersonDetector] Model loaded successfully.")
+        logger.info("Model loaded successfully.")
 
     def detect_and_track(self, frame: np.ndarray) -> list[DetectionResult]:
         """Runs YOLO tracking and height-adaptive full-body filter on the current frame."""
+        self.load()
         h, w = frame.shape[:2]
 
         # Ambang tepi dihitung dari tinggi frame agar perilaku gerbang full-body

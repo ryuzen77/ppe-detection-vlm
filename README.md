@@ -97,7 +97,7 @@ Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkap
 ```
 ppe_detection_vlm/
 ├── backend/                      # Paket Python; jalankan dengan `python -m backend`
-│   ├── __main__.py               # Titik masuk tunggal (memanggil `main.run()`)
+│   ├── __main__.py               # Titik masuk tunggal (memanggil `app.run()`)
 │   ├── config.py                 # Konfigurasi server, batas koridor, dan threshold
 │   ├── detector.py               # YOLO26s-Pose inference, ByteTrack & Full-Body Gatekeeper
 │   ├── vlm_analyzer.py           # Gemini 2.5 Flash VLM client & Hybrid Local GPU Engine
@@ -107,16 +107,43 @@ ppe_detection_vlm/
 │   ├── report_manager.py         # SQLite3 audit repository & Snapshot JPEG manager
 │   ├── camera_manager.py         # Enumerasi perangkat, probing mode, & pemilihan resolusi
 │   ├── api_monitor.py            # Real-time latency monitor & engine mode switcher
-│   ├── main.py                   # FastAPI REST backend, WebSocket /ws, & Static Server
+│   ├── app.py                    # Bootstrap FastAPI: middleware, router, frontend statis, server
+│   ├── shutdown.py               # Penanda berhenti bersama untuk stream & WebSocket
+│   ├── messages.py               # Seluruh teks operasional (lampu, HUD, API, CSV)
+│   ├── ppe_rules.py              # Katalog item APD — satu-satunya sumber definisi
+│   ├── runtime_settings.py       # Pengaturan yang diubah operator (item APD aktif)
+│   ├── video/
+│   │   ├── capture.py            # Pembacaan kamera, inferensi per frame, JPEG untuk stream
+│   │   └── hud.py                # HUD server-side & layar tunggu
+│   ├── api/
+│   │   ├── deps.py               # Guard ADMIN_TOKEN
+│   │   ├── routes_system.py      # Health, reset, koridor, audio, uji lampu IoT
+│   │   ├── routes_cameras.py     # Katalog, pemindaian, & pergantian kamera
+│   │   ├── routes_ppe.py         # Katalog & item APD aktif
+│   │   ├── routes_reports.py     # Riwayat inspeksi, snapshot, ekspor CSV
+│   │   ├── routes_vlm.py         # API key, pemantauan latensi, mode engine
+│   │   ├── routes_stream.py      # Aliran video MJPEG
+│   │   └── websocket.py          # Telemetri real-time /ws
 │   ├── generate_audio.py         # Pembangkit berkas MP3 panduan suara (gTTS)
-│   ├── test_lifecycle.py         # Uji alur state machine dengan crop sintetis
 │   ├── requirements.txt          # Dependensi Python library
+│   ├── requirements-dev.txt      # + pytest, untuk pengembangan
 │   ├── .env                      # File variabel lingkungan lokal
 │   ├── .env.example              # Contoh variabel lingkungan
-│   ├── audio/                    # File suara instruksi K3 (MP3)
+│   ├── storage.py                # Menyiapkan DATA_DIR & memindahkan data dari tata letak lama
+│   ├── logging_setup.py          # Log konsol + berkas berotasi di DATA_DIR/logs
+│   ├── yolo26s-pose.pt           # Satu-satunya bobot model (diabaikan git; diunduh otomatis bila hilang)
+│   └── audio/                    # File suara instruksi K3 (MP3, aset rilis)
+│
+├── data/                         # DATA_DIR bawaan (diabaikan git; bisa dipindah lewat .env)
+│   ├── camera_state.json         # Kamera & mode terakhir yang dipilih operator
+│   ├── runtime_settings.json     # Item APD yang diwajibkan
+│   ├── logs/safeguard.log        # Log aplikasi & uvicorn (berotasi 5 MB x 5)
 │   └── reports/
 │       ├── audit.db              # Database SQLite3 riwayat pemeriksaan
 │       └── snapshots/            # Arsip bukti foto pekerja JPEG
+│
+├── tests/                        # pytest: gerbang, engine lokal, kamera, migrasi DB & data
+│   └── conftest.py               # Isolasi: DATA_DIR sementara, tanpa Gemini, tanpa IoT
 │
 ├── frontend/
 │   ├── index.html                # Tampilan utama Dashboard (Single Page App 3-Tab)
@@ -153,7 +180,7 @@ Bagian ini sengaja dicantumkan agar klaim sistem dapat dipertanggungjawabkan.
 * **Engine lokal bukan model AI.** `LocalVisionAnalyzer` adalah heuristik warna OpenCV (segmentasi HSV, rasio piksel) yang berjalan di CPU — bukan model *deep learning* dan bukan inferensi GPU. Hanya deteksi pose YOLO26s yang berjalan di CUDA. Akurasinya jauh di bawah Gemini VLM, terutama untuk helm dan alas kaki. Keputusan dari jalur ini selalu ditandai "Engine lokal — akurasi terbatas" di dashboard.
 * **Anti-spoofing hanya pada jalur Gemini.** Penolakan foto di layar ponsel atau cetakan kertas ditegakkan lewat instruksi prompt VLM. Jalur lokal tidak memilikinya, sehingga dalam mode offline sistem dapat tertipu oleh foto.
 * **Tanpa autentikasi secara bawaan.** Endpoint yang mengubah state dilindungi hanya jika `ADMIN_TOKEN` diisi pada `.env`. Tanpa itu, siapa pun yang dapat menjangkau host ini di jaringan bisa mengganti API key atau menyalakan lampu gerbang.
-* **Data pribadi pada snapshot.** `backend/reports/snapshots/` menyimpan potongan foto wajah pekerja tanpa batas waktu, dan `audit.db` menyimpan riwayat inspeksinya. Perlakukan sebagai data pribadi: batasi akses direktori tersebut dan tetapkan kebijakan retensi sebelum dipakai di lapangan.
+* **Data pribadi pada snapshot.** `DATA_DIR/reports/snapshots/` menyimpan potongan foto wajah pekerja tanpa batas waktu, dan `audit.db` menyimpan riwayat inspeksinya. Perlakukan sebagai data pribadi: batasi akses direktori tersebut dan tetapkan kebijakan retensi sebelum dipakai di lapangan.
 * **Penamaan kamera khusus Windows.** Nama perangkat diambil lewat DirectShow (`pygrabber`). Di platform lain daftar tetap berfungsi, tetapi hanya menampilkan label generik `Kamera 0`, `Kamera 1`, dan seterusnya.
 * **Resolusi rendah menurunkan ketelitian VLM.** Mode dipilih dengan prioritas kelancaran, sehingga potongan gambar yang dikirim ke Gemini bisa lebih kecil dari batas 640 px. Dashboard menampilkan peringatan saat ini terjadi. Untuk mengutamakan ketelitian, set `CAMERA_AUTO_MODE=false` lalu tentukan `FRAME_WIDTH`/`FRAME_HEIGHT` sendiri di `.env`.
 * **Pemindaian kamera menghentikan video sementara.** Kamera yang sedang aktif terkunci oleh aliran video, jadi untuk mengukurnya sistem melepas perangkat itu lebih dulu. Selama proses (~15–25 detik per kamera) dashboard menampilkan layar tunggu. Lakukan pemindaian sebelum demo dimulai, bukan di tengahnya.
@@ -176,9 +203,13 @@ python -m backend
 ```
 *(Atau Anda cukup menjalankan berkas `start_system.bat`)*
 
-`backend/` adalah paket Python dengan impor relatif, sehingga harus dijalankan sebagai modul dari akar repo. Menjalankan `python backend/main.py` secara langsung tidak lagi didukung. Jalur `.env`, bobot model, audio, dan laporan diselesaikan relatif terhadap direktori `backend/`, bukan direktori kerja terminal.
+Dari PowerShell (termasuk terminal bawaan VS Code), tulis `.\start_system.bat`. PowerShell tidak menjalankan skrip di folder aktif tanpa awalan `.\`. Hentikan server dengan `Ctrl+C` di jendela terminal tempat server berjalan; cmd lalu bertanya *Terminate batch job (Y/N)?*, jawab `Y`. `Ctrl+C` tidak sampai ke program bila server dijalankan dari panel **Output** VS Code; karena itu proyek ini menyetel `code-runner.runInTerminal` agar tombol Run Code memakai tab **Terminal**.
 
-Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m backend.test_lifecycle` untuk uji alur state machine.
+`backend/` adalah paket Python dengan impor relatif, sehingga harus dijalankan sebagai modul dari akar repo. Menjalankan berkas di dalam `backend/` secara langsung (misalnya `python backend/app.py`) tidak didukung. Jalur `.env`, bobot model, dan audio diselesaikan relatif terhadap direktori `backend/`, bukan direktori kerja terminal.
+
+**Data runtime terpisah dari kode.** Audit, foto bukti, pilihan kamera, dan item APD aktif disimpan di `DATA_DIR`. Bawaannya folder `data/` di akar repo. Untuk produksi, isi `DATA_DIR` di `.env` dengan jalur absolut di luar repo, misalnya `C:\ProgramData\SafeguardAI`, supaya deploy ulang tidak menyentuh data. Data lama yang masih berada di `backend/` dipindah otomatis saat server pertama kali dijalankan; berkas yang bentrok dengan isi tujuan tidak ditimpa, melainkan dilaporkan di log.
+
+Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (pasang dulu `pip install -r backend/requirements-dev.txt`). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
 
 Server akan otomatis memuat model YOLO26s-Pose di GPU CUDA dan melayani aplikasi di `http://0.0.0.0:8000`.
 

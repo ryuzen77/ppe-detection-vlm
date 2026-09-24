@@ -1,3 +1,4 @@
+import logging
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +14,8 @@ from .audio_engine import audio_player
 from .notifier import notifier
 from .report_manager import report_mgr
 from .api_monitor import api_monitor
+
+logger = logging.getLogger(__name__)
 
 class TrackState:
     INITIAL = "INITIAL"
@@ -110,7 +113,7 @@ class StateManager:
                     if track.stable_frames >= cfg.STABLE_FRAMES_REQUIRED:
                         track.state = TrackState.ANALYZING
                         crop_to_analyze = det.crop_img.copy() if det.crop_img is not None else None
-                        print(f"[StateManager] Triggering Gemini VLM analysis for Track ID #{tid} (1 frame)...")
+                        logger.info(f"Triggering Gemini VLM analysis for Track ID #{tid} (1 frame)...")
                         audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
                         
                         self.executor.submit(self._run_vlm_analysis, tid, crop_to_analyze)
@@ -173,17 +176,17 @@ class StateManager:
                         self.inspection_history.pop()
 
                     if result.is_complete:
-                        print(f"[StateManager] Track #{track_id}: APD LENGKAP! Green Light ON.")
+                        logger.info(f"Track #{track_id}: APD LENGKAP! Green Light ON.")
                         notifier.set_complete(messages.LIGHT_GRANTED)
                         audio_player.play_result(is_complete=True)
                     else:
-                        print(f"[StateManager] Track #{track_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
+                        logger.info(f"Track #{track_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
                         missing_text = ", ".join(result.missing_items)
                         notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=missing_text))
                         audio_player.play_result(is_complete=False, missing_items=result.missing_items)
 
         except Exception as e:
-            print(f"[StateManager] Error during VLM analysis for track #{track_id}: {e}")
+            logger.exception(f"Error during VLM analysis for track #{track_id}: {e}")
             with self.lock:
                 if track_id in self.tracks:
                     self.tracks[track_id].state = TrackState.INITIAL

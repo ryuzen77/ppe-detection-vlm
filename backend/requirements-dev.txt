@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Hanya untuk pengembangan: menjalankan tests/ dengan `python -m pytest`
+pytest>=8.0

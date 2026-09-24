@@ -1,3 +1,4 @@
+import logging
 import json
 import base64
 import os
@@ -14,6 +15,8 @@ from PIL import Image
 from .config import cfg
 from .api_monitor import api_monitor
 from . import ppe_rules
+
+logger = logging.getLogger(__name__)
 
 class ItemResult(BaseModel):
     """Hasil pemeriksaan satu item APD.
@@ -320,6 +323,8 @@ class VLMAnalyzer:
         self.api_lock = threading.Lock()
         self.last_api_call_time: float = 0.0
 
+    def start(self):
+        """Merakit klien Gemini dari katalog APD aktif. Dipanggil setelah pengaturan dimuat."""
         self._init_gemini()
 
     def _init_gemini(self):
@@ -328,16 +333,16 @@ class VLMAnalyzer:
                 import google.generativeai as genai
                 genai.configure(api_key=self.api_key.strip())
                 self._build_client(build_system_prompt())
-                print(f"[VLMAnalyzer] Successfully connected to Gemini VLM ({self.model_name})")
+                logger.info(f"Successfully connected to Gemini VLM ({self.model_name})")
                 api_monitor.status = "ONLINE"
             except Exception as e:
-                print(f"[VLMAnalyzer] Error configuring Gemini: {e}")
+                logger.error(f"Error configuring Gemini: {e}")
                 self.genai_client = None
                 api_monitor.record_error(str(e))
         else:
             self.genai_client = None
             api_monitor.status = "OFFLINE"
-            print("[VLMAnalyzer] GEMINI_API_KEY not set. Operating in LOCAL HEURISTIC MODE (akurasi terbatas).")
+            logger.warning("GEMINI_API_KEY not set. Operating in LOCAL HEURISTIC MODE (akurasi terbatas).")
 
     def _build_client(self, system_prompt: str):
         """Membuat klien Gemini dengan prompt tertentu. Tidak ada panggilan jaringan."""
@@ -432,7 +437,7 @@ class VLMAnalyzer:
         time_since_last = now - self.last_api_call_time
         if time_since_last < cfg.FREE_TIER_MIN_INTERVAL_SECONDS:
             dur_ms = round((time.time() - start_t) * 1000, 1)
-            print(f"[VLMAnalyzer] Anti-Spam Free Tier: Jeda baru {time_since_last:.1f}s (< {cfg.FREE_TIER_MIN_INTERVAL_SECONDS}s). Menggunakan Local GPU Fast-Pass.")
+            logger.info(f"Anti-Spam Free Tier: Jeda baru {time_since_last:.1f}s (< {cfg.FREE_TIER_MIN_INTERVAL_SECONDS}s). Menggunakan Local GPU Fast-Pass.")
             local_result.inference_source = "LOCAL_FAST_PASS (Free-Tier Rate Guard)"
             local_result.inference_time_ms = dur_ms
             local_result.notes = f"[PROTEKSI FREE TIER] Jeda {time_since_last:.1f}s < {cfg.FREE_TIER_MIN_INTERVAL_SECONDS}s, dialihkan ke heuristik lokal agar kuota tidak 429."
@@ -443,7 +448,7 @@ class VLMAnalyzer:
         acquired = self.api_lock.acquire(blocking=False)
         if not acquired:
             dur_ms = round((time.time() - start_t) * 1000, 1)
-            print("[VLMAnalyzer] Anti-Spam: API Lock sedang aktif. Dialihkan aman ke Local GPU.")
+            logger.info("Anti-Spam: API Lock sedang aktif. Dialihkan aman ke Local GPU.")
             local_result.inference_source = "LOCAL_FAST_PASS (API Busy Lock Guard)"
             local_result.inference_time_ms = dur_ms
             local_result.notes = "[API SIBUK] Sedang melayani request lain, verifikasi diselesaikan heuristik lokal."
@@ -462,7 +467,7 @@ class VLMAnalyzer:
             api_monitor.record_success(dur_ms)
             return gemini_result
         except TimeoutError:
-            print(f"[VLMAnalyzer] Gemini timed out (> {cfg.GEMINI_TIMEOUT_SECONDS}s). Menggunakan Local GPU Fallback!")
+            logger.warning(f"Gemini timed out (> {cfg.GEMINI_TIMEOUT_SECONDS}s). Menggunakan Local GPU Fallback!")
             dur_ms = round((time.time() - start_t) * 1000, 1)
             api_monitor.record_timeout(cfg.GEMINI_TIMEOUT_SECONDS)
             local_result.inference_source = "OFFLINE_FALLBACK (API Timeout)"
@@ -470,7 +475,7 @@ class VLMAnalyzer:
             local_result.notes = f"[TIMEOUT {cfg.GEMINI_TIMEOUT_SECONDS}s] API lambat/macet, keputusan dialihkan ke heuristik lokal."
             return local_result
         except Exception as e:
-            print(f"[VLMAnalyzer] Network error calling Gemini ({e}). Seamlessly using Local Fallback.")
+            logger.warning(f"Network error calling Gemini ({e}). Seamlessly using Local Fallback.")
             dur_ms = round((time.time() - start_t) * 1000, 1)
             api_monitor.record_error(str(e))
             local_result.inference_source = "OFFLINE_FALLBACK"

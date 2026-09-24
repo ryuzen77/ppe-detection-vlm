@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import threading
@@ -7,15 +8,25 @@ import pygame
 from .config import cfg
 from . import ppe_rules
 
+logger = logging.getLogger(__name__)
+
 class AudioEngine:
     """Thread-safe, non-blocking audio player using pygame.mixer."""
     def __init__(self):
         self.audio_dir = cfg.AUDIO_DIR
         self.queue: Queue = Queue()
-        self.is_running = True
+        self.is_running = False
         self.is_muted = False
         self.last_played_time = {}
+        # Perangkat audio baru dibuka di start(); sebelum itu play() diabaikan
+        self.enabled = False
+        self.channel = None
+        self.worker = None
 
+    def start(self):
+        """Membuka mixer pygame dan menyalakan thread pemutar. Idempoten."""
+        if self.is_running:
+            return
         try:
             pygame.mixer.init()
             pygame.mixer.set_num_channels(8)
@@ -23,9 +34,10 @@ class AudioEngine:
             self.channel.set_volume(cfg.AUDIO_VOLUME)
             self.enabled = True
         except Exception as e:
-            print(f"[AudioEngine] Warning: Failed to init pygame mixer: {e}")
+            logger.warning(f"Warning: Failed to init pygame mixer: {e}")
             self.enabled = False
 
+        self.is_running = True
         self.worker = threading.Thread(target=self._process_queue, daemon=True)
         self.worker.start()
 
@@ -57,7 +69,7 @@ class AudioEngine:
 
             audio_file = self.audio_dir / f"{sound_name}.mp3"
             if not audio_file.exists():
-                print(f"[AudioEngine] File not found: {audio_file}")
+                logger.warning(f"File not found: {audio_file}")
                 self.queue.task_done()
                 continue
 
@@ -69,7 +81,7 @@ class AudioEngine:
                 self.channel.play(sound)
                 self.last_played_time[sound_name] = now
             except Exception as e:
-                print(f"[AudioEngine] Error playing {sound_name}: {e}")
+                logger.warning(f"Error playing {sound_name}: {e}")
 
             self.queue.task_done()
 

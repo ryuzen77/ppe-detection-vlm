@@ -4,11 +4,15 @@ Mengikuti pola `camera_state.json`: satu berkas JSON kecil per mesin. Berkas yan
 hilang atau rusak tidak boleh menghentikan sistem — nilai bawaan dipakai.
 """
 
+import logging
 import json
 import threading
-from pathlib import Path
 
-SETTINGS_PATH = Path(__file__).resolve().parent / "runtime_settings.json"
+from .config import cfg
+
+logger = logging.getLogger(__name__)
+
+SETTINGS_PATH = cfg.RUNTIME_SETTINGS_PATH
 
 _lock = threading.Lock()
 
@@ -21,7 +25,7 @@ def load() -> dict:
             if isinstance(data, dict):
                 return data
     except Exception as e:
-        print(f"[RuntimeSettings] Gagal membaca {SETTINGS_PATH.name}: {e}")
+        logger.warning(f"Gagal membaca {SETTINGS_PATH.name}: {e}")
     return {}
 
 
@@ -33,10 +37,11 @@ def update(key: str, value) -> bool:
         try:
             # Tulis ke berkas sementara lalu ganti, supaya listrik padam di tengah
             # penulisan tidak meninggalkan JSON setengah jadi.
+            SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
             tmp = SETTINGS_PATH.with_suffix(".json.tmp")
             tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             tmp.replace(SETTINGS_PATH)
             return True
         except Exception as e:
-            print(f"[RuntimeSettings] Gagal menyimpan {SETTINGS_PATH.name}: {e}")
+            logger.error(f"Gagal menyimpan {SETTINGS_PATH.name}: {e}")
             return False
