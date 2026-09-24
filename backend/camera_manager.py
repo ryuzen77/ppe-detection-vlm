@@ -124,8 +124,15 @@ def list_device_names() -> list[str]:
     try:
         if sys.platform == "win32":
             # pygrabber khusus Windows dan bukan dependensi keras
+            import comtypes
             from pygrabber.dshow_graph import FilterGraph
 
+            # COM wajib diinisialisasi per thread. comtypes hanya melakukannya di
+            # thread yang pertama kali mengimpornya, sehingga pemanggil dari
+            # thread lain (pembaca kamera, pemantau, API) gagal acak dengan
+            # "CoInitialize has not been called" (terjadi nyata 24-09). Aman
+            # dipanggil berulang pada thread yang sama.
+            comtypes.CoInitialize()
             return list(FilterGraph().get_input_devices())
         if sys.platform.startswith("linux"):
             return linux_device_names()

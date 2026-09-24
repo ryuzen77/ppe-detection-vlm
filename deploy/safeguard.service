@@ -1,4 +1,4 @@
-# Unit systemd SAFEGUARD AI: menyala otomatis saat boot, bangkit ulang bila mati.
+# Unit systemd DEPRO (Digital Safety Protection): menyala otomatis saat boot, bangkit ulang bila mati.
 #
 # Pasang (sesuaikan User dan jalur, lalu):
 #   sudo cp deploy/safeguard.service /etc/systemd/system/
@@ -11,7 +11,7 @@
 # terhapus bersama repo.
 
 [Unit]
-Description=SAFEGUARD AI - gerbang pemeriksaan APD
+Description=DEPRO - Digital Safety Protection (gerbang pemeriksaan APD)
 Wants=network-online.target
 After=network-online.target
 

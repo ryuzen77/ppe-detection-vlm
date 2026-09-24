@@ -1,7 +1,7 @@
 @echo off
-title SAFEGUARD AI - PPE Compliance Real-time System
+title DEPRO - Digital Safety Protection
 echo ========================================================
-echo  SAFEGUARD AI - PPE Detection Real-time System
+echo  DEPRO - Digital Safety Protection
 echo  Backend: FastAPI + YOLO26s-Pose + VLM (Server-Side)
 echo  Frontend: Modern Real-time Dashboard (WebSocket)
 echo ========================================================

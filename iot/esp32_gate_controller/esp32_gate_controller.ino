@@ -1,6 +1,6 @@
 /**
  * ===================================================================
- * SAFEGUARD AI - ESP32 DevKit V1 (USB Serial Demo Mode)
+ * DEPRO - ESP32 DevKit V1 (USB Serial Demo Mode)
  * Pengendali Lampu Bulat Hijau & Merah Terpisah via Kabel USB Laptop
  * 
  * Keunggulan Mode Demo:
@@ -96,7 +96,7 @@ void setup() {
   selfTest();
 
   Serial.println(F("=================================================="));
-  Serial.println(F(" SAFEGUARD AI - ESP32 GATE CONTROLLER (DEMO USB)  "));
+  Serial.println(F(" DEPRO - ESP32 GATE CONTROLLER (DEMO USB)        "));
   Serial.println(F(" Status: SIAP MENERIMA PERINTAH SERIAL DARI LAPTOP"));
   Serial.println(F(" Perintah: LIGHT_GREEN | LIGHT_RED | LIGHT_OFF    "));
   Serial.println(F("=================================================="));

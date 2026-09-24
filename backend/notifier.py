@@ -58,7 +58,7 @@ class IoTNotifier:
         base_url = cfg.IOT_HTTP_URL.rstrip('/')
         url = f"{base_url}/api/light?state={state}"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "SafeguardAI/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": "DEPRO/1.0"})
             # Isi balasan ESP32 tidak dipakai; cukup dipastikan permintaan diterima
             with urllib.request.urlopen(req, timeout=cfg.IOT_HTTP_TIMEOUT_SECONDS):
                 pass

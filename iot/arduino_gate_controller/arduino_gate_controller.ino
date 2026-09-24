@@ -1,6 +1,6 @@
 /**
  * ===================================================================
- * SAFEGUARD AI - IoT Industrial Gate Controller
+ * DEPRO - IoT Industrial Gate Controller
  * Pengendali Lampu Bulat Hijau & Merah Terpisah
  * Komunikasi: Serial UART (9600 Baud)
  * ===================================================================

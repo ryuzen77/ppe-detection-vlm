@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Peluncur SAFEGUARD AI untuk Linux/macOS (padanan start_system.bat).
+# Peluncur DEPRO (Digital Safety Protection) untuk Linux/macOS (padanan start_system.bat).
 # Environment Python 3.12 dari backend/requirements-dev.lock; lokasinya bisa
 # diganti lewat variabel SAFEGUARD_VENV. Konfigurasi dibaca dari backend/.env.
 set -eu
@@ -16,6 +16,6 @@ if [ ! -x "$PYEXE" ]; then
 fi
 
 cd "$(dirname "$0")"
-echo "Menjalankan SAFEGUARD AI pada http://localhost:${PORT:-8000} ..."
+echo "Menjalankan DEPRO pada http://localhost:${PORT:-8000} ..."
 # exec: sinyal (Ctrl+C, SIGTERM dari systemd) langsung sampai ke server
 exec "$PYEXE" -m backend

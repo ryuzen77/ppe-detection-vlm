@@ -1,4 +1,4 @@
-# 🛡️ SAFEGUARD AI: Real-Time PPE Compliance Inspection System
+# 🛡️ DEPRO (Digital Safety Protection): Real-Time PPE Compliance Inspection System
 > **Sistem Inspeksi Kepatuhan Alat Pelindung Diri (APD) Otomatis Berbasis YOLO26s-Pose, Google Gemini VLM, dan IoT Gerbang K3**
 
 Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkapan APD pekerja secara *real-time* di gerbang masuk area industri/proyek. Menggabungkan kecepatan **Computer Vision Edge AI (RTX 4060)** untuk verifikasi postur tubuh utuh (*Full-Body Gatekeeper*) dan kecerdasan **Vision-Language Model (Gemini 3.5 Flash-Lite)** untuk audit visual mendalam.
@@ -154,7 +154,7 @@ ppe_detection_vlm/
 ├── tests/                        # pytest: gerbang, failover VLM, kamera, migrasi DB & data
 │   └── conftest.py               # Isolasi: DATA_DIR sementara, tanpa Gemini, tanpa IoT
 │
-├── web/                          # UI baru (T33): Svelte 5 + TypeScript + Vite, disajikan di /app/
+├── web/                          # UI baru (T33): Svelte 5 + TypeScript + Vite, halaman utama "/"
 │   ├── src/lib/api/              # Tipe data backend, klien REST & WebSocket (+ tes vitest)
 │   ├── src/lib/stores/           # Store reaktif telemetri (Svelte 5 runes)
 │   └── dist/                     # Hasil build, SENGAJA dicommit (gerbang tanpa Node.js)
@@ -244,13 +244,13 @@ Dari PowerShell (termasuk terminal bawaan VS Code), tulis `.\start_system.bat`. 
 
 `backend/` adalah paket Python dengan impor relatif, sehingga harus dijalankan sebagai modul dari akar repo. Menjalankan berkas di dalam `backend/` secara langsung (misalnya `python backend/app.py`) tidak didukung. Jalur `.env`, bobot model, dan audio diselesaikan relatif terhadap direktori `backend/`, bukan direktori kerja terminal.
 
-**Data runtime terpisah dari kode.** Audit, foto bukti, pilihan kamera, dan item APD aktif disimpan di `DATA_DIR`. Bawaannya folder `data/` di akar repo. Untuk produksi, isi `DATA_DIR` di `.env` dengan jalur absolut di luar repo, misalnya `C:\ProgramData\SafeguardAI`, supaya deploy ulang tidak menyentuh data. Data lama yang masih berada di `backend/` dipindah otomatis saat server pertama kali dijalankan; berkas yang bentrok dengan isi tujuan tidak ditimpa, melainkan dilaporkan di log.
+**Data runtime terpisah dari kode.** Audit, foto bukti, pilihan kamera, dan item APD aktif disimpan di `DATA_DIR`. Bawaannya folder `data/` di akar repo. Untuk produksi, isi `DATA_DIR` di `.env` dengan jalur absolut di luar repo, misalnya `C:\ProgramData\DEPRO`, supaya deploy ulang tidak menyentuh data. Data lama yang masih berada di `backend/` dipindah otomatis saat server pertama kali dijalankan; berkas yang bentrok dengan isi tujuan tidak ditimpa, melainkan dilaporkan di log.
 
 Di Linux, `start_system.sh` memakai `~/.venvs/apd_py312` (bisa diganti lewat `SAFEGUARD_VENV`) dan dihentikan dengan `Ctrl+C`. Untuk menyala otomatis saat boot, pasang `deploy/safeguard.service`; petunjuknya ada di dalam berkas itu. Server berhenti bersih saat menerima `SIGTERM` dari systemd.
 
 Sebelum commit, jalankan `python scripts/check.py` (ruff + seluruh pytest, sama dengan CI; bila Node.js terpasang juga cek tipe, tes, dan build UI baru).
 
-**Mengembangkan UI baru (`web/`)** butuh Node.js 24 di mesin pengembang saja; mesin gerbang tidak, karena hasil build `web/dist` ikut dicommit. Sekali: `cd web && npm ci`. Lalu `npm run dev` (Vite di http://localhost:5173/app/, API & WebSocket diteruskan ke backend di port 8000), `npm run check` (svelte-check + tsc), `npm test` (vitest). Setelah mengubah sumber, jalankan `npm run build` dan commit `web/dist`; CI menolak dist yang tidak sesuai sumbernya.
+**Mengembangkan UI baru (`web/`)** butuh Node.js 24 di mesin pengembang saja; mesin gerbang tidak, karena hasil build `web/dist` ikut dicommit. Sekali: `cd web && npm ci`. Lalu `npm run dev` (Vite di http://localhost:5173/, API & WebSocket diteruskan ke backend di port 8000), `npm run check` (svelte-check + tsc), `npm test` (vitest). Setelah mengubah sumber, jalankan `npm run build` dan commit `web/dist`; CI menolak dist yang tidak sesuai sumbernya.
 
 Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (environment dari `backend/requirements-dev.lock`, lihat bagian Prasyarat Lingkungan). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
 
@@ -262,7 +262,7 @@ Buka browser (Google Chrome, Microsoft Edge, atau Brave) dan navigasikan ke:
 http://localhost:8000
 ```
 
-UI baru yang sedang dibangun (Svelte + TypeScript) terbuka di `http://localhost:8000/app/`. Selama migrasi, UI lama tetap di `/` sebagai cadangan.
+Dashboard memakai UI baru (Svelte + TypeScript). Tampilan lama tetap utuh di `http://localhost:8000/legacy/` sebagai cadangan; selama tab Laporan dan Pengaturan belum dipindahkan ke UI baru, keduanya dibuka lewat tampilan lama. Alamat lama `/app/` dialihkan ke `/`.
 
 Saat pertama dibuka, dashboard menampilkan dialog **Pilih Sumber Kamera**. Video belum tersambung sampai Anda memilih salah satu perangkat.
 

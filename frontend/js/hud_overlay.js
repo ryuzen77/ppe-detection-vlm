@@ -1,5 +1,5 @@
 /**
- * SAFEGUARD AI - HUD Overlay Canvas Renderer (60 FPS)
+ * DEPRO - HUD Overlay Canvas Renderer (60 FPS)
  */
 
 export class HUDOverlay {

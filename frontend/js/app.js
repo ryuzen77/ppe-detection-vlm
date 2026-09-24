@@ -1,5 +1,5 @@
 /**
- * SAFEGUARD AI - Main Controller
+ * DEPRO - Main Controller
  * Handles SPA 3-Tab navigation (Monitoring, Laporan, Pengaturan),
  * real-time telemetry, video toolbar controls, integrated report auditing,
  * and IoT hardware / AI settings.

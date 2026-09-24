@@ -43,7 +43,7 @@ class GeminiProvider(VLMProvider):
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
                 temperature=0.1,
-                **self._thinking(),
+                **self._common(),
             ),
         )
         return response.text or ""
@@ -51,11 +51,15 @@ class GeminiProvider(VLMProvider):
     def ping(self) -> str:
         response = self._client.models.generate_content(
             model=self.model, contents="Ping. Jawab 'PONG'.",
-            config=self._types.GenerateContentConfig(**self._thinking()),
+            config=self._types.GenerateContentConfig(**self._common()),
         )
         return (response.text or "").strip()
 
-    def _thinking(self) -> dict:
-        if not self.thinking_level:
-            return {}
-        return {"thinking_config": self._types.ThinkingConfig(thinking_level=self.thinking_level)}
+    def _common(self) -> dict:
+        # Automatic function calling (model memanggil fungsi Python) aktif secara
+        # bawaan di SDK dan memunculkan peringatan "Direct use of automatic
+        # function calling" di setiap panggilan, padahal tidak dipakai di sini.
+        options = {"automatic_function_calling": self._types.AutomaticFunctionCallingConfig(disable=True)}
+        if self.thinking_level:
+            options["thinking_config"] = self._types.ThinkingConfig(thinking_level=self.thinking_level)
+        return options

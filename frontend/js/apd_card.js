@@ -1,6 +1,6 @@
 /**
  * ===================================================================
- * SAFEGUARD AI - APD Cards & Stepper Guidance Visualizer (60 FPS)
+ * DEPRO - APD Cards & Stepper Guidance Visualizer (60 FPS)
  * Sesuai Desain Mockup Enterprise K3
  * ===================================================================
  */

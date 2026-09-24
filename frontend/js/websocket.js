@@ -1,5 +1,5 @@
 /**
- * SAFEGUARD AI - WebSocket Client with auto-reconnect
+ * DEPRO - WebSocket Client with auto-reconnect
  */
 export class TelemetryWebSocket {
   constructor(url, onMessage, onStatusChange) {

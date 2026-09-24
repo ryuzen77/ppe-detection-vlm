@@ -322,6 +322,17 @@ def test_thinking_level_dikirim_bila_disetel(monkeypatch):
         assert call["config"].thinking_config.thinking_level.value == "MINIMAL"
 
 
+def test_automatic_function_calling_dimatikan(monkeypatch):
+    # Tidak dipakai; bila aktif SDK mencatat peringatan AFC di setiap panggilan
+    provider = GeminiProvider(api_key="kunci-palsu", model="gemini-3.5-flash-lite")
+    recorder = _Recorder('{"ok": true}')
+    monkeypatch.setattr(provider, "_client", type("Client", (), {"models": recorder})())
+    provider.analyze(b"\xff\xd8x\xff\xd9", system_prompt="S", user_prompt="U")
+    provider.ping()
+    for call in recorder.calls:
+        assert call["config"].automatic_function_calling.disable is True
+
+
 def test_thinking_level_kosong_tidak_dikirim(monkeypatch):
     provider = GeminiProvider(api_key="kunci-palsu", model="gemini-3.5-flash-lite", thinking_level="")
     recorder = _Recorder('{"ok": true}')

@@ -1,4 +1,6 @@
 """Pemilihan mode kamera dan pelacakan kamera tersimpan lewat namanya."""
+import sys
+
 import pytest
 
 from backend import camera_manager
@@ -189,3 +191,42 @@ def test_open_capture_jatuh_ke_backend_bawaan_bila_gagal(monkeypatch):
     assert len(dibuat) == 2
     assert dibuat[0].released  # percobaan pertama dilepas, tidak bocor
     assert cap.backend is None and cap.isOpened()
+
+
+# --- Nama kamera lintas thread & pemantau keberadaan (24-09) --------------------
+
+@pytest.mark.skipif(sys.platform != "win32", reason="DirectShow/COM khusus Windows")
+def test_nama_kamera_terbaca_dari_thread_mana_pun():
+    # comtypes hanya menginisialisasi COM di thread yang pertama mengimpornya;
+    # thread lain dulu gagal "CoInitialize has not been called" dan memakai
+    # label generik, lalu pemantau menganggap kamera itu dicabut.
+    import threading
+    utama = camera_manager.list_device_names()
+    hasil = {}
+    t = threading.Thread(target=lambda: hasil.setdefault("thread", camera_manager.list_device_names()))
+    t.start()
+    t.join(10)
+    assert hasil["thread"] == utama
+
+
+def _layanan_kamera(nama, terverifikasi):
+    from backend.video.capture import VideoCaptureService
+    svc = VideoCaptureService()
+    svc.camera_status, svc.camera_index = "OK", 1
+    svc.camera_name, svc.camera_name_verified = nama, terverifikasi
+    return svc
+
+
+def test_nama_generik_tidak_membuat_kamera_dianggap_dicabut(perangkat):
+    perangkat(["Integrated Camera", "GENERAL WEBCAM"])
+    svc = _layanan_kamera("Kamera 1", terverifikasi=False)
+    svc._check_presence()
+    assert svc._device_missing is False
+    assert (svc.camera_name, svc.camera_name_verified) == ("GENERAL WEBCAM", True), "Nama asli dipulihkan"
+
+
+def test_kamera_bernama_asli_yang_hilang_tetap_terdeteksi_dicabut(perangkat):
+    perangkat(["Integrated Camera"])
+    svc = _layanan_kamera("GENERAL WEBCAM", terverifikasi=True)
+    svc._check_presence()
+    assert svc._device_missing is True

@@ -1,0 +1,64 @@
+/* Token desain: satu sumber untuk warna, tipografi, jarak, dan sudut.
+   Komponen memakai token ini lewat var(--...), bukan nilai mentah.
+
+   Aturan warna (keputusan pengguna):
+   - latar abu gelap netral, tanpa glow/neon
+   - hijau  = APD lengkap / sehat
+   - merah  = APD kurang (dan hanya itu untuk gerbang) / kegagalan fatal
+   - kuning = peringatan: arahan posisi, "belum dinilai", VLM cadangan, mohon tunggu */
+
+:root {
+  color-scheme: dark;
+
+  /* Permukaan */
+  --bg: #0e1012;
+  --surface: #15181b;
+  --surface-2: #1b1f23;
+  --surface-3: #22272c;
+  --border: #272c32;
+  --border-strong: #353b42;
+
+  /* Teks */
+  --text: #e6e8eb;
+  --text-muted: #9aa2ab;
+  --text-faint: #6c747d;
+
+  /* Status */
+  --ok: #22c55e;
+  --ok-soft: rgba(34, 197, 94, 0.12);
+  --ok-line: rgba(34, 197, 94, 0.35);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.12);
+  --danger-line: rgba(239, 68, 68, 0.38);
+  --warn: #f5a524;
+  --warn-soft: rgba(245, 165, 36, 0.12);
+  --warn-line: rgba(245, 165, 36, 0.35);
+  /* Aksen interaksi (navigasi aktif, fokus, tautan) — bukan status */
+  --accent: #6ea8fe;
+  --accent-soft: rgba(110, 168, 254, 0.12);
+
+  /* Tipografi */
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2.25rem;
+
+  /* Jarak (kelipatan 4 px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  --topbar-h: 56px;
+}

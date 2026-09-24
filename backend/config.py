@@ -43,6 +43,11 @@ class Config:
     # Server Settings
     HOST: str = _env("HOST", "0.0.0.0")
     PORT: int = int(_env("PORT", "8000"))
+    # Batas tunggu koneksi saat server berhenti. Tanpa batas, satu koneksi yang
+    # di-reset klien di Windows (Python 3.12, asyncio proactor melewatkan
+    # Server._detach) membuat shutdown menggantung selamanya dan Ctrl+C kedua
+    # pun tidak menolong. Setelah batas ini koneksi yang tersisa diputus.
+    SHUTDOWN_TIMEOUT_SECONDS: float = float(_env("SHUTDOWN_TIMEOUT_SECONDS", "5"))
     # Default dibatasi ke localhost. `allow_origins=["*"]` bersama
     # `allow_credentials=True` ditolak browser sesuai spesifikasi CORS.
     CORS_ORIGINS: list[str] = [

@@ -1,6 +1,6 @@
 /**
  * ===================================================================
- * SAFEGUARD AI - Katalog APD
+ * DEPRO - Katalog APD
  * Satu-satunya tempat frontend mengetahui item APD apa saja yang ada.
  * Isinya datang dari `GET /api/ppe-rules`, yang dibangkitkan dari
  * `backend/ppe_rules.py`; tidak ada nama item yang ditulis tetap di sini.

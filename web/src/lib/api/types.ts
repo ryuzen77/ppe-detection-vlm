@@ -256,7 +256,8 @@ export interface CameraDevice {
 
 export interface CameraCatalog {
   scanning: boolean
-  last_scan_time: number | null
+  /** Jam pemindaian terakhir "HH:MM:SS", atau "-" bila belum pernah */
+  last_scan_time: string | null
   devices: CameraDevice[]
   saved: { index: number; name?: string; mode?: CameraMode | null } | null
   active: CameraStatus

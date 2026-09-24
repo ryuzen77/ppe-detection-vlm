@@ -122,6 +122,14 @@ class VLMEngine:
                                            thread_name_prefix=f"VLM_{role}")
 
     @property
+    def who(self) -> str:
+        """Identitas lengkap untuk log, mis. "utama gemini/gemini-3.5-flash-lite".
+
+        Nama penyedia & model hanya ditulis di log (dan Pengaturan admin), tidak di
+        tampilan operator — keputusan pengguna."""
+        return f"{self.role} {self.provider_name}/{self.model_name}"
+
+    @property
     def label(self) -> str:
         prefix = "VLM_LIVE" if self.role == ROLE_PRIMARY else "VLM_CADANGAN"
         return f"{prefix}:{self.provider_name}/{self.model_name}"
@@ -160,7 +168,10 @@ class VLMEngine:
         try:
             self.executor.submit(self.provider.warm_up).result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
         except Exception as e:
-            logger.warning(f"Pemanasan VLM {self.role} {self.provider_name} gagal ({e}).")
+            # Tidak fatal: server tetap menyala; VLM ini dicoba lagi pada pekerja
+            # pertama dan, bila gagal, inspeksi dialihkan ke VLM lain (T27).
+            logger.warning(f"Pemanasan VLM {self.role} {self.provider_name} gagal ({str(e)[:160]}). "
+                           f"Server tetap berjalan; VLM ini dicoba lagi saat inspeksi.")
             return None
         duration = time.time() - start
         logger.info(f"Pemanasan VLM {self.role} {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
@@ -325,14 +336,14 @@ class VLMAnalyzer:
     def _primary_result(self, ok: bool, now: float):
         if ok:
             if self.primary_down_since is not None:
-                logger.info(f"VLM utama pulih setelah {now - self.primary_down_since:.0f} dtk.")
+                logger.info(f"VLM {self.primary.who} pulih setelah {now - self.primary_down_since:.0f} dtk.")
             self.primary_failures = 0
             self.primary_down_since = None
             return
         self.primary_failures += 1
         if self.primary_failures >= cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN and self.primary_down_since is None:
             self.primary_down_since = now
-            logger.warning(f"VLM utama dianggap terputus setelah {self.primary_failures} kegagalan berturut-turut; "
+            logger.warning(f"VLM {self.primary.who} dianggap terputus setelah {self.primary_failures} kegagalan berturut-turut; "
                            f"inspeksi langsung ke cadangan, utama dicoba lagi setiap "
                            f"{cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS:g} dtk.")
 
@@ -394,7 +405,8 @@ class VLMAnalyzer:
                     self._primary_result(False, time.time())
                     reason = self._describe(e, self.primary)
                     reasons.append(f"utama: {reason}")
-                    logger.warning(f"VLM utama gagal ({reason}); beralih ke cadangan.")
+                    target = self.backup.who if self.backup is not None and self.backup.provider is not None else "-"
+                    logger.warning(f"VLM {self.primary.who} gagal ({reason}); beralih ke {target}.")
             elif self.primary is not None and self.primary.provider is not None:
                 reasons.append("utama: dianggap terputus")
 
@@ -404,7 +416,7 @@ class VLMAnalyzer:
                 except Exception as e:
                     reason = self._describe(e, self.backup)
                     reasons.append(f"cadangan: {reason}")
-                    logger.warning(f"VLM cadangan gagal ({reason}).")
+                    logger.warning(f"VLM {self.backup.who} gagal ({reason}).")
             else:
                 reasons.append("cadangan: tidak tersedia")
 

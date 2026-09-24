@@ -238,7 +238,7 @@ Salin kode C++ berikut ke dalam **Arduino IDE**, pilih board **Arduino Nano** (a
 ```cpp
 /**
  * ===================================================================
- * SAFEGUARD AI - IoT Industrial Gate Controller
+ * DEPRO - IoT Industrial Gate Controller
  * Pengendali Lampu Bulat Hijau & Merah Terpisah
  * Komunikasi: Serial UART (9600 Baud)
  * ===================================================================

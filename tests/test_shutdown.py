@@ -106,3 +106,62 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     assert elapsed < 5, f"Berhenti terlalu lama: {elapsed:.1f} detik"
     assert "Traceback" not in log and "CancelledError" not in log
     assert "Shutdown selesai" in log
+
+
+# Python 3.12 di Windows: bila klien me-reset koneksi, asyncio (proactor) bisa
+# melewatkan server._detach() sehingga Server.wait_closed() menunggu selamanya.
+# uvicorn memanggilnya saat shutdown, jadi server menggantung dan Ctrl+C kedua
+# pun tidak menolong (terjadi nyata 24-09 dari terminal VS Code). Tes ini
+# memaksa wait_closed() menggantung di semua OS dan menuntut server tetap
+# berhenti bersih berkat batas waktu shutdown.
+_WAIT_CLOSED_MACET = r"""
+import asyncio.base_events as be
+import asyncio
+
+async def _tak_pernah_selesai(self):
+    await asyncio.Event().wait()
+
+be.Server.wait_closed = _tak_pernah_selesai
+from backend.app import run
+run()
+"""
+
+
+def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
+    port = _free_port()
+    env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
+           "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
+           "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+           "SHUTDOWN_TIMEOUT_SECONDS": "1"}
+    proc = subprocess.Popen([sys.executable, "-c", _WAIT_CLOSED_MACET], cwd=REPO_ROOT, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **POPEN_FLAGS)
+    output = []
+    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in proc.stdout],
+                     daemon=True).start()
+    try:
+        for _ in range(240):
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2)
+                break
+            except Exception:
+                if proc.poll() is not None:
+                    pytest.fail("Server berhenti saat startup:\n" + "".join(output)[-3000:])
+                time.sleep(0.5)
+        else:
+            pytest.fail("Server tidak siap dalam 120 detik")
+
+        start = time.time()
+        os.kill(proc.pid, STOP_SIGNAL)
+        try:
+            code = proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            pytest.fail("Server menggantung di wait_closed():\n" + "".join(output)[-2000:])
+        elapsed = time.time() - start
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    log = "".join(output)
+    assert code == 0
+    assert elapsed < 8, f"Berhenti terlalu lama: {elapsed:.1f} detik"
+    assert "Shutdown selesai" in log

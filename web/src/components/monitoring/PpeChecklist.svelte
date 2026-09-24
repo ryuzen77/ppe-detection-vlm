@@ -1,0 +1,115 @@
+<script lang="ts">
+  // Checklist APD per item: hijau = ada, merah = kurang, kuning = belum dinilai
+  // (keputusan pengguna). Satu baris per item, tanpa kotak berlapis.
+  import Check from '@lucide/svelte/icons/check'
+  import Minus from '@lucide/svelte/icons/minus'
+  import X from '@lucide/svelte/icons/x'
+  import type { InspectionResult, PpeItem } from '../../lib/api/types'
+  import { assessItem } from '../../lib/ppe'
+  import PpeIcon from '../PpeIcon.svelte'
+
+  let { items, result, decidedBy }: {
+    items: PpeItem[]
+    result: InspectionResult | null
+    decidedBy: string
+  } = $props()
+</script>
+
+<section class="card" aria-label="Kelengkapan APD">
+  <header>
+    <h3>Kelengkapan APD</h3>
+    {#if decidedBy === 'cadangan'}
+      <span class="backup" title="VLM utama tidak menjawab; penilaian oleh VLM cadangan">Dinilai VLM cadangan</span>
+    {/if}
+  </header>
+  <ul>
+    {#each items as item (item.key)}
+      {@const a = assessItem(item, result?.items?.[item.key])}
+      <li class="st-{a.status}">
+        <span class="item-icon"><PpeIcon itemKey={item.key} /></span>
+        <span class="name">{item.label}</span>
+        <span class="state">
+          {#if a.status === 'ok'}<Check size={16} strokeWidth={2.5} />
+          {:else if a.status === 'missing'}<X size={16} strokeWidth={2.5} />
+          {:else}<Minus size={16} strokeWidth={2.5} />{/if}
+          <span class="state-text">{a.text}</span>
+        </span>
+      </li>
+    {:else}
+      <li class="empty">Memuat daftar APD…</li>
+    {/each}
+  </ul>
+</section>
+
+<style>
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+  }
+  h3 {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .backup {
+    font-size: var(--text-xs);
+    color: var(--warn);
+    border: 1px solid var(--warn-line);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  li {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 9px 0;
+    border-top: 1px solid var(--border);
+  }
+  li:first-child {
+    border-top: 0;
+  }
+  .item-icon {
+    color: var(--text-muted);
+    display: inline-flex;
+  }
+  .name {
+    font-weight: 500;
+  }
+  .state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+  }
+  .st-ok .state {
+    color: var(--ok);
+  }
+  .st-missing .state {
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .st-pending .state {
+    color: var(--warn);
+  }
+  .empty {
+    color: var(--text-faint);
+    display: block;
+  }
+</style>

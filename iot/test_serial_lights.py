@@ -1,5 +1,5 @@
 """
-SAFEGUARD AI - IoT Hardware Diagnostic Script
+DEPRO - IoT Hardware Diagnostic Script
 Uji Coba Pengendalian Lampu Bulat Hijau & Merah Fisik via Serial COM
 """
 

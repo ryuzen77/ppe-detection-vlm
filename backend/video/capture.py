@@ -32,6 +32,9 @@ class VideoCaptureService:
         # IDLE (belum dipilih) / OPENING / OK / LOST (terputus, dicoba ulang) / SYNTHETIC
         self.camera_status = "IDLE"
         self.camera_name = ""
+        # True bila camera_name adalah nama asli dari OS, bukan label generik
+        # "Kamera N" karena daftar nama sesaat tidak terbaca
+        self.camera_name_verified = False
         self.camera_error = ""
         self.active_mode = None
         # Permintaan pindah kamera; hanya diset dari luar, dieksekusi thread pembaca
@@ -136,15 +139,31 @@ class VideoCaptureService:
         """
         while self.is_running:
             time.sleep(cfg.CAMERA_PRESENCE_CHECK_SECONDS)
-            if self.camera_status != "OK" or self.use_synthetic or not self.camera_name:
-                continue
-            try:
-                names = camera_manager.list_device_names()
-            except Exception:
-                continue
-            if names and self.camera_name not in names:
-                logger.warning(f"'{self.camera_name}' hilang dari daftar perangkat sistem.")
-                self._device_missing = True
+            self._check_presence()
+
+    def _check_presence(self):
+        """Satu putaran pemeriksaan keberadaan kamera aktif (lihat _presence_watchdog)."""
+        if self.camera_status != "OK" or self.use_synthetic or not self.camera_name:
+            return
+        try:
+            names = camera_manager.list_device_names()
+        except Exception:
+            return
+        if not names:
+            return
+        if not self.camera_name_verified:
+            # Nama generik "Kamera N" tidak pernah cocok dengan daftar asli; dulu
+            # hal ini membuat kamera yang sehat dianggap dicabut (24-09).
+            # Pulihkan nama aslinya alih-alih memutus kamera.
+            idx = self.camera_index
+            if idx is not None and 0 <= idx < len(names):
+                logger.info(f"Nama kamera index {idx} dipulihkan: '{names[idx]}'.")
+                self.camera_name = names[idx]
+                self.camera_name_verified = True
+            return
+        if self.camera_name not in names:
+            logger.warning(f"'{self.camera_name}' hilang dari daftar perangkat sistem.")
+            self._device_missing = True
 
     def _find_index_by_name(self, name: str) -> int | None:
         """Mencari indeks terkini sebuah kamera berdasarkan namanya."""
@@ -166,9 +185,11 @@ class VideoCaptureService:
         try:
             names = camera_manager.list_device_names()
             if 0 <= index < len(names):
+                self.camera_name_verified = True
                 return names[index]
         except Exception:
             pass
+        self.camera_name_verified = False
         return messages.CAMERA_FALLBACK_NAME.format(index=index)
 
     def _init_camera(self, index: int | None = None, mode: dict | None = None) -> bool:

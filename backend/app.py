@@ -10,6 +10,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -34,10 +35,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Model, kamera, audio, IoT, dan basis data dibuka di sini, bukan saat impor
     runtime.start()
+    base = f"http://localhost:{cfg.PORT}"
+    if web_dist_dir.exists():
+        logger.info("Dashboard: %s/  |  tampilan lama (cadangan): %s/legacy/", base, base)
     yield
     runtime.stop()
 
-app = FastAPI(title="PPE Detection VLM Backend", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="DEPRO - Digital Safety Protection API", version="1.0.0", lifespan=lifespan)
 
 # Enable CORS for decoupled frontend.
 # Kredensial hanya diizinkan kalau daftar origin eksplisit; browser menolak
@@ -71,17 +75,33 @@ class RevalidatingStaticFiles(StaticFiles):
         return response
 
 
-# UI baru (Svelte + TypeScript, T33): hasil build web/dist disajikan di /app/
-# selama migrasi. Dipasang sebelum "/" karena mount "/" menangkap semua path.
+# Frontend (T33). UI baru (Svelte + TypeScript, hasil build web/dist) menjadi
+# halaman utama di "/"; UI lama tetap utuh di "/legacy/" sebagai cadangan.
+# Dipasang setelah semua router, karena mount "/" menangkap semua path sisa.
 web_dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
-if web_dist_dir.exists():
-    app.mount("/app", RevalidatingStaticFiles(directory=str(web_dist_dir), html=True), name="web")
-
-# UI lama tetap di "/" sebagai cadangan sampai UI baru lengkap. Dipasang setelah
-# semua router, karena mount "/" menangkap setiap path yang belum dicocokkan.
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+
+
+# Alamat lama UI baru selama migrasi (/app/) tetap berfungsi
+@app.get("/app", include_in_schema=False)
+@app.get("/app/", include_in_schema=False)
+async def _app_redirect():
+    return RedirectResponse("/")
+
+
 if frontend_dir.exists():
-    app.mount("/", RevalidatingStaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+    # Tanpa garis miring, rujukan relatif UI lama (css/, js/) salah alamat
+    @app.get("/legacy", include_in_schema=False)
+    async def _legacy_redirect():
+        return RedirectResponse("/legacy/")
+
+    app.mount("/legacy", RevalidatingStaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+
+if web_dist_dir.exists():
+    app.mount("/", RevalidatingStaticFiles(directory=str(web_dist_dir), html=True), name="web")
+elif frontend_dir.exists():
+    # web/dist belum dibangun: UI lama tetap tersedia di akar
+    app.mount("/", RevalidatingStaticFiles(directory=str(frontend_dir), html=True), name="frontend-root")
 
 def run():
     """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
@@ -126,7 +146,8 @@ def run():
     # log_config=None: uvicorn tidak memasang handler sendiri, sehingga lognya
     # mengalir ke root logger dan ikut tercatat di DATA_DIR/logs (lihat logging_setup).
     config = uvicorn.Config(app, host=cfg.HOST, port=cfg.PORT, reload=False,
-                            log_level=cfg.LOG_LEVEL.lower(), log_config=None)
+                            log_level=cfg.LOG_LEVEL.lower(), log_config=None,
+                            timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS)
     server = GracefulServer(config)
     try:
         server.run()

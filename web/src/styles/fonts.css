@@ -1,0 +1,13 @@
+/* Font disimpan lokal di hasil build (bukan Google Fonts): gerbang bisa tanpa
+   internet. Hanya subset Latin — teks UI berbahasa Indonesia. Lisensi OFL-1.1. */
+
+/* Angka (FPS, latensi, jam, ID pekerja) */
+@import '@fontsource/jetbrains-mono/latin-500.css';
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
