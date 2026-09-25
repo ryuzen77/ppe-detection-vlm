@@ -14,7 +14,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T20b — pengaman akses jaringan | Gemini (setelah T20) | `gemini/t20b-akses` | antre | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Dipecah dari T20 (keputusan pengguna 25-09-2026). (1) `ADMIN_TOKEN` wajib bila `HOST` bukan localhost: sekarang `HOST=0.0.0.0` + token kosong = siapa pun di LAN bisa mengubah pengaturan. Usul: server menolak menyala tanpa token kecuali diizinkan eksplisit lewat `.env` untuk demo. (2) Batas ukuran isi permintaan `POST` (angka di `config.py`), ditolak 413. Sementara sampai T30 (login) menggantikan token. Detail perilaku didiskusikan dengan pengguna sebelum kode |
+| T20b — pengaman akses jaringan | Gemini | `gemini/t20b-akses` | antre | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Perilaku sudah diputuskan (lihat "Keputusan pengguna → Pengaman akses jaringan"). Digabung **setelah** T20b-UI (kolom token) supaya tombol di UI baru tidak mendadak ditolak |
+| T20b-UI — kolom token admin di UI baru | Claude | `claude/t20b-token-ui` | antre | `web/src/components/`, `web/src/lib/` (tambah), `web/src/lib/messages.ts` (tambah) | Isian token kecil (disimpan di browser, kunci `safeguard_admin_token` sama dengan UI lama); pesan jelas saat server menjawab 401. Dipindah ke tab Pengaturan di T33 langkah 3 |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 
 ## Antrean berikutnya (urut)
@@ -71,6 +72,13 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - Pembersihan **otomatis** saat server menyala dan sekali sehari di latar (tanpa cron OS), hasilnya dicatat di log. Tombol manual "Hapus data tua" menyusul di Pengaturan setelah login admin (T30).
 - Log sistem tidak ikut; cukup rotasi bawaan (`LOG_MAX_BYTES` 5 MB × `LOG_BACKUP_COUNT` 5).
 - Larangan "jangan hapus `data/`" di AGENTS.md berlaku untuk agen, bukan untuk fitur retensi.
+
+**Pengaman akses jaringan (T20b, 25-09-2026)**
+- `HOST` bukan localhost (`127.0.0.1`, `::1`, `localhost`) + `ADMIN_TOKEN` kosong → server **menolak menyala** dengan pesan jelas di log. Pengecualian demo hanya bila diizinkan eksplisit lewat `.env` (mis. `ALLOW_INSECURE_LAN=true`), disertai peringatan setiap start.
+- Yang dikunci token hanya perintah yang mengubah state (POST, sudah memakai `require_admin`). Perlindungan data baca (foto bukti, CSV, riwayat, video langsung) menunggu login sesungguhnya di T30.
+- Isi permintaan `POST` maksimal **1 MB** (angka di `config.py`); lebih besar → 413 dengan pesan dari `messages.py`.
+- Urutan: kolom token di UI baru (T20b-UI, Claude) digabung dulu, baru T20b.
+- Akibat bagi pengembangan: `backend/.env` di folder utama perlu `ADMIN_TOKEN` (diisi pengguna sendiri) atau `HOST=127.0.0.1`; worktree Gemini tanpa `.env` menjalankan server dengan `HOST=127.0.0.1`.
 
 **Operasi**
 - OS produksi belum tentu Windows; produksi lewat Docker di Linux, pengembangan di Windows dengan venv.
