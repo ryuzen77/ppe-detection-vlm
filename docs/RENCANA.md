@@ -14,8 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T33 langkah 2 — tab Laporan | Claude | `claude/t33-laporan` | tinjau | `web/src/pages/`, `web/src/components/reports/`, `web/src/lib/` (tambah), `web/src/styles/tokens.css` (tambah `--backdrop`) | Tanpa perubahan backend. Isi: 6 statistik (kepatuhan dengan meter berwarna), saring status & tanggal, halaman 25 baris, foto bukti (dialog), APD per item, "Dinilai oleh" tanpa nama penyedia, ekspor CSV, muat ulang otomatis saat ada pemeriksaan baru. Cara uji: `python scripts/check.py`; `npm run build` lalu buka `/#/laporan`. Tinjau: `git diff master...claude/t33-laporan -- web/src`. Catatan: bilah atas (langkah 1) meluap horizontal di jendela < ~1040 px — bukan dari Laporan, diperbaiki terpisah |
-| T33 perbaikan — bilah atas meluap di jendela sempit | Claude | `claude/topbar-luap` | dikerjakan | `web/src/components/TopBar.svelte` | Chip status meluap horizontal < ~1040 px (temuan saat uji Laporan) |
 | T20b — pengaman akses jaringan | Gemini (setelah T20) | `gemini/t20b-akses` | antre | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Dipecah dari T20 (keputusan pengguna 25-09-2026). (1) `ADMIN_TOKEN` wajib bila `HOST` bukan localhost: sekarang `HOST=0.0.0.0` + token kosong = siapa pun di LAN bisa mengubah pengaturan. Usul: server menolak menyala tanpa token kecuali diizinkan eksplisit lewat `.env` untuk demo. (2) Batas ukuran isi permintaan `POST` (angka di `config.py`), ditolak 413. Sementara sampai T30 (login) menggantikan token. Detail perilaku didiskusikan dengan pengguna sebelum kode |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 
@@ -23,13 +21,12 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | # | Task | Isi |
 | :-- | :-- | :-- |
-| 1 | **T33 langkah 2 — tab Laporan di UI baru** | Riwayat pemeriksaan (tabel, filter status & tanggal, halaman), foto bukti (kecil, bisa diperbesar), statistik (total, lolos, pelanggaran, kepatuhan, diputuskan cadangan, gangguan), ekspor CSV. Mengikuti sistem desain langkah 1; semua teks di `messages.ts`. |
-| 2 | **T33 langkah 3 — tab Pengaturan** | Kamera, aturan APD wajib (checkbox), lampu gerbang (IoT), VLM (penyedia & model tampil di sini — area admin), bagian **Diagnostik** (uji latensi VLM, tes lampu). Setelahnya **UI lama (`frontend/`) dihapus** beserta `/legacy/`. |
-| 3 | T28 — penyedia VLM dipilih dari dashboard | Utama & cadangan (penyedia, model, base URL, API key) dari Pengaturan, tersimpan persisten (key di penyimpanan rahasia), tanpa restart, uji koneksi per penyedia. Menyerap T17. |
-| 4 | T30 — autentikasi Pengaturan | Login untuk Pengaturan & semua endpoint yang mengubah state; wajib di produksi. Rincian didiskusikan saat mulai. |
-| 5 | T26 sisa — evaluasi Gemini | 84 foto berlabel lewat `tools/eval_vlm.py` saat layanan Google normal (24-09 sedang 503/lambat). |
-| 6 | T29 — operasi otomatis + Docker | Produksi Linux lewat Docker Compose (kamera, GPU, suara, serial diteruskan; `restart: unless-stopped`). |
-| 7 | T18 XSS (UI lama; gugur bila UI lama sudah dihapus), T25 sisa latensi | T20 kini hanya retensi; pengerasan keamanan jadi T20b (sebelum T30) |
+| 1 | **T33 langkah 3 — tab Pengaturan** | Kamera, aturan APD wajib (checkbox), lampu gerbang (IoT), VLM (penyedia & model tampil di sini — area admin), bagian **Diagnostik** (uji latensi VLM, tes lampu). Setelahnya **UI lama (`frontend/`) dihapus** beserta `/legacy/`. |
+| 2 | T28 — penyedia VLM dipilih dari dashboard | Utama & cadangan (penyedia, model, base URL, API key) dari Pengaturan, tersimpan persisten (key di penyimpanan rahasia), tanpa restart, uji koneksi per penyedia. Menyerap T17. |
+| 3 | T30 — autentikasi Pengaturan | Login untuk Pengaturan & semua endpoint yang mengubah state; wajib di produksi. Rincian didiskusikan saat mulai. |
+| 4 | T26 sisa — evaluasi Gemini | 84 foto berlabel lewat `tools/eval_vlm.py` saat layanan Google normal (24-09 sedang 503/lambat). |
+| 5 | T29 — operasi otomatis + Docker | Produksi Linux lewat Docker Compose (kamera, GPU, suara, serial diteruskan; `restart: unless-stopped`). |
+| 6 | T18 XSS (UI lama; gugur bila UI lama sudah dihapus), T25 sisa latensi | T20 kini hanya retensi; pengerasan keamanan jadi T20b (sebelum T30) |
 
 ## Selesai (ringkas)
 
@@ -45,6 +42,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T32 | Ditutup: "kaki terpotong" pada foto uji karena foto dibingkai terlalu rapat (bukan bug); dipantau ulang dengan kamera nyata |
 | T20 | Retensi data (Gemini): foto 30 hari, audit 1 tahun, foto maks. 2 GB, pembersihan otomatis saat start + tiap `RETENTION_INTERVAL_HOURS`; nilai ≤ 0 = nonaktif. Pengerasan keamanan dipecah ke T20b |
 | T33 langkah 1 | UI baru Svelte 5 + TS di `/`, sistem desain, tab Monitoring, nama DEPRO, hard code dibereskan (`messages.ts`, `settings.ts`, token CSS, `icon_name` di katalog) |
+| T33 langkah 2 | Tab Laporan di UI baru: 6 statistik (kepatuhan dengan meter), saring status & tanggal, halaman, foto bukti, APD per item, "Dinilai oleh" tanpa nama penyedia, ekspor CSV, muat ulang otomatis. Ditinjau Gemini |
+| T33 perbaikan bilah atas | Bilah atas responsif 360–1440 px tanpa scroll horizontal (chip menyempit → ikon → baris kedua). Ditinjau Gemini |
 
 ## Keputusan pengguna (acuan)
 

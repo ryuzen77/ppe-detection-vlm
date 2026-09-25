@@ -4,7 +4,7 @@ import type { CameraState } from './api/types'
 import { describeSource } from './format'
 import { gateView } from './gate'
 import { computeFit, detectionStyle, drawHud, withAlpha, type HudPalette } from './hud'
-import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, seconds } from './messages'
+import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, chipTitle, seconds } from './messages'
 import { detectEvents, initialWatch } from './notify'
 import { assessItem } from './ppe'
 import { parseRoute } from './router.svelte'
@@ -251,5 +251,12 @@ describe('storage', () => {
     }
     expect(readItem('k', blocked)).toBeNull()
     expect(() => writeItem('k', 'v', blocked)).not.toThrow()
+  })
+})
+
+describe('chipTitle', () => {
+  it('menggabungkan teks & keterangan; tanpa keterangan cukup teks', () => {
+    expect(chipTitle('Kamera siap', 'USB Cam')).toBe('Kamera siap · USB Cam')
+    expect(chipTitle('Kamera siap', '')).toBe('Kamera siap')
   })
 })
