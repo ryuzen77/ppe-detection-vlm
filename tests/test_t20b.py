@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from backend.app import app
+from backend.app import app, insecure_network_reason
 from backend.config import cfg
 from backend.messages import STARTUP_INSECURE_LAN
 
@@ -10,11 +10,13 @@ def test_payload_too_large(monkeypatch):
     monkeypatch.setattr(cfg, "MAX_PAYLOAD_BYTES", 15)
     
     payload = {"value": "this_is_a_very_long_string"}
-    response = client.post("/api/config/vlm-key", json=payload)
+    # Use a non-existent endpoint to safely test payload limit without side effects
+    response = client.post("/api/ppe-rules/active", json=payload)
     assert response.status_code == 413
     assert response.json()["detail"] == "Payload Too Large"
     
-    response2 = client.post("/api/config/vlm-key", json={"a":"b"})
+    response2 = client.post("/api/ppe-rules/active", json={"a":"b"})
+    # It should pass the size limit and reach the router, which returns 404 Not Found
     assert response2.status_code != 413
 
 def test_payload_chunked(monkeypatch):
@@ -25,69 +27,46 @@ def test_payload_chunked(monkeypatch):
         yield b'this_is_a_'
         yield b'very_long_string"}'
         
-    response = client.post("/api/config/vlm-key", content=generate_large_payload())
-    # TestClient doesn't actually stream the generator in a way that chunks it to receive(),
-    # or the exception gets swallowed somewhere. Let's just assert 413 or 500 if the connection drops.
-    # Actually, we should check if the middleware works.
-    if response.status_code != 413:
-        print("Middleware chunked failed. Response code:", response.status_code)
-        print("Response body:", response.text)
+    response = client.post("/api/ppe-rules/active", content=generate_large_payload())
     assert response.status_code == 413
+    assert response.json()["detail"] == "Payload Too Large"
     
-def test_startup_insecure_lan(monkeypatch):
-    import sys
+    def generate_small_payload():
+        yield b'{"a":"b"}'
+        
+    response2 = client.post("/api/ppe-rules/active", content=generate_small_payload())
+    assert response2.status_code != 413
+
+def test_insecure_network_reason_direct():
+    # Test murni tanpa mock
+    # 1. LAN tanpa token dan demo dimatikan -> kembalikan pesan peringatan
+    reason = insecure_network_reason("192.168.1.10", "", False)
+    assert reason is not None
+    assert STARTUP_INSECURE_LAN.format(host="192.168.1.10") in reason
+    
+    # 2. LAN tanpa token tapi demo diizinkan -> kembalikan None (hanya warning di log)
+    assert insecure_network_reason("192.168.1.10", "", True) is None
+    
+    # 3. Localhost tanpa token -> kembalikan None
+    assert insecure_network_reason("127.0.0.1", "", False) is None
+    
+    # 4. LAN dengan token -> kembalikan None
+    assert insecure_network_reason("192.168.1.10", "secret", False) is None
+
+def test_startup_insecure_lan_lifespan(monkeypatch):
     from backend import runtime
     monkeypatch.setattr(runtime, "start", lambda: None)
     monkeypatch.setattr(runtime, "stop", lambda: None)
-    
-    exit_calls = []
-    def mock_exit(msg=None):
-        exit_calls.append(msg)
-        raise RuntimeError("MockExit")
-        
-    monkeypatch.setattr(sys, "exit", mock_exit)
     
     monkeypatch.setattr(cfg, "HOST", "192.168.1.10")
     monkeypatch.setattr(cfg, "ADMIN_TOKEN", "")
     monkeypatch.setattr(cfg, "ALLOW_INSECURE_DEMO", False)
     
+    # Lifespan akan melempar RuntimeError
     try:
         with TestClient(app):
             pass
-    except RuntimeError as e:
-        if str(e) != "MockExit":
-            raise
-    except BaseException:
-        pass
-        
-    assert len(exit_calls) > 0
-    assert STARTUP_INSECURE_LAN.format(host="192.168.1.10") in str(exit_calls[0])
-    
-    exit_calls.clear()
-    monkeypatch.setattr(cfg, "ALLOW_INSECURE_DEMO", True)
-    try:
-        with TestClient(app):
-            pass
-    except RuntimeError as e:
-        if str(e) == "MockExit":
-            pytest.fail("Should not exit when ALLOW_INSECURE_DEMO is True")
-    
-    exit_calls.clear()
-    monkeypatch.setattr(cfg, "HOST", "127.0.0.1")
-    monkeypatch.setattr(cfg, "ALLOW_INSECURE_DEMO", False)
-    try:
-        with TestClient(app):
-            pass
-    except RuntimeError as e:
-        if str(e) == "MockExit":
-            pytest.fail("Should not exit when localhost")
-
-    exit_calls.clear()
-    monkeypatch.setattr(cfg, "HOST", "0.0.0.0")
-    monkeypatch.setattr(cfg, "ADMIN_TOKEN", "secret")
-    try:
-        with TestClient(app):
-            pass
-    except RuntimeError as e:
-        if str(e) == "MockExit":
-            pytest.fail("Should not exit when token set")
+        pytest.fail("TestClient harusnya gagal karena RuntimeError di lifespan")
+    except BaseException as e:
+        # Pengecekan ada di ExceptionGroup / Exception
+        assert "Server berjalan di jaringan terbuka" in str(e.args) or "Server berjalan di jaringan terbuka" in str(getattr(e, 'exceptions', e))

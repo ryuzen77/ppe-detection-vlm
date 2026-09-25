@@ -30,16 +30,25 @@ from .api import (
 
 logger = logging.getLogger(__name__)
 
+def insecure_network_reason(host: str, token: str, allow_demo: bool) -> str | None:
+    from .config import cfg
+    from .messages import STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
+    if host not in cfg.LOCALHOST_IPS and not token:
+        if not allow_demo:
+            return STARTUP_INSECURE_LAN.format(host=host)
+        else:
+            logger.warning(INSECURE_DEMO_WARNING)
+    return None
+
+class PayloadTooLargeError(Exception):
+    pass
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if cfg.HOST not in ("127.0.0.1", "localhost", "::1") and not cfg.ADMIN_TOKEN:
-        if not cfg.ALLOW_INSECURE_DEMO:
-            from .messages import STARTUP_INSECURE_LAN
-            import sys
-            sys.exit(STARTUP_INSECURE_LAN.format(host=cfg.HOST))
-        else:
-            logger.warning("Menjalankan mode demo tidak aman di LAN karena ALLOW_INSECURE_DEMO aktif.")
+    reason = insecure_network_reason(cfg.HOST, cfg.ADMIN_TOKEN, cfg.ALLOW_INSECURE_DEMO)
+    if reason:
+        raise RuntimeError(reason)
             
     # Model, kamera, audio, IoT, dan basis data dibuka di sini, bukan saat impor
     runtime.start()
@@ -61,17 +70,22 @@ class LimitPayloadSizeMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
+        from .messages import PAYLOAD_TOO_LARGE
+        
         if scope["type"] != "http" or scope["method"] not in ("POST", "PUT", "PATCH"):
             return await self.app(scope, receive, send)
             
         content_length = None
         for name, value in scope.get("headers", []):
             if name == b"content-length":
-                content_length = int(value)
+                try:
+                    content_length = int(value)
+                except ValueError:
+                    pass
                 break
                 
-        if content_length and content_length > cfg.MAX_PAYLOAD_BYTES:
-            await self._send_413(send)
+        if content_length is not None and content_length > cfg.MAX_PAYLOAD_BYTES:
+            await self._send_413(send, PAYLOAD_TOO_LARGE)
             return
             
         received_bytes = 0
@@ -81,26 +95,26 @@ class LimitPayloadSizeMiddleware:
             if message["type"] == "http.request":
                 received_bytes += len(message.get("body", b""))
                 if received_bytes > cfg.MAX_PAYLOAD_BYTES:
-                    raise RuntimeError("Payload Too Large")
+                    raise PayloadTooLargeError(PAYLOAD_TOO_LARGE)
             return message
             
         try:
             return await self.app(scope, custom_receive, send)
-        except RuntimeError as e:
-            if str(e) == "Payload Too Large":
-                await self._send_413(send)
-                return
-            raise
+        except PayloadTooLargeError as e:
+            await self._send_413(send, str(e))
+            return
             
-    async def _send_413(self, send):
+    async def _send_413(self, send, detail):
+        import json
+        body = json.dumps({"detail": detail}).encode("utf-8")
         await send({
             "type": "http.response.start",
             "status": 413,
-            "headers": [(b"content-type", b"application/json")],
+            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("utf-8"))],
         })
         await send({
             "type": "http.response.body",
-            "body": b'{"detail": "Payload Too Large"}',
+            "body": body,
         })
 
 app.add_middleware(LimitPayloadSizeMiddleware)

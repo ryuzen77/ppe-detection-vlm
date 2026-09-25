@@ -14,7 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T20b — pengaman akses jaringan | Gemini | `gemini/t20b-akses` | antre | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Perilaku sudah diputuskan (lihat "Keputusan pengguna → Pengaman akses jaringan"). Digabung **setelah** T20b-UI (kolom token) supaya tombol di UI baru tidak mendadak ditolak |
+| T20b — pengaman akses jaringan | Gemini | `gemini/t20b-akses` | tinjau | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Perilaku sudah diputuskan (lihat "Keputusan pengguna → Pengaman akses jaringan"). Digabung **setelah** T20b-UI (kolom token) supaya tombol di UI baru tidak mendadak ditolak |
 | T20b-UI — kolom token admin di UI baru | Claude | `claude/t20b-token-ui` | dikerjakan | `web/src/components/`, `web/src/lib/` (tambah), `web/src/lib/messages.ts` (tambah) | Isian token kecil (disimpan di browser, kunci `safeguard_admin_token` sama dengan UI lama); pesan jelas saat server menjawab 401. Dipindah ke tab Pengaturan di T33 langkah 3 |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 

@@ -48,6 +48,7 @@ class Config:
     # Server._detach) membuat shutdown menggantung selamanya dan Ctrl+C kedua
     # pun tidak menolong. Setelah batas ini koneksi yang tersisa diputus.
     SHUTDOWN_TIMEOUT_SECONDS: float = float(_env("SHUTDOWN_TIMEOUT_SECONDS", "5"))
+    LOCALHOST_IPS: set[str] = {'127.0.0.1', '::1', 'localhost'}
     MAX_PAYLOAD_BYTES: int = int(_env("MAX_PAYLOAD_BYTES", str(1 * 1024 * 1024)))
     # Default dibatasi ke localhost. `allow_origins=["*"]` bersama
     # `allow_credentials=True` ditolak browser sesuai spesifikasi CORS.
