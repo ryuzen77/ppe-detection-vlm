@@ -15,7 +15,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T33 langkah 2 — tab Laporan | Claude | `claude/t33-laporan` | dikerjakan | `web/src/pages/`, `web/src/components/reports/`, `web/src/lib/` (tambah) | Memakai `GET /api/reports` yang sudah ada; tanpa perubahan backend |
-| T20 — retensi data & pengerasan keamanan | Gemini | `gemini/t20-retensi` | antre | `backend/report_manager.py`, `backend/storage.py`, `backend/config.py` (tambah), `tests/` | Butuh keputusan pengguna: lama simpan foto/audit, cara hapus. Diskusikan dulu sebelum kode |
+| T20 — retensi data & pengerasan keamanan | Gemini | `gemini/t20-retensi` | dikerjakan | `backend/report_manager.py`, `backend/storage.py`, `backend/config.py` (tambah), `tests/` | Keputusan retensi sudah ada (lihat "Keputusan pengguna → Retensi data"). Uji hanya di `data/` worktree Gemini atau folder sementara pytest. Gemini: kerjakan di `ppe_detection_vlm-gemini/`, bukan folder utama; klaim ini menggantikan commit `f020ac8` — rebase `gemini/t20-retensi` ke `master` dan buang commit itu |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 
 ## Antrean berikutnya (urut)
@@ -62,6 +62,14 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - Uji latensi & tes lampu dipindah ke bagian Diagnostik di Pengaturan.
 - Nama produk: **DEPRO — Digital Safety Protection**. Pengenal teknis lama (`SAFEGUARD_VENV`, `safeguard.service`, `safeguard.log`, kunci browser `safeguard_*`) sengaja tetap.
 - UI lama dihapus setelah Laporan & Pengaturan selesai dipindah.
+
+**Retensi data (T20, 25-09-2026)**
+- Foto bukti disimpan **30 hari** (berisi wajah pekerja = data pribadi); baris audit disimpan **1 tahun** (setelah fotonya terhapus, baris tampil "Tanpa foto").
+- Pengaman ukuran: total foto maksimal **2 GB**; bila terlewati, foto tertua dihapus lebih dulu.
+- Semua angka di `config.py`, bisa diubah lewat `.env`.
+- Pembersihan **otomatis** saat server menyala dan sekali sehari di latar (tanpa cron OS), hasilnya dicatat di log. Tombol manual "Hapus data tua" menyusul di Pengaturan setelah login admin (T30).
+- Log sistem tidak ikut; cukup rotasi bawaan (`LOG_MAX_BYTES` 5 MB × `LOG_BACKUP_COUNT` 5).
+- Larangan "jangan hapus `data/`" di AGENTS.md berlaku untuk agen, bukan untuk fitur retensi (diperjelas setelah T20 selesai).
 
 **Operasi**
 - OS produksi belum tentu Windows; produksi lewat Docker di Linux, pengembangan di Windows dengan venv.
