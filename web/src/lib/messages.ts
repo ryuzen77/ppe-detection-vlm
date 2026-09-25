@@ -187,6 +187,9 @@ export const modeLabel = (m: { width: number; height: number; fps: number } | nu
 export const withError = (base: string, e: unknown): string =>
   `${base}: ${e instanceof Error ? e.message : String(e)}`
 
+/** Tooltip chip status: teks chip + keterangan (tetap terbaca saat chip tinggal ikon) */
+export const chipTitle = (text: string, hint: string): string => (hint ? `${text} · ${hint}` : text)
+
 // --- Notifikasi ----------------------------------------------------------------------------------
 
 export const NOTIFY = {

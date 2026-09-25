@@ -7,7 +7,7 @@
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
-  import { BRAND, CONNECTION, GATE_CHIP, NAV } from '../lib/messages'
+  import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
   import { cameraChip, vlmChip } from '../lib/status'
@@ -42,14 +42,14 @@
     {#if router.current !== 'monitoring' && gate.kind !== 'offline'}
       <a class="gate tone-{gate.tone}" href={href('monitoring')} title={GATE_CHIP.title}>
         <span class="dot"></span>
-        {GATE_CHIP.text(gate.title, gate.trackId)}
+        <span class="label">{GATE_CHIP.text(gate.title, gate.trackId)}</span>
       </a>
     {/if}
     {#if telemetry.status !== 'connected'}
-      <span class="chip tone-danger"><WifiOff size={14} aria-hidden="true" /> {CONNECTION.lost}</span>
+      <span class="chip tone-danger" title={CONNECTION.lost}><WifiOff size={14} aria-hidden="true" /> <span class="label">{CONNECTION.lost}</span></span>
     {:else}
-      <span class="chip tone-{camera.tone}" title={camera.hint}><Camera size={14} aria-hidden="true" /> {camera.text}</span>
-      <span class="chip tone-{vlm.tone}" title={vlm.hint}><Cpu size={14} aria-hidden="true" /> {vlm.text}</span>
+      <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
+      <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
     {/if}
     <span class="clock mono">{now.toLocaleTimeString(CLOCK.locale, { hour12: false })}</span>
   </div>
@@ -108,8 +108,14 @@
     color: var(--text);
     background: var(--surface-3);
   }
+  .brand,
+  nav {
+    flex-shrink: 0;
+  }
+  /* Status boleh menyempit: chip dipotong (…) lebih dulu daripada navigasi */
   .status {
     margin-left: auto;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: var(--space-2);
@@ -125,6 +131,15 @@
     border: 1px solid var(--border);
     color: var(--text-muted);
     white-space: nowrap;
+    min-width: 0;
+  }
+  .chip :global(svg),
+  .dot {
+    flex-shrink: 0;
+  }
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .gate {
     text-decoration: none;
@@ -161,5 +176,53 @@
   .clock {
     color: var(--text-muted);
     padding-left: var(--space-2);
+  }
+
+  /* Jendela sempit (media query tidak bisa memakai var(--...)): tagline &
+     jam disembunyikan, lalu chip kamera/VLM tinggal ikon — teks lengkapnya
+     tetap di tooltip dan dibacakan pembaca layar. */
+  @media (max-width: 1100px) {
+    .topbar {
+      gap: var(--space-4);
+      padding: 0 var(--space-4);
+    }
+    .brand-tagline,
+    .clock {
+      display: none;
+    }
+  }
+  @media (max-width: 1000px) {
+    .chip .label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    /* Chip ikon tidak ikut menyempit; yang dipotong teks chip gerbang */
+    .chip {
+      padding: 4px 6px;
+      flex-shrink: 0;
+    }
+  }
+  /* Layar ponsel: status pindah ke baris kedua. Aman karena Monitoring
+     (satu-satunya pemakai --topbar-h) sudah bertinggi otomatis di < 1100px. */
+  @media (max-width: 560px) {
+    .topbar {
+      height: auto;
+      flex-wrap: wrap;
+      row-gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+    }
+    .status {
+      margin-left: 0;
+      flex-basis: 100%;
+    }
+    .brand-text {
+      display: none;
+    }
+    nav a {
+      padding: 6px 8px;
+    }
   }
 </style>
