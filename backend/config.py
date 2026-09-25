@@ -186,6 +186,9 @@ class Config:
     VLM_IS_LOCAL: bool = VLM_PROVIDER in LOCAL_VLM_PROVIDERS
     # Khusus Gemini. minimal / low / medium / high; kosong = tidak dikirim.
     GEMINI_THINKING_LEVEL: str = _env("GEMINI_THINKING_LEVEL", "minimal")
+    # Suhu sampling VLM. Rendah = jawaban konsisten untuk foto yang sama
+    # (penilaian APD bukan tugas kreatif). Berlaku untuk semua penyedia.
+    VLM_TEMPERATURE: float = float(_env("VLM_TEMPERATURE", "0.1"))
 
     # --- VLM cadangan (T27) ---
     # Dipakai OTOMATIS saat VLM utama gagal, di inspeksi yang sama. Bawaannya VLM

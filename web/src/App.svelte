@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte'
   import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
+  import { PAGES } from './lib/messages'
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
@@ -37,9 +38,9 @@
   {#if router.current === 'monitoring'}
     <Monitoring />
   {:else if router.current === 'laporan'}
-    <NotYetMigrated title="Laporan" description="Riwayat pemeriksaan, foto bukti, statistik kepatuhan, dan ekspor CSV." />
+    <NotYetMigrated {...PAGES.laporan} />
   {:else}
-    <NotYetMigrated title="Pengaturan" description="Kamera, aturan APD wajib, lampu gerbang, VLM, dan diagnostik." />
+    <NotYetMigrated {...PAGES.pengaturan} />
   {/if}
 </main>
 <Toasts />

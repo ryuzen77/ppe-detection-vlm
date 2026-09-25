@@ -18,7 +18,10 @@ export interface PpeItem {
   key: string
   label: string
   short_label: string
+  /** Emoji (UI lama) */
   icon: string
+  /** Nama ikon garis untuk UI baru, kunci registri ikon (mis. "hard-hat") */
+  icon_name: string
   ok_label: string
   fail_label: string
   reports_color: boolean
@@ -204,6 +207,8 @@ export interface Telemetry {
   light: LightStatus
   history: HistoryRecord[]
   stable_frames_required: number
+  /** Ambang keyakinan titik pose — sama dengan detektor backend */
+  keypoint_conf_threshold: number
   is_live_vlm: boolean
   vlm: VlmInfo
   api_monitor: MonitorStatus

@@ -4,6 +4,7 @@
   import CircleX from '@lucide/svelte/icons/circle-x'
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert'
   import X from '@lucide/svelte/icons/x'
+  import { NOTIFY } from '../lib/messages'
   import { href } from '../lib/router.svelte'
   import { toasts } from '../lib/stores/toasts.svelte'
 </script>
@@ -18,7 +19,7 @@
         <strong>{toast.title}</strong>
         <span>{toast.detail}</span>
       </a>
-      <button class="close" aria-label="Tutup notifikasi" onclick={() => toasts.dismiss(toast.id)}><X size={16} /></button>
+      <button class="close" aria-label={NOTIFY.close} onclick={() => toasts.dismiss(toast.id)}><X size={16} /></button>
     </div>
   {/each}
 </div>

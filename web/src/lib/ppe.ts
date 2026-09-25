@@ -6,6 +6,7 @@
  * lengkap/tidak tetap dihitung backend; ini hanya untuk teks & warna per baris.
  */
 import type { ItemResult, PpeItem } from './api/types'
+import { CHECKLIST } from './messages'
 
 /** ok: lengkap | missing: kurang | pending: belum dinilai (kuning, keputusan pengguna) */
 export type ItemStatus = 'ok' | 'missing' | 'pending'
@@ -16,7 +17,7 @@ export interface ItemAssessment {
 }
 
 export function assessItem(item: PpeItem, result: ItemResult | undefined | null): ItemAssessment {
-  if (!result) return { status: 'pending', text: 'Belum dinilai' }
+  if (!result) return { status: 'pending', text: CHECKLIST.pending }
   const qualifier = item.qualifier
   const qualifierOk = qualifier ? Boolean(result[qualifier.key]) : true
   if (result.detected && qualifierOk) {

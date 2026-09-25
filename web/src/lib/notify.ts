@@ -5,6 +5,7 @@
  * melihat Monitoring: pekerja DITOLAK dan sistem VLM gangguan/pulih.
  */
 import type { HistoryRecord, Telemetry, VlmMode } from './api/types'
+import { NOTIFY } from './messages'
 
 export interface GateEvent {
   kind: 'denied' | 'outage' | 'recovered'
@@ -38,19 +39,15 @@ export function detectEvents(prev: WatchState, t: Telemetry): { events: GateEven
   for (const rec of history) {
     if (keyOf(rec) === prev.lastHistoryKey) break
     if (!rec.is_complete) {
-      events.push({
-        kind: 'denied',
-        title: `Pekerja #${rec.track_id} ditolak`,
-        detail: rec.missing_items.length ? `Kurang: ${rec.missing_items.join(', ')}` : 'APD belum lengkap',
-      })
+      events.push({ kind: 'denied', title: NOTIFY.denied(rec.track_id), detail: NOTIFY.missing(rec.missing_items) })
     }
   }
 
-  if (next.lastMode !== prev.lastMode && prev.lastMode !== null) {
+  if (next.lastMode !== prev.lastMode && prev.lastMode !== null && next.lastMode !== null) {
     if (next.lastMode === 'GANGGUAN') {
-      events.push({ kind: 'outage', title: 'Sistem gangguan', detail: 'VLM utama & cadangan tidak menjawab; pekerja diminta menunggu.' })
+      events.push({ kind: 'outage', title: NOTIFY.outageTitle, detail: NOTIFY.outageDetail })
     } else if (prev.lastMode === 'GANGGUAN') {
-      events.push({ kind: 'recovered', title: 'Sistem pulih', detail: `VLM ${next.lastMode === 'UTAMA' ? 'utama' : 'cadangan'} kembali menilai.` })
+      events.push({ kind: 'recovered', title: NOTIFY.recoveredTitle, detail: NOTIFY.recoveredDetail(next.lastMode) })
     }
   }
   return { events, next }

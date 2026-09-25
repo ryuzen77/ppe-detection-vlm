@@ -59,7 +59,7 @@ def test_klien_gemini_dibuat_tanpa_jaringan():
 
 
 def test_permintaan_gemini_sama_dengan_perilaku_lama(monkeypatch):
-    provider = GeminiProvider(api_key="kunci-palsu", model="gemini-3.5-flash-lite")
+    provider = GeminiProvider(api_key="kunci-palsu", model="gemini-3.5-flash-lite", temperature=cfg.VLM_TEMPERATURE)
     recorder = _Recorder('{"ok": true}')
     # `models` pada klien SDK hanya-baca, jadi klien diganti utuh
     monkeypatch.setattr(provider, "_client", type("Client", (), {"models": recorder})())
@@ -76,7 +76,7 @@ def test_permintaan_gemini_sama_dengan_perilaku_lama(monkeypatch):
     conf = call["config"]
     assert conf.system_instruction == "SISTEM"
     assert conf.response_mime_type == "application/json"
-    assert conf.temperature == 0.1
+    assert conf.temperature == cfg.VLM_TEMPERATURE
 
 
 def test_ping_gemini_mengembalikan_teks(monkeypatch):
@@ -339,3 +339,14 @@ def test_thinking_level_kosong_tidak_dikirim(monkeypatch):
     monkeypatch.setattr(provider, "_client", type("Client", (), {"models": recorder})())
     provider.analyze(b"\xff\xd8x\xff\xd9", system_prompt="S", user_prompt="U")
     assert recorder.calls[0]["config"].thinking_config is None
+
+
+def test_engine_meneruskan_suhu_dari_config(monkeypatch):
+    # Suhu sampling berasal dari config (VLM_TEMPERATURE), bukan tertulis di adaptor
+    monkeypatch.setattr(cfg, "VLM_TEMPERATURE", 0.3)
+    utama = VLMEngine("utama", "gemini", "m", api_key="k")
+    cadangan = VLMEngine("cadangan", "ollama", "m")
+    assert utama.build() and cadangan.build()
+    assert utama.provider.temperature == 0.3 and cadangan.provider.temperature == 0.3
+    for e in (utama, cadangan):
+        e.executor.shutdown(wait=False)

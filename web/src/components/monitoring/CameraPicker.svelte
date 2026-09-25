@@ -4,9 +4,14 @@
   // server, jadi hasilnya ditunggu lewat polling sebelum dialog ditutup.
   import { onDestroy } from 'svelte'
   import { api } from '../../lib/api/client'
-  import type { CameraCatalog, CameraMode } from '../../lib/api/types'
+  import type { CameraCatalog, CameraDevice } from '../../lib/api/types'
+  import { CAMERA_PICKER as TEXT, modeLabel, withError } from '../../lib/messages'
+  import { CAMERA_POLL } from '../../lib/settings'
 
   let { open = $bindable(false) }: { open?: boolean } = $props()
+
+  /** Penanda backend untuk "belum pernah dipindai" */
+  const NEVER_SCANNED = '-'
 
   let dialog: HTMLDialogElement | undefined = $state()
   let catalog = $state<CameraCatalog | null>(null)
@@ -21,9 +26,18 @@
   }
   onDestroy(stopPoll)
 
-  function modeLabel(m: CameraMode | null): string {
-    if (!m) return ''
-    return `${m.width}×${m.height}${m.fps ? ` @${Math.round(m.fps)} fps` : ''}`
+  const activeIndex = $derived(catalog?.active.selected ? catalog.active.index : null)
+
+  function scanStatus(data: CameraCatalog): string {
+    if (data.scanning) return TEXT.scanning
+    if (data.last_scan_time && data.last_scan_time !== NEVER_SCANNED) return TEXT.lastScan(data.last_scan_time)
+    return TEXT.scanOptional
+  }
+
+  function deviceMeta(dev: CameraDevice): string {
+    const parts = [TEXT.index(dev.index)]
+    parts.push(dev.selected_mode ? modeLabel(dev.selected_mode) : dev.scanned === false ? TEXT.notScanned : TEXT.unavailable)
+    return parts.join(' · ')
   }
 
   async function refresh(): Promise<CameraCatalog | null> {
@@ -35,14 +49,10 @@
         const saved = data.devices.find((d) => data.saved?.name && d.name === data.saved.name)
         choice = saved ? saved.index : data.devices[0].index
       }
-      if (!busy) {
-        status = data.scanning ? 'Mengukur kemampuan kamera…'
-          : data.last_scan_time && data.last_scan_time !== '-' ? `Pemindaian terakhir pukul ${data.last_scan_time}.`
-          : 'Pemindaian bersifat opsional; kamera tetap bisa langsung dipakai.'
-      }
+      if (!busy) status = scanStatus(data)
       return data
     } catch (e) {
-      status = `Gagal memuat daftar kamera: ${e instanceof Error ? e.message : e}`
+      status = withError(TEXT.loadFailed, e)
       return null
     }
   }
@@ -61,12 +71,12 @@
   async function connect() {
     if (choice === null) return
     busy = 'connect'
-    status = 'Membuka kamera…'
+    status = TEXT.opening
     try {
       await api.selectCamera(choice)
     } catch (e) {
       busy = null
-      status = `Gagal menyambungkan: ${e instanceof Error ? e.message : e}`
+      status = withError(TEXT.connectFailed, e)
       return
     }
     let tries = 0
@@ -75,23 +85,23 @@
       tries += 1
       const data = await refresh()
       const st = data?.active.status
-      if (st === 'OK' || st === 'SYNTHETIC' || tries > 25) {
+      if (st === 'OK' || st === 'SYNTHETIC' || tries > CAMERA_POLL.connectMaxTries) {
         stopPoll()
         busy = null
         if (st === 'OK') open = false
-        else status = 'Kamera itu tidak dapat dibuka. Pilih sumber lain.'
+        else status = TEXT.cannotOpen
       }
-    }, 1000)
+    }, CAMERA_POLL.connectPollMs)
   }
 
   async function scan() {
     busy = 'scan'
-    status = 'Mengukur kemampuan kamera…'
+    status = TEXT.scanning
     try {
       await api.scanCameras()
     } catch (e) {
       busy = null
-      status = `Gagal memulai pemindaian: ${e instanceof Error ? e.message : e}`
+      status = withError(TEXT.scanFailed, e)
       return
     }
     stopPoll()
@@ -102,32 +112,30 @@
         busy = null
         await refresh()
       }
-    }, 1500)
+    }, CAMERA_POLL.scanPollMs)
   }
 
   async function release() {
     busy = 'release'
     try {
       await api.selectCamera(null)
-      status = 'Kamera dilepas. Pilih sumber baru.'
+      status = TEXT.released
     } catch (e) {
-      status = `Gagal melepas kamera: ${e instanceof Error ? e.message : e}`
+      status = withError(TEXT.releaseFailed, e)
     } finally {
       busy = null
       await refresh()
     }
   }
-
-  const activeIndex = $derived(catalog?.active.selected ? catalog.active.index : null)
 </script>
 
 <dialog bind:this={dialog} onclose={() => (open = false)} aria-labelledby="camera-picker-title">
-  <h2 id="camera-picker-title">Pilih sumber kamera</h2>
-  <p class="hint">Pilih kamera yang dipakai untuk inspeksi, lalu tekan <strong>Gunakan kamera ini</strong>.</p>
+  <h2 id="camera-picker-title">{TEXT.title}</h2>
+  <p class="hint">{TEXT.hintBefore} <strong>{TEXT.confirm}</strong>.</p>
 
-  <div class="list" role="radiogroup" aria-label="Kamera">
+  <div class="list" role="radiogroup" aria-label={TEXT.listLabel}>
     {#if catalog && catalog.devices.length === 0}
-      <p class="hint">Tidak ada kamera terdeteksi. Colokkan kamera lalu tekan Pindai.</p>
+      <p class="hint">{TEXT.none}</p>
     {/if}
     {#each catalog?.devices ?? [] as dev (dev.index)}
       <button
@@ -138,31 +146,30 @@
         class:selected={dev.index === choice}
         onclick={() => (choice = dev.index)}
       >
-        <span class="name">{dev.name || `Kamera ${dev.index}`}</span>
+        <span class="name">{dev.name || TEXT.deviceFallback(dev.index)}</span>
         <span class="meta">
-          index {dev.index}
-          · {dev.selected_mode ? modeLabel(dev.selected_mode) : dev.scanned === false ? 'belum dipindai' : 'tidak tersedia'}
-          {#if dev.index === activeIndex} · <span class="active">sedang dipakai</span>{/if}
-          {#if catalog?.saved?.name && dev.name === catalog.saved.name && dev.index !== activeIndex} · terakhir dipakai{/if}
+          {deviceMeta(dev)}
+          {#if dev.index === activeIndex} · <span class="active">{TEXT.inUse}</span>{/if}
+          {#if catalog?.saved?.name && dev.name === catalog.saved.name && dev.index !== activeIndex} · {TEXT.lastUsed}{/if}
         </span>
       </button>
     {/each}
   </div>
 
   {#if catalog?.quality_warning}
-    <p class="warn">Resolusi kamera rendah: video lebih lancar, tetapi potongan gambar untuk AI lebih kecil sehingga penilaian helm dan sepatu bisa kurang teliti.</p>
+    <p class="warn">{TEXT.lowQuality}</p>
   {/if}
   <p class="status" aria-live="polite">{status}</p>
 
   <div class="actions">
-    <button class="btn" onclick={scan} disabled={busy !== null}>{busy === 'scan' ? 'Memindai…' : 'Pindai kemampuan'}</button>
+    <button class="btn" onclick={scan} disabled={busy !== null}>{busy === 'scan' ? TEXT.scanBusy : TEXT.scan}</button>
     {#if activeIndex !== null}
-      <button class="btn" onclick={release} disabled={busy !== null}>Lepas kamera</button>
+      <button class="btn" onclick={release} disabled={busy !== null}>{TEXT.release}</button>
     {/if}
     <span class="spacer"></span>
-    <button class="btn" onclick={() => (open = false)} disabled={busy === 'connect'}>Tutup</button>
+    <button class="btn" onclick={() => (open = false)} disabled={busy === 'connect'}>{TEXT.close}</button>
     <button class="btn btn-primary" onclick={connect} disabled={choice === null || busy !== null}>
-      {busy === 'connect' ? 'Menyambungkan…' : 'Gunakan kamera ini'}
+      {busy === 'connect' ? TEXT.connecting : TEXT.confirm}
     </button>
   </div>
 </dialog>

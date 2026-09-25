@@ -63,9 +63,9 @@ button {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0b1220;
+  color: var(--on-accent);
   font-weight: 600;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #8ab8ff;
+  background: var(--accent-hover);
 }

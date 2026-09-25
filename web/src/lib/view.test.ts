@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { ActiveTrack, HistoryRecord, InspectionResult, PpeItem, Telemetry } from './api/types'
-import { describeSource, seconds } from './format'
+import type { CameraState } from './api/types'
+import { describeSource } from './format'
 import { gateView } from './gate'
-import { computeFit, detectionStyle } from './hud'
+import { computeFit, detectionStyle, drawHud, withAlpha, type HudPalette } from './hud'
+import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, seconds } from './messages'
 import { detectEvents, initialWatch } from './notify'
 import { assessItem } from './ppe'
 import { parseRoute } from './router.svelte'
+import { cameraChip, vlmChip } from './status'
+import { readItem, writeItem } from './storage'
 
 // --- data tiruan ---------------------------------------------------------------
 
@@ -28,6 +32,7 @@ function tele(over: Partial<Telemetry> = {}): Telemetry {
     timestamp: 0, frame_width: 1280, frame_height: 720, has_person: false, active_track: null, detections: [],
     corridor: { enabled: true, left_ratio: 0.3, right_ratio: 0.7 },
     light: { light_state: 'OFF', message: '', timestamp: 0 }, history: [], stable_frames_required: 3,
+    keypoint_conf_threshold: 0.35,
     is_live_vlm: true,
     vlm: { role: 'utama', provider: 'gemini', model: 'm', is_local: false, needs_key: true, has_key: true, is_live: true, timeout_s: 4, error: '', backup: null, primary_down: false },
     api_monitor: { mode: 'UTAMA' } as Telemetry['api_monitor'],
@@ -89,7 +94,7 @@ describe('gateView', () => {
 
 describe('assessItem', () => {
   const rompi: PpeItem = {
-    key: 'rompi', label: 'Rompi', short_label: 'Rompi', icon: '', ok_label: 'Terpasang', fail_label: 'Tidak ada',
+    key: 'rompi', label: 'Rompi', short_label: 'Rompi', icon: '', icon_name: 'safety-vest', ok_label: 'Terpasang', fail_label: 'Tidak ada',
     reports_color: true, required: true, qualifier: { key: 'is_valid_color', fail_label: 'Bukan hi-vis' },
   }
   it('belum dinilai = pending (kuning)', () => {
@@ -152,7 +157,7 @@ describe('describeSource', () => {
   it.each([
     ['VLM_LIVE:gemini/g', 'utama', 'gemini/g'],
     ['VLM_CADANGAN:ollama/qwen2.5vl:7b', 'cadangan', 'ollama/qwen2.5vl:7b'],
-    ['VLM_GANGGUAN', 'gangguan', 'tanpa keputusan'],
+    ['VLM_GANGGUAN', 'gangguan', ''],
     ['GEMINI_LIVE', 'utama', 'gemini'],
     ['LOCAL_FAST_PASS', 'lama', 'LOCAL_FAST_PASS'],
   ])('%s', (src, role, label) => {
@@ -165,16 +170,86 @@ describe('describeSource', () => {
 })
 
 describe('overlay', () => {
+  const palette: HudPalette = { ok: '#00ff00', warn: '#ffaa00', outside: '#777777', text: '#ffffff', background: '#000000', font: 'sans-serif' }
+
   it('video 16:9 di kanvas 4:3 diberi bilah atas-bawah, bukan diregangkan', () => {
     const f = computeFit(800, 600, 1280, 720)
     expect(f.drawW).toBe(800)
     expect(f.drawH).toBe(450)
     expect(f.offsetY).toBe(75)
   })
-  it('warna kotak: pas hijau, arahan kuning, di luar jalur abu', () => {
+  it('warna kotak dari palet token: pas hijau, arahan kuning, di luar jalur abu', () => {
     const base = { track_id: 1, bbox: [0, 0, 1, 1] as [number, number, number, number], reason: '', conf: 1, keypoints: null }
-    expect(detectionStyle({ ...base, is_full_body: true, is_inside_corridor: true, clip_type: 'OPTIMAL' }).color).toBe('#22c55e')
-    expect(detectionStyle({ ...base, is_full_body: false, is_inside_corridor: true, clip_type: 'FEET_CLIPPED' }).color).toBe('#f5a524')
-    expect(detectionStyle({ ...base, is_full_body: true, is_inside_corridor: false, clip_type: 'OPTIMAL' }).label).toBe('di luar jalur')
+    expect(detectionStyle({ ...base, is_full_body: true, is_inside_corridor: true, clip_type: 'OPTIMAL' }, palette).color).toBe(palette.ok)
+    expect(detectionStyle({ ...base, is_full_body: false, is_inside_corridor: true, clip_type: 'FEET_CLIPPED' }, palette).color).toBe(palette.warn)
+    expect(detectionStyle({ ...base, is_full_body: true, is_inside_corridor: false, clip_type: 'OPTIMAL' }, palette).color).toBe(palette.outside)
+  })
+  it('drawHud memakai palet & ambang keypoint dari backend', () => {
+    const calls: { fn: string; style?: string }[] = []
+    const ctx = new Proxy({} as Record<string, unknown>, {
+      get(target, prop: string) {
+        if (prop in target) return target[prop]
+        if (prop === 'measureText') return () => ({ width: 50 })
+        return (..._args: unknown[]) => calls.push({ fn: prop, style: String(target.fillStyle ?? '') })
+      },
+      set(target, prop: string, value) {
+        target[prop] = value
+        return true
+      },
+    }) as unknown as CanvasRenderingContext2D
+    const det = {
+      track_id: 7, bbox: [100, 100, 300, 600] as [number, number, number, number], reason: '', conf: 0.9,
+      is_full_body: true, is_inside_corridor: true, clip_type: 'OPTIMAL',
+      // satu titik di atas ambang 0.35, satu di bawahnya
+      keypoints: [[150, 150, 0.9], [160, 160, 0.2]],
+    }
+    drawHud(ctx, 800, 450, tele({ detections: [det] }), true, palette)
+    expect(calls.filter((c) => c.fn === 'arc')).toHaveLength(1)
+    expect(calls.some((c) => c.fn === 'fillText')).toBe(true)
+    expect((ctx as unknown as { font: string }).font).toContain(palette.font)
+  })
+  it('warna token + alfa', () => {
+    expect(withAlpha('#ff8000', 0.5)).toBe('rgba(255, 128, 0, 0.5)')
+    expect(withAlpha('rgb(1,2,3)', 0.5)).toBe('rgb(1,2,3)')
+  })
+})
+
+// --- chip status, teks, penyimpanan ------------------------------------------------------
+
+describe('chip status', () => {
+  it('VLM tanpa nama penyedia (keputusan pengguna)', () => {
+    for (const mode of ['UTAMA', 'CADANGAN', 'GANGGUAN'] as const) {
+      const chip = vlmChip(tele({ api_monitor: { mode } as Telemetry['api_monitor'] }))
+      expect(chip.text).not.toMatch(/gemini|ollama|qwen/i)
+    }
+    expect(vlmChip(tele({ api_monitor: { mode: 'CADANGAN' } as Telemetry['api_monitor'] })).tone).toBe('warn')
+  })
+  it('kamera: nada per status', () => {
+    expect(cameraChip(tele()).tone).toBe('ok')
+    expect(cameraChip(tele({ camera: { ...tele().camera, status: 'LOST' } })).tone).toBe('danger')
+    expect(cameraChip(null).tone).toBe('neutral')
+  })
+})
+
+describe('messages', () => {
+  it('setiap status kamera punya teks untuk chip, panel keputusan, dan video', () => {
+    const states: CameraState[] = ['IDLE', 'OPENING', 'OK', 'OPTIMIZING', 'LOST', 'SYNTHETIC']
+    for (const s of states) {
+      expect(CAMERA_CHIP[s]).toBeTruthy()
+      expect(s === 'OK' || Boolean(CAMERA_NOT_READY[s])).toBe(true)
+      expect(s === 'OK' || Boolean(VIDEO.placeholder[s])).toBe(true)
+    }
+  })
+})
+
+describe('storage', () => {
+  it('penyimpanan diblokir tidak menjatuhkan UI', () => {
+    const blocked = {
+      getItem: () => { throw new Error('SecurityError') },
+      setItem: () => { throw new Error('SecurityError') },
+      removeItem: () => { throw new Error('SecurityError') },
+    }
+    expect(readItem('k', blocked)).toBeNull()
+    expect(() => writeItem('k', 'v', blocked)).not.toThrow()
   })
 })

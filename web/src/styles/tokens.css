@@ -36,6 +36,9 @@
   /* Aksen interaksi (navigasi aktif, fokus, tautan) — bukan status */
   --accent: #6ea8fe;
   --accent-soft: rgba(110, 168, 254, 0.12);
+  --accent-hover: #8ab8ff;
+  /* Teks di atas latar aksen (tombol utama) */
+  --on-accent: #0b1220;
 
   /* Tipografi */
   --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

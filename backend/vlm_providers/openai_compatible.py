@@ -8,6 +8,7 @@ import base64
 
 import httpx
 
+from .. import messages
 from .base import VLMProvider
 
 # Alamat bawaan per penyedia. VLM_BASE_URL (T23) selalu menang atas nilai ini.
@@ -27,7 +28,8 @@ PRESETS = {
 
 class OpenAICompatibleProvider(VLMProvider):
     def __init__(self, api_key: str, model: str, base_url: str, name: str = "openai",
-                 json_mode: bool = True, http_timeout: float = 60.0, warmup_timeout: float = 120.0):
+                 json_mode: bool = True, http_timeout: float = 60.0, warmup_timeout: float = 120.0,
+                 temperature: float | None = None):
         super().__init__(model)
         if not base_url:
             raise ValueError(f"Penyedia '{name}' butuh base URL (VLM_BASE_URL).")
@@ -45,12 +47,13 @@ class OpenAICompatibleProvider(VLMProvider):
         # saat pemanasan jauh lebih lama, jadi memakai batasnya sendiri.
         self._client = httpx.Client(base_url=self.base_url, headers=headers, timeout=http_timeout)
         self.warmup_timeout = warmup_timeout
+        # None = bawaan server (tidak dikirim); nilai dari config.VLM_TEMPERATURE
+        self.temperature = temperature
 
     def generate(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> str:
         data_url = "data:image/jpeg;base64," + base64.b64encode(image_jpeg).decode("ascii")
         body = {
             "model": self.model,
-            "temperature": 0.1,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": [
@@ -59,6 +62,8 @@ class OpenAICompatibleProvider(VLMProvider):
                 ]},
             ],
         }
+        if self.temperature is not None:
+            body["temperature"] = self.temperature
         if self.json_mode:
             body["response_format"] = {"type": "json_object"}
         return self._chat(body)
@@ -80,7 +85,7 @@ class OpenAICompatibleProvider(VLMProvider):
         return self._chat({
             "model": self.model,
             "max_tokens": 10,
-            "messages": [{"role": "user", "content": "Ping. Jawab 'PONG'."}],
+            "messages": [{"role": "user", "content": messages.VLM_PING_PROMPT}],
         }).strip()
 
     def _chat(self, body: dict) -> str:

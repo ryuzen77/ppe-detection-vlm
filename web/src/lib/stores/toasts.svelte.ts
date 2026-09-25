@@ -1,12 +1,10 @@
 /** Antrean notifikasi singkat (toast). */
 import type { GateEvent } from '../notify'
+import { TOASTS } from '../settings'
 
 export interface Toast extends GateEvent {
   id: number
 }
-
-const LIFETIME_MS = 8000
-const MAX_VISIBLE = 4
 
 class ToastStore {
   items = $state<Toast[]>([])
@@ -14,8 +12,8 @@ class ToastStore {
 
   push(event: GateEvent): void {
     const toast = { ...event, id: ++this.seq }
-    this.items = [toast, ...this.items].slice(0, MAX_VISIBLE)
-    setTimeout(() => this.dismiss(toast.id), LIFETIME_MS)
+    this.items = [toast, ...this.items].slice(0, TOASTS.maxVisible)
+    setTimeout(() => this.dismiss(toast.id), TOASTS.lifetimeMs)
   }
 
   dismiss(id: number): void {

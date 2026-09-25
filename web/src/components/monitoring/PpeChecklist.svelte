@@ -5,6 +5,7 @@
   import Minus from '@lucide/svelte/icons/minus'
   import X from '@lucide/svelte/icons/x'
   import type { InspectionResult, PpeItem } from '../../lib/api/types'
+  import { CHECKLIST } from '../../lib/messages'
   import { assessItem } from '../../lib/ppe'
   import PpeIcon from '../PpeIcon.svelte'
 
@@ -15,18 +16,18 @@
   } = $props()
 </script>
 
-<section class="card" aria-label="Kelengkapan APD">
+<section class="card" aria-label={CHECKLIST.title}>
   <header>
-    <h3>Kelengkapan APD</h3>
+    <h3>{CHECKLIST.title}</h3>
     {#if decidedBy === 'cadangan'}
-      <span class="backup" title="VLM utama tidak menjawab; penilaian oleh VLM cadangan">Dinilai VLM cadangan</span>
+      <span class="backup" title={CHECKLIST.backupHint}>{CHECKLIST.backupBadge}</span>
     {/if}
   </header>
   <ul>
     {#each items as item (item.key)}
       {@const a = assessItem(item, result?.items?.[item.key])}
       <li class="st-{a.status}">
-        <span class="item-icon"><PpeIcon itemKey={item.key} /></span>
+        <span class="item-icon"><PpeIcon name={item.icon_name} /></span>
         <span class="name">{item.label}</span>
         <span class="state">
           {#if a.status === 'ok'}<Check size={16} strokeWidth={2.5} />
@@ -36,7 +37,7 @@
         </span>
       </li>
     {:else}
-      <li class="empty">Memuat daftar APD…</li>
+      <li class="empty">{CHECKLIST.loading}</li>
     {/each}
   </ul>
 </section>

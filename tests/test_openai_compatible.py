@@ -6,6 +6,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
+from backend.config import cfg
+
 from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
 from backend.vlm_providers import create_provider
 from backend.vlm_providers.openai_compatible import PRESETS, OpenAICompatibleProvider
@@ -65,14 +67,15 @@ def _provider(server, **kw):
 
 def test_permintaan_berformat_openai_dengan_gambar_base64(server):
     jpeg = b"\xff\xd8isi-jpeg-uji\xff\xd9"
-    assert _provider(server).analyze(jpeg, system_prompt="SISTEM", user_prompt="PENGGUNA") == {"ok": True}
+    provider = _provider(server, temperature=cfg.VLM_TEMPERATURE)
+    assert provider.analyze(jpeg, system_prompt="SISTEM", user_prompt="PENGGUNA") == {"ok": True}
 
     (req,) = server.requests
     assert req["path"] == "/v1/chat/completions"
     assert req["auth"] == "Bearer kunci-uji"
     body = req["body"]
     assert body["model"] == "qwen/qwen2.5-vl-72b-instruct"
-    assert body["temperature"] == 0.1
+    assert body["temperature"] == cfg.VLM_TEMPERATURE
     assert body["response_format"] == {"type": "json_object"}
     system, user = body["messages"]
     assert system == {"role": "system", "content": "SISTEM"}
@@ -236,3 +239,8 @@ def test_pemanasan_berhasil_melaporkan_durasi(server, analyzer):
 def test_tanpa_penyedia_pemanasan_dilewati(analyzer):
     assert analyzer.primary is None and analyzer.backup is None
     assert analyzer.warm_up() is None
+
+
+def test_temperature_tidak_dikirim_bila_tidak_disetel(server):
+    _provider(server).analyze(b"x", system_prompt="S", user_prompt="U")
+    assert "temperature" not in server.requests[0]["body"]

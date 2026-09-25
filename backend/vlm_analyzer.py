@@ -74,7 +74,8 @@ def _is_spoof_rejection(missing_items) -> bool:
     return any(isinstance(m, str) and _SPOOF_MARKER in m.casefold() for m in (missing_items or []))
 
 
-USER_PROMPT = "Periksa kelengkapan APD pekerja pada gambar ini sesuai instruksi K3. Berikan output JSON."
+# Nama lama dipertahankan untuk pemakai (tes, alat evaluasi); isinya di messages.py
+USER_PROMPT = messages.VLM_USER_PROMPT
 
 
 def build_system_prompt(items=None) -> str:
@@ -86,15 +87,11 @@ def build_system_prompt(items=None) -> str:
     atau mematikan item, jadi item mati tidak pernah ditanyakan ke model.
     """
     items = items if items is not None else ppe_rules.get_active_items()
-    return (
-        "\nAnda adalah AI Inspektur K3 (Keselamatan dan Kesehatan Kerja) profesional.\n"
-        "Tugas Anda adalah memeriksa kelengkapan Alat Pelindung Diri (APD) pada orang "
-        "dalam gambar yang dikirimkan.\n\n"
-        "Aturan Penilaian APD:\n"
-        f"{ppe_rules.build_prompt_rules(items)}\n\n"
-        f"{len(items) + 1}. {ppe_rules.build_completeness_rule(items)}\n\n"
-        "Kembalikan hasil dalam format JSON yang valid persis seperti bentuk berikut:\n"
-        f"{ppe_rules.build_json_shape(items)}\n"
+    return messages.VLM_SYSTEM_PROMPT.format(
+        rules=ppe_rules.build_prompt_rules(items),
+        completeness_number=len(items) + 1,
+        completeness_rule=ppe_rules.build_completeness_rule(items),
+        json_shape=ppe_rules.build_json_shape(items),
     )
 
 
@@ -145,9 +142,10 @@ class VLMEngine:
             try:
                 # Klien HTTP dibatalkan sedikit sesudah batas waktu aplikasi
                 http_timeout = self.timeout + 1.0
-                options = ({"thinking_level": cfg.GEMINI_THINKING_LEVEL, "http_timeout": http_timeout}
+                common = {"http_timeout": http_timeout, "temperature": cfg.VLM_TEMPERATURE}
+                options = ({**common, "thinking_level": cfg.GEMINI_THINKING_LEVEL}
                            if self.provider_name == "gemini" else
-                           {"base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE, "http_timeout": http_timeout,
+                           {**common, "base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE,
                             "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS})
                 self.provider = create_provider(self.provider_name, api_key=self.api_key,
                                                 model=self.model_name, **options)

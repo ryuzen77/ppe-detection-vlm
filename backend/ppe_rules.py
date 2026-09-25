@@ -46,7 +46,8 @@ class PPEItem:
 
     key: str                    # Pengenal internal; dipakai sebagai kunci JSON, DB, dan DOM
     label: str                  # Nama yang dibaca operator
-    icon: str                   # Emoji untuk lencana dashboard
+    icon: str                   # Emoji untuk lencana dashboard lama (dihapus bersama UI lama)
+    icon_name: str              # Nama ikon garis untuk UI baru (mis. "hard-hat"); kunci ke registri ikon frontend
     missing_label: str          # Nama yang masuk ke daftar `missing_items`
     audio_missing: str          # Nama berkas MP3 (tanpa ekstensi) saat item tidak lengkap
     audio_missing_text: str     # Kalimat TTS untuk berkas tersebut (dipakai generate_audio.py)
@@ -68,6 +69,7 @@ class PPEItem:
             "label": self.label,
             "short_label": self.short_label or self.label,
             "icon": self.icon,
+            "icon_name": self.icon_name,
             "ok_label": self.ok_label,
             "fail_label": self.fail_label,
             "reports_color": self.reports_color,
@@ -104,6 +106,7 @@ PPE_ITEMS: list[PPEItem] = [
         label="Helm Keselamatan",
         short_label="Helm",
         icon="🪖",
+        icon_name="hard-hat",
         missing_label="Helm Keselamatan",
         audio_missing="kurang_helm",
         audio_missing_text="Peringatan! Anda belum memakai helm keselamatan.",
@@ -122,6 +125,7 @@ PPE_ITEMS: list[PPEItem] = [
         short_label="Rompi",
         reports_color=True,
         icon="🦺",
+        icon_name="safety-vest",
         missing_label="Rompi Keselamatan Orange/Kuning",
         audio_missing="kurang_rompi",
         audio_missing_text="Peringatan! Anda belum memakai rompi keselamatan warna orange atau kuning.",
@@ -146,6 +150,7 @@ PPE_ITEMS: list[PPEItem] = [
         label="Celana Panjang",
         short_label="Celana",
         icon="👖",
+        icon_name="trousers",
         missing_label="Celana Panjang",
         audio_missing="kurang_celana",
         audio_missing_text="Peringatan! Anda belum memakai celana panjang.",
@@ -162,6 +167,7 @@ PPE_ITEMS: list[PPEItem] = [
         label="Sepatu Tertutup",
         short_label="Sepatu",
         icon="👞",
+        icon_name="sport-shoe",
         missing_label="Sepatu Tertutup",
         audio_missing="kurang_sepatu",
         audio_missing_text="Peringatan! Anda belum memakai sepatu tertutup.",
@@ -190,6 +196,7 @@ PPE_ITEMS: list[PPEItem] = [
         label="Kacamata Safety",
         short_label="Kacamata",
         icon="🥽",
+        icon_name="rectangle-goggles",
         missing_label="Kacamata Safety",
         audio_missing="kurang_kacamata",
         audio_missing_text="Peringatan! Anda belum memakai kacamata safety.",
@@ -208,6 +215,7 @@ PPE_ITEMS: list[PPEItem] = [
         label="Sarung Tangan",
         short_label="Sarung Tangan",
         icon="🧤",
+        icon_name="hand",
         missing_label="Sarung Tangan",
         audio_missing="kurang_sarung_tangan",
         audio_missing_text="Peringatan! Anda belum memakai sarung tangan kerja.",

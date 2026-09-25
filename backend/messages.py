@@ -67,6 +67,22 @@ API_CAMERA_SWITCHING = "Berpindah ke kamera index {index}..."
 API_PPE_ACTIVE_FORMAT = 'Format: {"active": {"<kunci_item>": true/false}}'
 API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
 
+# --- Prompt VLM ---
+# Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
+VLM_SYSTEM_PROMPT = (
+    "\nAnda adalah AI Inspektur K3 (Keselamatan dan Kesehatan Kerja) profesional.\n"
+    "Tugas Anda adalah memeriksa kelengkapan Alat Pelindung Diri (APD) pada orang "
+    "dalam gambar yang dikirimkan.\n\n"
+    "Aturan Penilaian APD:\n"
+    "{rules}\n\n"
+    "{completeness_number}. {completeness_rule}\n\n"
+    "Kembalikan hasil dalam format JSON yang valid persis seperti bentuk berikut:\n"
+    "{json_shape}\n"
+)
+VLM_USER_PROMPT = "Periksa kelengkapan APD pekerja pada gambar ini sesuai instruksi K3. Berikan output JSON."
+# Panggilan termurah untuk uji latensi & pemanasan
+VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
+
 # --- VLM tidak tersedia (utama & cadangan gagal) ---
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "

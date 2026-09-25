@@ -14,9 +14,10 @@ import type {
   ReportStatusFilter,
   VlmInfo,
 } from './types'
+import { STORAGE } from '../settings'
 
 /** Kunci yang sama dengan UI lama, supaya token admin berlaku di kedua UI. */
-export const ADMIN_TOKEN_STORAGE_KEY = 'safeguard_admin_token'
+export const ADMIN_TOKEN_STORAGE_KEY = STORAGE.adminToken
 
 export class ApiError extends Error {
   readonly status: number

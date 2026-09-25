@@ -9,11 +9,12 @@
   import VideoOff from '@lucide/svelte/icons/video-off'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import type { GateView } from '../../lib/gate'
+  import { GATE } from '../../lib/messages'
 
   let { gate }: { gate: GateView } = $props()
 </script>
 
-<section class="decision tone-{gate.tone}" aria-live="polite" aria-label="Keputusan gerbang">
+<section class="decision tone-{gate.tone}" aria-live="polite" aria-label={GATE.ariaLabel}>
   <div class="icon">
     {#if gate.kind === 'granted'}<CircleCheck size={40} strokeWidth={1.75} />
     {:else if gate.kind === 'denied'}<CircleX size={40} strokeWidth={1.75} />
@@ -26,7 +27,7 @@
   </div>
 
   <div class="text">
-    {#if gate.trackId}<span class="subject mono">Pekerja #{gate.trackId}</span>{/if}
+    {#if gate.trackId}<span class="subject mono">{GATE.subject(gate.trackId)}</span>{/if}
     <h2 class:big={gate.kind === 'granted' || gate.kind === 'denied'}>{gate.title}</h2>
     <p>{gate.detail}</p>
     {#if gate.missing.length}

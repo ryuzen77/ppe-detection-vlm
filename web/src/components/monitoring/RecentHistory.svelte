@@ -1,18 +1,19 @@
 <script lang="ts">
   import type { HistoryRecord } from '../../lib/api/types'
-  import { describeSource, seconds } from '../../lib/format'
+  import { describeSource } from '../../lib/format'
+  import { HISTORY, seconds } from '../../lib/messages'
   import { href } from '../../lib/router.svelte'
 
   let { records }: { records: HistoryRecord[] } = $props()
 </script>
 
-<section class="card" aria-label="Riwayat pemeriksaan">
+<section class="card" aria-label={HISTORY.ariaLabel}>
   <header>
-    <h3>Riwayat terakhir</h3>
-    <a href={href('laporan')}>Semua laporan</a>
+    <h3>{HISTORY.title}</h3>
+    <a href={href('laporan')}>{HISTORY.allReports}</a>
   </header>
   {#if records.length === 0}
-    <p class="empty">Belum ada pemeriksaan sejak server menyala.</p>
+    <p class="empty">{HISTORY.empty}</p>
   {:else}
     <ul>
       {#each records as r (r.track_id + r.timestamp + r.snapshot_filename)}
@@ -21,13 +22,13 @@
           <span class="time mono">{r.timestamp}</span>
           <span class="who mono">#{r.track_id}</span>
           <span class="result" class:ok={r.is_complete} class:bad={!r.is_complete}>
-            {r.is_complete ? 'Lolos' : 'Ditolak'}
+            {r.is_complete ? HISTORY.passed : HISTORY.denied}
           </span>
           <span class="detail">
-            {r.is_complete ? 'APD lengkap' : r.missing_items.join(', ') || 'APD belum lengkap'}
+            {r.is_complete ? HISTORY.complete : r.missing_items.join(', ') || HISTORY.incomplete}
           </span>
           <span class="meta">
-            {#if src.role === 'cadangan'}<span class="backup">cadangan</span>{/if}
+            {#if src.role === 'cadangan'}<span class="backup">{HISTORY.backup}</span>{/if}
             <span class="mono">{seconds(r.inference_time_ms)}</span>
           </span>
         </li>

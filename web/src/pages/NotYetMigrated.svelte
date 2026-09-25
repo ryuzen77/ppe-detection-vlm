@@ -1,6 +1,9 @@
 <script lang="ts">
   // Halaman yang belum dipindahkan ke UI baru (langkah 2 & 3 T33). Selama itu
   // fungsinya tetap tersedia di UI lama.
+  import { PAGES } from '../lib/messages'
+  import { URLS } from '../lib/settings'
+
   let { title, description }: { title: string; description: string } = $props()
 </script>
 
@@ -8,8 +11,8 @@
   <section class="card">
     <h1>{title}</h1>
     <p>{description}</p>
-    <p class="note">Bagian ini belum dipindahkan ke tampilan baru. Sementara itu gunakan tampilan lama:</p>
-    <a class="btn btn-primary" href="/legacy/">Buka tampilan lama</a>
+    <p class="note">{PAGES.notMigrated}</p>
+    <a class="btn btn-primary" href={URLS.legacy}>{PAGES.openLegacy}</a>
   </section>
 </div>
 

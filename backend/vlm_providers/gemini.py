@@ -1,4 +1,5 @@
 """Google Gemini lewat SDK `google-genai` (pengganti `google-generativeai` yang sudah dihentikan)."""
+from .. import messages
 from .base import VLMProvider
 
 
@@ -9,8 +10,11 @@ GEMINI_MIN_DEADLINE_SECONDS = 10.0
 class GeminiProvider(VLMProvider):
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str, thinking_level: str = "", http_timeout: float = 0.0):
+    def __init__(self, api_key: str, model: str, thinking_level: str = "", http_timeout: float = 0.0,
+                 temperature: float | None = None):
         super().__init__(model)
+        # None = bawaan model (tidak dikirim); nilai dari config.VLM_TEMPERATURE
+        self.temperature = temperature
         # Model Gemini 3.x "berpikir" dulu secara bawaan. Untuk pemeriksaan visual
         # APD itu tidak menambah ketepatan tetapi melipatgandakan latensi (terukur
         # 5,0 dtk vs 1,4 dtk pada gemini-3.5-flash-lite dengan jawaban sama).
@@ -42,7 +46,6 @@ class GeminiProvider(VLMProvider):
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
-                temperature=0.1,
                 **self._common(),
             ),
         )
@@ -50,7 +53,7 @@ class GeminiProvider(VLMProvider):
 
     def ping(self) -> str:
         response = self._client.models.generate_content(
-            model=self.model, contents="Ping. Jawab 'PONG'.",
+            model=self.model, contents=messages.VLM_PING_PROMPT,
             config=self._types.GenerateContentConfig(**self._common()),
         )
         return (response.text or "").strip()
@@ -60,6 +63,8 @@ class GeminiProvider(VLMProvider):
         # bawaan di SDK dan memunculkan peringatan "Direct use of automatic
         # function calling" di setiap panggilan, padahal tidak dipakai di sini.
         options = {"automatic_function_calling": self._types.AutomaticFunctionCallingConfig(disable=True)}
+        if self.temperature is not None:
+            options["temperature"] = self.temperature
         if self.thinking_level:
             options["thinking_config"] = self._types.ThinkingConfig(thinking_level=self.thinking_level)
         return options

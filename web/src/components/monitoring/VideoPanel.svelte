@@ -11,31 +11,27 @@
   import VolumeX from '@lucide/svelte/icons/volume-x'
   import { onDestroy, onMount } from 'svelte'
   import { api } from '../../lib/api/client'
-  import { drawHud } from '../../lib/hud'
+  import { drawHud, readHudPalette, type HudPalette } from '../../lib/hud'
+  import { VIDEO, withError } from '../../lib/messages'
+  import { STORAGE } from '../../lib/settings'
+  import { readFlag, writeFlag } from '../../lib/storage'
   import { telemetry } from '../../lib/stores/telemetry.svelte'
 
   let { onPickCamera }: { onPickCamera: () => void } = $props()
-
-  const GUIDES_KEY = 'safeguard_guides_visible'
-  function loadGuides(): boolean {
-    try {
-      return localStorage.getItem(GUIDES_KEY) !== 'false'
-    } catch {
-      return true
-    }
-  }
 
   let img: HTMLImageElement | undefined = $state()
   let canvas: HTMLCanvasElement | undefined = $state()
   let frame: HTMLDivElement | undefined = $state()
   let size = $state({ w: 0, h: 0 })
-  let guides = $state(loadGuides())
+  let guides = $state(readFlag(STORAGE.guidesVisible, true))
   let streamKey = $state(Date.now())
   let message = $state('')
+  let palette: HudPalette | null = null
 
   const t = $derived(telemetry.data)
   const cameraOk = $derived(t?.camera.status === 'OK')
   const muted = $derived(t?.audio_muted ?? false)
+  const placeholder = $derived(t ? VIDEO.placeholder[t.camera.status] : VIDEO.waitingServer)
 
   // Aliran dimuat ulang saat kamera berganti atau baru tersambung kembali
   let lastCamera = ''
@@ -53,7 +49,9 @@
     canvas.width = size.w
     canvas.height = size.h
     const ctx = canvas.getContext('2d')
-    if (ctx) drawHud(ctx, size.w, size.h, t, guides)
+    // Warna overlay dari token CSS (dibaca sekali, setelah stylesheet termuat)
+    palette ??= readHudPalette()
+    if (ctx) drawHud(ctx, size.w, size.h, t, guides, palette)
   })
 
   let observer: ResizeObserver | null = null
@@ -73,11 +71,7 @@
 
   function toggleGuides() {
     guides = !guides
-    try {
-      localStorage.setItem(GUIDES_KEY, String(guides))
-    } catch {
-      // penyimpanan diblokir: pilihan berlaku selama halaman terbuka
-    }
+    writeFlag(STORAGE.guidesVisible, guides)
   }
 
   async function run(action: () => Promise<unknown>, failText: string) {
@@ -85,29 +79,23 @@
     try {
       await action()
     } catch (e) {
-      message = `${failText}: ${e instanceof Error ? e.message : e}`
+      message = withError(failText, e)
     }
   }
 </script>
 
-<section class="video" aria-label="Kamera inspeksi">
+<section class="video" aria-label={VIDEO.ariaLabel}>
   <div class="frame" bind:this={frame}>
     {#if cameraOk}
       <!-- Video & overlay hanya saat kamera siap: frame tunggu dari backend
            tidak diunduh dan tidak bertumpuk dengan placeholder di bawah. -->
-      <img bind:this={img} src={api.streamUrl() + `?t=${streamKey}`} alt="Video kamera gerbang" />
+      <img bind:this={img} src={`${api.streamUrl()}?t=${streamKey}`} alt={VIDEO.alt} />
       <canvas bind:this={canvas} aria-hidden="true"></canvas>
     {:else}
       <div class="placeholder">
         <VideoOff size={40} strokeWidth={1.5} aria-hidden="true" />
-        <p>
-          {!t ? 'Menunggu server…'
-            : t.camera.status === 'IDLE' ? 'Kamera belum dipilih'
-            : t.camera.status === 'LOST' ? 'Kamera terputus — menyambung ulang…'
-            : t.camera.status === 'SYNTHETIC' ? 'Kamera tidak dapat dibuka'
-            : 'Menyiapkan kamera…'}
-        </p>
-        {#if t}<button class="btn btn-primary" onclick={onPickCamera}><Camera size={16} /> Pilih kamera</button>{/if}
+        <p>{placeholder}</p>
+        {#if t}<button class="btn btn-primary" onclick={onPickCamera}><Camera size={16} /> {VIDEO.pickCamera}</button>{/if}
       </div>
     {/if}
   </div>
@@ -119,15 +107,15 @@
       {/if}
     </span>
     {#if message}<span class="error" role="alert">{message}</span>{/if}
-    <button class="btn" onclick={toggleGuides} aria-pressed={guides} title="Tampilkan jalur inspeksi & area pijakan">
-      {#if guides}<Eye size={16} />{:else}<EyeOff size={16} />{/if} Panduan
+    <button class="btn" onclick={toggleGuides} aria-pressed={guides} title={VIDEO.guidesHint}>
+      {#if guides}<Eye size={16} />{:else}<EyeOff size={16} />{/if} {VIDEO.guides}
     </button>
-    <button class="btn" onclick={() => run(() => api.setAudioMuted(!muted), 'Gagal mengubah suara')} aria-pressed={!muted}>
-      {#if muted}<VolumeX size={16} /> Senyap{:else}<Volume2 size={16} /> Suara{/if}
+    <button class="btn" onclick={() => run(() => api.setAudioMuted(!muted), VIDEO.soundFailed)} aria-pressed={!muted}>
+      {#if muted}<VolumeX size={16} /> {VIDEO.muted}{:else}<Volume2 size={16} /> {VIDEO.sound}{/if}
     </button>
-    <button class="btn" onclick={onPickCamera}><Camera size={16} /> Ganti kamera</button>
-    <button class="btn" onclick={() => run(() => api.reset(), 'Gagal memulai ulang')} title="Mulai ulang sesi pemeriksaan">
-      <RotateCcw size={16} /> Mulai ulang
+    <button class="btn" onclick={onPickCamera}><Camera size={16} /> {VIDEO.changeCamera}</button>
+    <button class="btn" onclick={() => run(() => api.reset(), VIDEO.resetFailed)} title={VIDEO.resetHint}>
+      <RotateCcw size={16} /> {VIDEO.reset}
     </button>
   </div>
 </section>

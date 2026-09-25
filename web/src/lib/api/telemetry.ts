@@ -4,6 +4,7 @@
  * Tidak bergantung pada Svelte maupun DOM, supaya bisa diuji dengan WebSocket
  * tiruan. Store reaktifnya ada di lib/stores/telemetry.svelte.ts.
  */
+import { TELEMETRY } from '../settings'
 import type { Telemetry } from './types'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
@@ -29,8 +30,8 @@ export interface TelemetryClientOptions {
   clearTimer?: (handle: unknown) => void
 }
 
-export const INITIAL_RECONNECT_MS = 1500
-export const MAX_RECONNECT_MS = 10000
+export const INITIAL_RECONNECT_MS = TELEMETRY.reconnectInitialMs
+export const MAX_RECONNECT_MS = TELEMETRY.reconnectMaxMs
 
 export class TelemetryClient {
   private readonly url: string
@@ -114,7 +115,7 @@ export class TelemetryClient {
     if (this.stopped) return
     if (this.timer !== null) this.opts.clearTimer(this.timer)
     const wait = this.delay
-    this.delay = Math.min(this.delay * 1.5, this.opts.maxDelayMs)
+    this.delay = Math.min(this.delay * TELEMETRY.reconnectFactor, this.opts.maxDelayMs)
     this.timer = this.opts.setTimer(() => {
       this.timer = null
       this.connect()

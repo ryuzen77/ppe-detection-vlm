@@ -7,71 +7,51 @@
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
-  import { href, router, type Route } from '../lib/router.svelte'
+  import { BRAND, CONNECTION, GATE_CHIP, NAV } from '../lib/messages'
+  import { href, ROUTES, router } from '../lib/router.svelte'
+  import { CLOCK } from '../lib/settings'
+  import { cameraChip, vlmChip } from '../lib/status'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
-  const NAV: { route: Route; label: string }[] = [
-    { route: 'monitoring', label: 'Monitoring' },
-    { route: 'laporan', label: 'Laporan' },
-    { route: 'pengaturan', label: 'Pengaturan' },
-  ]
-
   let now = $state(new Date())
-  const clock = setInterval(() => (now = new Date()), 1000)
+  const clock = setInterval(() => (now = new Date()), CLOCK.tickMs)
   onDestroy(() => clearInterval(clock))
 
   const t = $derived(telemetry.data)
   const gate = $derived(gateView(t, telemetry.status))
-
-  const camera = $derived.by(() => {
-    const c = t?.camera
-    if (!c) return { tone: 'neutral', text: 'Kamera' }
-    if (c.status === 'OK') return { tone: 'ok', text: `Kamera · ${Math.round(t!.fps)} fps` }
-    if (c.status === 'IDLE') return { tone: 'warn', text: 'Kamera belum dipilih' }
-    if (c.status === 'LOST') return { tone: 'danger', text: 'Kamera terputus' }
-    return { tone: 'warn', text: 'Kamera menyiapkan' }
-  })
-
-  const vlm = $derived.by(() => {
-    const m = t?.api_monitor?.mode
-    // Nama penyedia/model sengaja tidak ditampilkan (keputusan pengguna): cukup
-    // status umum yang dipahami operator.
-    if (m === 'UTAMA') return { tone: 'ok', text: 'VLM utama', hint: 'Penilaian APD oleh VLM utama' }
-    if (m === 'CADANGAN') return { tone: 'warn', text: 'VLM cadangan', hint: 'VLM utama tidak menjawab; penilaian oleh VLM cadangan' }
-    if (m === 'GANGGUAN') return { tone: 'danger', text: 'VLM gangguan', hint: 'VLM utama & cadangan tidak menjawab' }
-    return { tone: 'neutral', text: 'VLM', hint: '' }
-  })
+  const camera = $derived(cameraChip(t))
+  const vlm = $derived(vlmChip(t))
 </script>
 
 <header class="topbar">
-  <div class="brand" title="DEPRO — Digital Safety Protection">
+  <div class="brand" title={BRAND.full}>
     <ShieldCheck size={22} strokeWidth={2} aria-hidden="true" />
     <span class="brand-text">
-      <span class="brand-name">DEPRO</span>
-      <span class="brand-tagline">Digital Safety Protection</span>
+      <span class="brand-name">{BRAND.name}</span>
+      <span class="brand-tagline">{BRAND.tagline}</span>
     </span>
   </div>
 
-  <nav aria-label="Navigasi utama">
-    {#each NAV as item (item.route)}
-      <a href={href(item.route)} aria-current={router.current === item.route ? 'page' : undefined}>{item.label}</a>
+  <nav aria-label={NAV.label}>
+    {#each ROUTES as route (route)}
+      <a href={href(route)} aria-current={router.current === route ? 'page' : undefined}>{NAV[route]}</a>
     {/each}
   </nav>
 
   <div class="status">
     {#if router.current !== 'monitoring' && gate.kind !== 'offline'}
-      <a class="gate tone-{gate.tone}" href={href('monitoring')} title="Buka Monitoring">
+      <a class="gate tone-{gate.tone}" href={href('monitoring')} title={GATE_CHIP.title}>
         <span class="dot"></span>
-        Gerbang: {gate.title}{gate.trackId ? ` · #${gate.trackId}` : ''}
+        {GATE_CHIP.text(gate.title, gate.trackId)}
       </a>
     {/if}
     {#if telemetry.status !== 'connected'}
-      <span class="chip tone-danger"><WifiOff size={14} aria-hidden="true" /> Server terputus</span>
+      <span class="chip tone-danger"><WifiOff size={14} aria-hidden="true" /> {CONNECTION.lost}</span>
     {:else}
-      <span class="chip tone-{camera.tone}"><Camera size={14} aria-hidden="true" /> {camera.text}</span>
+      <span class="chip tone-{camera.tone}" title={camera.hint}><Camera size={14} aria-hidden="true" /> {camera.text}</span>
       <span class="chip tone-{vlm.tone}" title={vlm.hint}><Cpu size={14} aria-hidden="true" /> {vlm.text}</span>
     {/if}
-    <span class="clock mono">{now.toLocaleTimeString('id-ID', { hour12: false })}</span>
+    <span class="clock mono">{now.toLocaleTimeString(CLOCK.locale, { hour12: false })}</span>
   </div>
 </header>
 
