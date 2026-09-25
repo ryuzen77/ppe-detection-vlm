@@ -71,5 +71,5 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 - VRAM puncak 7,6 / 8 GB dengan `qwen2.5vl:7b` + YOLO — risiko OOM bila ada beban GPU lain.
 - Ollama kadang crash pada gambar tertentu (ollama/ollama#14170); inspeksi itu jatuh ke jalur gangguan dan diulang.
-- Kesamaan build `web/dist` Linux (CI) vs Windows belum dibuktikan — CI akan menunjukkannya.
+- Build `web/dist` kini identik antar folder/worktree (akhir baris `web/` dikunci LF lewat `.gitattributes`); kesamaan di Linux CI belum dibuktikan langsung (repo belum punya remote).
 - Repo belum punya remote git, jadi CI belum pernah berjalan.
