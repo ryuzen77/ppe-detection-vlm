@@ -6,6 +6,13 @@ pesan commit (`git log`).
 
 Terakhir diperbarui: 25-09-2026.
 
+## Lanjut dari sini (jeda 25-09-2026)
+
+- **Menunggu pengguna:** uji nyata T20b + T20b-UI (restart server, tombol kunci di bilah atas, perintah tanpa token → dialog, isi token → berhasil; opsional akses dari perangkat lain & uji tolak menyala).
+- **Menunggu Gemini:** `git checkout --detach master` di worktree-nya agar branch `gemini/t20b-akses` bisa dihapus. Belum ada task baru untuk Gemini.
+- **Usulan putaran berikutnya (paralel, area tidak beririsan):** Claude → T33 langkah 3 (tab Pengaturan + Diagnostik, lalu hapus UI lama; kolom token pindah ke sana). Gemini → bagian backend T28 (penyedia VLM dari dashboard), **kontrak API ditulis & disetujui dulu** di berkas ini sebelum kode.
+- Praktik tinjauan: laporan agen selalu dicocokkan ke isi commit (`git log`/diff) dan diuji nyata sebelum digabung; beberapa laporan sebelumnya tidak sesuai isi branch.
+
 ## Papan tugas
 
 Aturan klaim & penggabungan: [`AGENTS.md` §2](../AGENTS.md). Klaim dulu (isi
@@ -90,3 +97,5 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - Ollama kadang crash pada gambar tertentu (ollama/ollama#14170); inspeksi itu jatuh ke jalur gangguan dan diulang.
 - Build `web/dist` kini identik antar folder/worktree (akhir baris `web/` dikunci LF lewat `.gitattributes`); kesamaan di Linux CI belum dibuktikan langsung (repo belum punya remote).
 - Repo belum punya remote git, jadi CI belum pernah berjalan.
+- Monitoring di lebar ~360 px: satu tombol panel video melewati tepi kanan (terpotong, tanpa scroll horizontal) — rapikan di T33 langkah 3.
+- Data baca (foto bukti, CSV, riwayat, video langsung) masih terbuka tanpa token di jaringan — ditutup oleh login T30.
