@@ -271,6 +271,14 @@ class Config:
     SNAPSHOT_JPEG_QUALITY: int = 80           # Mutu foto bukti (~30-50 KB per foto)
     DB_TIMEOUT_SECONDS: float = 10.0          # Tunggu kunci SQLite sebelum menyerah
 
+    # Retensi Data (T20)
+    # Lama simpan foto wajah pekerja (hari) sebelum dihapus (hanya fotonya yang terhapus).
+    RETENTION_PHOTO_DAYS: int = int(_env("RETENTION_PHOTO_DAYS", "30"))
+    # Lama simpan baris audit (hari) sebelum dihapus total.
+    RETENTION_AUDIT_DAYS: int = int(_env("RETENTION_AUDIT_DAYS", "365"))
+    # Batas kapasitas total folder foto (GB). Foto tertua dihapus bila batas ini terlampaui.
+    RETENTION_MAX_PHOTO_GB: float = float(_env("RETENTION_MAX_PHOTO_GB", "2.0"))
+
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.
     AUDIO_DIR: Path = BASE_DIR / "audio"

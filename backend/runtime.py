@@ -6,6 +6,7 @@ supaya pengujian dan alat bantu bisa memakai modul-modulnya tanpa perangkat
 keras lengkap.
 """
 import logging
+import threading
 
 from .config import cfg
 from .logging_setup import setup_logging
@@ -19,6 +20,15 @@ from .vlm_analyzer import vlm_analyzer
 from .video.capture import video_service
 
 logger = logging.getLogger(__name__)
+
+_cleanup_thread = None
+_cleanup_stop = threading.Event()
+
+def _retention_loop():
+    while not _cleanup_stop.is_set():
+        report_mgr.cleanup_old_data()
+        _cleanup_stop.wait(86400)  # Cek setiap 24 jam
+
 
 
 def start():
@@ -38,10 +48,17 @@ def start():
     # setelah panggilan VLM pertama terbukti cepat
     vlm_analyzer.warm_up()
     video_service.start()
+    
+    global _cleanup_thread
+    _cleanup_stop.clear()
+    _cleanup_thread = threading.Thread(target=_retention_loop, name="RetentionCleanup", daemon=True)
+    _cleanup_thread.start()
+    
     logger.info("Seluruh layanan siap. Data: %s", cfg.DATA_DIR)
 
 
 def stop():
+    _cleanup_stop.set()
     video_service.stop()
     audio_player.stop()
     notifier.stop()

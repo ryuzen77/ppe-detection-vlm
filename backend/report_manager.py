@@ -422,4 +422,86 @@ class ReportManager:
                 return path
         return None
 
+    def cleanup_old_data(self):
+        """Pembersihan data sesuai kebijakan retensi (T20)."""
+        now = time.time()
+        photo_cutoff = now - (cfg.RETENTION_PHOTO_DAYS * 86400)
+        audit_cutoff = now - (cfg.RETENTION_AUDIT_DAYS * 86400)
+        photo_cutoff_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(photo_cutoff))
+        audit_cutoff_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(audit_cutoff))
+
+        deleted_photos = 0
+        deleted_audits = 0
+        reclaimed_bytes = 0
+
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+
+                # 1. Hapus audit yang melewati batas RETENTION_AUDIT_DAYS
+                cursor.execute("SELECT snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''", (audit_cutoff_str,))
+                for row in cursor.fetchall():
+                    path = self.get_snapshot_path(row["snapshot_filename"])
+                    if path:
+                        try:
+                            reclaimed_bytes += path.stat().st_size
+                            path.unlink()
+                            deleted_photos += 1
+                        except OSError:
+                            pass
+                
+                cursor.execute("DELETE FROM worker_inspections WHERE timestamp < ?", (audit_cutoff_str,))
+                deleted_audits += cursor.rowcount
+                conn.commit()
+
+                # 2. Hapus foto yang melewati batas RETENTION_PHOTO_DAYS, baris tetap ada tapi tanpa foto
+                cursor.execute("SELECT id, snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''", (photo_cutoff_str,))
+                rows = cursor.fetchall()
+                for row in rows:
+                    path = self.get_snapshot_path(row["snapshot_filename"])
+                    if path:
+                        try:
+                            reclaimed_bytes += path.stat().st_size
+                            path.unlink()
+                            deleted_photos += 1
+                        except OSError:
+                            pass
+                    cursor.execute("UPDATE worker_inspections SET snapshot_filename = '' WHERE id = ?", (row["id"],))
+                conn.commit()
+
+                # 3. Pengaman ukuran: jika total folder > RETENTION_MAX_PHOTO_GB
+                max_bytes = cfg.RETENTION_MAX_PHOTO_GB * 1024 * 1024 * 1024
+                photos = []
+                total_size = 0
+                for p in self.snapshots_dir.glob("*.jpg"):
+                    try:
+                        st = p.stat()
+                        photos.append((st.st_mtime, p))
+                        total_size += st.st_size
+                    except OSError:
+                        pass
+                
+                if total_size > max_bytes:
+                    photos.sort(key=lambda x: x[0])  # oldest first
+                    bytes_to_free = total_size - max_bytes
+                    for mtime, p in photos:
+                        if bytes_to_free <= 0:
+                            break
+                        try:
+                            size = p.stat().st_size
+                            p.unlink()
+                            bytes_to_free -= size
+                            reclaimed_bytes += size
+                            deleted_photos += 1
+                            cursor.execute("UPDATE worker_inspections SET snapshot_filename = '' WHERE snapshot_filename = ?", (p.name,))
+                        except OSError:
+                            pass
+                    conn.commit()
+
+            if deleted_photos > 0 or deleted_audits > 0:
+                logger.info(f"Retensi data: menghapus {deleted_audits} audit dan {deleted_photos} foto "
+                            f"(membebaskan {reclaimed_bytes / (1024*1024):.1f} MB).")
+        except Exception as e:
+            logger.error(f"Gagal membersihkan data tua: {e}")
+
 report_mgr = ReportManager()
