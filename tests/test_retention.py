@@ -142,3 +142,82 @@ def test_cleanup_max_size(temp_retention_env):
     
     assert rows[2]["track_id"] == 3
     assert rows[2]["snapshot_filename"] == "photo_3.jpg"
+
+def test_retention_disabled(temp_retention_env, monkeypatch):
+    mgr = temp_retention_env
+    
+    # Disable all retentions
+    monkeypatch.setattr(cfg, "RETENTION_PHOTO_DAYS", 0)
+    monkeypatch.setattr(cfg, "RETENTION_AUDIT_DAYS", 0)
+    monkeypatch.setattr(cfg, "RETENTION_MAX_PHOTO_GB", 0)
+    
+    conn = mgr._get_connection()
+    now = time.time()
+    
+    def insert(track_id, timestamp_offset):
+        t = now + timestamp_offset
+        ts_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t))
+        fname = f"photo_{track_id}.jpg"
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO worker_inspections (
+                track_id, timestamp, date_str, time_str, is_complete,
+                items_json, missing_items, notes, inference_source,
+                inference_time_ms, snapshot_filename
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (track_id, ts_str, "2026-01-01", "12:00", 1, '{}', '[]', '', 'VLM', 1.0, fname))
+        conn.commit()
+        
+        p = mgr.snapshots_dir / fname
+        p.write_bytes(b"x" * 5000)
+        os.utime(p, (t, t))
+    
+    # Old data
+    insert(1, -100 * 86400) # 100 days old
+    insert(2, -200 * 86400) # 200 days old
+    
+    mgr.cleanup_old_data()
+    
+    # Should not be deleted because retention is disabled (0)
+    assert (mgr.snapshots_dir / "photo_1.jpg").exists()
+    assert (mgr.snapshots_dir / "photo_2.jpg").exists()
+    
+    cursor = conn.cursor()
+    cursor.execute("SELECT track_id, snapshot_filename FROM worker_inspections ORDER BY track_id")
+    rows = cursor.fetchall()
+    
+    assert len(rows) == 2
+    assert rows[0]["snapshot_filename"] == "photo_1.jpg"
+    assert rows[1]["snapshot_filename"] == "photo_2.jpg"
+
+def test_retention_thread_stops(monkeypatch):
+    import backend.runtime as rt
+    import threading
+    
+    rt._cleanup_stop.clear()
+    
+    # Mock config to wait very little
+    monkeypatch.setattr(cfg, "RETENTION_INTERVAL_HOURS", 24)
+    
+    called = []
+    def mock_cleanup():
+        called.append(1)
+        
+    import backend.report_manager
+    monkeypatch.setattr(backend.report_manager.report_mgr, "cleanup_old_data", mock_cleanup)
+    
+    # We must also mock video_service.stop etc if we call rt.stop()
+    monkeypatch.setattr(rt.video_service, "stop", lambda: None)
+    monkeypatch.setattr(rt.audio_player, "stop", lambda: None)
+    monkeypatch.setattr(rt.notifier, "stop", lambda: None)
+    
+    thread = threading.Thread(target=rt._retention_loop, daemon=True)
+    thread.start()
+    
+    time.sleep(0.1)
+    assert sum(called) >= 1
+    
+    rt.stop()
+    thread.join(timeout=2.0)
+    assert not thread.is_alive(), "Thread should have exited when stop() was called"

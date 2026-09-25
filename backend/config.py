@@ -278,6 +278,8 @@ class Config:
     RETENTION_AUDIT_DAYS: int = int(_env("RETENTION_AUDIT_DAYS", "365"))
     # Batas kapasitas total folder foto (GB). Foto tertua dihapus bila batas ini terlampaui.
     RETENTION_MAX_PHOTO_GB: float = float(_env("RETENTION_MAX_PHOTO_GB", "2.0"))
+    # Interval pemeriksaan retensi di latar belakang (jam)
+    RETENTION_INTERVAL_HOURS: int = int(_env("RETENTION_INTERVAL_HOURS", "24"))
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

@@ -27,7 +27,7 @@ _cleanup_stop = threading.Event()
 def _retention_loop():
     while not _cleanup_stop.is_set():
         report_mgr.cleanup_old_data()
-        _cleanup_stop.wait(86400)  # Cek setiap 24 jam
+        _cleanup_stop.wait(cfg.RETENTION_INTERVAL_HOURS * 3600)
 
 
 
