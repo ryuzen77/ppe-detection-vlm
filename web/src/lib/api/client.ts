@@ -34,8 +34,15 @@ export class ApiError extends Error {
 /** HTTP 401: server menolak karena token admin kosong/salah */
 export const HTTP_UNAUTHORIZED = 401
 
-/** Token admin dari penyimpanan browser; aman bila penyimpanan diblokir. */
+/**
+ * Token yang gagal disimpan di browser (mode privat ketat, penyimpanan penuh)
+ * tetap berlaku selama halaman terbuka. null = penyimpanan browser berfungsi.
+ */
+let memoryFallback: string | null = null
+
+/** Token admin: dari penyimpanan browser, atau cadangan memori bila penyimpanan gagal. */
 export function readAdminToken(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): string {
+  if (memoryFallback !== null) return memoryFallback
   try {
     return storage?.getItem(ADMIN_TOKEN_STORAGE_KEY) ?? ''
   } catch {
@@ -47,10 +54,13 @@ export function writeAdminToken(token: string, storage: Pick<Storage, 'setItem' 
   // Spasi di tepi hampir selalu ikut saat token ditempel dari pesan/dokumen
   const value = token.trim()
   try {
-    if (value) storage?.setItem(ADMIN_TOKEN_STORAGE_KEY, value)
-    else storage?.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+    if (!storage) throw new Error('penyimpanan browser tidak tersedia')
+    if (value) storage.setItem(ADMIN_TOKEN_STORAGE_KEY, value)
+    else storage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+    memoryFallback = null
   } catch {
-    // Penyimpanan diblokir (mode privat): token berlaku selama halaman terbuka saja
+    // Penyimpanan diblokir: token hidup di memori sampai halaman ditutup
+    memoryFallback = value
   }
 }
 

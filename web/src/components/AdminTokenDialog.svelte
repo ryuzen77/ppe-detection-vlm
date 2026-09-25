@@ -29,7 +29,8 @@
     if (!value.trim()) return
     adminToken.save(value)
     value = ''
-    status = TEXT.saved
+    // Tertutup sendiri: tombol kunci di bilah atas berubah jadi "tersimpan"
+    adminToken.close()
   }
 
   function clear() {
@@ -47,7 +48,7 @@
     <label for="admin-token-input">{TEXT.label}</label>
     <div class="field">
       <input id="admin-token-input" type={visible ? 'text' : 'password'} bind:value
-             placeholder={TEXT.placeholder} autocomplete="off" spellcheck="false" />
+             placeholder={TEXT.placeholder} autocomplete="new-password" spellcheck="false" />
       <button type="button" class="btn icon" onclick={() => (visible = !visible)}
               aria-label={visible ? TEXT.hide : TEXT.show} aria-pressed={visible}>
         {#if visible}<EyeOff size={16} />{:else}<Eye size={16} />{/if}

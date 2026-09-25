@@ -128,3 +128,32 @@ describe('penolakan token admin', () => {
     expect(data.has(ADMIN_TOKEN_STORAGE_KEY)).toBe(false)
   })
 })
+
+describe('cadangan memori token', () => {
+  const blocked = {
+    getItem: (): string | null => { throw new Error('diblokir') },
+    setItem: (): void => { throw new Error('diblokir') },
+    removeItem: (): void => { throw new Error('diblokir') },
+  }
+
+  it('penyimpanan diblokir: token tetap terbaca selama halaman terbuka', () => {
+    writeAdminToken('rahasia', blocked)
+    expect(readAdminToken(blocked)).toBe('rahasia')
+    writeAdminToken('', blocked)
+    expect(readAdminToken(blocked)).toBe('')
+  })
+
+  it('penyimpanan pulih: cadangan memori dilepas', () => {
+    const data = new Map<string, string>()
+    const ok = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    }
+    writeAdminToken('lama', blocked)
+    writeAdminToken('baru', ok)
+    expect(readAdminToken(ok)).toBe('baru')
+    data.delete(ADMIN_TOKEN_STORAGE_KEY) // dihapus dari tab/UI lain
+    expect(readAdminToken(ok)).toBe('')
+  })
+})
