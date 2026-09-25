@@ -7,6 +7,9 @@ from backend.messages import STARTUP_INSECURE_LAN
 
 client = TestClient(app)
 
+STARTUP_TEST_PORT = "8099"
+STARTUP_TEST_TIMEOUT_S = 60
+
 def test_payload_too_large(monkeypatch):
     monkeypatch.setattr(cfg, "MAX_PAYLOAD_BYTES", 15)
     
@@ -80,13 +83,18 @@ def test_startup_subprocess():
     env["HOST"] = "0.0.0.0"
     env["ADMIN_TOKEN"] = ""
     env["ALLOW_INSECURE_DEMO"] = "false"
-    
+    # Port terpisah & batas waktu: bila pemeriksaan ini rusak, server sungguhan
+    # akan menyala; tes harus gagal cepat, bukan menggantung atau bentrok
+    # dengan server pengembangan di port 8000.
+    env["PORT"] = STARTUP_TEST_PORT
+
     result = subprocess.run(
         [sys.executable, "-m", "backend"],
         env=env,
         capture_output=True,
         text=True,
-        cwd=str(Path(__file__).resolve().parent.parent)
+        cwd=str(Path(__file__).resolve().parent.parent),
+        timeout=STARTUP_TEST_TIMEOUT_S,
     )
     
     assert result.returncode == 1
