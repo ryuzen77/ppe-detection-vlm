@@ -21,6 +21,8 @@ from .video.capture import video_service
 
 logger = logging.getLogger(__name__)
 
+SECONDS_PER_HOUR = 60 * 60
+
 _cleanup_thread = None
 _cleanup_stop = threading.Event()
 
@@ -29,7 +31,7 @@ def _retention_loop():
         report_mgr.cleanup_old_data()
         if cfg.RETENTION_INTERVAL_HOURS <= 0:
             break
-        _cleanup_stop.wait(cfg.RETENTION_INTERVAL_HOURS * 3600)
+        _cleanup_stop.wait(cfg.RETENTION_INTERVAL_HOURS * SECONDS_PER_HOUR)
 
 
 

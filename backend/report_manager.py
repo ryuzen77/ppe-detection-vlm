@@ -3,8 +3,6 @@ import sqlite3
 import threading
 import json
 import time
-
-SECONDS_PER_DAY = 86400
 import os
 import csv
 import io
@@ -21,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Label sumber keputusan VLM cadangan (lihat VLMEngine.label)
 BACKUP_SOURCE_PREFIX = "VLM_CADANGAN:"
+
+# Retensi (T20): umur data dihitung dalam hari
+SECONDS_PER_DAY = 24 * 60 * 60
 
 # Jalur data diatur lewat DATA_DIR di config, di luar direktori kode
 DB_PATH = cfg.DB_PATH
