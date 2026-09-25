@@ -64,4 +64,7 @@
   --radius-lg: 14px;
 
   --topbar-h: 56px;
+
+  /* Latar gelap di belakang dialog modal */
+  --backdrop: rgba(0, 0, 0, 0.7);
 }

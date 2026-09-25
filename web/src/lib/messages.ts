@@ -5,6 +5,7 @@
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
 import type { CameraState, VlmMode } from './api/types'
+import { LOCALE, REPORTS as REPORTS_SETTINGS } from './settings'
 
 export const BRAND = {
   name: 'DEPRO',
@@ -121,7 +122,9 @@ export const HISTORY = {
 
 /** Detik → "3,2 dtk" (format Indonesia) */
 export const seconds = (ms: number | null | undefined): string =>
-  ms == null || !Number.isFinite(ms) ? '-' : `${(ms / 1000).toFixed(1).replace('.', ',')} dtk`
+  ms == null || !Number.isFinite(ms)
+    ? '-'
+    : `${(ms / 1000).toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} dtk`
 
 // --- Panel video & dialog kamera ---------------------------------------------------------------
 
@@ -199,10 +202,79 @@ export const NOTIFY = {
   recoveredDetail: (mode: VlmMode) => `VLM ${mode === 'UTAMA' ? 'utama' : 'cadangan'} kembali menilai.`,
 } as const
 
-// --- Halaman yang belum dipindahkan (T33 langkah 2 & 3) ---------------------------------------
+// --- Laporan (T33 langkah 2) --------------------------------------------------------------------
+
+export const REPORTS = {
+  title: 'Laporan',
+  subtitle: 'Riwayat pemeriksaan gerbang, foto bukti, dan statistik kepatuhan APD.',
+  refresh: 'Muat ulang',
+  exportCsv: 'Ekspor CSV',
+  exportHint: 'Unduh seluruh audit sebagai CSV',
+  stats: {
+    ariaLabel: 'Statistik kepatuhan',
+    scopeAll: 'Seluruh riwayat',
+    scopeSinceStart: 'Sejak server menyala',
+    total: 'Total pemeriksaan',
+    passed: 'Lolos',
+    denied: 'Ditolak',
+    compliance: 'Tingkat kepatuhan',
+    backup: 'Dinilai VLM cadangan',
+    outages: 'Gangguan sistem',
+    outagesHint: 'Pemeriksaan tanpa keputusan karena VLM utama & cadangan tidak menjawab',
+  },
+  filters: {
+    ariaLabel: 'Saring riwayat',
+    status: { all: 'Semua', complete: 'Lolos', incomplete: 'Ditolak' } as Record<'all' | 'complete' | 'incomplete', string>,
+    date: 'Tanggal',
+    clearDate: 'Semua tanggal',
+  },
+  table: {
+    ariaLabel: 'Riwayat pemeriksaan',
+    photo: 'Foto',
+    time: 'Waktu',
+    worker: 'Pekerja',
+    result: 'Hasil',
+    ppe: 'APD',
+    source: 'Dinilai oleh',
+    duration: 'Durasi',
+    worker_id: (id: number) => `#${id}`,
+    noPhoto: 'Tanpa foto',
+    openPhoto: (id: number) => `Perbesar foto pekerja #${id}`,
+    missing: (items: string[]) => (items.length ? `Kurang: ${items.join(', ')}` : ''),
+  },
+  result: { passed: 'Lolos', denied: 'Ditolak', unverified: 'Tidak terverifikasi' },
+  source: { utama: 'VLM utama', cadangan: 'VLM cadangan', gangguan: 'Tanpa keputusan', lama: 'Data lama' },
+  loading: 'Memuat riwayat…',
+  empty: 'Belum ada pemeriksaan.',
+  emptyFiltered: 'Tidak ada pemeriksaan yang cocok dengan saringan.',
+  loadFailed: 'Gagal memuat riwayat',
+  page: {
+    ariaLabel: 'Halaman riwayat',
+    range: (from: number, to: number, total: number) => `${from}–${to} dari ${total}`,
+    prev: 'Sebelumnya',
+    next: 'Berikutnya',
+  },
+  photo: {
+    title: (id: number) => `Foto bukti pekerja #${id}`,
+    caption: (date: string, time: string, result: string) => `${date} ${time} · ${result}`,
+    close: 'Tutup',
+  },
+} as const
+
+/** Tanggal audit 'YYYY-MM-DD' → '25 Sep 2026'; teks tak dikenal dikembalikan apa adanya */
+export function shortDate(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? isoDate : d.toLocaleDateString(LOCALE, REPORTS_SETTINGS.dateFormat)
+}
+/** Angka hitungan berformat Indonesia (1.284) */
+export const count = (n: number | null | undefined): string => (n ?? 0).toLocaleString(LOCALE)
+/** Persen berformat Indonesia (78,8%) */
+export const percent = (n: number | null | undefined): string =>
+  `${(n ?? 0).toLocaleString(LOCALE, { maximumFractionDigits: 1 })}%`
+
+// --- Halaman yang belum dipindahkan (T33 langkah 3) ---------------------------------------
 
 export const PAGES = {
-  laporan: { title: 'Laporan', description: 'Riwayat pemeriksaan, foto bukti, statistik kepatuhan, dan ekspor CSV.' },
   pengaturan: { title: 'Pengaturan', description: 'Kamera, aturan APD wajib, lampu gerbang, VLM, dan diagnostik.' },
   notMigrated: 'Bagian ini belum dipindahkan ke tampilan baru. Sementara itu gunakan tampilan lama:',
   openLegacy: 'Buka tampilan lama',

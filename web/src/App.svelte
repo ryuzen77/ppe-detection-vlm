@@ -8,6 +8,7 @@
   import { catalog } from './lib/stores/catalog.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
   import { toasts } from './lib/stores/toasts.svelte'
+  import Laporan from './pages/Laporan.svelte'
   import Monitoring from './pages/Monitoring.svelte'
   import NotYetMigrated from './pages/NotYetMigrated.svelte'
 
@@ -38,7 +39,7 @@
   {#if router.current === 'monitoring'}
     <Monitoring />
   {:else if router.current === 'laporan'}
-    <NotYetMigrated {...PAGES.laporan} />
+    <Laporan />
   {:else}
     <NotYetMigrated {...PAGES.pengaturan} />
   {/if}

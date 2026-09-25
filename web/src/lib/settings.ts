@@ -4,6 +4,9 @@
  * di sini melainkan dibaca dari telemetri, supaya keduanya tidak menyimpang.
  */
 
+/** Bahasa & format angka/tanggal/jam di seluruh UI */
+export const LOCALE = 'id-ID'
+
 export const URLS = {
   /** Tampilan lama (cadangan) selama redesign belum lengkap */
   legacy: '/legacy/',
@@ -30,7 +33,7 @@ export const CAMERA_POLL = {
 
 export const CLOCK = {
   tickMs: 1000,
-  locale: 'id-ID',
+  locale: LOCALE,
 } as const
 
 /** Geometri overlay video (proporsi terhadap kotak video) */
@@ -53,6 +56,19 @@ export const HUD = {
   /** Tebal & ukuran; keluarga font dari token --font-sans */
   badgeFont: '600 12px',
   zoneFont: '600 11px',
+} as const
+
+/** Halaman Laporan */
+export const REPORTS = {
+  pageSize: 25,
+  /** Ambang warna meter kepatuhan (%): >= good hijau, >= warn kuning, di bawahnya merah */
+  complianceGood: 95,
+  complianceWarn: 80,
+  /** Jeda sebelum memuat ulang saat ada pemeriksaan baru (menghindari muat beruntun) */
+  refreshDebounceMs: 800,
+  /** Format tanggal di tabel riwayat (25 Sep 2026) */
+  dateFormat: { day: '2-digit', month: 'short', year: 'numeric' } as Intl.DateTimeFormatOptions,
+  thumbPx: 44,
 } as const
 
 /** Kunci penyimpanan browser (dipakai bersama UI lama: jangan diganti tanpa migrasi) */
