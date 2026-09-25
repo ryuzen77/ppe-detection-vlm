@@ -27,6 +27,8 @@ _cleanup_stop = threading.Event()
 def _retention_loop():
     while not _cleanup_stop.is_set():
         report_mgr.cleanup_old_data()
+        if cfg.RETENTION_INTERVAL_HOURS <= 0:
+            break
         _cleanup_stop.wait(cfg.RETENTION_INTERVAL_HOURS * 3600)
 
 

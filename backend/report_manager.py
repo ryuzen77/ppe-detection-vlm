@@ -3,6 +3,8 @@ import sqlite3
 import threading
 import json
 import time
+
+SECONDS_PER_DAY = 86400
 import os
 import csv
 import io
@@ -451,7 +453,7 @@ class ReportManager:
 
                 # 1. Hapus audit (dan fotonya) yang melewati batas RETENTION_AUDIT_DAYS
                 if cfg.RETENTION_AUDIT_DAYS > 0:
-                    audit_cutoff = now - (cfg.RETENTION_AUDIT_DAYS * 86400)
+                    audit_cutoff = now - (cfg.RETENTION_AUDIT_DAYS * SECONDS_PER_DAY)
                     audit_cutoff_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(audit_cutoff))
                     
                     cursor.execute("SELECT snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''", (audit_cutoff_str,))
@@ -467,7 +469,7 @@ class ReportManager:
 
                 # 2. Hapus foto yang melewati batas RETENTION_PHOTO_DAYS
                 if cfg.RETENTION_PHOTO_DAYS > 0:
-                    photo_cutoff = now - (cfg.RETENTION_PHOTO_DAYS * 86400)
+                    photo_cutoff = now - (cfg.RETENTION_PHOTO_DAYS * SECONDS_PER_DAY)
                     photo_cutoff_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(photo_cutoff))
                     
                     cursor.execute("SELECT snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''", (photo_cutoff_str,))

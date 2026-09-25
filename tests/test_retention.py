@@ -221,3 +221,27 @@ def test_retention_thread_stops(monkeypatch):
     rt.stop()
     thread.join(timeout=2.0)
     assert not thread.is_alive(), "Thread should have exited when stop() was called"
+
+def test_retention_interval_disabled(monkeypatch):
+    import backend.runtime as rt
+    import threading
+    
+    rt._cleanup_stop.clear()
+    
+    # 0 or negative should run exactly once and exit
+    monkeypatch.setattr(cfg, "RETENTION_INTERVAL_HOURS", 0)
+    
+    called = []
+    def mock_cleanup():
+        called.append(1)
+        
+    import backend.report_manager
+    monkeypatch.setattr(backend.report_manager.report_mgr, "cleanup_old_data", mock_cleanup)
+    
+    thread = threading.Thread(target=rt._retention_loop, daemon=True)
+    thread.start()
+    
+    # Wait for the thread to finish naturally without stop() being called
+    thread.join(timeout=2.0)
+    assert not thread.is_alive(), "Thread did not exit when interval <= 0"
+    assert sum(called) == 1, "Cleanup should be called exactly once"
