@@ -121,7 +121,9 @@ terima, pertanyaan untuk agen lain, dan keputusan kecil ditulis di kolom
   keluar, atau diunggah.
 - **Jangan menyunting `iot/wokwi_simulation/README.md`** (catatan simulasi, di
   luar lingkup).
-- Jangan menghapus atau menimpa `data/` (audit & foto bukti produksi).
+- Jangan menghapus atau menimpa `data/` (audit & foto bukti produksi). Larangan ini
+  untuk agen; pembersihan otomatis fitur retensi (T20, angka di `config.py`) tetap
+  berjalan. Uji retensi hanya di folder sementara pytest.
 - Jangan menjalankan panggilan VLM cloud berulang tanpa perlu: kuota free tier
   API gerbang terbatas (~15 RPM, ~500/hari per project).
 

@@ -15,7 +15,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T33 langkah 2 — tab Laporan | Claude | `claude/t33-laporan` | dikerjakan | `web/src/pages/`, `web/src/components/reports/`, `web/src/lib/` (tambah) | Memakai `GET /api/reports` yang sudah ada; tanpa perubahan backend |
-| T20 — retensi data | Gemini | `gemini/t20-retensi` | tinjau | `backend/report_manager.py`, `backend/storage.py`, `backend/config.py`, `backend/runtime.py`, `tests/` | Keputusan retensi sudah ada (lihat "Keputusan pengguna → Retensi data"). Uji hanya di `data/` worktree Gemini atau folder sementara pytest. Gemini: kerjakan di `ppe_detection_vlm-gemini/`, bukan folder utama; klaim ini menggantikan commit `f020ac8` — rebase `gemini/t20-retensi` ke `master` dan buang commit itu |
 | T33 perbaikan — bilah atas meluap di jendela sempit | Claude | `claude/topbar-luap` | dikerjakan | `web/src/components/TopBar.svelte` | Chip status meluap horizontal < ~1040 px (temuan saat uji Laporan) |
 | T20b — pengaman akses jaringan | Gemini (setelah T20) | `gemini/t20b-akses` | antre | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Dipecah dari T20 (keputusan pengguna 25-09-2026). (1) `ADMIN_TOKEN` wajib bila `HOST` bukan localhost: sekarang `HOST=0.0.0.0` + token kosong = siapa pun di LAN bisa mengubah pengaturan. Usul: server menolak menyala tanpa token kecuali diizinkan eksplisit lewat `.env` untuk demo. (2) Batas ukuran isi permintaan `POST` (angka di `config.py`), ditolak 413. Sementara sampai T30 (login) menggantikan token. Detail perilaku didiskusikan dengan pengguna sebelum kode |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
@@ -44,6 +43,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T26 | Evaluasi 84 foto: cadangan lokal = `qwen2.5vl:7b` (akurasi 94%, 0/58 APD kurang lolos, median 7,9 dtk) |
 | T27 | Failover otomatis utama → cadangan, pemutus sirkuit, heuristik OpenCV dibuang, "mohon tunggu" bila keduanya gagal |
 | T32 | Ditutup: "kaki terpotong" pada foto uji karena foto dibingkai terlalu rapat (bukan bug); dipantau ulang dengan kamera nyata |
+| T20 | Retensi data (Gemini): foto 30 hari, audit 1 tahun, foto maks. 2 GB, pembersihan otomatis saat start + tiap `RETENTION_INTERVAL_HOURS`; nilai ≤ 0 = nonaktif. Pengerasan keamanan dipecah ke T20b |
 | T33 langkah 1 | UI baru Svelte 5 + TS di `/`, sistem desain, tab Monitoring, nama DEPRO, hard code dibereskan (`messages.ts`, `settings.ts`, token CSS, `icon_name` di katalog) |
 
 ## Keputusan pengguna (acuan)
@@ -71,7 +71,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - Semua angka di `config.py`, bisa diubah lewat `.env`.
 - Pembersihan **otomatis** saat server menyala dan sekali sehari di latar (tanpa cron OS), hasilnya dicatat di log. Tombol manual "Hapus data tua" menyusul di Pengaturan setelah login admin (T30).
 - Log sistem tidak ikut; cukup rotasi bawaan (`LOG_MAX_BYTES` 5 MB × `LOG_BACKUP_COUNT` 5).
-- Larangan "jangan hapus `data/`" di AGENTS.md berlaku untuk agen, bukan untuk fitur retensi (diperjelas setelah T20 selesai).
+- Larangan "jangan hapus `data/`" di AGENTS.md berlaku untuk agen, bukan untuk fitur retensi.
 
 **Operasi**
 - OS produksi belum tentu Windows; produksi lewat Docker di Linux, pengembangan di Windows dengan venv.
