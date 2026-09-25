@@ -36,6 +36,13 @@ Claude Code dan Gemini (Antigravity) boleh bekerja **bersamaan**, dengan aturan:
 | **Gemini** | `ppe_detection_vlm-gemini/` (di sebelah folder utama) | `gemini/<task>` | **8001** (`PORT=8001`) |
 
 - **Jangan pernah menyunting folder agen lain.**
+- **Cek folder kerja sebelum mulai** (setiap sesi, sebelum perintah git atau
+  menyunting berkas): jalankan `git worktree list` dan `git branch --show-current`,
+  lalu pastikan folder yang terbuka di IDE adalah folder milikmu di tabel atas.
+  Salah folder → berhenti, jangan commit/checkout/reset apa pun, laporkan ke
+  pengguna. (Kejadian 25-09-2026: Gemini sempat bekerja di folder utama karena
+  Antigravity membuka `ppe_detection_vlm/`, bukan `ppe_detection_vlm-gemini/`.)
+- Jangan `checkout`/`reset`/`rebase` branch milik agen lain.
 - Worktree Gemini **tidak punya `backend/.env`** (sengaja): server Gemini jalan
   tanpa API key gerbang, jadi kuota VLM cloud aman. Uji VLM memakai penyedia
   tiruan (tes) atau VLM lokal Ollama.
@@ -49,6 +56,13 @@ Claude Code dan Gemini (Antigravity) boleh bekerja **bersamaan**, dengan aturan:
   agen **mengklaim** task: isi kolom Pemilik, Branch, Status `dikerjakan`, dan
   **Area berkas** yang akan disentuh — commit perubahan papan itu sendirian
   (`docs: klaim <task>`) supaya agen lain melihatnya.
+- **Klaim selalu dicatat di `master`**, bukan di branch task: branch lain tidak
+  melihat isi branch-mu. Karena `master` ada di folder integrator, agen lain
+  menyampaikan klaimnya lewat pengguna dan **integrator (Claude) yang
+  meng-commit** perubahan papan itu (hanya `docs/RENCANA.md`). Perubahan status
+  berikutnya (`tinjau`) boleh ditulis di branch task, lalu ikut saat digabung.
+- Setelah klaim tercatat, buat/pindah ke branch task di foldermu sendiri
+  dari `master` terbaru (`git rebase master` bila branch sudah ada).
 - **Satu agen hanya mengerjakan satu task** pada satu waktu.
 - Task yang area berkasnya **beririsan** dengan task yang sedang dikerjakan agen
   lain tidak boleh diklaim — pilih task lain atau tunggu.
