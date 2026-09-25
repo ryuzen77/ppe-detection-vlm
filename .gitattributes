@@ -5,3 +5,6 @@
 *.bat     text eol=crlf
 # Hasil build UI baru dicommit; LF di semua OS supaya CI dapat membandingkannya
 web/dist/** text eol=lf
+# UI baru: LF di semua OS, supaya hasil build web/dist identik di Windows, Linux, CI, dan
+# setiap worktree (Vite menyalin akhir baris index.html apa adanya)
+web/** text=auto eol=lf
