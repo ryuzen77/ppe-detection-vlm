@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if cfg.HOST not in ("127.0.0.1", "localhost", "::1") and not cfg.ADMIN_TOKEN:
+        if not cfg.ALLOW_INSECURE_DEMO:
+            from .messages import STARTUP_INSECURE_LAN
+            import sys
+            sys.exit(STARTUP_INSECURE_LAN.format(host=cfg.HOST))
+        else:
+            logger.warning("Menjalankan mode demo tidak aman di LAN karena ALLOW_INSECURE_DEMO aktif.")
+            
     # Model, kamera, audio, IoT, dan basis data dibuka di sini, bukan saat impor
     runtime.start()
     base = f"http://localhost:{cfg.PORT}"
@@ -47,16 +55,55 @@ app = FastAPI(title="DEPRO - Digital Safety Protection API", version="1.0.0", li
 # Kredensial hanya diizinkan kalau daftar origin eksplisit; browser menolak
 # kombinasi wildcard + credentials.
 _allow_wildcard_origin = "*" in cfg.CORS_ORIGINS
-from fastapi import Request
-from fastapi.responses import JSONResponse
 
-@app.middleware("http")
-async def limit_payload_size(request: Request, call_next):
-    if request.method in ("POST", "PUT", "PATCH"):
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > cfg.MAX_PAYLOAD_BYTES:
-            return JSONResponse(status_code=413, content={"detail": "Payload Too Large"})
-    return await call_next(request)
+class LimitPayloadSizeMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] not in ("POST", "PUT", "PATCH"):
+            return await self.app(scope, receive, send)
+            
+        content_length = None
+        for name, value in scope.get("headers", []):
+            if name == b"content-length":
+                content_length = int(value)
+                break
+                
+        if content_length and content_length > cfg.MAX_PAYLOAD_BYTES:
+            await self._send_413(send)
+            return
+            
+        received_bytes = 0
+        async def custom_receive():
+            nonlocal received_bytes
+            message = await receive()
+            if message["type"] == "http.request":
+                received_bytes += len(message.get("body", b""))
+                if received_bytes > cfg.MAX_PAYLOAD_BYTES:
+                    raise RuntimeError("Payload Too Large")
+            return message
+            
+        try:
+            return await self.app(scope, custom_receive, send)
+        except RuntimeError as e:
+            if str(e) == "Payload Too Large":
+                await self._send_413(send)
+                return
+            raise
+            
+    async def _send_413(self, send):
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [(b"content-type", b"application/json")],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": b'{"detail": "Payload Too Large"}',
+        })
+
+app.add_middleware(LimitPayloadSizeMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -119,13 +166,6 @@ def run():
     # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
     # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
     # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.
-    if cfg.HOST not in ("127.0.0.1", "localhost", "::1") and not cfg.ADMIN_TOKEN:
-        if not cfg.ALLOW_UNSECURE_DEMO:
-            from .messages import STARTUP_INSECURE_LAN
-            sys.exit(STARTUP_INSECURE_LAN.format(host=cfg.HOST))
-        else:
-            logger.warning("Menjalankan mode demo tidak aman di LAN karena ALLOW_UNSECURE_DEMO aktif.")
-
     setup_logging(cfg)
     install_shutdown_hook()
 

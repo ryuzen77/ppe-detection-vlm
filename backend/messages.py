@@ -100,4 +100,4 @@ CSV_ITEM_OK = "OK"
 CSV_ITEM_OK_COLOR = "OK ({color})"
 CSV_ITEM_NOT_ASSESSED = "TIDAK DINILAI"
 
-STARTUP_INSECURE_LAN = "Server berjalan di jaringan terbuka (HOST={host}) tanpa ADMIN_TOKEN. Untuk mencegah pihak lain mengubah pengaturan gerbang, buat ADMIN_TOKEN di .env. Jika Anda yakin ini hanya demo aman, set ALLOW_UNSECURE_DEMO=true di .env."
+STARTUP_INSECURE_LAN = "Server berjalan di jaringan terbuka (HOST={host}) tanpa ADMIN_TOKEN. Untuk mencegah pihak lain mengubah pengaturan gerbang, buat ADMIN_TOKEN di .env. Jika Anda yakin ini hanya demo aman, set ALLOW_INSECURE_DEMO=true di .env."
