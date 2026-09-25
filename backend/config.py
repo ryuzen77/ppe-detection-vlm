@@ -48,6 +48,7 @@ class Config:
     # Server._detach) membuat shutdown menggantung selamanya dan Ctrl+C kedua
     # pun tidak menolong. Setelah batas ini koneksi yang tersisa diputus.
     SHUTDOWN_TIMEOUT_SECONDS: float = float(_env("SHUTDOWN_TIMEOUT_SECONDS", "5"))
+    MAX_PAYLOAD_BYTES: int = int(_env("MAX_PAYLOAD_BYTES", str(1 * 1024 * 1024)))
     # Default dibatasi ke localhost. `allow_origins=["*"]` bersama
     # `allow_credentials=True` ditolak browser sesuai spesifikasi CORS.
     CORS_ORIGINS: list[str] = [
@@ -62,6 +63,7 @@ class Config:
     # Guard opsional untuk endpoint yang mengubah state. Kosong = guard non-aktif,
     # supaya demo lokal tidak terhambat. Isi kalau server dipakai di jaringan bersama.
     ADMIN_TOKEN: str = _env("ADMIN_TOKEN", "")
+    ALLOW_UNSECURE_DEMO: bool = _env("ALLOW_UNSECURE_DEMO", "false").lower() == "true"
 
     # Camera Settings (Webcam / USB Camera default: 0)
     CAMERA_INDEX: int = int(_env("CAMERA_INDEX", "0"))

@@ -47,6 +47,17 @@ app = FastAPI(title="DEPRO - Digital Safety Protection API", version="1.0.0", li
 # Kredensial hanya diizinkan kalau daftar origin eksplisit; browser menolak
 # kombinasi wildcard + credentials.
 _allow_wildcard_origin = "*" in cfg.CORS_ORIGINS
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.middleware("http")
+async def limit_payload_size(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > cfg.MAX_PAYLOAD_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "Payload Too Large"})
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cfg.CORS_ORIGINS,
@@ -108,6 +119,13 @@ def run():
     # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
     # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
     # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.
+    if cfg.HOST not in ("127.0.0.1", "localhost", "::1") and not cfg.ADMIN_TOKEN:
+        if not cfg.ALLOW_UNSECURE_DEMO:
+            from .messages import STARTUP_INSECURE_LAN
+            sys.exit(STARTUP_INSECURE_LAN.format(host=cfg.HOST))
+        else:
+            logger.warning("Menjalankan mode demo tidak aman di LAN karena ALLOW_UNSECURE_DEMO aktif.")
+
     setup_logging(cfg)
     install_shutdown_hook()
 
