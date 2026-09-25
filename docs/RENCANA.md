@@ -16,6 +16,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T33 langkah 2 — tab Laporan | Claude | `claude/t33-laporan` | dikerjakan | `web/src/pages/`, `web/src/components/reports/`, `web/src/lib/` (tambah) | Memakai `GET /api/reports` yang sudah ada; tanpa perubahan backend |
 | T20 — retensi data & pengerasan keamanan | Gemini | `gemini/t20-retensi` | dikerjakan | `backend/report_manager.py`, `backend/storage.py`, `backend/config.py` (tambah), `tests/` | Keputusan retensi sudah ada (lihat "Keputusan pengguna → Retensi data"). Uji hanya di `data/` worktree Gemini atau folder sementara pytest. Gemini: kerjakan di `ppe_detection_vlm-gemini/`, bukan folder utama; klaim ini menggantikan commit `f020ac8` — rebase `gemini/t20-retensi` ke `master` dan buang commit itu |
+| T33 perbaikan — bilah atas meluap di jendela sempit | Claude | `claude/topbar-luap` | dikerjakan | `web/src/components/TopBar.svelte` | Chip status meluap horizontal < ~1040 px (temuan saat uji Laporan) |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 
 ## Antrean berikutnya (urut)
