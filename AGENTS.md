@@ -22,16 +22,81 @@ dihapus setelah redesign selesai).
   menebak lewat banyak putaran eksperimen.
 - **Laporkan apa adanya**: tes gagal ditulis gagal, langkah yang dilewati
   disebutkan.
-- **Commit hanya bila diminta pengguna.** Jangan push.
+- **Commit ke `master` hanya atas izin pengguna** (commit di branch task sendiri boleh, lihat §2.4). Jangan push.
 
-## 2. Bekerja bergantian dengan agen lain
+## 2. Bekerja bersama agen lain (paralel)
 
-- **Satu agen aktif pada satu waktu** di folder repo ini. Sebelum serah terima,
-  pekerjaan di-commit (atas izin pengguna) supaya agen berikutnya mulai dari
-  pohon kerja bersih.
-- Bila harus paralel: agen kedua bekerja di **git worktree/branch terpisah**;
-  penggabungan dilakukan satu pihak setelah `python scripts/check.py` lolos.
-- Perbarui `docs/RENCANA.md` saat status task atau keputusan berubah.
+Claude Code dan Gemini (Antigravity) boleh bekerja **bersamaan**, dengan aturan:
+
+### 2.1 Ruang kerja terpisah
+
+| Agen | Folder (git worktree) | Branch | Port server |
+| :-- | :-- | :-- | :-- |
+| **Claude** — juga **integrator** | `ppe_detection_vlm/` (folder utama) | `master` + `claude/<task>` | 8000 |
+| **Gemini** | `ppe_detection_vlm-gemini/` (di sebelah folder utama) | `gemini/<task>` | **8001** (`PORT=8001`) |
+
+- **Jangan pernah menyunting folder agen lain.**
+- Worktree Gemini **tidak punya `backend/.env`** (sengaja): server Gemini jalan
+  tanpa API key gerbang, jadi kuota VLM cloud aman. Uji VLM memakai penyedia
+  tiruan (tes) atau VLM lokal Ollama.
+- Worktree Gemini punya `data/` kosong sendiri (audit asli tidak tersentuh).
+- **Kamera hanya bisa dipakai satu server.** Uji dengan kamera sungguhan
+  dilakukan bergiliran; di luar itu uji tanpa kamera.
+
+### 2.2 Papan tugas — klaim dulu, baru kerjakan
+
+- Papan tugas ada di `docs/RENCANA.md` bagian **"Papan tugas"**. Sebelum mulai,
+  agen **mengklaim** task: isi kolom Pemilik, Branch, Status `dikerjakan`, dan
+  **Area berkas** yang akan disentuh — commit perubahan papan itu sendirian
+  (`docs: klaim <task>`) supaya agen lain melihatnya.
+- **Satu agen hanya mengerjakan satu task** pada satu waktu.
+- Task yang area berkasnya **beririsan** dengan task yang sedang dikerjakan agen
+  lain tidak boleh diklaim — pilih task lain atau tunggu.
+- Pembagian bawaan: **Claude = UI (`web/`)**, **Gemini = backend (`backend/`,
+  `tests/`, `tools/`)**, kecuali pengguna menentukan lain.
+
+### 2.3 Berkas bersama (titik rawan bentrok)
+
+Berkas ini dipakai hampir semua task. Aturannya: **hanya menambah** (entri baru
+di bagian yang sesuai), tidak mengubah atau memindah entri milik task lain, dan
+perubahan dijelaskan di pesan commit.
+
+- `backend/config.py`, `backend/messages.py`, `backend/.env.example`,
+  `backend/ppe_rules.py`
+- `web/src/lib/messages.ts`, `web/src/lib/settings.ts`,
+  `web/src/lib/api/types.ts`, `web/src/styles/tokens.css`
+- `docs/RENCANA.md`, `README.md`, `AGENTS.md`
+
+Khusus:
+
+- **Kontrak API dulu.** Bila backend (Gemini) membuat/mengubah endpoint yang
+  dipakai UI (Claude), bentuk JSON-nya ditulis dulu di `docs/RENCANA.md` (atau
+  sebagai tipe di `web/src/lib/api/types.ts`) dan disetujui, baru dikerjakan.
+- **Dependensi** (`backend/requirements*.txt/.lock`, `web/package*.json`): hanya
+  satu agen per putaran yang boleh mengubahnya, dan wajib ditulis di papan tugas.
+- **`web/dist/` hanya dibangun ulang oleh integrator** setelah penggabungan.
+  Branch agen tidak meng-commit `web/dist` (menghindari bentrok berkas hasil build).
+  `scripts/check.py` ikut membangunnya — di branch agen, batalkan perubahan itu
+  sebelum commit: `git restore --staged --worktree web/dist`.
+
+### 2.4 Selesai → tinjau → gabung
+
+1. Agen menyelesaikan task di branch-nya sendiri, `python scripts/check.py`
+   lolos, lalu commit **di branch itu** (boleh tanpa menunggu izin, karena belum
+   menyentuh `master`).
+2. Status di papan tugas diubah ke `tinjau`, disertai ringkasan & cara uji.
+3. **Agen lain meninjau diff** (hanya membaca, temuan ditulis untuk pengguna).
+4. **Penggabungan ke `master` hanya atas persetujuan pengguna**, dikerjakan
+   integrator di folder utama: rebase/merge branch → `python scripts/check.py`
+   → `npm run build` → commit `web/dist` → status `selesai`.
+5. Setelah `master` berubah, agen lain **rebase branch-nya ke `master`** sebelum
+   melanjutkan (di folder masing-masing).
+
+### 2.5 Komunikasi
+
+Agen tidak bisa saling memanggil; pengguna yang mengoper pesan. Catatan serah
+terima, pertanyaan untuk agen lain, dan keputusan kecil ditulis di kolom
+**Catatan** papan tugas, bukan hanya di obrolan.
 
 ## 3. Larangan
 

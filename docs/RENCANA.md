@@ -6,6 +6,18 @@ pesan commit (`git log`).
 
 Terakhir diperbarui: 25-09-2026.
 
+## Papan tugas
+
+Aturan klaim & penggabungan: [`AGENTS.md` §2](../AGENTS.md). Klaim dulu (isi
+Pemilik, Branch, Status `dikerjakan`, Area berkas), commit papan ini sendirian,
+baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
+
+| Task | Pemilik | Branch | Status | Area berkas | Catatan |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| T33 langkah 2 — tab Laporan | Claude (usulan) | `claude/t33-laporan` | antre | `web/src/pages/`, `web/src/components/reports/`, `web/src/lib/` (tambah) | Memakai `GET /api/reports` yang sudah ada; tanpa perubahan backend |
+| T20 — retensi data & pengerasan keamanan | Gemini (usulan) | `gemini/t20-retensi` | antre | `backend/report_manager.py`, `backend/storage.py`, `backend/config.py` (tambah), `tests/` | Butuh keputusan pengguna: lama simpan foto/audit, cara hapus. Diskusikan dulu sebelum kode |
+| T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
+
 ## Antrean berikutnya (urut)
 
 | # | Task | Isi |
