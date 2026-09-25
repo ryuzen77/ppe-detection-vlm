@@ -30,9 +30,26 @@ from .api import (
 
 logger = logging.getLogger(__name__)
 
+def insecure_network_reason(host: str, token: str, allow_demo: bool) -> str | None:
+    from .config import cfg
+    from .messages import STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
+    if host not in cfg.LOCALHOST_IPS and not token:
+        if not allow_demo:
+            return STARTUP_INSECURE_LAN.format(host=host)
+        else:
+            logger.warning(INSECURE_DEMO_WARNING)
+    return None
+
+class PayloadTooLargeError(Exception):
+    pass
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    reason = insecure_network_reason(cfg.HOST, cfg.ADMIN_TOKEN, cfg.ALLOW_INSECURE_DEMO)
+    if reason:
+        raise RuntimeError(reason)
+            
     # Model, kamera, audio, IoT, dan basis data dibuka di sini, bukan saat impor
     runtime.start()
     base = f"http://localhost:{cfg.PORT}"
@@ -47,6 +64,61 @@ app = FastAPI(title="DEPRO - Digital Safety Protection API", version="1.0.0", li
 # Kredensial hanya diizinkan kalau daftar origin eksplisit; browser menolak
 # kombinasi wildcard + credentials.
 _allow_wildcard_origin = "*" in cfg.CORS_ORIGINS
+
+class LimitPayloadSizeMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        from .messages import PAYLOAD_TOO_LARGE
+        
+        if scope["type"] != "http" or scope["method"] not in ("POST", "PUT", "PATCH"):
+            return await self.app(scope, receive, send)
+            
+        content_length = None
+        for name, value in scope.get("headers", []):
+            if name == b"content-length":
+                try:
+                    content_length = int(value)
+                except ValueError:
+                    pass
+                break
+                
+        if content_length is not None and content_length > cfg.MAX_PAYLOAD_BYTES:
+            await self._send_413(send, PAYLOAD_TOO_LARGE)
+            return
+            
+        received_bytes = 0
+        async def custom_receive():
+            nonlocal received_bytes
+            message = await receive()
+            if message["type"] == "http.request":
+                received_bytes += len(message.get("body", b""))
+                if received_bytes > cfg.MAX_PAYLOAD_BYTES:
+                    raise PayloadTooLargeError(PAYLOAD_TOO_LARGE)
+            return message
+            
+        try:
+            return await self.app(scope, custom_receive, send)
+        except PayloadTooLargeError as e:
+            await self._send_413(send, str(e))
+            return
+            
+    async def _send_413(self, send, detail):
+        import json
+        body = json.dumps({"detail": detail}).encode("utf-8")
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("utf-8"))],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body,
+        })
+
+app.add_middleware(LimitPayloadSizeMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cfg.CORS_ORIGINS,
@@ -105,6 +177,12 @@ elif frontend_dir.exists():
 
 def run():
     """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
+    reason = insecure_network_reason(cfg.HOST, cfg.ADMIN_TOKEN, cfg.ALLOW_INSECURE_DEMO)
+    if reason:
+        import sys
+        print(reason, file=sys.stderr)
+        sys.exit(1)
+
     # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
     # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
     # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.

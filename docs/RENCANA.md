@@ -14,8 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T20b — pengaman akses jaringan | Gemini | `gemini/t20b-akses` | antre | `backend/config.py` (tambah), `backend/app.py`, `backend/api/deps.py`, `backend/messages.py` (tambah), `backend/.env.example`, `tests/` | Perilaku sudah diputuskan (lihat "Keputusan pengguna → Pengaman akses jaringan"). Digabung **setelah** T20b-UI (kolom token) supaya tombol di UI baru tidak mendadak ditolak |
-| T20b-UI — kolom token admin di UI baru | Claude | `claude/t20b-token-ui` | tinjau | `web/src/components/` (`AdminTokenDialog.svelte`, `TopBar.svelte`), `web/src/App.svelte`, `web/src/lib/api/client.ts`, `web/src/lib/stores/adminToken.svelte.ts`, `web/src/lib/messages.ts` (tambah) | Tombol kunci di bilah atas membuka dialog token (isian sandi, simpan/hapus, kunci browser sama dengan UI lama). Setiap 401 dari server membuka dialog itu otomatis dengan pesan penolakan. Diuji dengan server token sementara: 401 → dialog; simpan token → 200; hapus token → 401 lagi; dialog token tampil di atas pemilih kamera. Tinjau: `git diff master...claude/t20b-token-ui -- web/src`. Tinjauan Gemini (25-09): 3 temuan diperbaiki — cadangan memori token saat penyimpanan browser diblokir (+tes), `autocomplete="new-password"`, dialog tertutup sendiri setelah simpan |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 
 ## Antrean berikutnya (urut)
@@ -43,6 +41,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T32 | Ditutup: "kaki terpotong" pada foto uji karena foto dibingkai terlalu rapat (bukan bug); dipantau ulang dengan kamera nyata |
 | T20 | Retensi data (Gemini): foto 30 hari, audit 1 tahun, foto maks. 2 GB, pembersihan otomatis saat start + tiap `RETENTION_INTERVAL_HOURS`; nilai ≤ 0 = nonaktif. Pengerasan keamanan dipecah ke T20b |
 | T33 langkah 1 | UI baru Svelte 5 + TS di `/`, sistem desain, tab Monitoring, nama DEPRO, hard code dibereskan (`messages.ts`, `settings.ts`, token CSS, `icon_name` di katalog) |
+| T20b | Pengaman akses jaringan (Gemini): server menolak menyala (kode keluar 1) bila `HOST` bukan localhost tanpa `ADMIN_TOKEN`, kecuali `ALLOW_INSECURE_DEMO=true`; isi `POST` maks. 1 MB → 413 (termasuk *chunked*). Ditinjau Claude |
+| T20b-UI | Tombol kunci + dialog token admin di UI baru; 401 membuka dialog; cadangan memori bila penyimpanan browser diblokir. Ditinjau Gemini |
 | T33 langkah 2 | Tab Laporan di UI baru: 6 statistik (kepatuhan dengan meter), saring status & tanggal, halaman, foto bukti, APD per item, "Dinilai oleh" tanpa nama penyedia, ekspor CSV, muat ulang otomatis. Ditinjau Gemini |
 | T33 perbaikan bilah atas | Bilah atas responsif 360–1440 px tanpa scroll horizontal (chip menyempit → ikon → baris kedua). Ditinjau Gemini |
 
