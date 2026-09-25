@@ -184,6 +184,8 @@ ppe_detection_vlm/
 ├── start_system.bat              # Skrip 1-klik untuk menjalankan sistem di Windows
 ├── start_system.sh               # Padanannya untuk Linux/macOS
 ├── ruff.toml                     # Aturan linter
+├── AGENTS.md                     # Aturan kerja agen AI (Claude, Gemini/Antigravity); CLAUDE.md mengimpornya
+├── docs/RENCANA.md               # Rencana bersama: antrean task, status, keputusan pengguna
 └── README.md                     # Dokumentasi komprehensif proyek
 ```
 
