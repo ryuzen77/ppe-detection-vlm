@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
+  import AdminTokenDialog from './components/AdminTokenDialog.svelte'
   import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
+  import { api } from './lib/api/client'
   import { PAGES } from './lib/messages'
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
+  import { adminToken } from './lib/stores/adminToken.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
   import { toasts } from './lib/stores/toasts.svelte'
@@ -16,6 +19,8 @@
     router.start()
     telemetry.start()
     catalog.load()
+    // Perintah mana pun yang ditolak karena token → buka isian token
+    api.onUnauthorized = () => adminToken.open('rejected')
   })
   onDestroy(() => telemetry.stop())
 
@@ -45,3 +50,4 @@
   {/if}
 </main>
 <Toasts />
+<AdminTokenDialog />

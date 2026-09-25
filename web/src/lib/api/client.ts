@@ -31,6 +31,9 @@ export class ApiError extends Error {
   }
 }
 
+/** HTTP 401: server menolak karena token admin kosong/salah */
+export const HTTP_UNAUTHORIZED = 401
+
 /** Token admin dari penyimpanan browser; aman bila penyimpanan diblokir. */
 export function readAdminToken(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): string {
   try {
@@ -41,8 +44,10 @@ export function readAdminToken(storage: Pick<Storage, 'getItem'> | undefined = g
 }
 
 export function writeAdminToken(token: string, storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = globalThis.localStorage): void {
+  // Spasi di tepi hampir selalu ikut saat token ditempel dari pesan/dokumen
+  const value = token.trim()
   try {
-    if (token) storage?.setItem(ADMIN_TOKEN_STORAGE_KEY, token)
+    if (value) storage?.setItem(ADMIN_TOKEN_STORAGE_KEY, value)
     else storage?.removeItem(ADMIN_TOKEN_STORAGE_KEY)
   } catch {
     // Penyimpanan diblokir (mode privat): token berlaku selama halaman terbuka saja
@@ -60,6 +65,8 @@ export class ApiClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof globalThis.fetch
   private readonly getAdminToken: () => string
+  /** Dipanggil saat server menolak token admin, sebelum galatnya dilempar (mis. membuka isian token) */
+  onUnauthorized: ((error: ApiError) => void) | null = null
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? '').replace(/\/$/, '')
@@ -95,7 +102,9 @@ export class ApiClient {
       const detail = typeof data === 'object' && data !== null
         ? ((data as Record<string, unknown>).detail ?? (data as Record<string, unknown>).message)
         : undefined
-      throw new ApiError(response.status, String(detail ?? `HTTP ${response.status}`), data)
+      const error = new ApiError(response.status, String(detail ?? `HTTP ${response.status}`), data)
+      if (response.status === HTTP_UNAUTHORIZED) this.onUnauthorized?.(error)
+      throw error
     }
     return data as T
   }

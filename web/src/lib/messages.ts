@@ -193,6 +193,27 @@ export const withError = (base: string, e: unknown): string =>
 /** Tooltip chip status: teks chip + keterangan (tetap terbaca saat chip tinggal ikon) */
 export const chipTitle = (text: string, hint: string): string => (hint ? `${text} · ${hint}` : text)
 
+// --- Token admin (sementara sampai login T30) ----------------------------------------------------
+
+export const ADMIN_TOKEN = {
+  title: 'Token admin',
+  intro:
+    'Perintah yang mengubah gerbang (ganti kamera, APD wajib, lampu, VLM) butuh token admin dari pengelola server. Token hanya disimpan di browser ini.',
+  rejected: 'Server menolak perintah tadi: token admin belum diisi atau salah.',
+  label: 'Token admin',
+  placeholder: 'Tempel token dari pengelola server',
+  show: 'Tampilkan token',
+  hide: 'Sembunyikan token',
+  save: 'Simpan',
+  clear: 'Hapus token',
+  close: 'Tutup',
+  saved: 'Token disimpan. Ulangi perintah tadi.',
+  cleared: 'Token dihapus dari browser ini.',
+  checkedLater: 'Token diperiksa server saat perintah berikutnya dikirim.',
+  buttonSet: 'Token admin: tersimpan',
+  buttonUnset: 'Token admin: belum diisi',
+} as const
+
 // --- Notifikasi ----------------------------------------------------------------------------------
 
 export const NOTIFY = {

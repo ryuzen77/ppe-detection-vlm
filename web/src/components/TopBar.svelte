@@ -3,14 +3,16 @@
   // (keputusan gerbang, kamera, VLM, koneksi, jam) — keputusan UX T33.
   import Camera from '@lucide/svelte/icons/camera'
   import Cpu from '@lucide/svelte/icons/cpu'
+  import KeyRound from '@lucide/svelte/icons/key-round'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
-  import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
+  import { ADMIN_TOKEN, BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
   import { cameraChip, vlmChip } from '../lib/status'
+  import { adminToken } from '../lib/stores/adminToken.svelte'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
   let now = $state(new Date())
@@ -51,6 +53,11 @@
       <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
       <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
     {/if}
+    <button class="key" class:unset={!adminToken.hasToken} onclick={() => adminToken.open()}
+            title={adminToken.hasToken ? ADMIN_TOKEN.buttonSet : ADMIN_TOKEN.buttonUnset}
+            aria-label={adminToken.hasToken ? ADMIN_TOKEN.buttonSet : ADMIN_TOKEN.buttonUnset}>
+      <KeyRound size={16} aria-hidden="true" />
+    </button>
     <span class="clock mono">{now.toLocaleTimeString(CLOCK.locale, { hour12: false })}</span>
   </div>
 </header>
@@ -172,6 +179,28 @@
   }
   .gate.tone-danger .dot {
     background: var(--danger);
+  }
+  /* Tombol token admin: netral (bukan warna status); belum diisi = lebih redup */
+  .key {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .key:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+  .key.unset {
+    color: var(--text-faint);
+    border-style: dashed;
   }
   .clock {
     color: var(--text-muted);

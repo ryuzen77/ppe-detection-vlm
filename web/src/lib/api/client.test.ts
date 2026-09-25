@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADMIN_TOKEN_STORAGE_KEY, ApiClient, ApiError, readAdminToken, writeAdminToken } from './client'
+import { ADMIN_TOKEN_STORAGE_KEY, ApiClient, ApiError, HTTP_UNAUTHORIZED, readAdminToken, writeAdminToken } from './client'
 
 type Call = { url: string; init: RequestInit }
 
@@ -92,5 +92,39 @@ describe('token admin', () => {
     }
     expect(readAdminToken(blocked)).toBe('')
     expect(() => writeAdminToken('x', blocked)).not.toThrow()
+  })
+})
+
+describe('penolakan token admin', () => {
+  it('401 memanggil onUnauthorized lalu tetap melempar ApiError', async () => {
+    const { fn } = fakeFetch(HTTP_UNAUTHORIZED, { detail: 'Token admin tidak valid' })
+    const api = new ApiClient({ fetch: fn })
+    const seen: ApiError[] = []
+    api.onUnauthorized = (e) => seen.push(e)
+    const err = await api.reset().catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toBe(err)
+  })
+
+  it('galat lain tidak memanggil onUnauthorized', async () => {
+    const { fn } = fakeFetch(403, { detail: 'dilarang' })
+    const api = new ApiClient({ fetch: fn })
+    let called = false
+    api.onUnauthorized = () => (called = true)
+    await api.reset().catch(() => undefined)
+    expect(called).toBe(false)
+  })
+
+  it('token disimpan tanpa spasi tepi; isian kosong/spasi menghapus', () => {
+    const data = new Map<string, string>()
+    const storage = {
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    }
+    writeAdminToken('  rahasia\n', storage)
+    expect(data.get(ADMIN_TOKEN_STORAGE_KEY)).toBe('rahasia')
+    writeAdminToken('   ', storage)
+    expect(data.has(ADMIN_TOKEN_STORAGE_KEY)).toBe(false)
   })
 })
