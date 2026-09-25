@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from backend.app import app, insecure_network_reason
@@ -10,7 +11,7 @@ def test_payload_too_large(monkeypatch):
     monkeypatch.setattr(cfg, "MAX_PAYLOAD_BYTES", 15)
     
     payload = {"value": "this_is_a_very_long_string"}
-    # Use a non-existent endpoint to safely test payload limit without side effects
+    # /api/ppe-rules/active itu endpoint nyata; isi {'a':'b'} sengaja tidak valid sehingga tidak mengubah apa pun
     response = client.post("/api/ppe-rules/active", json=payload)
     assert response.status_code == 413
     assert response.json()["detail"] == "Payload Too Large"
@@ -70,3 +71,24 @@ def test_startup_insecure_lan_lifespan(monkeypatch):
     except BaseException as e:
         # Pengecekan ada di ExceptionGroup / Exception
         assert "Server berjalan di jaringan terbuka" in str(e.args) or "Server berjalan di jaringan terbuka" in str(getattr(e, 'exceptions', e))
+
+def test_startup_subprocess():
+    import subprocess
+    import sys
+    import os
+    env = os.environ.copy()
+    env["HOST"] = "0.0.0.0"
+    env["ADMIN_TOKEN"] = ""
+    env["ALLOW_INSECURE_DEMO"] = "false"
+    
+    result = subprocess.run(
+        [sys.executable, "-m", "backend"],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parent.parent)
+    )
+    
+    assert result.returncode == 1
+    assert "Server berjalan di jaringan terbuka" in result.stderr
+    assert "Traceback" not in result.stderr

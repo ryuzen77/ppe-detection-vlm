@@ -177,6 +177,12 @@ elif frontend_dir.exists():
 
 def run():
     """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
+    reason = insecure_network_reason(cfg.HOST, cfg.ADMIN_TOKEN, cfg.ALLOW_INSECURE_DEMO)
+    if reason:
+        import sys
+        print(reason, file=sys.stderr)
+        sys.exit(1)
+
     # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
     # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
     # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.
