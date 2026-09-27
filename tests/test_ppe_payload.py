@@ -150,3 +150,29 @@ def test_kunci_tambahan_dari_model_diabaikan(catalog_defaults):
     data["items"]["helm"]["alasan"] = "helm putih"
     data["notes"] = "teks bebas"
     assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+
+
+# --- Nilai null dari VLM (T39a, jawaban nyata Gemini) ----------------------------------
+
+def test_warna_null_untuk_orang_tanpa_rompi_tidak_menggagalkan_jawaban(catalog_defaults):
+    # Jawaban nyata gemini-3.5-flash-lite untuk baju kuning tanpa rompi (no_19)
+    data = _balasan_ringkas()
+    data["items"]["rompi"] = {"detected": False, "color": None, "is_valid_color": False}
+    result = VLMAnalyzer._parse_vlm_payload(data)
+    assert not result.is_complete
+    assert result.missing_items == [missing_label("rompi")]
+    assert result.items["rompi"].color == ""
+
+
+def test_syarat_null_dianggap_tidak_terpenuhi(catalog_defaults):
+    data = _balasan_ringkas()
+    data["items"]["sepatu"] = {"detected": True, "is_closed_shoes": None}
+    result = VLMAnalyzer._parse_vlm_payload(data)
+    assert not result.is_complete
+    assert missing_label("sepatu") in result.missing_items
+
+
+def test_detected_null_dianggap_tidak_terdeteksi(catalog_defaults):
+    data = _balasan_ringkas()
+    data["items"]["helm"] = {"detected": None}
+    assert missing_label("helm") in VLMAnalyzer._parse_vlm_payload(data).missing_items
