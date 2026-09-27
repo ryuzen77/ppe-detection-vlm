@@ -6,6 +6,22 @@ pesan commit (`git log`).
 
 Terakhir diperbarui: 25-09-2026.
 
+## Lanjut dari sini (28-09-2026, jeda karena limit harian)
+
+- **Pengguna menjalankan uji nyata hari ini** (satu penguji; UI/UX + kamera). **Besok Claude:** minta jam
+  mulai tiap mode dari pengguna → analisis log (`data/logs/`) & audit: rata-rata waktu per pekerja
+  (internet normal vs putus), keputusan salah, suara, sesi, zona, pemulihan GPU (T38), catatan UI/UX.
+- Skenario kamera yang diminta ikut diuji (data untuk T45): tutup lensa ~10 dtk, cabut kamera saat lampu
+  hijau, penutup privasi/kamera mati — cocokkan dengan jam yang dicatat pengguna.
+- **Terbuka (T45):** pengguna menjawab "lampu menyala merah dan ada suara" saat kamera bermasalah — ini
+  bertentangan dengan AGENTS.md §5 (merah hanya APD kurang). Pilihan yang ditawarkan: (1) kuning + suara
+  "gerbang gangguan" (saran Claude), (2) merah + suara gangguan, revisi §5, tidak dicatat pelanggaran,
+  (3) merah berkedip + suara, revisi §5. Juga: suara diputar sekali atau diulang ~10 dtk. **Belum dijawab**
+  — pastikan dulu apakah itu jawaban atau hasil uji.
+- Selesai 28-09: audit kode + AGENTS.md §4.1 + `tests/test_code_hygiene.py`; aturan nama kode berbahasa
+  Inggris; README ringkas + `docs/INSTALASI.md` & `docs/ARSITEKTUR.md`; antrean T41–T45.
+- Gemini perlu `git rebase master` sebelum lanjut (master berubah 28-09).
+
 ## Lanjut dari sini (27-09-2026)
 
 - **Pembagian putaran ini (keputusan pengguna):** Claude → **backend** (perbaikan antrean T36, lalu ketahanan T37).
