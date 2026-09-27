@@ -21,6 +21,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T35 — uji kecepatan gerbang (Uji 1: prompt & gambar VLM lokal) | Claude (ditetapkan pengguna) | `claude/t35-uji-kecepatan` | dikerjakan | `tools/bench_vlm.py` (baru), `data/eval/` (hasil) | Tanpa mengubah kode gerbang. 84 foto T26 (`picture_test/`, hanya ke Ollama lokal, izin pengguna 27-09). Varian prompt P0 (sekarang) / P1 (output ringkas) / P2 (input+output ringkas), item rokok ikut di P1/P2 untuk mengukur biayanya; varian gambar maks 448/640/896 px + kontrol frame penuh. Dicatat: token & waktu baca input vs tulis jawaban (Ollama), akurasi, APD kurang yang lolos. Uji ulang setelah kamera 4 MP tersedia |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
 
 ## Antrean berikutnya (urut)
