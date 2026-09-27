@@ -55,6 +55,10 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 | 7 | Sedang | Helm di atas rambut lebat (`apd_10`), sepatu tertutup (`apd_4`) | Pekerja patuh salah ditolak (2/26 foto) |
 | 8 | Rendah | T28 — penyedia VLM dari dashboard | Kenyamanan admin; bisa lewat `.env` |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
+| 10 | Sedang | **T41 — satu sumber indeks pose COCO + rasio `detector` ke config** (audit 28-09) | Indeks 5/6/13–16 ditulis ulang di `detector.py`, `frame_quality.py`, `zone.py`; bila satu berubah yang lain tertinggal → salah menilai tubuh utuh/titik berdiri. Rasio 0.20/0.12/0.15/0.65/0.05/0.08 di `detector.py` ke `config.py` |
+| 11 | Rendah | T42 — cicil utang kode (audit 28-09) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
+| 12 | Rendah | T43 — laporan skala besar (audit 28-09) | 100 rb baris: halaman 17 ms, filter tanggal 20 ms (belum ada indeks `date_str`), ekspor CSV 700 ms / 16,8 MB di RAM → indeks `date_str` + ekspor bertahap (streaming) |
+| 13 | Rendah | T44 — formatter & linter web (audit 28-09) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
 
 ### Rencana (belum dikerjakan) — setelah sistem utama lolos semua tes
 
@@ -143,6 +147,10 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - Isi permintaan `POST` maksimal **1 MB** (angka di `config.py`); lebih besar → 413 dengan pesan dari `messages.py`.
 - Urutan: kolom token di UI baru (T20b-UI, Claude) digabung dulu, baru T20b.
 - Akibat bagi pengembangan: `backend/.env` di folder utama perlu `ADMIN_TOKEN` (diisi pengguna sendiri) atau `HOST=127.0.0.1`; worktree Gemini tanpa `.env` menjalankan server dengan `HOST=127.0.0.1`.
+
+**Kode (28-09)**
+- Daftar periksa kode (efisiensi, clean code, hardcode & rahasia) = AGENTS.md §4.1, dijaga `tests/test_code_hygiene.py`.
+- Nama di kode berbahasa Inggris; komentar & docstring boleh Bahasa Indonesia; teks pengguna tetap Indonesia di `messages.*`.
 
 **Operasi**
 - OS produksi belum tentu Windows; produksi lewat Docker di Linux, pengembangan di Windows dengan venv.

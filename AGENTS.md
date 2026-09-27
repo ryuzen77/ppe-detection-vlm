@@ -157,8 +157,46 @@ terima, pertanyaan untuk agen lain, dan keputusan kecil ditulis di kolom
   komponen hanya merakit).
 - **Perubahan logika wajib disertai tes** (pytest di `tests/`, vitest di
   `web/src/**/*.test.ts`).
-- Ikuti gaya di sekitarnya: komentar & docstring berbahasa Indonesia, jelaskan
-  *mengapa*, bukan *apa*.
+- **Bahasa kode: Inggris.** Nama variabel, fungsi, kelas, berkas, kunci
+  konfigurasi, dan kunci JSON/API **baru** berbahasa Inggris. Komentar &
+  docstring boleh Bahasa Indonesia. Teks untuk pengguna (UI, suara, prompt,
+  pesan log) tetap di `messages.py` / `messages.ts` dalam bahasa produk
+  (Indonesia). Nama lama berbahasa Indonesia diganti bertahap saat berkasnya
+  disentuh; kunci yang sudah tersimpan atau jadi kontrak (kolom DB,
+  `runtime_settings`, JSON VLM `orang_nyata`, endpoint) hanya diganti lewat
+  task sendiri dengan migrasi.
+- Ikuti gaya di sekitarnya: komentar & docstring jelaskan *mengapa*, bukan *apa*.
+
+### 4.1 Daftar periksa kode (setiap perubahan, sebelum `tinjau`)
+
+Berlaku untuk kode **baru atau yang disentuh**; utang lama dicicil lewat antrean
+risiko (§2.2a), bukan dirombak sekaligus di luar task.
+
+1. **Efisiensi**
+   - Jalur panas = per frame (`detector`, `state_manager`, telemetri) dan per
+     inspeksi (VLM, audit). Perubahan di jalur ini diukur dulu (`cProfile` /
+     `time.perf_counter`) dengan beban kecil dan besar (1 vs 20 orang; 100 vs
+     100.000 baris audit), angkanya ditulis di laporan task.
+   - Hindari loop bersarang atas orang/ID/baris audit bila ada struktur
+     O(1)/O(n) (dict, set, indeks SQLite). Kueri baru ke `worker_inspections`
+     dicek memakai indeks (`EXPLAIN QUERY PLAN`).
+2. **Clean code**
+   - `ruff check` lolos (lewat `scripts/check.py`); fungsi baru ≤ 30 baris
+     badan — lebih panjang dipecah atau diberi alasan di laporan.
+   - Tidak menyalin blok ≥ 6 baris: angkat ke fungsi/komponen bersama.
+   - Nama jelas; fungsi satu tanggung jawab; logika murni terpisah dari I/O & UI.
+   - Formatter: `ruff format` hanya untuk berkas **baru** (format massal berkas
+     lama menunggu task sendiri supaya diff tinjauan tetap terbaca).
+3. **Hardcode & rahasia**
+   - Angka/teks/warna ke sumber tunggal (daftar di atas); konstanta modul
+     bernama (mis. `LEFT_ANKLE`) boleh untuk fakta tetap (indeks COCO, kode
+     HTTP), tapi **satu definisi** — jangan diulang di beberapa modul.
+   - Tidak ada API key, token, password, atau path mesin di kode/berkas yang
+     di-commit; nilai uji memakai tiruan jelas (`kunci-uji`).
+   - `tests/test_code_hygiene.py` menjaga: tidak ada pola rahasia di berkas
+     terlacak, `backend/.env` tidak terlacak, warna hex UI hanya di
+     `tokens.css`, dan fungsi Python panjang tidak bertambah (daftar utang
+     hanya boleh menyusut).
 
 ## 5. Keputusan produk yang tidak boleh dilanggar
 
