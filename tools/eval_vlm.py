@@ -136,8 +136,12 @@ def unload_ollama(model: str):
 
 def main():
     data = Path(sys.argv[1]).resolve()
+    # --files a,b,c : hanya foto dengan nama (tanpa ekstensi) ini — menghemat kuota
+    # VLM cloud saat cukup menguji sebagian foto (mis. T39a, 10 gambar)
+    wanted = set(sys.argv[sys.argv.index("--files") + 1].split(",")) if "--files" in sys.argv else None
     files = [(f, label) for sub, label in CLASSES.items()
-             for f in sorted((data / sub).glob("*")) if f.suffix.lower() in (".jpg", ".jpeg", ".png")]
+             for f in sorted((data / sub).glob("*")) if f.suffix.lower() in (".jpg", ".jpeg", ".png")
+             and (wanted is None or f.stem in wanted)]
     if not files:
         sys.exit(f"Tidak ada foto di {data}/ppe_complete atau ppe_incomplete")
 
