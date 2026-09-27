@@ -42,23 +42,24 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - Telemetri WebSocket: `"zone": {"enabled", "y_min", "y_max"}`; tiap `detections[i]` + `"foot_y": number | null`, `"in_zone": bool`
 - Orang di belakang zona (antrean) diabaikan; subjek yang keluar zona mengakhiri sesi setelah jeda jalur kosong. Pengaturan persisten di `data/runtime_settings.json`
 
-## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09)
+## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, diperbarui 28-09)
 
 | # | Risiko | Task | Alasan risiko / isi |
 | :-- | :-- | :-- | :-- |
 | 1 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Perubahan besar T36a–d, T37, T38, T39a + UI T33 belum diuji di gerbang nyata (keputusan, suara, sesi, zona, pemulihan GPU). **Siap dijalankan** |
-| 2 | **Tinggi** | **T30 — login + lindungi data baca** | Foto bukti (wajah), video langsung, dan CSV terbuka tanpa token di jaringan → kebocoran data pribadi |
-| 3 | **Tinggi** | **Hapus UI lama (`frontend/`, `/legacy/`) + T18** | UI lama masih disajikan dan punya jalur XSS; dihapus setelah T33 digabung |
-| 4 | Sedang | T29 — operasi otomatis + Docker | Gerbang belum menyala sendiri setelah listrik padam (risiko naik jadi Tinggi saat produksi) |
-| 5 | Sedang | T39b — profil penyedia VLM (sisa T39) | Salah konfigurasi penyedia/mode berpikir; `.env.example` netral |
-| 6 | Sedang | **T40 — alternatif mesin VLM lokal** (keputusan setelah uji nyata) | Crash `encoding image` berasal dari llama.cpp (llama.cpp#17422, #17881; ollama#14170), jadi mengganti Ollama dengan llama.cpp langsung kemungkinan tidak menghilangkannya. Bila uji nyata menunjukkan cadangan masih sering bermasalah walau ada penjaga T38: uji coba Qwen2.5-VL 4-bit lewat Transformers (PyTorch) di **proses terpisah** berantarmuka OpenAI-compatible (adaptor sudah mendukung, cukup ganti `.env`), diukur dengan `tools/bench_vlm.py` (akurasi, 0 APD kurang lolos, waktu, VRAM bersama YOLO). vLLM ditinjau untuk produksi Linux/GPU besar (T29). Data sejauh ini: ~2–4 crash per 84 foto |
-| 7 | Sedang | Helm di atas rambut lebat (`apd_10`), sepatu tertutup (`apd_4`) | Pekerja patuh salah ditolak (2/26 foto) |
-| 8 | Rendah | T28 — penyedia VLM dari dashboard | Kenyamanan admin; bisa lewat `.env` |
-| 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
-| 10 | Sedang | **T41 — satu sumber indeks pose COCO + rasio `detector` ke config** (audit 28-09) | Indeks 5/6/13–16 ditulis ulang di `detector.py`, `frame_quality.py`, `zone.py`; bila satu berubah yang lain tertinggal → salah menilai tubuh utuh/titik berdiri. Rasio 0.20/0.12/0.15/0.65/0.05/0.08 di `detector.py` ke `config.py` |
-| 11 | Rendah | T42 — cicil utang kode (audit 28-09) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
-| 12 | Rendah | T43 — laporan skala besar (audit 28-09) | 100 rb baris: halaman 17 ms, filter tanggal 20 ms (belum ada indeks `date_str`), ekspor CSV 700 ms / 16,8 MB di RAM → indeks `date_str` + ekspor bertahap (streaming) |
-| 13 | Rendah | T44 — formatter & linter web (audit 28-09) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
+| 2 | **Tinggi** | **T45 — ketangguhan kamera** (usulan 28-09) | Kamera **terhalang** (lensa tertutup/gelap/seragam) tetap berstatus OK → gerbang mati diam-diam; gambar **membeku** (frame identik, laju tampak normal) → dugaan dari kode: sesi tak pernah kosong sehingga lampu hijau bisa tetap menyala untuk pekerja berikutnya (dibuktikan dulu dengan tes). Isi: deteksi terhalang (kecerahan/keseragaman/tepi, bertahan > N dtk) & beku (selisih antar-frame nol > N dtk → sambung ulang); saat kamera bermasalah sesi & keputusan dibatalkan, lampu kuning + suara tunggu (bukan merah); status `BLOCKED`/`FROZEN` di telemetri (kontrak API ditulis dulu, UI oleh Gemini) & log. Ambang dari data uji nyata (tutup lensa ~10 dtk, cabut saat hijau, penutup privasi). **Belum diputuskan:** kuning berkedip/tetap; suara tunggu sekali/berulang |
+| 3 | **Tinggi** | **T30 — login + lindungi data baca** | Foto bukti (wajah), video langsung, dan CSV terbuka tanpa token di jaringan → kebocoran data pribadi |
+| 4 | **Tinggi** | **Hapus UI lama (`frontend/`, `/legacy/`) + T18** | UI lama masih disajikan dan punya jalur XSS; dihapus setelah T33 digabung |
+| 5 | Sedang | T29 — operasi otomatis + Docker | Gerbang belum menyala sendiri setelah listrik padam (risiko naik jadi Tinggi saat produksi) |
+| 6 | Sedang | T39b — profil penyedia VLM (sisa T39) | Salah konfigurasi penyedia/mode berpikir; `.env.example` netral |
+| 7 | Sedang | **T40 — alternatif mesin VLM lokal** (keputusan setelah uji nyata) | Crash `encoding image` berasal dari llama.cpp (llama.cpp#17422, #17881; ollama#14170), jadi mengganti Ollama dengan llama.cpp langsung kemungkinan tidak menghilangkannya. Bila uji nyata menunjukkan cadangan masih sering bermasalah walau ada penjaga T38: uji coba Qwen2.5-VL 4-bit lewat Transformers (PyTorch) di **proses terpisah** berantarmuka OpenAI-compatible (adaptor sudah mendukung, cukup ganti `.env`), diukur dengan `tools/bench_vlm.py` (akurasi, 0 APD kurang lolos, waktu, VRAM bersama YOLO). vLLM ditinjau untuk produksi Linux/GPU besar (T29). Data sejauh ini: ~2–4 crash per 84 foto |
+| 8 | Sedang | Helm di atas rambut lebat (`apd_10`), sepatu tertutup (`apd_4`) | Pekerja patuh salah ditolak (2/26 foto) |
+| 9 | Sedang | **T41 — satu sumber indeks pose COCO + rasio `detector` ke config** (audit 28-09) | Indeks 5/6/13–16 ditulis ulang di `detector.py`, `frame_quality.py`, `zone.py`; bila satu berubah yang lain tertinggal → salah menilai tubuh utuh/titik berdiri. Rasio 0.20/0.12/0.15/0.65/0.05/0.08 di `detector.py` ke `config.py` |
+| 10 | Rendah | T28 — penyedia VLM dari dashboard | Kenyamanan admin; bisa lewat `.env` |
+| 11 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
+| 12 | Rendah | T42 — cicil utang kode (audit 28-09) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
+| 13 | Rendah | T43 — laporan skala besar (audit 28-09) | 100 rb baris: halaman 17 ms, filter tanggal 20 ms (belum ada indeks `date_str`), ekspor CSV 700 ms / 16,8 MB di RAM → indeks `date_str` + ekspor bertahap (streaming) |
+| 14 | Rendah | T44 — formatter & linter web (audit 28-09) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
 
 ### Rencana (belum dikerjakan) — setelah sistem utama lolos semua tes
 
