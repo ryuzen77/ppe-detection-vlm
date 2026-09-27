@@ -251,7 +251,13 @@ class Config:
     # Lama jalur inspeksi harus kosong sebelum sesi gerbang berakhir dan sistem
     # kembali ke tahap 1. Selama sesi berjalan keputusan terkunci; jeda ini juga
     # menyerap orang yang tertutup sesaat agar tidak dianggap sudah pergi.
-    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "3.0"))
+    # 1,5 dtk sejak T36c (sebelumnya 3): jeda ini menahan antrean tiap pekerja,
+    # sedangkan orang yang sama yang muncul lagi ditangani ingatan keputusan di bawah.
+    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "1.5"))
+    # Lama keputusan per ID pelacak diingat setelah sesinya berakhir. Orang yang
+    # tertutup/keluar jalur sesaat (ID sama) tidak diperiksa ulang; orang yang
+    # benar-benar pergi lalu kembali mendapat ID baru dan diperiksa lagi (T36c).
+    DECIDED_TRACK_MEMORY_SECONDS: float = float(_env("DECIDED_TRACK_MEMORY_SECONDS", "10"))
     # Maximum history records kept in memory
     MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))
 

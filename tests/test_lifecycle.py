@@ -273,8 +273,10 @@ def test_setelah_jalur_kosong_pekerja_berikutnya_diperiksa_dari_awal(gerbang, vl
     gerbang.update_frame_detections([])
     assert _active() is None and notifier.current_state == "OFF"
 
+    # Pekerja berikutnya = orang lain, jadi ID pelacak lain. ID yang sama dalam
+    # DECIDED_TRACK_MEMORY_SECONDS dianggap orang yang sama (T36c).
     vlm.reply = _balasan(helm=True)
-    _analisa_selesai(gerbang)
+    _analisa_selesai(gerbang, track_id=TRACK_ID + 1)
     assert _active()["session_id"] != sesi_pertama
     assert len(state_mgr.inspection_history) == riwayat + 1
     assert notifier.current_state == "RED"
@@ -313,3 +315,65 @@ def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, m
     assert _wait_for(lambda: len(state_mgr.inspection_history) == riwayat + 1)
     time.sleep(0.1)
     assert notifier.current_state == "OFF"
+
+
+# --- Ingatan keputusan per ID pelacak (T36c) -------------------------------------------
+
+def _jalur_kosong(gerbang):
+    gerbang.update_frame_detections([])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([])
+    assert _active() is None, "Sesi berakhir setelah jalur kosong"
+
+
+def test_id_yang_baru_diputuskan_tidak_diperiksa_ulang_di_sesi_berikutnya(gerbang, vlm):
+    # Kasus Track #32 (T35): orang yang sama keluar jalur > jeda, lalu muncul lagi
+    # dengan ID sama. Dulu diperiksa ulang (VLM + audit ganda).
+    vlm.reply = _balasan(rompi=True)
+    _analisa_selesai(gerbang)
+    panggilan, riwayat, sesi = vlm.calls, len(state_mgr.inspection_history), _active()["session_id"]
+    _jalur_kosong(gerbang)
+    assert notifier.current_state == "OFF"
+
+    vlm.reply = _balasan()  # seandainya dianalisa ulang, hasilnya akan berbeda
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 3):
+        gerbang.update_frame_detections([_det(full_body=True)])
+    time.sleep(0.2)
+
+    assert _active()["session_id"] != sesi, "Sesi baru dimulai"
+    assert _active()["state"] == TrackState.ANALYZED
+    assert _active()["vlm_result"]["is_complete"] is False, "Keputusan lama dipakai"
+    assert vlm.calls == panggilan, "Tanpa panggilan VLM kedua"
+    assert len(state_mgr.inspection_history) == riwayat, "Tanpa baris audit ganda"
+    assert notifier.current_state == "RED", "Lampu kembali ke keputusan sebelumnya"
+
+
+def test_id_diperiksa_ulang_setelah_ingatan_kedaluwarsa(gerbang, vlm, monkeypatch):
+    monkeypatch.setattr(cfg, "DECIDED_TRACK_MEMORY_SECONDS", 0.1)
+    vlm.reply = _balasan(rompi=True)
+    _analisa_selesai(gerbang)
+    _jalur_kosong(gerbang)
+    time.sleep(0.15)  # ingatan dihitung sejak sesi berakhir; tunggu melewatinya
+    vlm.reply = _balasan()
+    riwayat = len(state_mgr.inspection_history)
+
+    _analisa_selesai(gerbang)
+    assert _active()["vlm_result"]["is_complete"] is True
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+def test_orang_lain_setelah_sesi_tetap_diperiksa(gerbang, vlm):
+    _analisa_selesai(gerbang)
+    _jalur_kosong(gerbang)
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai(gerbang, track_id=TRACK_ID + 7)
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+def test_reset_operator_menghapus_ingatan_keputusan(gerbang, vlm):
+    _analisa_selesai(gerbang)
+    _jalur_kosong(gerbang)
+    gerbang.reset_all()
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai(gerbang)
+    assert len(state_mgr.inspection_history) == riwayat + 1

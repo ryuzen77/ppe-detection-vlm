@@ -36,6 +36,11 @@ class GateSession:
     dikunci per ID, orang itu diperiksa ulang tanpa pernah meninggalkan gerbang
     (panggilan VLM dan baris audit ganda, dan keputusan bisa berubah). Sesi baru
     dimulai hanya setelah jalur inspeksi kosong selama STANDBY_RESET_DELAY_SECONDS.
+
+    Sejak T36c jeda itu dipersingkat, dan sebagai gantinya keputusan per ID
+    pelacak diingat DECIDED_TRACK_MEMORY_SECONDS: bila sesi baru dimulai untuk
+    ID yang baru saja diputuskan (orang yang sama keluar jalur sesaat), keputusan
+    lama dipakai ulang tanpa VLM, audit, maupun suara ulang (kasus Track #32, T35).
     """
 
     _counter = 0
@@ -71,6 +76,8 @@ class StateManager:
         self.lock = threading.Lock()
         self.inspection_history: List[dict] = []
         self.latest_detections: List[DetectionResult] = []
+        # ID pelacak -> (waktu, keputusan) untuk sesi yang sudah diputuskan (T36c)
+        self.recent_decisions: dict[int, tuple[float, InspectionResult]] = {}
 
     @staticmethod
     def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int]) -> DetectionResult:
@@ -79,6 +86,25 @@ class StateManager:
             if det.track_id == current_id:
                 return det
         return max(candidates, key=lambda d: d.bbox[3] - d.bbox[1])
+
+    def _remember_decision(self, track_id: int, result: InspectionResult, now: float):
+        self.recent_decisions[track_id] = (now, result)
+
+    def _recent_decision(self, track_id: int, now: float) -> Optional[InspectionResult]:
+        """Keputusan untuk ID ini bila masih dalam ingatan; entri kedaluwarsa dibuang."""
+        for tid, (at, _) in list(self.recent_decisions.items()):
+            if now - at > cfg.DECIDED_TRACK_MEMORY_SECONDS:
+                del self.recent_decisions[tid]
+        entry = self.recent_decisions.get(track_id)
+        return entry[1] if entry else None
+
+    @staticmethod
+    def _show_decision(result: InspectionResult):
+        """Lampu untuk keputusan APD (suara diputar terpisah oleh pemanggil)."""
+        if result.is_complete:
+            notifier.set_complete(messages.LIGHT_GRANTED)
+        else:
+            notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=", ".join(result.missing_items)))
 
     def update_frame_detections(self, detections: list[DetectionResult]):
         """Processes detections from the current frame."""
@@ -93,14 +119,27 @@ class StateManager:
             if not in_lane:
                 if self.session is not None and (now - self.session.last_seen) > cfg.STANDBY_RESET_DELAY_SECONDS:
                     logger.info(f"Sesi #{self.session.session_id} selesai: jalur kosong. Gerbang standby.")
+                    if self.session.vlm_result is not None:
+                        # ID terakhir subjek (bisa berbeda dari ID saat dianalisa)
+                        self._remember_decision(self.session.track_id, self.session.vlm_result, now)
                     self.session = None
                     notifier.set_idle()
                 return
 
             session = self.session
             if session is None:
-                session = self.session = GateSession(in_lane[0].track_id, now)
+                subject = self._pick_subject(in_lane, None)
+                session = self.session = GateSession(subject.track_id, now)
                 logger.info(f"Sesi #{session.session_id} dimulai.")
+                previous = self._recent_decision(subject.track_id, now)
+                if previous is not None:
+                    # Orang yang sama baru saja diputuskan: keputusan tetap berlaku
+                    session.vlm_result = previous
+                    session.state = TrackState.ANALYZED
+                    session.analysis_timestamp = now
+                    self._show_decision(previous)
+                    logger.info(f"Sesi #{session.session_id}: Track #{subject.track_id} baru saja diputuskan; "
+                                f"keputusan dipakai ulang tanpa analisa baru.")
 
             det = self._pick_subject(in_lane, session.track_id)
             session.track_id = det.track_id
@@ -216,16 +255,14 @@ class StateManager:
                 session.vlm_result = result
                 session.state = TrackState.ANALYZED
                 session.analysis_timestamp = time.time()
+                self._remember_decision(track_id, result, session.analysis_timestamp)
 
                 if result.is_complete:
                     logger.info(f"Sesi #{session_id}: APD LENGKAP! Green Light ON.")
-                    notifier.set_complete(messages.LIGHT_GRANTED)
-                    audio_player.play_result(is_complete=True)
                 else:
                     logger.info(f"Sesi #{session_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
-                    missing_text = ", ".join(result.missing_items)
-                    notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=missing_text))
-                    audio_player.play_result(is_complete=False, missing_items=result.missing_items)
+                self._show_decision(result)
+                audio_player.play_result(is_complete=result.is_complete, missing_items=result.missing_items)
 
         except Exception as e:
             logger.exception(f"Error during VLM analysis for session #{session_id}: {e}")
@@ -261,6 +298,8 @@ class StateManager:
     def reset_all(self):
         with self.lock:
             self.session = None
+            # Reset operator = mulai bersih: orang yang sama boleh diperiksa ulang
+            self.recent_decisions.clear()
             notifier.set_idle()
 
     def get_telemetry(self) -> dict:
