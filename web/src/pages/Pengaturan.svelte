@@ -1,6 +1,7 @@
 <script lang="ts">
   import AdminToken from '../components/settings/AdminToken.svelte'
   import CameraPicker from '../components/monitoring/CameraPicker.svelte'
+  import ZoneSettings from '../components/settings/ZoneSettings.svelte'
   import { api } from '../lib/api/client'
   import type { VlmInfo } from '../lib/api/types'
   import { SETTINGS_TAB } from '../lib/messages'
@@ -75,6 +76,8 @@
 <div class="wrap">
   <div class="content">
     <AdminToken />
+
+    <ZoneSettings />
 
     <section class="card">
       <h2>{SETTINGS_TAB.camera}</h2>

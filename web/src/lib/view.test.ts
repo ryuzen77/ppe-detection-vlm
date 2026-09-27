@@ -31,6 +31,7 @@ function tele(over: Partial<Telemetry> = {}): Telemetry {
   return {
     timestamp: 0, frame_width: 1280, frame_height: 720, has_person: false, active_track: null, detections: [],
     corridor: { enabled: true, left_ratio: 0.3, right_ratio: 0.7 },
+    zone: { enabled: false, y_min: 0.7, y_max: 0.85 },
     light: { light_state: 'OFF', message: '', timestamp: 0 }, history: [], stable_frames_required: 3,
     keypoint_conf_threshold: 0.35,
     is_live_vlm: true,
@@ -179,7 +180,7 @@ describe('overlay', () => {
     expect(f.offsetY).toBe(75)
   })
   it('warna kotak dari palet token: pas hijau, arahan kuning, di luar jalur abu', () => {
-    const base = { track_id: 1, bbox: [0, 0, 1, 1] as [number, number, number, number], reason: '', conf: 1, keypoints: null }
+    const base = { track_id: 1, bbox: [0, 0, 1, 1] as [number, number, number, number], reason: '', conf: 1, keypoints: null, foot_y: null, in_zone: true }
     expect(detectionStyle({ ...base, is_full_body: true, is_inside_corridor: true, clip_type: 'OPTIMAL' }, palette).color).toBe(palette.ok)
     expect(detectionStyle({ ...base, is_full_body: false, is_inside_corridor: true, clip_type: 'FEET_CLIPPED' }, palette).color).toBe(palette.warn)
     expect(detectionStyle({ ...base, is_full_body: true, is_inside_corridor: false, clip_type: 'OPTIMAL' }, palette).color).toBe(palette.outside)
@@ -201,7 +202,7 @@ describe('overlay', () => {
       track_id: 7, bbox: [100, 100, 300, 600] as [number, number, number, number], reason: '', conf: 0.9,
       is_full_body: true, is_inside_corridor: true, clip_type: 'OPTIMAL',
       // satu titik di atas ambang 0.35, satu di bawahnya
-      keypoints: [[150, 150, 0.9], [160, 160, 0.2]],
+      keypoints: [[150, 150, 0.9], [160, 160, 0.2]], foot_y: null, in_zone: true,
     }
     drawHud(ctx, 800, 450, tele({ detections: [det] }), true, palette)
     expect(calls.filter((c) => c.fn === 'arc')).toHaveLength(1)

@@ -186,4 +186,15 @@
     color: var(--danger);
     font-size: var(--text-sm);
   }
+  @media (max-width: 400px) {
+    .controls .btn {
+      flex: 1 1 40%;
+      padding: var(--space-2) var(--space-1);
+      font-size: var(--text-xs);
+    }
+    .camera-name {
+      width: 100%;
+      margin-bottom: var(--space-2);
+    }
+  }
 </style>

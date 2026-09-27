@@ -78,6 +78,21 @@ export function drawHud(
   const fit = computeFit(w, h, t.frame_width, t.frame_height)
   const { offsetX, offsetY, drawW, drawH, scale } = fit
 
+  if (guides && t.zone?.enabled) {
+    ctx.strokeStyle = palette.ok
+    ctx.lineWidth = HUD.laneLineWidth
+    ctx.setLineDash(HUD.laneDash)
+    for (const y of [t.zone.y_min, t.zone.y_max]) {
+      const lineY = offsetY + y * drawH
+      ctx.beginPath()
+      ctx.moveTo(offsetX, lineY)
+      ctx.lineTo(offsetX + drawW, lineY)
+      ctx.stroke()
+    }
+    ctx.setLineDash([])
+  }
+
+
   if (guides && t.corridor?.enabled) {
     const x1 = offsetX + drawW * t.corridor.left_ratio
     const x2 = offsetX + drawW * t.corridor.right_ratio
@@ -113,7 +128,10 @@ export function drawHud(
     const [bx1, by1, bx2, by2] = d.bbox
     const x = offsetX + bx1 * scale
     const y = offsetY + by1 * scale
-    const { color, label } = detectionStyle(d, palette)
+    let { color, label } = detectionStyle(d, palette)
+    if (t.zone?.enabled && !d.in_zone) {
+      color = withAlpha(color, 0.4) // redup di luar zona
+    }
     drawBrackets(ctx, x, y, (bx2 - bx1) * scale, (by2 - by1) * scale, color)
     if (d.is_inside_corridor && d.keypoints) {
       ctx.fillStyle = color
