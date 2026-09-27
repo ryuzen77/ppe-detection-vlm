@@ -1,6 +1,8 @@
 """Ketahanan saat listrik padam/crash (T37): audit, foto bukti, catatan hidup server."""
 import json
 import logging
+import threading
+import time
 
 import numpy as np
 import pytest
@@ -96,3 +98,30 @@ def test_start_setelah_henti_mendadak_mencatat_peringatan(tmp_path, caplog):
         m.start()
     m.stop()
     assert any("MENDADAK" in r.getMessage() for r in caplog.records)
+
+
+def test_stop_saat_detak_sedang_menulis_tetap_tercatat_rapi(tmp_path, monkeypatch):
+    # Tinjauan T37: detak clean=False yang sedang berjalan tidak boleh menimpa
+    # status rapi dari stop(). Detak ditahan di tengah penulisan secara sengaja.
+    monkeypatch.setattr(uptime.cfg, "UPTIME_HEARTBEAT_SECONDS", 0.01)
+    path = tmp_path / "uptime.json"
+    m = uptime.UptimeMonitor(path)
+    in_beat, release = threading.Event(), threading.Event()
+    original = m._write_unlocked
+
+    def slow_write(clean):
+        if not clean and threading.current_thread() is m._thread:
+            in_beat.set()
+            release.wait(2)
+        original(clean)
+
+    monkeypatch.setattr(m, "_write_unlocked", slow_write)
+    m.start()
+    assert in_beat.wait(2), "detak tidak berjalan"
+    stopper = threading.Thread(target=m.stop)
+    stopper.start()
+    time.sleep(0.1)       # stop() sudah dipanggil saat detak masih menulis
+    release.set()
+    stopper.join(2)
+    m._thread.join(2)  # tulisan detak (bila ada) harus sudah terjadi sebelum diperiksa
+    assert json.loads(path.read_text())[uptime.KEY_CLEAN] is True

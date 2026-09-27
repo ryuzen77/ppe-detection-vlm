@@ -51,6 +51,10 @@ class UptimeMonitor:
         self.path = Path(path) if path else cfg.UPTIME_STATE_PATH
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        # Thread detak dan stop() menulis berkas yang sama; tanpa gembok, tulisan
+        # clean=False dari detak bisa selesai SETELAH clean=True dari stop() dan
+        # server yang dimatikan rapi tercatat "berhenti mendadak" (tinjauan T37)
+        self._write_lock = threading.Lock()
 
     def _read(self) -> Optional[dict]:
         try:
@@ -61,6 +65,10 @@ class UptimeMonitor:
     def _write(self, clean: bool):
         # Berkas sementara lalu ganti nama: listrik padam di tengah penulisan
         # tidak meninggalkan JSON setengah jadi
+        with self._write_lock:
+            self._write_unlocked(clean)
+
+    def _write_unlocked(self, clean: bool):
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_name(self.path.name + ".tmp")
@@ -84,6 +92,10 @@ class UptimeMonitor:
 
     def stop(self):
         self._stop.set()
+        # Detak terakhir yang sedang berjalan harus selesai dulu, supaya status
+        # rapi pasti menjadi tulisan terakhir
+        if self._thread is not None:
+            self._thread.join(timeout=cfg.THREAD_STOP_TIMEOUT_SECONDS)
         self._write(clean=True)
 
 
