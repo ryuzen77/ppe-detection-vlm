@@ -5,7 +5,7 @@ import numpy as np
 import threading
 from typing import Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import cfg, LOCAL_VLM_PROVIDERS
 from .api_monitor import api_monitor
@@ -32,6 +32,20 @@ class ItemResult(BaseModel):
     detected: bool = Field(default=False, description="Apakah item terdeteksi dipakai")
     color: str = Field(default="", description="Warna item bila relevan")
     description: str = Field(default="", description="Keterangan singkat item")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _null_means_not_given(cls, data):
+        """`null` dari VLM = nilai tidak diisi, jadi nilai bawaan yang berlaku.
+
+        Gemini menjawab `"color": null` untuk orang tanpa rompi (T39a). Tanpa ini
+        seluruh jawaban gagal divalidasi, dianggap kegagalan VLM utama, dilempar ke
+        cadangan, dan dua kali berturut-turut membuat pemutus sirkuit menganggap
+        utama mati. Syarat (qualifier) yang null dianggap tidak terpenuhi.
+        """
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if v is not None}
+        return data
 
 
 class InspectionResult(BaseModel):
