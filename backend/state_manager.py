@@ -81,6 +81,8 @@ class StateManager:
         self.lock = threading.Lock()
         self.inspection_history: List[dict] = []
         self.latest_detections: List[DetectionResult] = []
+        # Posisi kaki terakhir yang jelas per ID, saat kaki tertutup (T36d)
+        self.foot_memory = zones.FootMemory()
         # ID pelacak -> (waktu, keputusan) untuk sesi yang LOLOS (T36c)
         self.recent_decisions: dict[int, tuple[float, InspectionResult]] = {}
 
@@ -119,13 +121,16 @@ class StateManager:
 
         with self.lock:
             self.latest_detections = detections
+            for d in detections:
+                d.zone_y = self.foot_memory.resolve(d.track_id, getattr(d, "foot_y", None),
+                                                    getattr(d, "foot_y_box", None), now)
             # Hanya orang di jalur inspeksi yang dihitung; orang yang lewat di
             # luar jalur tidak memulai sesi dan tidak menahan reset. Bila zona
             # titik berdiri aktif (T36d), antrean di belakang zona juga diabaikan,
             # jadi sesi berakhir begitu subjek keluar zona dan orang berikutnya maju.
             active_zone = zone_store.get()
             in_lane = [d for d in detections if getattr(d, "is_inside_corridor", True)
-                       and zones.in_zone(getattr(d, "foot_y", None), active_zone)]
+                       and zones.in_zone(getattr(d, "zone_y", None), active_zone)]
 
             if not in_lane:
                 if self.session is not None and (now - self.session.last_seen) > cfg.STANDBY_RESET_DELAY_SECONDS:
@@ -311,6 +316,7 @@ class StateManager:
             self.session = None
             # Reset operator = mulai bersih: orang yang sama boleh diperiksa ulang
             self.recent_decisions.clear()
+            self.foot_memory.clear()
             notifier.set_idle()
 
     def get_telemetry(self) -> dict:
@@ -328,8 +334,8 @@ class StateManager:
                     "clip_type": getattr(d, 'clip_type', 'OPTIMAL'),
                     "conf": round(d.conf, 2),
                     "keypoints": d.keypoints,
-                    "foot_y": getattr(d, "foot_y", None),
-                    "in_zone": zones.in_zone(getattr(d, "foot_y", None), active_zone),
+                    "foot_y": getattr(d, "zone_y", None),
+                    "in_zone": zones.in_zone(getattr(d, "zone_y", None), active_zone),
                 })
 
             active_track_data = None

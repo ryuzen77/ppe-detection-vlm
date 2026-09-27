@@ -31,7 +31,9 @@ async def set_zone(request: Request):
 
 @router.post("/api/config/zone/calibrate", dependencies=[Depends(require_admin)])
 async def calibrate_zone():
-    """Titik berdiri = posisi kaki orang di lorong saat ini (yang paling dekat kamera)."""
+    """Titik berdiri = posisi pergelangan kaki orang di lorong saat ini (yang paling
+    dekat kamera). Tepi kotak tubuh tidak dipakai: bila kaki tidak terlihat jelas,
+    titik berdiri bisa tersetel dari kotak yang terpotong."""
     people = [d for d in state_mgr.latest_detections if getattr(d, "is_inside_corridor", True)]
     if not people:
         raise HTTPException(status_code=409, detail=messages.ZONE_CALIBRATE_NO_PERSON)

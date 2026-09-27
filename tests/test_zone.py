@@ -29,17 +29,46 @@ def store(monkeypatch):
 
 # --- Posisi kaki ------------------------------------------------------------------------
 
-def test_posisi_kaki_dari_rata_rata_pergelangan():
-    assert zones.foot_y(_kpts(800), [0, 100, 200, 900], FRAME_H) == pytest.approx(0.8)
+def test_posisi_kaki_dari_pergelangan_paling_bawah():
+    # Saat melangkah satu kaki terangkat; yang menapak (paling bawah) yang dipakai
+    assert zones.ankle_y(_kpts(800), FRAME_H) == pytest.approx(0.81)
 
 
-def test_pergelangan_tidak_yakin_memakai_tepi_bawah_kotak():
-    assert zones.foot_y(_kpts(800, conf=0.1), [0, 100, 200, 900], FRAME_H) == pytest.approx(0.9)
-    assert zones.foot_y(None, [0, 100, 200, 900], FRAME_H) == pytest.approx(0.9)
+def test_satu_kaki_terangkat_tidak_menarik_posisi_mundur():
+    pts = _kpts(800)
+    pts[zones.LEFT_ANKLE][1] = 600.0  # kaki kiri terangkat jauh
+    assert zones.ankle_y(pts, FRAME_H) == pytest.approx(0.81)
+
+
+def test_pergelangan_tidak_yakin_berarti_tidak_terlihat():
+    assert zones.ankle_y(_kpts(800, conf=0.1), FRAME_H) is None
+    assert zones.ankle_y(None, FRAME_H) is None
+    assert zones.box_bottom_y([0, 100, 200, 900], FRAME_H) == pytest.approx(0.9)
 
 
 def test_posisi_kaki_dibatasi_0_sampai_1():
-    assert zones.foot_y(_kpts(1200), [0, 0, 10, 10], FRAME_H) == 1.0
+    assert zones.ankle_y(_kpts(1200), FRAME_H) == 1.0
+
+
+# --- Ingatan posisi kaki (kaki tertutup orang lain) ------------------------------------
+
+def test_kaki_tertutup_memakai_posisi_terakhir_yang_jelas():
+    m = zones.FootMemory()
+    assert m.resolve(5, 0.78, 0.80, now=0.0) == 0.78
+    # Badan bawah tertutup: kotak berhenti di pinggang (0,5); posisi terakhir dipakai
+    assert m.resolve(5, None, 0.5, now=cfg.FOOT_MEMORY_SECONDS / 2) == 0.78
+
+
+def test_ingatan_kaki_kedaluwarsa_kembali_ke_tepi_kotak():
+    m = zones.FootMemory()
+    m.resolve(5, 0.78, 0.80, now=0.0)
+    assert m.resolve(5, None, 0.5, now=cfg.FOOT_MEMORY_SECONDS + 0.1) == 0.5
+
+
+def test_ingatan_kaki_per_id():
+    m = zones.FootMemory()
+    m.resolve(5, 0.78, 0.80, now=0.0)
+    assert m.resolve(6, None, 0.5, now=0.1) == 0.5
 
 
 # --- Pita zona --------------------------------------------------------------------------

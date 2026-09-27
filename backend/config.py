@@ -177,6 +177,8 @@ class Config:
     ZONE_CALIBRATE_MARGIN: float = float(_env("ZONE_CALIBRATE_MARGIN", "0.06"))
     # Pita tersempit yang diterima, agar zona tidak mustahil dipenuhi
     ZONE_MIN_HEIGHT: float = 0.04
+    # Lama posisi kaki terakhir yang jelas dipakai saat pergelangan kaki tertutup
+    FOOT_MEMORY_SECONDS: float = float(_env("FOOT_MEMORY_SECONDS", "2.0"))
 
     # --- VLM, bebas penyedia (T23) ---
     # gemini, openai, openrouter, qwen, deepseek, ollama, vllm, openai-compatible.

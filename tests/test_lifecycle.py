@@ -438,3 +438,19 @@ def _analisa_selesai_zona(gerbang, track_id):
     for _ in range(cfg.STABLE_FRAMES_REQUIRED):
         gerbang.update_frame_detections([_det(full_body=True, track_id=track_id, foot_y=0.78)])
     assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)
+
+
+def test_kaki_subjek_tertutup_sesaat_sesi_tetap_berjalan(gerbang, zona, monkeypatch, vlm):
+    # Temuan tinjauan T36d: orang lewat di depan subjek, pergelangan kaki tak
+    # terlihat dan kotak tubuh berhenti di pinggang (0,5). Tanpa ingatan kaki,
+    # subjek dianggap keluar zona dan sesi berakhir di tengah pemeriksaan.
+    monkeypatch.setattr(cfg, "FOOT_MEMORY_SECONDS", 2.0)
+    _analisa_selesai_zona(gerbang, TRACK_ID)
+    sesi, panggilan = _active()["session_id"], vlm.calls
+
+    tertutup = _det(full_body=True, track_id=TRACK_ID, foot_y=None, foot_y_box=0.5)
+    gerbang.update_frame_detections([tertutup])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([tertutup])
+    assert _active() is not None and _active()["session_id"] == sesi, "sesi tidak terputus"
+    assert vlm.calls == panggilan

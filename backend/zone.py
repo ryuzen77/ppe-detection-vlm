@@ -36,9 +36,18 @@ def default_zone() -> Zone:
     return Zone(False, cfg.ZONE_Y_MIN_DEFAULT, cfg.ZONE_Y_MAX_DEFAULT, SOURCE_DEFAULT)
 
 
-def foot_y(keypoints, bbox, frame_h: int) -> Optional[float]:
-    """Posisi kaki relatif tinggi gambar: rata-rata pergelangan kaki yang cukup
-    yakin, atau tepi bawah kotak tubuh bila kaki tidak terlihat."""
+def _relative(y: float, frame_h: int) -> float:
+    return min(1.0, max(0.0, y / frame_h))
+
+
+def ankle_y(keypoints, frame_h: int) -> Optional[float]:
+    """Posisi kaki dari pergelangan kaki yang cukup yakin; None bila tidak terlihat.
+
+    Diambil yang PALING BAWAH di gambar, bukan rata-rata: saat melangkah satu kaki
+    terangkat dan rata-rata "tertarik mundur", sehingga orang yang masuk/keluar
+    zona tampak berkedip (temuan tinjauan T36d). Kaki paling bawah adalah kaki yang
+    menapak dan paling dekat ke gerbang.
+    """
     if frame_h <= 0:
         return None
     ys = []
@@ -49,8 +58,42 @@ def foot_y(keypoints, bbox, frame_h: int) -> Optional[float]:
             continue
         if conf >= cfg.KEYPOINT_CONF_THRESHOLD:
             ys.append(float(y))
-    y = sum(ys) / len(ys) if ys else (float(bbox[3]) if bbox else None)
-    return None if y is None else min(1.0, max(0.0, y / frame_h))
+    return _relative(max(ys), frame_h) if ys else None
+
+
+def box_bottom_y(bbox, frame_h: int) -> Optional[float]:
+    """Tepi bawah kotak tubuh: perkiraan kasar posisi kaki. Bila badan bawah
+    tertutup orang lain, kotak berhenti di pinggang, jadi hanya dipakai sebagai
+    pilihan terakhir (lihat FootMemory)."""
+    if frame_h <= 0 or not bbox:
+        return None
+    return _relative(float(bbox[3]), frame_h)
+
+
+class FootMemory:
+    """Posisi kaki terakhir yang terlihat jelas per ID pelacak.
+
+    Bila pergelangan kaki subjek tertutup (mis. orang lewat di depannya), posisi
+    terakhir yang jelas dipakai selama FOOT_MEMORY_SECONDS, bukan tepi bawah kotak
+    yang bisa melompat ke pinggang dan membuat subjek dianggap keluar zona di
+    tengah pemeriksaan (temuan tinjauan T36d).
+    """
+
+    def __init__(self):
+        self._last: dict[int, tuple[float, float]] = {}
+
+    def resolve(self, track_id: int, ankle: Optional[float], box: Optional[float], now: float) -> Optional[float]:
+        for tid, (at, _) in list(self._last.items()):
+            if now - at > cfg.FOOT_MEMORY_SECONDS:
+                del self._last[tid]
+        if ankle is not None:
+            self._last[track_id] = (now, ankle)
+            return ankle
+        remembered = self._last.get(track_id)
+        return remembered[1] if remembered else box
+
+    def clear(self):
+        self._last.clear()
 
 
 def in_zone(y: Optional[float], zone: Zone) -> bool:
