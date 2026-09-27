@@ -23,6 +23,9 @@ BACKUP_SOURCE_PREFIX = "VLM_CADANGAN:"
 # Retensi (T20): umur data dihitung dalam hari
 SECONDS_PER_DAY = 24 * 60 * 60
 
+# Akhiran foto bukti yang sedang ditulis (lihat _write_snapshot)
+SNAPSHOT_TMP_SUFFIX = ".tmp"
+
 # Jalur data diatur lewat DATA_DIR di config, di luar direktori kode
 DB_PATH = cfg.DB_PATH
 SNAPSHOTS_DIR = cfg.SNAPSHOTS_DIR
@@ -113,13 +116,55 @@ class ReportManager:
             if not self._opened:
                 self.db_path.parent.mkdir(parents=True, exist_ok=True)
                 self.snapshots_dir.mkdir(parents=True, exist_ok=True)
+                self._remove_partial_snapshots()
                 self._init_db()
                 self._opened = True
         return self
 
+    def _remove_partial_snapshots(self):
+        """Foto sementara yang tertinggal karena listrik padam/crash saat ditulis."""
+        partial = list(self.snapshots_dir.glob(f"*{SNAPSHOT_TMP_SUFFIX}"))
+        for p in partial:
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        if partial:
+            logger.warning(messages.SNAPSHOT_TMP_REMOVED.format(count=len(partial)))
+
+    def _write_snapshot(self, path: Path, image: np.ndarray) -> bool:
+        """Menulis JPEG secara atomik: berkas sementara di-fsync lalu diganti nama.
+
+        Listrik padam di tengah penulisan tidak meninggalkan foto rusak dengan
+        nama final, dan kegagalan (mis. disk penuh) terdeteksi. Dulu hasil
+        cv2.imwrite tidak diperiksa, sehingga audit bisa merujuk foto yang
+        tidak pernah tertulis.
+        """
+        tmp = path.with_name(path.name + SNAPSHOT_TMP_SUFFIX)
+        try:
+            ok, buf = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.SNAPSHOT_JPEG_QUALITY])
+            if not ok:
+                raise ValueError("cv2.imencode gagal")
+            with open(tmp, "wb") as f:
+                f.write(buf.tobytes())
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+            return True
+        except Exception as e:
+            logger.error(messages.SNAPSHOT_WRITE_FAILED.format(name=path.name, error=e))
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return False
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=cfg.DB_TIMEOUT_SECONDS)
         conn.row_factory = sqlite3.Row
+        # Per koneksi: dulu hanya disetel (NORMAL) di koneksi inisialisasi yang
+        # langsung ditutup, jadi tidak pernah berlaku untuk penulisan audit (T37)
+        conn.execute(f"PRAGMA synchronous = {cfg.AUDIT_DB_SYNCHRONOUS};")
         return conn
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -131,7 +176,6 @@ class ReportManager:
         conn = self._connect()
         try:
             conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
             self._migrate(conn)
         finally:
             conn.close()
@@ -252,11 +296,7 @@ class ReportManager:
         snapshot_filename = ""
         if crop_img is not None and crop_img.size > 0:
             snapshot_filename = f"worker_{track_id}_{file_time_slug}.jpg"
-            save_path = self.snapshots_dir / snapshot_filename
-            try:
-                cv2.imwrite(str(save_path), crop_img, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.SNAPSHOT_JPEG_QUALITY])
-            except Exception as e:
-                logger.error(f"Error saving snapshot image: {e}")
+            if not self._write_snapshot(self.snapshots_dir / snapshot_filename, crop_img):
                 snapshot_filename = ""
 
         with self._get_connection() as conn:
