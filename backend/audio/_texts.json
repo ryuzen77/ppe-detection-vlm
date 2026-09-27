@@ -1,0 +1,16 @@
+{
+  "kurang_celana": "Celana panjang belum dipakai. Akses ditolak.",
+  "kurang_helm": "Helm belum dipakai. Akses ditolak.",
+  "kurang_kacamata": "Kacamata safety belum dipakai. Akses ditolak.",
+  "kurang_rompi": "Rompi keselamatan belum sesuai. Akses ditolak.",
+  "kurang_sarung_tangan": "Sarung tangan belum dipakai. Akses ditolak.",
+  "kurang_sepatu": "Sepatu tertutup belum dipakai. Akses ditolak.",
+  "lengkap": "APD lengkap. Silakan masuk.",
+  "mundur": "Mundur sampai seluruh tubuh terlihat.",
+  "mundur_kaki": "Mundur satu langkah, kaki belum terlihat.",
+  "mundur_kepala": "Mundur sedikit, kepala terpotong.",
+  "posisi_pas": "Posisi tepat. Mohon tunggu.",
+  "sedang_analisa": "Mohon tunggu.",
+  "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
+  "tidak_lengkap": "APD tidak lengkap. Akses ditolak."
+}

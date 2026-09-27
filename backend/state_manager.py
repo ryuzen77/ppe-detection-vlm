@@ -249,7 +249,7 @@ class StateManager:
             logger.warning(f"Sesi #{session_id}: sistem gangguan, pekerja diminta menunggu; "
                            f"diperiksa ulang dalam {cfg.VLM_SYSTEM_RETRY_SECONDS:g} dtk.")
             notifier.set_waiting()
-            audio_player.play("sistem_gangguan", min_interval=cfg.AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS)
+            audio_player.play("sistem_gangguan", min_interval=cfg.AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS, urgent=True)
 
     def _retry_session(self, session_id: int):
         """Analisa tidak menghasilkan keputusan (galat internal): sesi boleh mencoba lagi."""

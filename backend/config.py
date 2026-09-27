@@ -246,6 +246,8 @@ class Config:
     AUDIO_ANALYZING_DEBOUNCE_SECONDS: float = 2.0
     # Jeda pengulangan pengumuman "sistem sedang gangguan, mohon tunggu"
     AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS: float = 20.0
+    # Selang cek antrean & channel pemutar suara (T36b)
+    AUDIO_POLL_SECONDS: float = 0.05
     # Lama jalur inspeksi harus kosong sebelum sesi gerbang berakhir dan sistem
     # kembali ke tahap 1. Selama sesi berjalan keputusan terkunci; jeda ini juga
     # menyerap orang yang tertutup sesaat agar tidak dianggap sudah pergi.

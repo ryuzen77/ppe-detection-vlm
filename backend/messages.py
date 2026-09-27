@@ -81,6 +81,22 @@ VLM_USER_PROMPT = "Nilai gambar ini. JSON saja."
 # Panggilan termurah untuk uji latensi & pemanasan
 VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
 
+# --- Suara gerbang (dibangkitkan jadi MP3 oleh generate_audio.py) ---
+# Sengaja singkat (T36b): suara hasil ikut menentukan kapan pekerja melangkah,
+# jadi tiap detik suara menambah waktu antrean. Suara per item APD ada di katalog
+# ppe_rules (`audio_missing_text`).
+VOICE_TEXTS = {
+    "mundur": "Mundur sampai seluruh tubuh terlihat.",
+    "mundur_kepala": "Mundur sedikit, kepala terpotong.",
+    "mundur_kaki": "Mundur satu langkah, kaki belum terlihat.",
+    "posisi_pas": "Posisi tepat. Mohon tunggu.",
+    "lengkap": "APD lengkap. Silakan masuk.",
+    "tidak_lengkap": "APD tidak lengkap. Akses ditolak.",
+    "sedang_analisa": "Mohon tunggu.",
+    # Utama & cadangan VLM gagal (T27): belum ada keputusan, pemeriksaan diulang otomatis
+    "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
+}
+
 # --- VLM tidak tersedia (utama & cadangan gagal) ---
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "
