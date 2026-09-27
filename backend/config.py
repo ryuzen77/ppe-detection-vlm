@@ -169,6 +169,15 @@ class Config:
     # Ambang kepercayaan deteksi keypoint pose tubuh (mata, bahu, lutut, kaki)
     KEYPOINT_CONF_THRESHOLD: float = 0.35
 
+    # Zona titik berdiri (T36d): pita posisi kaki relatif tinggi gambar (0 atas,
+    # 1 bawah). Bawaan nonaktif; diaktifkan lewat kalibrasi/Pengaturan.
+    ZONE_Y_MIN_DEFAULT: float = 0.70
+    ZONE_Y_MAX_DEFAULT: float = 0.85
+    # Toleransi atas-bawah saat kalibrasi dari orang yang berdiri di titik (±)
+    ZONE_CALIBRATE_MARGIN: float = float(_env("ZONE_CALIBRATE_MARGIN", "0.06"))
+    # Pita tersempit yang diterima, agar zona tidak mustahil dipenuhi
+    ZONE_MIN_HEIGHT: float = 0.04
+
     # --- VLM, bebas penyedia (T23) ---
     # gemini, openai, openrouter, qwen, deepseek, ollama, vllm, openai-compatible.
     # Nama lama GEMINI_API_KEY / GEMINI_MODEL tetap dibaca agar .env lama tidak rusak.

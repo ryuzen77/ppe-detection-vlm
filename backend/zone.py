@@ -1,0 +1,116 @@
+"""Zona titik berdiri (T36d): siapa yang sedang berdiri di titik pemeriksaan.
+
+Kamera dipasang di atas gerbang dan menghadap pekerja yang datang, jadi makin
+dekat seseorang ke gerbang, makin ke bawah posisi kakinya di gambar. Zona adalah
+pita posisi kaki (relatif tinggi gambar, 0 = atas, 1 = bawah). Orang di belakang
+zona (antrean) tidak dihitung, sehingga pekerja berikutnya bisa maju begitu
+subjek keluar zona.
+
+Logika murni tanpa kamera/GPU; status aktif dipegang `ZoneStore` dan disimpan
+di runtime_settings.
+"""
+import threading
+from dataclasses import asdict, dataclass
+from typing import Optional
+
+from . import messages, runtime_settings
+from .config import cfg
+
+# Indeks titik pose COCO untuk pergelangan kaki kiri & kanan
+LEFT_ANKLE, RIGHT_ANKLE = 15, 16
+SETTINGS_KEY = "zone"
+SOURCE_DEFAULT, SOURCE_CALIBRATED, SOURCE_MANUAL = "bawaan", "kalibrasi", "manual"
+
+
+@dataclass(frozen=True)
+class Zone:
+    enabled: bool
+    y_min: float
+    y_max: float
+    source: str = SOURCE_DEFAULT
+
+
+def default_zone() -> Zone:
+    # Nonaktif sampai dikalibrasi di lokasi: perilaku gerbang tidak berubah
+    # sebelum kamera dipasang dan diatur.
+    return Zone(False, cfg.ZONE_Y_MIN_DEFAULT, cfg.ZONE_Y_MAX_DEFAULT, SOURCE_DEFAULT)
+
+
+def foot_y(keypoints, bbox, frame_h: int) -> Optional[float]:
+    """Posisi kaki relatif tinggi gambar: rata-rata pergelangan kaki yang cukup
+    yakin, atau tepi bawah kotak tubuh bila kaki tidak terlihat."""
+    if frame_h <= 0:
+        return None
+    ys = []
+    for idx in (LEFT_ANKLE, RIGHT_ANKLE):
+        try:
+            _, y, conf = keypoints[idx][:3]
+        except (TypeError, IndexError, ValueError):
+            continue
+        if conf >= cfg.KEYPOINT_CONF_THRESHOLD:
+            ys.append(float(y))
+    y = sum(ys) / len(ys) if ys else (float(bbox[3]) if bbox else None)
+    return None if y is None else min(1.0, max(0.0, y / frame_h))
+
+
+def in_zone(y: Optional[float], zone: Zone) -> bool:
+    """Zona nonaktif = semua orang dihitung (perilaku sebelum T36d)."""
+    if not zone.enabled:
+        return True
+    return y is not None and zone.y_min <= y <= zone.y_max
+
+
+def validated(y_min: float, y_max: float) -> tuple[float, float]:
+    if not (0.0 <= y_min < y_max <= 1.0):
+        raise ValueError(messages.ZONE_INVALID_RANGE)
+    if y_max - y_min < cfg.ZONE_MIN_HEIGHT:
+        raise ValueError(messages.ZONE_TOO_NARROW.format(min=cfg.ZONE_MIN_HEIGHT))
+    return y_min, y_max
+
+
+def calibrated(y: float) -> Zone:
+    """Pita di sekitar posisi kaki orang yang berdiri di titik pemeriksaan."""
+    m = cfg.ZONE_CALIBRATE_MARGIN
+    return Zone(True, max(0.0, y - m), min(1.0, y + m), SOURCE_CALIBRATED)
+
+
+class ZoneStore:
+    """Zona aktif, aman diakses dari thread kamera dan API."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._zone = default_zone()
+
+    def load(self):
+        saved = runtime_settings.load().get(SETTINGS_KEY)
+        if isinstance(saved, dict):
+            try:
+                y_min, y_max = validated(float(saved["y_min"]), float(saved["y_max"]))
+                zone = Zone(bool(saved.get("enabled")), y_min, y_max, str(saved.get("source", SOURCE_MANUAL)))
+            except (KeyError, TypeError, ValueError):
+                zone = default_zone()  # berkas rusak: kembali ke bawaan, jangan gagal start
+            with self._lock:
+                self._zone = zone
+
+    def get(self) -> Zone:
+        with self._lock:
+            return self._zone
+
+    def set(self, zone: Zone) -> Zone:
+        with self._lock:
+            self._zone = zone
+        runtime_settings.update(SETTINGS_KEY, asdict(zone))
+        return zone
+
+    def update(self, enabled: Optional[bool] = None, y_min: Optional[float] = None,
+               y_max: Optional[float] = None) -> Zone:
+        current = self.get()
+        lo = current.y_min if y_min is None else float(y_min)
+        hi = current.y_max if y_max is None else float(y_max)
+        lo, hi = validated(lo, hi)
+        changed_band = (lo, hi) != (current.y_min, current.y_max)
+        return self.set(Zone(current.enabled if enabled is None else bool(enabled), lo, hi,
+                             SOURCE_MANUAL if changed_band else current.source))
+
+
+zone_store = ZoneStore()

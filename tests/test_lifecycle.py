@@ -391,3 +391,50 @@ def test_reset_operator_menghapus_ingatan_keputusan(gerbang, vlm):
     riwayat = len(state_mgr.inspection_history)
     _analisa_selesai(gerbang)
     assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+# --- Zona titik berdiri (T36d) ----------------------------------------------------------
+
+@pytest.fixture
+def zona(monkeypatch):
+    from backend import zone as zones
+    import backend.state_manager as sm
+    store = zones.ZoneStore()
+    store.update(enabled=True, y_min=0.70, y_max=0.85)
+    monkeypatch.setattr(sm, "zone_store", store)
+    return store
+
+
+def test_antrean_di_belakang_zona_tidak_memulai_sesi(gerbang, zona):
+    riwayat = len(state_mgr.inspection_history)
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 3):
+        gerbang.update_frame_detections([_det(full_body=True, foot_y=0.5)])
+    time.sleep(0.2)
+    assert _active() is None
+    assert len(state_mgr.inspection_history) == riwayat
+
+
+def test_subjek_keluar_zona_mengakhiri_sesi_walau_antrean_terlihat(gerbang, zona, vlm):
+    subjek = dict(full_body=True, track_id=TRACK_ID, foot_y=0.78)
+    antrean = _det(full_body=True, track_id=TRACK_ID + 1, foot_y=0.5)
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(**subjek), antrean])
+    assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)
+    assert _active()["track_id"] == TRACK_ID, "antrean tidak menjadi subjek"
+
+    # Subjek berjalan ke gerbang (kaki melewati zona); antrean masih terlihat
+    gerbang.update_frame_detections([_det(full_body=True, track_id=TRACK_ID, foot_y=0.97), antrean])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([_det(full_body=True, track_id=TRACK_ID, foot_y=0.97), antrean])
+    assert _active() is None, "antrean di belakang zona tidak menahan sesi"
+
+    # Orang berikutnya maju ke zona dan diperiksa
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai_zona(gerbang, TRACK_ID + 1)
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+def _analisa_selesai_zona(gerbang, track_id):
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(full_body=True, track_id=track_id, foot_y=0.78)])
+    assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)

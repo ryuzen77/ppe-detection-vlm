@@ -25,6 +25,7 @@ from .api import (
     routes_stream,
     routes_system,
     routes_vlm,
+    routes_zone,
     websocket,
 )
 
@@ -128,7 +129,7 @@ app.add_middleware(
 )
 
 for _module in (routes_system, routes_vlm, routes_cameras, routes_ppe,
-                routes_reports, routes_stream, websocket):
+                routes_reports, routes_stream, routes_zone, websocket):
     app.include_router(_module.router)
 
 

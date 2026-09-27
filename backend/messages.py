@@ -65,6 +65,12 @@ API_CAMERA_RELEASED = "Melepas kamera, silakan pilih sumber baru."
 API_CAMERA_INDEX_INVALID = "Indeks kamera tidak valid"
 API_CAMERA_SWITCHING = "Berpindah ke kamera index {index}..."
 API_PPE_ACTIVE_FORMAT = 'Format: {"active": {"<kunci_item>": true/false}}'
+# Zona titik berdiri (T36d)
+ZONE_INVALID_RANGE = "Batas zona harus memenuhi 0 ≤ y_min < y_max ≤ 1."
+ZONE_TOO_NARROW = "Zona terlalu sempit (minimal {min:g} tinggi gambar)."
+ZONE_CALIBRATE_NO_PERSON = "Tidak ada orang di lorong pemeriksaan untuk dijadikan titik berdiri."
+ZONE_CALIBRATE_NO_FEET = "Kaki orang di titik berdiri belum terlihat kamera."
+ZONE_BODY_INVALID = "Isi harus objek JSON: {\"enabled\"?: bool, \"y_min\"?: angka, \"y_max\"?: angka}"
 API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
 
 # --- Prompt VLM ---
