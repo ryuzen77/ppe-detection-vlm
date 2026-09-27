@@ -1,280 +1,70 @@
-# 🛡️ DEPRO (Digital Safety Protection): Real-Time PPE Compliance Inspection System
-> **Sistem Inspeksi Kepatuhan Alat Pelindung Diri (APD) Otomatis Berbasis YOLO26s-Pose, Google Gemini VLM, dan IoT Gerbang K3**
+# DEPRO — Digital Safety Protection
 
-Sistem inspeksi kepatuhan K3 modern yang dirancang untuk memverifikasi kelengkapan APD pekerja secara *real-time* di gerbang masuk area industri/proyek. Menggabungkan kecepatan **Computer Vision Edge AI (RTX 4060)** untuk verifikasi postur tubuh utuh (*Full-Body Gatekeeper*) dan kecerdasan **Vision-Language Model (Gemini 3.5 Flash-Lite)** untuk audit visual mendalam.
-
----
-
-## 💻 Teknologi yang Digunakan (*Tech Stack*)
-
-### 1. Computer Vision & AI / ML (Edge Layer)
-* **Model Pose Estimation:** `YOLO26s-Pose` (Ultralytics) terakselerasi **NVIDIA CUDA** pada **NVIDIA GeForce RTX 4060 Laptop GPU** (~4–7 ms per frame).
-* **Multi-Object Tracking:** `ByteTrack` untuk pelacakan ID subjek pekerja secara konsisten tanpa tumpang tindih.
-* **Keypoints Analysis:** Evaluasi 17 titik sendi tubuh (mata, bahu, pinggul, lutut, dan pergelangan kaki) untuk memastikan postur pekerja utuh dari kepala hingga kaki sebelum analisis APD dipicu.
-* **Pemilihan Sumber di Awal:** Saat server menyala, tidak ada kamera yang dibuka sama sekali. Dashboard menampilkan dialog pemilihan berisi nama asli tiap perangkat, dan video baru tersambung setelah operator memilih — tidak ada kamera yang terlanjur dipakai lalu diganti. Kamera yang terakhir dipakai hanya disorot sebagai bawaan, bukan disambung otomatis.
-* **Pemilihan Mode Kamera:** Kamera dibuka seketika dengan permintaan bawaan yang terbukti lancar di berbagai perangkat, lalu tombol **Pindai kamera** mengukur seluruh mode dan memilih yang terbaik. Dua temuan pengukuran mendasari rancangan ini: (1) laju frame bergantung pada angka yang **diminta**, bukan hasilnya — meminta 848×480 menghasilkan 19,9 FPS sedangkan meminta 854×480 menghasilkan 29,7 FPS walau frame-nya sama-sama 848×480; (2) sebagian kamera USB baru mencapai laju stabilnya ~3,5 detik setelah dibuka (1 FPS di detik pertama, 26 FPS di detik keempat), sehingga pengukuran yang akurat tidak mungkin dilakukan secara instan.
-* **Kelancaran di Atas Rasio:** Mode dipilih dengan mengutamakan laju frame. Kamera USB penguji hanya mampu 7 FPS pada 16:9 tetapi 25 FPS pada 4:3, dan sistem memilih yang 4:3 — frame 4:3 aman karena overlay canvas menyesuaikan diri terhadap letterbox.
-* **Pemulihan Kamera:** Kamera yang tercabut terdeteksi dalam ~1 detik, dilaporkan di ribbon dashboard, dan disambung ulang otomatis tanpa membekukan aliran video.
-* **Corridor & pra-proses:** OpenCV (`cv2`) untuk Virtual Inspection Corridor, pemilihan frame terbaik (ketajaman, gerak, pose), serta pemotongan dan kompresi gambar sebelum dikirim ke VLM.
-
-### 2. Vision-Language Model (VLM & Cloud Layer)
-* **Model VLM (bebas penyedia):** dipilih lewat `VLM_PROVIDER` / `VLM_MODEL` di `backend/.env`, tanpa mengubah kode. Bawaan `Google Gemini 3.5 Flash-Lite` (SDK `google-genai`, ~1,5 dtk per inspeksi). Model lokal lewat Ollama, bawaannya `qwen2.5vl:7b` (tanpa API key; dari evaluasi 84 foto berlabel dengan `tools/eval_vlm.py`: akurasi 94%, tidak meloloskan satu pun pekerja ber-APD kurang, median ~7,9 dtk, VRAM ~7,6 GB bersama YOLO; batas waktu lokal 12 dtk). Juga didukung OpenRouter, Qwen (DashScope), DeepSeek (`deepseek-flash`), OpenAI, dan server vLLM. Semua penyedia memakai adaptor di `backend/vlm_providers/`; timeout, percobaan ulang, dan penilaian kelengkapan sama untuk semuanya. Model dipanaskan saat server menyala sehingga pekerja pertama tidak menunggu model dimuat.
-* **VLM utama + cadangan otomatis (T27):** Semua keputusan diambil VLM. Bila VLM utama galat, lewat batas waktu (cloud 4 dtk), atau jawabannya rusak, pekerja yang sama langsung diperiksa VLM cadangan (bawaan: `qwen2.5vl:7b` lewat Ollama, batas 12 dtk) — tanpa mengulang dari awal. Setelah 2 kegagalan berturut-turut, utama dilewati dan dicoba lagi pada pekerja nyata setelah 60 dtk. Bila utama dan cadangan sama-sama gagal, tidak ada keputusan: lampu tetap padam (merah khusus APD kurang), pekerja diminta menunggu lewat suara, lalu diperiksa ulang otomatis. Pita status dashboard menunjukkan 🟢 utama / 🟡 cadangan / 🔴 gangguan; audit mencatat model yang memutuskan (`VLM_LIVE:` utama, `VLM_CADANGAN:` cadangan). Tidak ada sakelar mode di dashboard: operator hanya menjalankan dan mengatur sistem. Heuristik warna OpenCV yang dulu menjadi cadangan sudah dibuang karena salah dua arah.
-* **Prompt Engineering K3:** Inferensi terstruktur yang mengembalikan format JSON standar untuk helm, rompi hi-vis, celana panjang, dan sepatu tertutup.
-* **API Anti-Spam Cache:** Membatasi inferensi tepat **1 frame per subjek unik**, dengan jeda minimum 4 detik antar panggilan dan kunci konkurensi, untuk mencegah pemborosan kuota API dan galat 429.
-
-### 3. Backend & Layanan Komunikasi
-* **Runtime:** Python 3.10 (Conda Environment).
-* **Web Framework:** `FastAPI` (REST API asinkron) & `Uvicorn` (dengan integrasi *Graceful Server Shutdown*).
-* **Real-time Telemetry:** `WebSocket` murni (interval 50 ms, ~20 Hz) untuk streaming bounding box, status APD, FPS, dan status cloud ke antarmuka pengguna.
-* **Video Pipeline:** MJPEG Multi-part HTTP Video Streaming. Pembacaan kamera dan inferensi YOLO berjalan di dua thread terpisah sehingga frame yang tertahan di buffer driver dibuang, bukan menumpuk jadi latensi.
-* **Database & Penyimpanan:** `SQLite3` (mode WAL - *Write-Ahead Logging*) untuk pencatatan riwayat audit pekerja, serta penyimpanan crop bukti foto snapshot JPEG otomatis.
-
-### 4. Audio Engine & Panduan Suara
-* **Playback Engine:** `pygame.mixer` (multi-threaded, non-blocking audio queue).
-* **Voice Generation:** gTTS (Google Text-to-Speech) berbahasa Indonesia, dibangkitkan sekali lewat `python -m backend.generate_audio` menjadi berkas MP3 statis.
-* **Smart Voice Limiter:** Pembatas otomatis maksimal 2 kali peringatan per orang untuk mencegah kebisingan berlebih (*anti-audio spam*), disertai sakelar *Mute* di web dashboard.
-
-### 5. Frontend & UI/UX
-* **Arsitektur:** Single Page Application (SPA) 3-Tab tanpa reload halaman.
-* **Teknologi:** Vanilla HTML5, Vanilla Modern CSS3 (Dark Navy Slate Theme, CSS Custom Properties / Tokens, Glassmorphism, Micro-animations), dan Vanilla JavaScript (ES6+ Modules).
-* **HUD Overlay:** HTML5 `<canvas>` yang digambar ulang setiap paket telemetri (~20 Hz) untuk garis batas koridor neon, bounding box dinamis, dan zona jejak kaki (*footprint standoff guide*). Overlay disejajarkan dengan kotak video hasil `object-fit: contain`, sehingga tetap presisi walau kamera mengirim rasio selain 16:9.
-* **Desain Responsif:** Disesuaikan untuk monitor pos operator gerbang K3 maupun laptop pengawas.
-
-### 6. IoT & Kontrol Gerbang Fisik
-* **Mikrokontroler:** `ESP32 DevKit V1` (C++ / Arduino framework).
-* **Protokol Komunikasi:** USB Serial Cable (baud rate **9600**) untuk demo langsung ke laptop, serta dukungan wireless HTTP REST client.
-* **Perangkat Keras:** Modul Relay 5V / Optocoupler, Tower Light Indikator Industri (Merah / Hijau / Buzzer), atau Solenoid Door Lock.
-* **Simulasi Virtual:** Integrasi siap pakai dengan simulator perangkat keras **Wokwi** (`diagram.json`).
-
----
-
-## 🌟 Aturan Pemeriksaan APD Wajib
-
-| Item APD | Kriteria Lolos (Hijau) | Kriteria Pelanggaran (Merah) |
-| :--- | :--- | :--- |
-| 🪖 **Helm Safety** | Terdeteksi helm keselamatan kerja proyek (**Warna bebas**: putih, kuning, biru, merah, oranye, dll). | Tidak memakai helm, atau memakai topi santai/kupluk. |
-| 🦺 **Rompi Reflektif** | Memakai rompi dengan warna keselamatan **Orange**, **Kuning**, atau **Lime Green** reflektif. | Tidak memakai rompi, atau memakai rompi kain biasa tanpa warna keselamatan / reflektor. |
-| 👖 **Celana Panjang** | Memakai celana panjang menutupi seluruh kaki. | Memakai celana pendek, celana 3/4, atau rok/gaun terbuka. |
-| 👞 **Sepatu Tertutup** | Memakai sepatu tertutup (*safety boots*, sneakers, sepatu kerja tertutup). | Memakai sandal, selop, sandal jepit, atau telanjang kaki. |
-
----
-
-## 🖥️ Fitur Dashboard UI/UX (3-Tab Architecture)
-
-### 1. Menu Monitoring
-* **Kamera Inspeksi Live:** Tampilan video resolusi penuh dengan overlay batas area inspeksi neon kuning.
-* **Toolbar Kontrol:**
-  * Sakelar **Panduan Posisi**: Sembunyikan atau tampilkan panduan batas lorong di layar.
-  * Sakelar **Suara**: Membisukan (*Mute*) atau mengaktifkan suara panduan speaker secara instan.
-  * **Detail Teknis**: Accordion informasi VLM yang sedang memutuskan (utama/cadangan/gangguan), latensi inferensi, dan active track ID.
-  * **Mulai Ulang**: Tombol reset pelacakan subjek.
-* **Kartu Panduan Interaktif & Stepper 3-Tahap:**
-  1. *Tahap 1 (Posisi)*: Memandu subjek berdiri tepat di tengah lorong hingga kepala sampai kaki terlihat.
-  2. *Tahap 2 (APD)*: Menganalisis kelengkapan 4 item APD menggunakan AI.
-  3. *Tahap 3 (Hasil)*: Menampilkan keputusan final (*Akses Diizinkan / Akses Ditolak*).
-* **Checklist APD 4-Item:** Lencana status interaktif untuk helm, rompi, celana, dan sepatu.
-* **Riwayat Pemeriksaan Terbaru:** Log singkat subjek yang baru saja diperiksa.
-
-### 2. Menu Laporan
-* **Ringkasan KPI K3:** Kartu metrik Total Pemeriksaan, Lolos APD, Pelanggaran, dan Tingkat Kepatuhan (%).
-* **Filter Interaktif:** Filter segmented (*Semua Data*, *✅ Lengkap*, *⚠️ Pelanggaran*) dan pemilih tanggal (*Date Picker*).
-* **Tabel Riwayat & Bukti Snapshot:** Menampilkan foto snapshot pekerja saat diperiksa, waktu presisi, status kelulusan, dan catatan APD yang kurang. Foto dapat diklik untuk pratinjau resolusi penuh.
-* **Ekspor CSV:** Unduh spreadsheet audit riwayat kepatuhan pekerja untuk arsip HSE K3.
-
-### 3. Menu Pengaturan
-* **Kamera & Koridor:** Daftar kamera dengan **nama perangkat asli** (webcam bawaan maupun USB), tombol **Pindai kamera** untuk mengukur resolusi dan laju frame nyata tiap perangkat, serta sakelar batas koridor tengah. Pergantian kamera berlaku langsung tanpa menjalankan ulang server. Pilihan disimpan berdasarkan **nama**, bukan indeks, karena mencolokkan kamera USB menggeser nomor perangkat lain.
-* **Aturan APD Wajib:** Checklist konfigurasi item APD yang diwajibkan untuk membuka gerbang.
-* **Lepas & Pilih Ulang:** Tombol untuk melepas kamera yang sedang dipakai dan kembali ke dialog pemilihan tanpa menjalankan ulang server.
-* **Pengujian Lampu Gerbang (IoT):** Tombol uji coba manual indikator fisik (**🟢 Tes Hijau**, **🔴 Tes Merah**, **⚪ Padam**).
-* **Google Gemini API Key:** Input kunci API tersimpan aman di *server-side* dengan tombol uji latensi (*Ping*).
-* **Token Admin (opsional):** Diisi hanya jika server dijalankan dengan `ADMIN_TOKEN`. Tersimpan di browser operator dan dilampirkan sebagai header pada setiap perintah yang mengubah state server.
-
----
-
-## 📁 Struktur Direktori Proyek
+Gerbang pemeriksaan **Alat Pelindung Diri (APD)** otomatis untuk area kerja
+industri/proyek. Kamera memastikan tubuh pekerja terlihat utuh, lalu
+Vision-Language Model (VLM) menilai kelengkapan APD. Hasilnya berupa lampu,
+suara panduan, dan catatan audit berfoto.
 
 ```
-ppe_detection_vlm/
-├── backend/                      # Paket Python; jalankan dengan `python -m backend`
-│   ├── __main__.py               # Titik masuk tunggal (memanggil `app.run()`)
-│   ├── config.py                 # Konfigurasi server, batas koridor, dan threshold
-│   ├── detector.py               # YOLO26s-Pose inference, ByteTrack & Full-Body Gatekeeper
-│   ├── vlm_analyzer.py           # VLM utama + cadangan: batas waktu, jeda kuota, pemutus sirkuit
-│   ├── vlm_providers/            # Adaptor penyedia VLM (kontrak di base.py; gemini.py)
-│   ├── state_manager.py          # State Machine, Smart Voice Limiter & Anti-Spam Queue
-│   ├── audio_engine.py           # Non-blocking audio queue player & Mute controller
-│   ├── notifier.py               # Pengendali sinyal lampu gerbang & IoT Hardware Bridge
-│   ├── report_manager.py         # SQLite3 audit repository & Snapshot JPEG manager
-│   ├── camera_manager.py         # Enumerasi perangkat, probing mode, & pemilihan resolusi
-│   ├── api_monitor.py            # Kesehatan VLM utama & cadangan untuk pita status dashboard
-│   ├── app.py                    # Bootstrap FastAPI: middleware, router, frontend statis, server
-│   ├── shutdown.py               # Penanda berhenti bersama untuk stream & WebSocket
-│   ├── messages.py               # Seluruh teks operasional (lampu, HUD, API, CSV)
-│   ├── ppe_rules.py              # Katalog item APD — satu-satunya sumber definisi
-│   ├── runtime_settings.py       # Pengaturan yang diubah operator (item APD aktif)
-│   ├── video/
-│   │   ├── capture.py            # Pembacaan kamera, inferensi per frame, JPEG untuk stream
-│   │   └── hud.py                # HUD server-side & layar tunggu
-│   ├── api/
-│   │   ├── deps.py               # Guard ADMIN_TOKEN
-│   │   ├── routes_system.py      # Health, reset, koridor, audio, uji lampu IoT
-│   │   ├── routes_cameras.py     # Katalog, pemindaian, & pergantian kamera
-│   │   ├── routes_ppe.py         # Katalog & item APD aktif
-│   │   ├── routes_reports.py     # Riwayat inspeksi, snapshot, ekspor CSV
-│   │   ├── routes_vlm.py         # API key, pemantauan latensi, mode engine
-│   │   ├── routes_stream.py      # Aliran video MJPEG
-│   │   └── websocket.py          # Telemetri real-time /ws
-│   ├── generate_audio.py         # Pembangkit berkas MP3 panduan suara (gTTS)
-│   ├── requirements.txt          # Dependensi Python library
-│   ├── requirements-dev.txt      # + pytest, websockets & ruff, untuk pengembangan
-│   ├── lock-excludes.txt         # Paket yang dikecualikan saat mengunci (opencv-python GUI)
-│   ├── requirements.lock         # Versi terkunci (server), dibuat dengan uv
-│   ├── requirements-dev.lock     # Versi terkunci (server + tes)
-│   ├── .env                      # File variabel lingkungan lokal
-│   ├── .env.example              # Contoh variabel lingkungan
-│   ├── storage.py                # Menyiapkan DATA_DIR & memindahkan data dari tata letak lama
-│   ├── logging_setup.py          # Log konsol + berkas berotasi di DATA_DIR/logs
-│   ├── yolo26s-pose.pt           # Satu-satunya bobot model (diabaikan git; diunduh otomatis bila hilang)
-│   └── audio/                    # File suara instruksi K3 (MP3, aset rilis)
-│
-├── data/                         # DATA_DIR bawaan (diabaikan git; bisa dipindah lewat .env)
-│   ├── camera_state.json         # Kamera & mode terakhir yang dipilih operator
-│   ├── runtime_settings.json     # Item APD yang diwajibkan
-│   ├── logs/safeguard.log        # Log aplikasi & uvicorn (berotasi 5 MB x 5)
-│   └── reports/
-│       ├── audit.db              # Database SQLite3 riwayat pemeriksaan
-│       └── snapshots/            # Arsip bukti foto pekerja JPEG
-│
-├── scripts/check.py              # Pemeriksaan sebelum commit, sama dengan CI: ruff + pytest
-├── tools/eval_vlm.py             # Evaluasi akurasi & latensi VLM pada foto berlabel (hasil ke DATA_DIR/eval)
-├── .github/workflows/ci.yml      # CI: ruff + pytest di Linux & Windows dari versi terkunci
-├── deploy/safeguard.service      # Unit systemd (Linux): menyala saat boot, bangkit ulang bila mati
-│
-├── tests/                        # pytest: gerbang, failover VLM, kamera, migrasi DB & data
-│   └── conftest.py               # Isolasi: DATA_DIR sementara, tanpa Gemini, tanpa IoT
-│
-├── web/                          # UI baru (T33): Svelte 5 + TypeScript + Vite, halaman utama "/"
-│   ├── src/lib/api/              # Tipe data backend, klien REST & WebSocket (+ tes vitest)
-│   ├── src/lib/stores/           # Store reaktif telemetri (Svelte 5 runes)
-│   └── dist/                     # Hasil build, SENGAJA dicommit (gerbang tanpa Node.js)
-│
-├── frontend/
-│   ├── index.html                # Tampilan utama Dashboard (Single Page App 3-Tab)
-│   ├── css/
-│   │   └── style.css             # Desain styling Dark Navy Slate Industrial K3
-│   └── js/
-│       ├── app.js                # Pengendali utama frontend, tab switcher, dan audio toggle
-│       ├── apd_card.js           # Pengendali kartu panduan, stepper 3-tahap, dan checklist
-│       ├── hud_overlay.js        # Canvas overlay 60 FPS untuk koridor dan jejak kaki
-│       └── websocket.js          # Klien WebSocket telemetri real-time (<10 ms)
-│
-├── iot/
-│   ├── esp32_gate_controller/
-│   │   └── esp32_gate_controller.ino  # Firmware Arduino/C++ ESP32 USB & Wi-Fi
-│   ├── arduino_gate_controller/
-│   │   └── arduino_gate_controller.ino # Firmware alternatif Arduino Uno/Nano
-│   ├── test_serial_lights.py     # Uji manual perintah lampu lewat serial
-│   └── wokwi_simulation/
-│       ├── diagram.json          # Rangkaian diagram sirkuit Wokwi
-│       ├── sketch.ino            # Kode simulasi Wokwi
-│       └── wokwi.toml            # Konfigurasi simulator Wokwi
-│
-├── IOT_HARDWARE_SPEC.md          # Spesifikasi teknis perangkat keras & wiring ESP32
-├── start_system.bat              # Skrip 1-klik untuk menjalankan sistem di Windows
-├── start_system.sh               # Padanannya untuk Linux/macOS
-├── ruff.toml                     # Aturan linter
-├── AGENTS.md                     # Aturan kerja agen AI (Claude, Gemini/Antigravity); CLAUDE.md mengimpornya
-├── docs/RENCANA.md               # Rencana bersama: antrean task, status, keputusan pengguna
-└── README.md                     # Dokumentasi komprehensif proyek
+Kamera → YOLO26 pose (tubuh utuh?) → VLM menilai APD → lampu · suara · audit
 ```
 
----
+## Mengapa
 
-## ⚠️ Batasan yang Diketahui
+- **Pemeriksaan konsisten tanpa petugas di setiap gerbang.** Pekerja yang APD-nya
+  kurang ditolak (lampu merah) disertai suara yang menyebut item yang kurang.
+- **Tetap berjalan saat internet putus.** VLM utama di cloud (bawaan Gemini),
+  cadangan VLM lokal (Ollama `qwen2.5vl:7b`), dan peralihannya otomatis. Bila
+  keduanya gagal, pekerja diminta menunggu, bukan ditolak.
+- **Jejak audit K3.** Setiap keputusan tersimpan beserta foto bukti dan bisa
+  diekspor ke CSV. Masa simpan diatur (foto 30 hari, audit 1 tahun).
 
-Bagian ini sengaja dicantumkan agar klaim sistem dapat dipertanggungjawabkan.
+APD yang diperiksa (bisa diatur di dashboard): helm, rompi hi-vis, celana
+panjang, sepatu tertutup.
 
-* **Cadangan lokal butuh GPU yang cukup.** `qwen2.5vl:7b` ditahan di GPU sejak startup agar peralihan instan; bersama YOLO puncaknya ~7,6 GB dari 8 GB pada RTX 4060 Laptop, dan median ~7,9 dtk per pekerja (lebih lambat dari Gemini ~1,5 dtk). Ollama sesekali crash pada gambar tertentu (ollama/ollama#14170); inspeksi itu jatuh ke jalur gangguan dan diulang.
-* **Anti-spoofing bergantung pada VLM.** Penolakan foto di layar ponsel atau cetakan kertas ditegakkan lewat instruksi prompt, jadi ketangguhannya bergantung pada model yang sedang memutuskan (utama atau cadangan) dan belum dievaluasi terpisah.
-* **Tanpa autentikasi secara bawaan.** Endpoint yang mengubah state dilindungi hanya jika `ADMIN_TOKEN` diisi pada `.env`. Tanpa itu, siapa pun yang dapat menjangkau host ini di jaringan bisa mengganti API key atau menyalakan lampu gerbang.
-* **Data pribadi pada snapshot.** `DATA_DIR/reports/snapshots/` menyimpan potongan foto wajah pekerja tanpa batas waktu, dan `audit.db` menyimpan riwayat inspeksinya. Perlakukan sebagai data pribadi: batasi akses direktori tersebut dan tetapkan kebijakan retensi sebelum dipakai di lapangan.
-* **Nama kamera hanya di Windows dan Linux.** Windows membaca nama lewat DirectShow (`pygrabber`), Linux dari `/sys/class/video4linux` (node sekunder sebuah kamera USB diberi akhiran `(node N)`). Di macOS daftar tetap berfungsi, tetapi hanya menampilkan label generik `Kamera 0`, `Kamera 1`, dan seterusnya.
-* **Resolusi rendah menurunkan ketelitian VLM.** Mode dipilih dengan prioritas kelancaran, sehingga potongan gambar yang dikirim ke Gemini bisa lebih kecil dari batas 640 px. Dashboard menampilkan peringatan saat ini terjadi. Untuk mengutamakan ketelitian, set `CAMERA_AUTO_MODE=false` lalu tentukan `FRAME_WIDTH`/`FRAME_HEIGHT` sendiri di `.env`.
-* **Pemindaian kamera menghentikan video sementara.** Kamera yang sedang aktif terkunci oleh aliran video, jadi untuk mengukurnya sistem melepas perangkat itu lebih dulu. Selama proses (~15–25 detik per kamera) dashboard menampilkan layar tunggu. Lakukan pemindaian sebelum demo dimulai, bukan di tengahnya.
-* **Satu subjek per inspeksi.** Koridor virtual dirancang untuk satu orang di tengah frame; beberapa orang sekaligus dalam koridor tidak ditangani secara eksplisit.
+## Mulai cepat
 
----
+Butuh Python 3.12, [uv](https://docs.astral.sh/uv/), dan GPU NVIDIA (CUDA).
+Jalankan dari akar repo (Windows):
 
-## 🚀 Panduan Menjalankan Sistem
-
-### 1. Prasyarat Lingkungan
-Python **3.12** dengan dependensi yang versinya dikunci di `backend/requirements.lock` (server) dan `backend/requirements-dev.lock` (server + pytest). Dibuat sekali dengan [uv](https://docs.astral.sh/uv/), dari akar repo:
 ```powershell
 uv venv --python 3.12 "$env:USERPROFILE\.venvs\apd_py312"
-uv pip sync --python "$env:USERPROFILE\.venvs\apd_py312\Scripts\python.exe" --torch-backend cu132 backend\requirements-dev.lock
-```
-`--torch-backend cu132` wajib: torch versi CUDA hanya ada di index PyTorch, sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi **sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, alih-alih diam-diam memasang torch versi CPU.
-
-Di Linux perintahnya sama, dengan jalur `~/.venvs/apd_py312/bin/python`. Suara butuh pustaka sistem, karena SDL di dalam pygame memuat driver audio dengan nama standar dan tidak memakai salinan yang dibawa wheel-nya:
-```bash
-# Debian 13 / Ubuntu 24.04+ / Kali
-sudo apt install libglib2.0-0t64 libpulse0 libasound2t64
-# Ubuntu 22.04 dan yang lebih lama
-sudo apt install libglib2.0-0 libpulse0 libasound2
-```
-`libglib2.0` wajib untuk modul mixer. `libpulse0` dipakai bila ada server PulseAudio/PipeWire (desktop, WSLg), `libasound2` untuk ALSA langsung di mesin gerbang tanpa server suara. Tanpa paket-paket ini sistem tetap berjalan, hanya tanpa suara (peringatan di log). OpenCV memakai varian `opencv-python-headless`, jadi tidak butuh `libGL`.
-
-`start_system.bat` memakai environment ini secara otomatis (lokasi bisa diganti lewat variabel `SAFEGUARD_VENV`).
-
-Memperbarui versi yang dikunci: ubah `requirements.txt` / `requirements-dev.txt`, hapus berkas `.lock` lama, lalu
-```powershell
-cd backend
-uv pip compile requirements.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url --excludes lock-excludes.txt -o requirements.lock
-uv pip compile requirements-dev.txt --universal --python-version 3.12 --torch-backend cu132 --emit-index-url --excludes lock-excludes.txt -o requirements-dev.lock
-```
-Berkas `.lock` lama harus dihapus dulu karena uv mempertahankan versi yang sudah tercatat di dalamnya. Jangan menaruh `--extra-index-url` PyTorch di `requirements.txt`: index itu juga memuat salinan lama `urllib3`, `certifi`, `requests`, dan lain-lain, yang lalu ikut terpilih. `--excludes lock-excludes.txt` juga wajib: Ultralytics menuntut `opencv-python` (varian GUI), yang bila ikut terpasang menimpa folder `cv2` milik varian headless.
-
-### 2. Menjalankan Server Backend
-Dari akar repositori, jalankan paket `backend`:
-```powershell
-python -m backend
-```
-*(Atau Anda cukup menjalankan berkas `start_system.bat` di Windows, atau `./start_system.sh` di Linux/macOS)*
-
-Dari PowerShell (termasuk terminal bawaan VS Code), tulis `.\start_system.bat`. PowerShell tidak menjalankan skrip di folder aktif tanpa awalan `.\`. Hentikan server dengan `Ctrl+C` di jendela terminal tempat server berjalan; cmd lalu bertanya *Terminate batch job (Y/N)?*, jawab `Y`. `Ctrl+C` tidak sampai ke program bila server dijalankan dari panel **Output** VS Code; karena itu proyek ini menyetel `code-runner.runInTerminal` agar tombol Run Code memakai tab **Terminal**.
-
-`backend/` adalah paket Python dengan impor relatif, sehingga harus dijalankan sebagai modul dari akar repo. Menjalankan berkas di dalam `backend/` secara langsung (misalnya `python backend/app.py`) tidak didukung. Jalur `.env`, bobot model, dan audio diselesaikan relatif terhadap direktori `backend/`, bukan direktori kerja terminal.
-
-**Data runtime terpisah dari kode.** Audit, foto bukti, pilihan kamera, dan item APD aktif disimpan di `DATA_DIR`. Bawaannya folder `data/` di akar repo. Untuk produksi, isi `DATA_DIR` di `.env` dengan jalur absolut di luar repo, misalnya `C:\ProgramData\DEPRO`, supaya deploy ulang tidak menyentuh data. Data lama yang masih berada di `backend/` dipindah otomatis saat server pertama kali dijalankan; berkas yang bentrok dengan isi tujuan tidak ditimpa, melainkan dilaporkan di log.
-
-Di Linux, `start_system.sh` memakai `~/.venvs/apd_py312` (bisa diganti lewat `SAFEGUARD_VENV`) dan dihentikan dengan `Ctrl+C`. Untuk menyala otomatis saat boot, pasang `deploy/safeguard.service`; petunjuknya ada di dalam berkas itu. Server berhenti bersih saat menerima `SIGTERM` dari systemd.
-
-Sebelum commit, jalankan `python scripts/check.py` (ruff + seluruh pytest, sama dengan CI; bila Node.js terpasang juga cek tipe, tes, dan build UI baru).
-
-**Mengembangkan UI baru (`web/`)** butuh Node.js 24 di mesin pengembang saja; mesin gerbang tidak, karena hasil build `web/dist` ikut dicommit. Sekali: `cd web && npm ci`. Lalu `npm run dev` (Vite di http://localhost:5173/, API & WebSocket diteruskan ke backend di port 8000), `npm run check` (svelte-check + tsc), `npm test` (vitest). Setelah mengubah sumber, jalankan `npm run build` dan commit `web/dist`; CI menolak dist yang tidak sesuai sumbernya.
-
-Perintah bantu lain juga dijalankan dari akar repo: `python -m backend.generate_audio` untuk membangkitkan MP3, dan `python -m pytest` untuk menjalankan seluruh tes di `tests/` (environment dari `backend/requirements-dev.lock`, lihat bagian Prasyarat Lingkungan). Tes memakai `DATA_DIR` sementara, tidak memanggil Gemini, dan tidak membuka port IoT, jadi aman dijalankan di mesin produksi.
-
-Server akan otomatis memuat model YOLO26s-Pose di GPU CUDA dan melayani aplikasi di `http://0.0.0.0:8000`.
-
-### 3. Membuka Dashboard Web
-Buka browser (Google Chrome, Microsoft Edge, atau Brave) dan navigasikan ke:
-```
-http://localhost:8000
+uv pip sync --python "$env:USERPROFILE\.venvs\apd_py312\Scripts\python.exe" --torch-backend cu132 backend\requirements.lock
+copy backend\.env.example backend\.env
+python -m backend                         # atau .\start_system.bat
 ```
 
-Dashboard memakai UI baru (Svelte + TypeScript). Tampilan lama tetap utuh di `http://localhost:8000/legacy/` sebagai cadangan; selama tab Laporan dan Pengaturan belum dipindahkan ke UI baru, keduanya dibuka lewat tampilan lama. Alamat lama `/app/` dialihkan ke `/`.
+Sebelum menjalankan, isi di `backend/.env`:
 
-Saat pertama dibuka, dashboard menampilkan dialog **Pilih Sumber Kamera**. Video belum tersambung sampai Anda memilih salah satu perangkat.
+- **API key VLM utama**, dan bila perlu VLM cadangan (`VLM_BACKUP_*`, mis. Ollama lokal).
+- **`ADMIN_TOKEN`**, atau `HOST=127.0.0.1` untuk uji di satu komputer. Dengan
+  `HOST=0.0.0.0` tanpa token, server sengaja menolak menyala.
 
-Untuk menghentikan server, tekan **`Ctrl + C`** sekali di jendela terminal. Sistem melepaskan kamera dan menutup seluruh koneksi dalam ~1 detik, termasuk aliran video dan WebSocket yang masih terbuka di browser.
+Buka <http://localhost:8000>, lalu pilih kamera. Hentikan server dengan `Ctrl+C`.
 
----
+Panduan lengkap untuk Linux, VLM lokal, audio, ESP32, dan pembaruan dependensi
+ada di **[docs/INSTALASI.md](docs/INSTALASI.md)**.
 
-## 🔌 Uji Coba Hardware ESP32 (Demo via Kabel USB)
+## Dokumentasi
 
-1. Hubungkan board **ESP32 DevKit V1** ke laptop menggunakan kabel data USB.
-2. Buka **Device Manager** di Windows, periksa nomor port COM yang terdeteksi (misal: `COM3`).
-3. Flash firmware dari `iot/esp32_gate_controller/esp32_gate_controller.ino` melalui Arduino IDE.
-4. Pada Dashboard Web di menu **Pengaturan**, periksa bagian **Lampu Indikator Fisik Gerbang (ESP32)** dan klik tombol **🟢 Tes Hijau** atau **🔴 Tes Merah** untuk menguji aktuasi relay/LED secara langsung.
+| Dokumen | Isi |
+| :-- | :-- |
+| [docs/INSTALASI.md](docs/INSTALASI.md) | Prasyarat, menjalankan server, UI `web/`, ESP32 |
+| [docs/ARSITEKTUR.md](docs/ARSITEKTUR.md) | Teknologi, alur keputusan, aturan APD, struktur folder, batasan |
+| [docs/RENCANA.md](docs/RENCANA.md) | Status, antrean task, dan keputusan produk |
+| [IOT_HARDWARE_SPEC.md](IOT_HARDWARE_SPEC.md) | Spesifikasi perangkat keras & wiring ESP32 |
+| [AGENTS.md](AGENTS.md) | Aturan kerja & kontribusi (manusia dan agen AI) |
+
+## Kontribusi
+
+Sebelum commit, jalankan `python scripts/check.py` (ruff, pytest, serta cek tipe,
+vitest, dan build UI). Pemeriksaan yang sama dijalankan CI di Linux dan Windows.
+Aturan kode (tanpa hard code, tes wajib, daftar periksa) ada di
+[AGENTS.md §4](AGENTS.md).
+
+## Status & pengelola
+
+Masih tahap **demo/prototipe**, belum untuk produksi. Contohnya, lisensi
+Ultralytics YOLO (AGPL) masih harus ditinjau sebelum dipakai komersial.
+Dikelola oleh Muhamad Zen Fikri. Pertanyaan dan laporan masalah bisa diajukan
+lewat *Issues* repositori ini.

@@ -215,7 +215,7 @@ risiko (§2.2a), bukan dirombak sekaligus di luar task.
 
 ## 6. Perintah
 
-Environment Python (sekali): lihat README "Prasyarat Lingkungan"
+Environment Python (sekali): lihat [docs/INSTALASI.md](docs/INSTALASI.md) §1
 (`uv venv` + `uv pip sync --torch-backend cu132 backend/requirements-dev.lock`).
 
 ```bash
