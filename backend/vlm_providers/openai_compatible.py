@@ -74,12 +74,39 @@ class OpenAICompatibleProvider(VLMProvider):
             # pekerja pertama setelah gerbang sepi menunggu ~38 dtk (terukur T22)
             # dan ditolak karena timeout. keep_alive=-1 pada API asli Ollama
             # memuat model sekarang dan menahannya selama server Ollama hidup.
-            root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
-            response = self._client.post(f"{root}/api/generate", json={"model": self.model, "keep_alive": -1},
+            response = self._client.post(f"{self._ollama_root()}/api/generate",
+                                         json={"model": self.model, "keep_alive": -1},
                                          timeout=self.warmup_timeout)
             if response.status_code >= 400:
                 raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
         self.ping()
+
+    def _ollama_root(self) -> str:
+        return self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+
+    def gpu_residency(self):
+        """Porsi model di VRAM menurut `/api/ps` Ollama; 0 bila model tidak dimuat."""
+        if self.name != "ollama":
+            return None
+        response = self._client.get(f"{self._ollama_root()}/api/ps", timeout=self.warmup_timeout)
+        response.raise_for_status()
+        names = {self.model, self.model if ":" in self.model else f"{self.model}:latest"}
+        for m in response.json().get("models", []):
+            if m.get("name") in names or m.get("model") in names:
+                size = m.get("size") or 0
+                return min(1.0, (m.get("size_vram") or 0) / size) if size else 0.0
+        return 0.0
+
+    def reload(self):
+        """Bongkar lalu muat lagi; Ollama mengulang pencarian GPU saat memuat."""
+        if self.name != "ollama":
+            return
+        root = self._ollama_root()
+        for keep_alive in (0, -1):
+            response = self._client.post(f"{root}/api/generate", json={"model": self.model, "keep_alive": keep_alive},
+                                         timeout=self.warmup_timeout)
+            if response.status_code >= 400:
+                raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
 
     def ping(self) -> str:
         return self._chat({

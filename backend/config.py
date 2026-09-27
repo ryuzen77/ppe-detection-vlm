@@ -232,6 +232,12 @@ class Config:
     # Bila utama dan cadangan sama-sama gagal, pekerja TIDAK diputuskan: diminta
     # menunggu, lalu diperiksa ulang otomatis setelah jeda ini selama masih di jalur.
     VLM_SYSTEM_RETRY_SECONDS: float = float(_env("VLM_SYSTEM_RETRY_SECONDS", "15"))
+    # Penjaga model lokal (T38): model dianggap sehat bila porsi GPU >= ini;
+    # diperiksa berkala dan setelah VLM lokal gagal, dimuat ulang bila kurang.
+    LOCAL_MIN_GPU_RATIO: float = 0.99
+    LOCAL_GPU_CHECK_SECONDS: float = float(_env("LOCAL_GPU_CHECK_SECONDS", "60"))
+    # Lama menunggu jeda antar-inspeksi sebelum memuat ulang (jangan putus pekerja)
+    LOCAL_GPU_REPAIR_WAIT_SECONDS: float = 30.0
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
     VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
     # Jeda minimum antar panggilan ke VLM cloud untuk menjaga kuota (free tier
