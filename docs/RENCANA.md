@@ -6,12 +6,21 @@ pesan commit (`git log`).
 
 Terakhir diperbarui: 25-09-2026.
 
-## Lanjut dari sini (jeda 25-09-2026)
+## Lanjut dari sini (27-09-2026)
 
-- **Menunggu pengguna:** uji nyata T20b + T20b-UI (restart server, tombol kunci di bilah atas, perintah tanpa token → dialog, isi token → berhasil; opsional akses dari perangkat lain & uji tolak menyala).
-- **Menunggu Gemini:** `git checkout --detach master` di worktree-nya agar branch `gemini/t20b-akses` bisa dihapus. Belum ada task baru untuk Gemini.
-- **Usulan putaran berikutnya (paralel, area tidak beririsan):** Claude → T33 langkah 3 (tab Pengaturan + Diagnostik, lalu hapus UI lama; kolom token pindah ke sana). Gemini → bagian backend T28 (penyedia VLM dari dashboard), **kontrak API ditulis & disetujui dulu** di berkas ini sebelum kode.
-- Praktik tinjauan: laporan agen selalu dicocokkan ke isi commit (`git log`/diff) dan diuji nyata sebelum digabung; beberapa laporan sebelumnya tidak sesuai isi branch.
+- **Pembagian putaran ini (keputusan pengguna):** Claude → **backend** (perbaikan antrean T36, lalu ketahanan T37).
+  Gemini → **frontend** (T33 langkah 3). Ini kebalikan pembagian bawaan §2.2, khusus putaran ini.
+- **Hasil T35 Uji 1 (84 foto, Ollama `qwen2.5vl:7b`, 100% GPU):** prompt produksi (P0) 7,8 dtk; jawaban
+  ringkas (P1) **3,6 dtk**. Kesalahan utama = **baju kuning dikira rompi** → aturan rompi ketat (rompi = tanpa
+  lengan, di atas baju, pita reflektif; baju kuning ≠ rompi). **P1 + rompi ketat: 0/58 APD kurang lolos**,
+  2/26 APD lengkap ditolak (`apd_10` helm di atas rambut lebat — ditunda; `apd_4` sepatu). Ukuran gambar dari
+  sisi kita tidak memengaruhi kecepatan (Ollama mengubah ukuran sendiri; 448 px merusak akurasi) → tetap
+  640 px (896 px aman untuk kamera 4 MP). Hasil di `data/eval/`, alat `tools/bench_vlm.py`.
+- **Analisa antrean (100 orang, satu jalur):** penentu terbesar kini **waktu keluar** (suara hasil menunggu
+  "sedang menganalisa" 4,9 dtk; jeda jalur kosong 3 dtk) dan **posisi**, bukan VLM. Perkiraan: prompt baru
+  ~46 mnt → + suara/jeda ~30 mnt → + zona titik berdiri ~17 mnt (lokal). Dibuktikan lewat Uji 3.
+- Praktik tinjauan: laporan agen selalu dicocokkan ke isi commit (`git log`/diff) dan diuji nyata sebelum
+  digabung.
 
 ## Papan tugas
 
@@ -21,19 +30,44 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T35 — uji kecepatan gerbang (Uji 1: prompt & gambar VLM lokal) | Claude (ditetapkan pengguna) | `claude/t35-uji-kecepatan` | dikerjakan | `tools/bench_vlm.py` (baru), `data/eval/` (hasil) | Tanpa mengubah kode gerbang. 84 foto T26 (`picture_test/`, hanya ke Ollama lokal, izin pengguna 27-09). Varian prompt P0 (sekarang) / P1 (output ringkas) / P2 (input+output ringkas), item rokok ikut di P1/P2 untuk mengukur biayanya; varian gambar maks 448/640/896 px + kontrol frame penuh. Dicatat: token & waktu baca input vs tulis jawaban (Ollama), akurasi, APD kurang yang lolos. Uji ulang setelah kamera 4 MP tersedia |
-| T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Kontrak API ditulis di sini dulu sebelum kode; UI-nya ikut T33 langkah 3 |
+| T35 Uji 1 — uji kecepatan VLM lokal (prompt & gambar) | Claude | `claude/t35-uji-kecepatan` | tinjau | `tools/bench_vlm.py` (baru) | Alat uji saja, kode gerbang tidak diubah. Hasil ringkas di "Lanjut dari sini". Gemini: tinjau diff `tools/` + jalankan `python tools/bench_vlm.py picture_test --prompts P1 --sizes 640 --vest-strict --limit 2` (butuh Ollama) |
+| T36a — prompt ringkas + aturan rompi ketat masuk gerbang | Claude | `claude/t36a-prompt` | antre | `backend/ppe_rules.py`, `backend/messages.py`, `backend/vlm_analyzer.py`, `tests/` | Bentuk jawaban VLM ringkas (nilai per item + `orang_nyata`), anti-spoof tetap dihormati, aturan rompi ketat di katalog. Berlaku untuk VLM utama & cadangan |
+| T36b — suara lebih cepat | Claude | — | antre | `backend/audio_engine.py`, `backend/generate_audio.py`, `backend/audio/*.mp3`, `backend/config.py` (tambah) | Pesan hasil dipersingkat; suara hasil memotong "sedang menganalisa" |
+| T36c — jeda jalur kosong + kunci ID tracker | Claude | — | antre | `backend/state_manager.py`, `backend/config.py` (tambah), `tests/` | Jeda 3 → ~1,5 dtk; track yang baru diputuskan tidak diperiksa ulang (menutup pemeriksaan ganda Track #32) |
+| T36d — zona titik berdiri | Claude | — | antre | `backend/state_manager.py`, `backend/detector.py`, `backend/config.py`, `backend/runtime_settings.py`, `tests/` | Zona dari posisi pergelangan kaki (kamera di atas gerbang menghadap pekerja); antrean di belakang zona diabaikan. **Kontrak API** pengaturan zona ditulis di sini sebelum UI-nya dibuat Gemini |
+| T33 langkah 3 — tab Pengaturan + Diagnostik | Gemini (keputusan pengguna 27-09) | `gemini/t33-pengaturan` | antre | `web/src/pages/`, `web/src/components/settings/` (baru), `web/src/lib/` (tambah), `web/src/lib/messages.ts` (tambah) | Kamera, APD wajib (checkbox), lampu (tes), VLM (penyedia & model — area admin), Diagnostik (uji latensi VLM, tes lampu); dialog token pindah ke sini; tampilkan **sejak kapan server terputus**; rapikan tombol Monitoring yang terpotong di ~360 px. Memakai endpoint yang **sudah ada**. Setelah selesai & digabung: hapus UI lama (`frontend/`, `/legacy/`) sebagai langkah terpisah |
+| T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
 
 ## Antrean berikutnya (urut)
 
 | # | Task | Isi |
 | :-- | :-- | :-- |
-| 1 | **T33 langkah 3 — tab Pengaturan** | Kamera, aturan APD wajib (checkbox), lampu gerbang (IoT), VLM (penyedia & model tampil di sini — area admin), bagian **Diagnostik** (uji latensi VLM, tes lampu). Setelahnya **UI lama (`frontend/`) dihapus** beserta `/legacy/`. |
-| 2 | T28 — penyedia VLM dipilih dari dashboard | Utama & cadangan (penyedia, model, base URL, API key) dari Pengaturan, tersimpan persisten (key di penyimpanan rahasia), tanpa restart, uji koneksi per penyedia. Menyerap T17. |
-| 3 | T30 — autentikasi Pengaturan | Login untuk Pengaturan & semua endpoint yang mengubah state; wajib di produksi. Rincian didiskusikan saat mulai. |
-| 4 | T26 sisa — evaluasi Gemini | 84 foto berlabel lewat `tools/eval_vlm.py` saat layanan Google normal (24-09 sedang 503/lambat). |
-| 5 | T29 — operasi otomatis + Docker | Produksi Linux lewat Docker Compose (kamera, GPU, suara, serial diteruskan; `restart: unless-stopped`). |
-| 6 | T18 XSS (UI lama; gugur bila UI lama sudah dihapus), T25 sisa latensi | T20 kini hanya retensi; pengerasan keamanan jadi T20b (sebelum T30) |
+| 1 | **T36 a→d — perbaikan antrean** (Claude) | Lihat papan tugas; satu sub-langkah per giliran, masing-masing dites & ditinjau |
+| 2 | **T35 Uji 2 & 3** | Uji 2: beban GPU saat gerbang + kamera berjalan (`ollama ps`, `nvidia-smi`). Uji 3: 20 lintasan/mode dengan protokol "langsung jalan", diukur dari log; hitung ulang skenario 100 orang |
+| 3 | **T37 — ketahanan sistem utama** (Claude) | SQLite `synchronous=FULL` (keputusan pengguna 27-09); foto bukti ditulis atomik (berkas sementara → ganti nama); log lama server terputus. Server menyala ulang otomatis ikut T29 |
+| 4 | T38 — crash Ollama pada gambar tertentu | `apd_19`, `no_23` selalu 500; kadang runner dimuat ulang sebagian ke CPU (`GPU discovery watchdog timed out`) → tiap inspeksi ~31 dtk sampai Ollama dimuat ulang. Selidiki versi Ollama & pemulihan otomatis (cek porsi GPU setelah galat) |
+| 5 | T30 — autentikasi Pengaturan | Login untuk Pengaturan & semua endpoint yang mengubah state; wajib di produksi |
+| 6 | T28 — penyedia VLM dipilih dari dashboard | Utama & cadangan dari Pengaturan, persisten, tanpa restart, uji koneksi per penyedia. Menyerap T17 |
+| 7 | T29 — operasi otomatis + Docker | Produksi Linux lewat Docker Compose; `restart: unless-stopped` |
+| 8 | T26 sisa — evaluasi Gemini; T25 sisa latensi | |
+| — | **Ditunda** | Aturan helm untuk rambut lebat (`apd_10`); akurasi sepatu tertutup (`apd_4`) |
+
+### Rencana (belum dikerjakan) — setelah sistem utama lolos semua tes
+
+- **Fitur larangan rokok:** item jenis *larangan* (terdeteksi = melanggar) di katalog; hanya yang terlihat
+  kamera. Detail (akibat di gerbang, sikap saat VLM ragu, crop detail mulut/tangan dalam satu panggilan
+  lewat mosaik) diputuskan sebelum dikerjakan. Butuh foto uji baru (rokok, pengecoh pulpen/sedotan).
+- **Set uji tambahan:** baju kuning/oranye tanpa rompi, rompi asli di atas baju kuning, rompi tanpa pita
+  reflektif, kaos bertulisan (termasuk "APD LENGKAP" — uji prompt injection lewat tulisan), foto kamera 4 MP;
+  label per item.
+- **IoT & palang boom** (tahap setelah fitur utama berjalan): ESP, relay, LED merah/hijau/kuning, sirine bila
+  perlu; sensor setelah palang memastikan pekerja lewat sebelum palang menutup. Tahap 1: **berurutan penuh**
+  (periksa → lampu + suara + palang buka → sensor lewat → palang tutup → pekerja berikutnya). Tahap 2:
+  pekerja berikutnya diperiksa lebih awal, pengumuman ditahan sampai palang SIAP. Heartbeat server → ESP,
+  tanda "sistem tidak aktif" (kuning berkedip), batas waktu bila lolos tapi tidak lewat, catat tailgating.
+  **Belum diputuskan:** palang saat listrik padam terbuka atau tertutup.
+- **Listrik padam:** UPS untuk PC, kamera, jaringan + shutdown rapi otomatis; BIOS "power on after AC loss";
+  SOP pemeriksaan manual oleh petugas.
 
 ## Selesai (ringkas)
 
@@ -80,6 +114,14 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - Pembersihan **otomatis** saat server menyala dan sekali sehari di latar (tanpa cron OS), hasilnya dicatat di log. Tombol manual "Hapus data tua" menyusul di Pengaturan setelah login admin (T30).
 - Log sistem tidak ikut; cukup rotasi bawaan (`LOG_MAX_BYTES` 5 MB × `LOG_BACKUP_COUNT` 5).
 - Larangan "jangan hapus `data/`" di AGENTS.md berlaku untuk agen, bukan untuk fitur retensi.
+
+**Kecepatan & antrean (27-09-2026)**
+- VLM menjawab ringkas (nilai per item) — deskripsi bebas tidak dipakai keputusan dan memperlambat ~2×.
+- Aturan rompi: bentuk (tanpa lengan, di atas baju, pita reflektif) dinilai terpisah dari warna; baju
+  kuning bukan rompi.
+- Kamera dipasang di atas gerbang/palang, menghadap pekerja yang datang; titik berdiri 2–3 m sebelum palang.
+- Audit SQLite `synchronous=FULL`: baris audit tidak boleh hilang walau listrik padam mendadak.
+- IoT/palang baru dikerjakan setelah sistem utama lolos semua tes.
 
 **Pengaman akses jaringan (T20b, 25-09-2026)**
 - `HOST` bukan localhost (`127.0.0.1`, `::1`, `localhost`) + `ADMIN_TOKEN` kosong → server **menolak menyala** dengan pesan jelas di log. Pengecualian demo hanya bila diizinkan eksplisit lewat `.env` (mis. `ALLOW_INSECURE_LAN=true`), disertai peringatan setiap start.
