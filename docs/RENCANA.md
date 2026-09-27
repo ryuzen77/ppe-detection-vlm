@@ -30,8 +30,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T35 Uji 1 — uji kecepatan VLM lokal (prompt & gambar) | Claude | `claude/t35-uji-kecepatan` | tinjau | `tools/bench_vlm.py` (baru) | Alat uji saja, kode gerbang tidak diubah. Hasil ringkas di "Lanjut dari sini". Gemini: tinjau diff `tools/` + jalankan `python tools/bench_vlm.py picture_test --prompts P1 --sizes 640 --vest-strict --limit 2` (butuh Ollama) |
-| T36a — prompt ringkas + aturan rompi ketat masuk gerbang | Claude | `claude/t36a-prompt` | dikerjakan | `backend/ppe_rules.py`, `backend/messages.py`, `backend/vlm_analyzer.py`, `tests/` | Bentuk jawaban VLM ringkas (nilai per item + `orang_nyata`), anti-spoof tetap dihormati, aturan rompi ketat di katalog. Berlaku untuk VLM utama & cadangan |
 | T36b — suara lebih cepat | Claude | `claude/t36b-suara` (di atas `claude/t36a-prompt`) | dikerjakan | `backend/audio_engine.py`, `backend/generate_audio.py`, `backend/audio/*.mp3`, `backend/config.py` (tambah) | Pesan hasil dipersingkat; suara hasil memotong "sedang menganalisa" |
 | T36c — jeda jalur kosong + kunci ID tracker | Claude | — | antre | `backend/state_manager.py`, `backend/config.py` (tambah), `tests/` | Jeda 3 → ~1,5 dtk; track yang baru diputuskan tidak diperiksa ulang (menutup pemeriksaan ganda Track #32) |
 | T36d — zona titik berdiri | Claude | — | antre | `backend/state_manager.py`, `backend/detector.py`, `backend/config.py`, `backend/runtime_settings.py`, `tests/` | Zona dari posisi pergelangan kaki (kamera di atas gerbang menghadap pekerja); antrean di belakang zona diabaikan. **Kontrak API** pengaturan zona ditulis di sini sebelum UI-nya dibuat Gemini |
@@ -85,6 +83,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T33 langkah 1 | UI baru Svelte 5 + TS di `/`, sistem desain, tab Monitoring, nama DEPRO, hard code dibereskan (`messages.ts`, `settings.ts`, token CSS, `icon_name` di katalog) |
 | T20b | Pengaman akses jaringan (Gemini): server menolak menyala (kode keluar 1) bila `HOST` bukan localhost tanpa `ADMIN_TOKEN`, kecuali `ALLOW_INSECURE_DEMO=true`; isi `POST` maks. 1 MB → 413 (termasuk *chunked*). Ditinjau Claude |
 | T20b-UI | Tombol kunci + dialog token admin di UI baru; 401 membuka dialog; cadangan memori bila penyimpanan browser diblokir. Ditinjau Gemini |
+| T35 Uji 1 | Alat uji kecepatan VLM lokal `tools/bench_vlm.py` (varian prompt/gambar, token & waktu baca vs tulis, porsi GPU, galat server dipisah). Temuan utama: jawaban ringkas 2× lebih cepat; baju kuning dikira rompi; ukuran gambar dari sisi kita tidak memengaruhi kecepatan |
+| T36a | Prompt ringkas + aturan rompi ketat di gerbang: VLM lokal 7,8 → 3,45 dtk, 0/57 APD kurang lolos pada 82 foto; anti-spoof lewat `orang_nyata` |
 | T33 langkah 2 | Tab Laporan di UI baru: 6 statistik (kepatuhan dengan meter), saring status & tanggal, halaman, foto bukti, APD per item, "Dinilai oleh" tanpa nama penyedia, ekspor CSV, muat ulang otomatis. Ditinjau Gemini |
 | T33 perbaikan bilah atas | Bilah atas responsif 360–1440 px tanpa scroll horizontal (chip menyempit → ikon → baris kedua). Ditinjau Gemini |
 

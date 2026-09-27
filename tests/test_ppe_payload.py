@@ -109,3 +109,44 @@ def test_penolakan_anti_spoofing_dikenali_dengan_ejaan_apa_pun(catalog_defaults,
     result = VLMAnalyzer._parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [ppe_rules.SPOOF_MISSING_LABEL]
+
+
+# --- Jawaban ringkas (T36a) -------------------------------------------------------
+
+def _balasan_ringkas(orang_nyata=True):
+    """Bentuk yang kini diminta prompt: nilai per item + tanda orang nyata, tanpa teks bebas."""
+    items = {
+        "helm": {"detected": True},
+        "rompi": {"detected": True, "color": "oranye", "is_valid_color": True},
+        "celana": {"detected": True},
+        "sepatu": {"detected": True, "is_closed_shoes": True},
+    }
+    return {"items": items, ppe_rules.REAL_PERSON_KEY: orang_nyata}
+
+
+def test_jawaban_ringkas_lengkap_lolos(catalog_defaults):
+    result = VLMAnalyzer._parse_vlm_payload(_balasan_ringkas())
+    assert result.is_complete
+    assert result.missing_items == []
+    assert result.items["rompi"].color == "oranye"
+
+
+def test_orang_nyata_false_ditolak_sebagai_spoof(catalog_defaults):
+    result = VLMAnalyzer._parse_vlm_payload(_balasan_ringkas(orang_nyata=False))
+    assert not result.is_complete
+    assert result.missing_items == [ppe_rules.SPOOF_MISSING_LABEL]
+
+
+def test_orang_nyata_tidak_dijawab_tidak_dianggap_spoof(catalog_defaults):
+    # Hanya false eksplisit yang menolak; model yang lupa menulis kunci ini
+    # tetap dinilai dari item-itemnya.
+    data = _balasan_ringkas()
+    del data[ppe_rules.REAL_PERSON_KEY]
+    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+
+
+def test_kunci_tambahan_dari_model_diabaikan(catalog_defaults):
+    data = _balasan_ringkas()
+    data["items"]["helm"]["alasan"] = "helm putih"
+    data["notes"] = "teks bebas"
+    assert VLMAnalyzer._parse_vlm_payload(data).is_complete

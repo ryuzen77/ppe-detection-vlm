@@ -69,17 +69,15 @@ API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
 
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
+# Jawaban ringkas (hanya nilai per item) — lihat ppe_rules.build_json_shape.
 VLM_SYSTEM_PROMPT = (
-    "\nAnda adalah AI Inspektur K3 (Keselamatan dan Kesehatan Kerja) profesional.\n"
-    "Tugas Anda adalah memeriksa kelengkapan Alat Pelindung Diri (APD) pada orang "
-    "dalam gambar yang dikirimkan.\n\n"
-    "Aturan Penilaian APD:\n"
+    "Anda inspektur K3. Nilai APD orang di gambar. "
+    "Jawab HANYA JSON sesuai bentuk di bawah, tanpa teks lain.\n\n"
     "{rules}\n\n"
-    "{completeness_number}. {completeness_rule}\n\n"
-    "Kembalikan hasil dalam format JSON yang valid persis seperti bentuk berikut:\n"
-    "{json_shape}\n"
+    "Bentuk JSON:\n"
+    "{json_shape}"
 )
-VLM_USER_PROMPT = "Periksa kelengkapan APD pekerja pada gambar ini sesuai instruksi K3. Berikan output JSON."
+VLM_USER_PROMPT = "Nilai gambar ini. JSON saja."
 # Panggilan termurah untuk uji latensi & pemanasan
 VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
 

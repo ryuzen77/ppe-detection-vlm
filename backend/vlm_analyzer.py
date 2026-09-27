@@ -89,8 +89,6 @@ def build_system_prompt(items=None) -> str:
     items = items if items is not None else ppe_rules.get_active_items()
     return messages.VLM_SYSTEM_PROMPT.format(
         rules=ppe_rules.build_prompt_rules(items),
-        completeness_number=len(items) + 1,
-        completeness_rule=ppe_rules.build_completeness_rule(items),
         json_shape=ppe_rules.build_json_shape(items),
     )
 
@@ -506,7 +504,9 @@ class VLMAnalyzer:
         # model menulisnya dengan ejaan yang berubah-ubah ("Helm keselamatan" vs
         # "Helm Keselamatan") sehingga pencocokan teks menghasilkan duplikat, dan
         # menyebut item yang sedang dimatikan tidak boleh menolak pekerja.
-        if _is_spoof_rejection(data.get("missing_items")):
+        # Bentuk sekarang: `orang_nyata` = false. Penanda lama di `missing_items`
+        # tetap dihormati (balasan penyedia dengan prompt lama / uji lama).
+        if data.get(ppe_rules.REAL_PERSON_KEY) is False or _is_spoof_rejection(data.get("missing_items")):
             missing = [ppe_rules.SPOOF_MISSING_LABEL] + missing
             is_complete = False
 
