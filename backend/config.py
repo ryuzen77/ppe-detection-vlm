@@ -254,9 +254,9 @@ class Config:
     # 1,5 dtk sejak T36c (sebelumnya 3): jeda ini menahan antrean tiap pekerja,
     # sedangkan orang yang sama yang muncul lagi ditangani ingatan keputusan di bawah.
     STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "1.5"))
-    # Lama keputusan per ID pelacak diingat setelah sesinya berakhir. Orang yang
-    # tertutup/keluar jalur sesaat (ID sama) tidak diperiksa ulang; orang yang
-    # benar-benar pergi lalu kembali mendapat ID baru dan diperiksa lagi (T36c).
+    # Lama keputusan LOLOS per ID pelacak diingat setelah sesinya berakhir: orang
+    # yang lolos lalu keluar jalur sesaat (ID sama) tidak diperiksa ulang. Keputusan
+    # ditolak tidak diingat, jadi pekerja yang memperbaiki APD selalu diperiksa ulang (T36c).
     DECIDED_TRACK_MEMORY_SECONDS: float = float(_env("DECIDED_TRACK_MEMORY_SECONDS", "10"))
     # Maximum history records kept in memory
     MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))

@@ -326,39 +326,53 @@ def _jalur_kosong(gerbang):
     assert _active() is None, "Sesi berakhir setelah jalur kosong"
 
 
-def test_id_yang_baru_diputuskan_tidak_diperiksa_ulang_di_sesi_berikutnya(gerbang, vlm):
-    # Kasus Track #32 (T35): orang yang sama keluar jalur > jeda, lalu muncul lagi
-    # dengan ID sama. Dulu diperiksa ulang (VLM + audit ganda).
-    vlm.reply = _balasan(rompi=True)
+def test_id_yang_baru_lolos_tidak_diperiksa_ulang_di_sesi_berikutnya(gerbang, vlm):
+    # Orang yang lolos keluar jalur > jeda (mis. saat berjalan ke gerbang), lalu
+    # terlihat lagi dengan ID sama: keputusan lolos dipakai, tanpa VLM/audit ganda.
     _analisa_selesai(gerbang)
     panggilan, riwayat, sesi = vlm.calls, len(state_mgr.inspection_history), _active()["session_id"]
     _jalur_kosong(gerbang)
     assert notifier.current_state == "OFF"
 
-    vlm.reply = _balasan()  # seandainya dianalisa ulang, hasilnya akan berbeda
+    vlm.reply = _balasan(rompi=True)  # seandainya dianalisa ulang, hasilnya akan berbeda
     for _ in range(cfg.STABLE_FRAMES_REQUIRED + 3):
         gerbang.update_frame_detections([_det(full_body=True)])
     time.sleep(0.2)
 
     assert _active()["session_id"] != sesi, "Sesi baru dimulai"
     assert _active()["state"] == TrackState.ANALYZED
-    assert _active()["vlm_result"]["is_complete"] is False, "Keputusan lama dipakai"
+    assert _active()["vlm_result"]["is_complete"] is True, "Keputusan lolos dipakai"
     assert vlm.calls == panggilan, "Tanpa panggilan VLM kedua"
     assert len(state_mgr.inspection_history) == riwayat, "Tanpa baris audit ganda"
-    assert notifier.current_state == "RED", "Lampu kembali ke keputusan sebelumnya"
+    assert notifier.current_state == "GREEN", "Lampu kembali ke keputusan sebelumnya"
+
+
+def test_pekerja_ditolak_yang_memperbaiki_apd_diperiksa_ulang_walau_id_sama(gerbang, vlm):
+    # Temuan tinjauan (T36c): ditolak -> mundur selangkah, pakai helm, maju lagi
+    # dengan ID sama. Ia harus dianalisa ulang, bukan ditolak lagi dari ingatan.
+    vlm.reply = _balasan(helm=True)
+    _analisa_selesai(gerbang)
+    assert notifier.current_state == "RED"
+    _jalur_kosong(gerbang)
+
+    vlm.reply = _balasan()  # kini memakai helm
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai(gerbang)
+    assert _active()["vlm_result"]["is_complete"] is True
+    assert len(state_mgr.inspection_history) == riwayat + 1
+    assert notifier.current_state == "GREEN"
 
 
 def test_id_diperiksa_ulang_setelah_ingatan_kedaluwarsa(gerbang, vlm, monkeypatch):
     monkeypatch.setattr(cfg, "DECIDED_TRACK_MEMORY_SECONDS", 0.1)
-    vlm.reply = _balasan(rompi=True)
-    _analisa_selesai(gerbang)
+    _analisa_selesai(gerbang)  # lolos -> diingat
     _jalur_kosong(gerbang)
     time.sleep(0.15)  # ingatan dihitung sejak sesi berakhir; tunggu melewatinya
-    vlm.reply = _balasan()
+    vlm.reply = _balasan(rompi=True)
     riwayat = len(state_mgr.inspection_history)
 
     _analisa_selesai(gerbang)
-    assert _active()["vlm_result"]["is_complete"] is True
+    assert _active()["vlm_result"]["is_complete"] is False
     assert len(state_mgr.inspection_history) == riwayat + 1
 
 

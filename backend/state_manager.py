@@ -37,10 +37,13 @@ class GateSession:
     (panggilan VLM dan baris audit ganda, dan keputusan bisa berubah). Sesi baru
     dimulai hanya setelah jalur inspeksi kosong selama STANDBY_RESET_DELAY_SECONDS.
 
-    Sejak T36c jeda itu dipersingkat, dan sebagai gantinya keputusan per ID
-    pelacak diingat DECIDED_TRACK_MEMORY_SECONDS: bila sesi baru dimulai untuk
-    ID yang baru saja diputuskan (orang yang sama keluar jalur sesaat), keputusan
-    lama dipakai ulang tanpa VLM, audit, maupun suara ulang (kasus Track #32, T35).
+    Sejak T36c jeda itu dipersingkat, dan sebagai gantinya keputusan LOLOS per ID
+    pelacak diingat DECIDED_TRACK_MEMORY_SECONDS: bila sesi baru dimulai untuk ID
+    yang baru saja lolos (mis. keluar jalur sesaat saat berjalan ke gerbang),
+    keputusan itu dipakai ulang tanpa VLM, audit, maupun suara ulang.
+    Keputusan DITOLAK sengaja tidak diingat: pekerja yang mundur selangkah,
+    memperbaiki APD, lalu maju lagi biasanya masih ber-ID sama dan harus
+    diperiksa ulang, bukan ditolak lagi (temuan tinjauan Gemini, T36c).
     """
 
     _counter = 0
@@ -76,7 +79,7 @@ class StateManager:
         self.lock = threading.Lock()
         self.inspection_history: List[dict] = []
         self.latest_detections: List[DetectionResult] = []
-        # ID pelacak -> (waktu, keputusan) untuk sesi yang sudah diputuskan (T36c)
+        # ID pelacak -> (waktu, keputusan) untuk sesi yang LOLOS (T36c)
         self.recent_decisions: dict[int, tuple[float, InspectionResult]] = {}
 
     @staticmethod
@@ -88,7 +91,9 @@ class StateManager:
         return max(candidates, key=lambda d: d.bbox[3] - d.bbox[1])
 
     def _remember_decision(self, track_id: int, result: InspectionResult, now: float):
-        self.recent_decisions[track_id] = (now, result)
+        # Hanya lolos: yang ditolak harus bisa diperiksa ulang setelah memperbaiki APD
+        if result.is_complete:
+            self.recent_decisions[track_id] = (now, result)
 
     def _recent_decision(self, track_id: int, now: float) -> Optional[InspectionResult]:
         """Keputusan untuk ID ini bila masih dalam ingatan; entri kedaluwarsa dibuang."""
