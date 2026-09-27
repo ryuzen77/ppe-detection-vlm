@@ -2,6 +2,8 @@
   import { api, ApiError } from '../../lib/api/client'
   import type { Zone } from '../../lib/api/types'
   import { SETTINGS_TAB, withError } from '../../lib/messages'
+  import { STAND_ZONE } from '../../lib/settings'
+  import { isValidZoneBand } from '../../lib/zone'
 
   let zone = $state<Zone | null>(null)
   let errorMsg = $state('')
@@ -11,6 +13,10 @@
     api.zone().then(z => zone = z).catch(() => {})
   })
 
+  async function reload() {
+    try { zone = await api.zone() } catch { /* biarkan zone lama */ }
+  }
+
   async function toggleZone(e: Event) {
     if (!zone) return
     const checked = (e.target as HTMLInputElement).checked
@@ -18,18 +24,24 @@
       zone = await api.setZone({ enabled: checked })
       errorMsg = ''
     } catch (e) {
-      errorMsg = withError('Gagal mengubah zona', e)
-      zone.enabled = !checked // revert UI
+      errorMsg = withError(SETTINGS_TAB.zoneSaveFailed, e)
+      await reload()
     }
   }
 
   async function saveRange() {
     if (!zone) return
+    if (!isValidZoneBand(zone.y_min, zone.y_max, STAND_ZONE.minHeight)) {
+      errorMsg = SETTINGS_TAB.zoneInvalidBand
+      await reload()
+      return
+    }
     try {
       zone = await api.setZone({ y_min: zone.y_min, y_max: zone.y_max })
       errorMsg = ''
     } catch (e) {
-      errorMsg = withError('Gagal mengubah batas zona', e)
+      errorMsg = withError(SETTINGS_TAB.zoneRangeFailed, e)
+      await reload()
     }
   }
 
@@ -37,14 +49,15 @@
     try {
       zone = await api.calibrateZone()
       errorMsg = ''
-      successMsg = 'Titik berdiri berhasil dikalibrasi.'
-      setTimeout(() => successMsg = '', 3000)
+      successMsg = SETTINGS_TAB.zoneCalibrated
+      setTimeout(() => successMsg = '', STAND_ZONE.successMessageMs)
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        errorMsg = (e.body as any)?.detail || 'Tidak ada orang / kaki tidak terlihat.'
+        errorMsg = e.message || SETTINGS_TAB.zoneNoPerson
       } else {
-        errorMsg = withError('Gagal kalibrasi', e)
+        errorMsg = withError(SETTINGS_TAB.zoneCalibrateFailed, e)
       }
+      await reload()
     }
   }
 </script>
@@ -63,18 +76,18 @@
     <div class="zone-controls" class:disabled={!zone.enabled}>
       <div class="slider-group">
         <label>
-          Atas (y_min: {zone.y_min.toFixed(2)})
-          <input type="range" min="0" max="1" step="0.01" bind:value={zone.y_min} onchange={saveRange} disabled={!zone.enabled} />
+          {SETTINGS_TAB.sliderTop(zone.y_min.toFixed(2))}
+          <input type="range" min="0" max="1" step={STAND_ZONE.sliderStep} bind:value={zone.y_min} onchange={saveRange} disabled={!zone.enabled} />
         </label>
         <label>
-          Bawah (y_max: {zone.y_max.toFixed(2)})
-          <input type="range" min="0" max="1" step="0.01" bind:value={zone.y_max} onchange={saveRange} disabled={!zone.enabled} />
+          {SETTINGS_TAB.sliderBottom(zone.y_max.toFixed(2))}
+          <input type="range" min="0" max="1" step={STAND_ZONE.sliderStep} bind:value={zone.y_max} onchange={saveRange} disabled={!zone.enabled} />
         </label>
       </div>
 
       <div class="calibrate-section">
         <button class="btn btn-primary" onclick={calibrate} disabled={!zone.enabled}>{SETTINGS_TAB.zoneCalibrate}</button>
-        <span class="source-label">{SETTINGS_TAB.zoneSource.replace('{0}', zone.source)}</span>
+        <span class="source-label">{SETTINGS_TAB.zoneSource(zone.source)}</span>
       </div>
     </div>
   {:else}

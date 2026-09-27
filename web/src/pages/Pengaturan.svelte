@@ -5,6 +5,7 @@
   import { api } from '../lib/api/client'
   import type { VlmInfo } from '../lib/api/types'
   import { SETTINGS_TAB } from '../lib/messages'
+  import { LIGHT_TEST } from '../lib/settings'
   import { telemetry } from '../lib/stores/telemetry.svelte'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { formatLostSince } from '../lib/diagnostics'
@@ -31,29 +32,29 @@
   ))
 
   async function testLight() {
-    lightStatus = 'Menjalankan...'
+    lightStatus = SETTINGS_TAB.running
     try {
       await api.testLight('green')
       setTimeout(async () => {
         try {
           await api.testLight('off')
-          lightStatus = 'Berhasil'
+          lightStatus = SETTINGS_TAB.success
         } catch (e) {
-          lightStatus = withError('Gagal mematikan lampu', e)
+          lightStatus = withError(SETTINGS_TAB.lightOffFailed, e)
         }
-      }, 2000)
+      }, LIGHT_TEST.offDelayMs)
     } catch (e) {
-      lightStatus = withError('Gagal menyalakan lampu', e)
+      lightStatus = withError(SETTINGS_TAB.lightOnFailed, e)
     }
   }
 
   async function pingVlm() {
-    pingStatus = 'Menjalankan...'
+    pingStatus = SETTINGS_TAB.running
     try {
       const res = await api.pingVlm()
-      pingStatus = `Status: ${res.status}. Latensi: ${res.latency_ms}ms. ${res.message}`
+      pingStatus = SETTINGS_TAB.pingResult(res.status, res.latency_ms, res.message)
     } catch (e) {
-      pingStatus = withError('Gagal ping VLM', e)
+      pingStatus = withError(SETTINGS_TAB.pingFailed, e)
     }
   }
 
@@ -68,7 +69,7 @@
       await api.setPpeActive(active)
       catalog.load()
     } catch (e) {
-      ppeError = withError('Gagal mengubah aturan APD', e)
+      ppeError = withError(SETTINGS_TAB.ppeUpdateFailed, e)
     }
   }
 </script>
@@ -133,7 +134,7 @@
           </div>
         {/if}
       </div>
-      <button class="btn btn-primary" style="margin-top: 16px" onclick={pingVlm}>{SETTINGS_TAB.latencyTestBtn}</button>
+      <button class="btn btn-primary mt-4" onclick={pingVlm}>{SETTINGS_TAB.latencyTestBtn}</button>
       {#if pingStatus}<p class="status-msg">{pingStatus}</p>{/if}
     </section>
   </div>
@@ -198,5 +199,8 @@
     margin-top: var(--space-2);
     font-size: var(--text-sm);
     color: var(--text-muted);
+  }
+  .mt-4 {
+    margin-top: var(--space-4);
   }
 </style>

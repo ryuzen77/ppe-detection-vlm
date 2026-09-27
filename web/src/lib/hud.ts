@@ -9,7 +9,8 @@
  */
 import type { Detection, Telemetry } from './api/types'
 import { HUD as TEXT } from './messages'
-import { HUD } from './settings'
+import { HUD, STAND_ZONE } from './settings'
+import { zoneLineY } from './zone'
 
 export interface Fit {
   scale: number
@@ -79,11 +80,11 @@ export function drawHud(
   const { offsetX, offsetY, drawW, drawH, scale } = fit
 
   if (guides && t.zone?.enabled) {
-    ctx.strokeStyle = palette.ok
+    ctx.strokeStyle = palette.text
     ctx.lineWidth = HUD.laneLineWidth
     ctx.setLineDash(HUD.laneDash)
     for (const y of [t.zone.y_min, t.zone.y_max]) {
-      const lineY = offsetY + y * drawH
+      const lineY = zoneLineY(y, offsetY, drawH)
       ctx.beginPath()
       ctx.moveTo(offsetX, lineY)
       ctx.lineTo(offsetX + drawW, lineY)
@@ -130,7 +131,7 @@ export function drawHud(
     const y = offsetY + by1 * scale
     let { color, label } = detectionStyle(d, palette)
     if (t.zone?.enabled && !d.in_zone) {
-      color = withAlpha(color, 0.4) // redup di luar zona
+      color = withAlpha(color, STAND_ZONE.outsideAlpha) // redup di luar zona
     }
     drawBrackets(ctx, x, y, (bx2 - bx1) * scale, (by2 - by1) * scale, color)
     if (d.is_inside_corridor && d.keypoints) {

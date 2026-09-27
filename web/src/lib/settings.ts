@@ -76,3 +76,14 @@ export const STORAGE = {
   adminToken: 'safeguard_admin_token',
   guidesVisible: 'safeguard_guides_visible',
 } as const
+
+export const STAND_ZONE = {
+  minHeight: 0.04,          // sama dengan ZONE_MIN_HEIGHT di backend/config.py
+  sliderStep: 0.01,
+  outsideAlpha: 0.4,        // redup untuk deteksi di luar zona
+  successMessageMs: 3000,
+} as const;
+
+export const LIGHT_TEST = {
+  offDelayMs: 2000,
+} as const;
