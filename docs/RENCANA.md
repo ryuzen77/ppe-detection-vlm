@@ -32,9 +32,19 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T36b — suara lebih cepat | Claude | `claude/t36b-suara` (di atas `claude/t36a-prompt`) | dikerjakan | `backend/audio_engine.py`, `backend/generate_audio.py`, `backend/audio/*.mp3`, `backend/config.py` (tambah) | Pesan hasil dipersingkat; suara hasil memotong "sedang menganalisa" |
 | T36c — jeda jalur kosong + kunci ID tracker | Claude | `claude/t36c-sesi` (di atas `claude/t36b-suara`) | dikerjakan | `backend/state_manager.py`, `backend/config.py` (tambah), `tests/` | Jeda 3 → ~1,5 dtk; track yang baru diputuskan tidak diperiksa ulang (menutup pemeriksaan ganda Track #32) |
-| T36d — zona titik berdiri | Claude | — | antre | `backend/state_manager.py`, `backend/detector.py`, `backend/config.py`, `backend/runtime_settings.py`, `tests/` | Zona dari posisi pergelangan kaki (kamera di atas gerbang menghadap pekerja); antrean di belakang zona diabaikan. **Kontrak API** pengaturan zona ditulis di sini sebelum UI-nya dibuat Gemini |
+| T36d — zona titik berdiri | Claude | `claude/t36d-zona` (di atas `claude/t36c-sesi`) | dikerjakan | `backend/zone.py` (baru), `backend/state_manager.py`, `backend/detector.py`, `backend/config.py`, `backend/messages.py`, `backend/runtime_settings.py`, `backend/api/routes_zone.py` (baru), `backend/app.py`, `tests/` | Untuk demo (di lokasi nyata ada batas berdiri & kamera tetap). Bawaan NONAKTIF sampai dikalibrasi. **Kontrak API disetujui pengguna 27-09** — lihat "Kontrak API T36d" di bawah papan. UI (kartu Titik berdiri + pita zona di video) menyusul untuk Gemini |
 | T33 langkah 3 — tab Pengaturan + Diagnostik | Gemini (keputusan pengguna 27-09) | `gemini/t33-pengaturan` | antre | `web/src/pages/`, `web/src/components/settings/` (baru), `web/src/lib/` (tambah), `web/src/lib/messages.ts` (tambah) | Kamera, APD wajib (checkbox), lampu (tes), VLM (penyedia & model — area admin), Diagnostik (uji latensi VLM, tes lampu); dialog token pindah ke sini; tampilkan **sejak kapan server terputus**; rapikan tombol Monitoring yang terpotong di ~360 px. Memakai endpoint yang **sudah ada**. Setelah selesai & digabung: hapus UI lama (`frontend/`, `/legacy/`) sebagai langkah terpisah |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
+
+### Kontrak API T36d — zona titik berdiri (disetujui 27-09)
+
+Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di atas gerbang menghadap pekerja, makin dekat ke gerbang makin besar `y`.
+
+- `GET /api/config/zone` → `{"enabled": bool, "y_min": number, "y_max": number, "source": "bawaan" | "kalibrasi" | "manual"}`
+- `POST /api/config/zone` (token admin), body `{"enabled"?: bool, "y_min"?: number, "y_max"?: number}` → bentuk sama; 400 `{"detail"}` bila `0 ≤ y_min < y_max ≤ 1` tidak terpenuhi atau pita terlalu sempit
+- `POST /api/config/zone/calibrate` (token admin) → bentuk sama (`enabled: true`, `source: "kalibrasi"`, pita = posisi kaki subjek ± toleransi di `config.py`); 409 `{"detail"}` bila tidak ada orang atau kaki tidak terlihat
+- Telemetri WebSocket: `"zone": {"enabled", "y_min", "y_max"}`; tiap `detections[i]` + `"foot_y": number | null`, `"in_zone": bool`
+- Orang di belakang zona (antrean) diabaikan; subjek yang keluar zona mengakhiri sesi setelah jeda jalur kosong. Pengaturan persisten di `data/runtime_settings.json`
 
 ## Antrean berikutnya (urut)
 
