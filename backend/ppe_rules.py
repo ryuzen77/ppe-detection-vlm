@@ -131,16 +131,24 @@ PPE_ITEMS: list[PPEItem] = [
         audio_missing_text="Peringatan! Anda belum memakai rompi keselamatan warna orange atau kuning.",
         ok_label="Terpasang",
         fail_label="Tidak Ada",
+        # Bentuk dinilai terpisah dari warna: di uji T35 baju/kaos kuning (termasuk
+        # motif hitam-kuning) dikira rompi karena aturan lama hanya menekankan warna.
         prompt_rule=(
             "ROMPI KESELAMATAN (Safety Vest / Hi-Vis Vest):\n"
-            "   - Wajib memakai rompi keselamatan.\n"
-            "   - WARNA WAJIB ORANGE ATAU KUNING / LIME HI-VIS (reflektif)."
+            "   - Rompi keselamatan = pakaian luar TANPA LENGAN yang dipakai DI ATAS baju/kaos,\n"
+            "     biasanya terbuka di depan (resleting/perekat) dan punya PITA REFLEKTIF\n"
+            "     (garis perak/abu mengkilap) melintang di dada atau perut.\n"
+            "   - Kaos, kemeja, jaket, atau seragam berwarna kuning/oranye BUKAN rompi keselamatan,\n"
+            "     walaupun warnanya sama -> detected = false."
         ),
         qualifier=Qualifier(
             key="is_valid_color",
             prompt_rule=(
-                "   - Rompi warna biru, hitam, merah, atau pakaian biasa TANPA rompi "
-                "reflektif dianggap TIDAK VALID (is_valid_color = false)."
+                # Warna hi-vis disebut satu per satu: di validasi T36a rompi hijau
+                # stabilo ditulis model "green" lalu dinilai tidak sah.
+                "   - Jika rompi ada, nilai warnanya: ORANYE, KUNING, atau HIJAU STABILO / LIME / NEON\n"
+                "     (hi-vis) -> is_valid_color = true; rompi biru, hitam, merah, abu-abu, atau hijau tua\n"
+                "     -> is_valid_color = false."
             ),
             fail_label="Bukan Hi-Vis",
         ),
@@ -234,12 +242,14 @@ PPE_ITEMS: list[PPEItem] = [
 
 # Aturan tingkat sistem, bukan milik satu item. Dipisah supaya prompt tetap bisa
 # dirakit dari katalog tanpa kehilangan pemeriksaan anti-spoofing.
+# Kunci jawaban VLM untuk anti-spoofing: false = subjek bukan orang fisik nyata.
+REAL_PERSON_KEY = "orang_nyata"
+
 ANTI_SPOOF_RULE = (
     "VALIDASI ORANG NYATA (Anti-Spoofing):\n"
     "   - Subjek wajib merupakan orang fisik nyata yang sedang berdiri untuk diinspeksi.\n"
     "   - Jika gambar hanyalah foto yang ditampilkan di layar smartphone/laptop atau "
-    "cetakan kertas yang diarahkan ke kamera, tolak dengan is_complete = false dan "
-    'missing_items = ["Bukan Orang Fisik Nyata (Terdeteksi Foto/Layar)"].'
+    f"cetakan kertas yang diarahkan ke kamera, isi {REAL_PERSON_KEY} = false."
 )
 
 SPOOF_MISSING_LABEL = "Bukan Orang Fisik Nyata (Terdeteksi Foto/Layar)"
@@ -381,57 +391,25 @@ def build_prompt_rules(items: Optional[list[PPEItem]] = None) -> str:
     return "\n\n".join(blok)
 
 
-def build_completeness_rule(items: Optional[list[PPEItem]] = None) -> str:
-    """Aturan `is_complete`, diturunkan dari katalog.
+def build_json_shape(items: Optional[list[PPEItem]] = None) -> str:
+    """Bentuk JSON ringkas yang diminta dari VLM, diturunkan dari katalog.
 
-    Dulu aturan ini ditulis tangan di prompt sekaligus diulang di engine lokal,
-    sehingga keduanya bisa menyimpang tanpa ketahuan. Sekarang keduanya berasal
-    dari satu definisi.
+    Hanya nilai yang dipakai `evaluate` (plus warna untuk ditampilkan dan tanda
+    anti-spoofing). Deskripsi bebas, `is_complete`, `missing_items`, dan `notes`
+    sengaja tidak diminta: kesimpulan dihitung sistem, dan menulis teks bebas
+    membuat VLM lokal ~2x lebih lambat (T35: 7,8 -> 3,6 dtk) tanpa menambah akurasi.
     """
     items = items if items is not None else get_active_items()
-    syarat = []
-    for item in items:
-        if item.qualifier is not None:
-            syarat.append(
-                f"({item.key}.detected == true DAN {item.key}.{item.qualifier.key} == true)"
-            )
-        else:
-            syarat.append(f"{item.key}.detected == true")
-
-    gabungan = " DAN\n     ".join(syarat)
-    return (
-        "KESIMPULAN KELENGKAPAN (is_complete):\n"
-        "   - is_complete = True HANYA JIKA:\n"
-        f"     {gabungan}.\n"
-        "   - Jika ada satu saja yang tidak memenuhi syarat, is_complete = False "
-        "dan masukkan nama item ke missing_items."
-    )
-
-
-def build_json_shape(items: Optional[list[PPEItem]] = None) -> str:
-    """Contoh bentuk JSON yang diminta dari VLM, diturunkan dari katalog."""
-    items = items if items is not None else get_active_items()
-    baris = []
+    fields = []
     for item in items:
         field = ['"detected": true/false']
         if item.reports_color:
-            field.append('"color": "<warna yang terlihat>"')
+            field.append('"color": "<warna>"')
         if item.qualifier is not None:
             field.append(f'"{item.qualifier.key}": true/false')
-        field.append('"description": "<keterangan singkat>"')
-        baris.append(f'    "{item.key}": {{ ' + ", ".join(field) + " }")
+        fields.append(f'"{item.key}": {{' + ", ".join(field) + "}")
+    return '{"items": {' + ", ".join(fields) + f'}}, "{REAL_PERSON_KEY}": true/false}}'
 
-    isi = ",\n".join(baris)
-    return (
-        "{\n"
-        '  "items": {\n'
-        f"{isi}\n"
-        "  },\n"
-        '  "is_complete": true/false,\n'
-        '  "missing_items": ["<nama item yang belum memenuhi syarat>"],\n'
-        '  "notes": "<ringkasan hasil inspeksi dalam Bahasa Indonesia>"\n'
-        "}"
-    )
 
 
 def evaluate(results: dict, items: Optional[list[PPEItem]] = None) -> tuple[bool, list[str]]:
