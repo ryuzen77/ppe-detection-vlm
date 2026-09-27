@@ -104,3 +104,19 @@ def test_hanya_berkas_baru_atau_teks_berubah_yang_dibangkitkan():
     recorded = {"a": "satu", "b": "dua lama"}
     existing = {"a", "b"}
     assert generate_audio.stale_keys(prompts, recorded, existing) == ["b", "c"]
+
+
+def test_suara_penting_yang_dilewati_tidak_meninggalkan_tanda(engine):
+    # Hasil yang sama dua kali dalam jeda ulang: yang kedua dilewati, tetapi
+    # suara biasa sesudahnya tetap harus diputar setelah channel kosong.
+    engine._handle("lengkap", 0, True)
+    engine.play("lengkap", min_interval=60, urgent=True)
+    engine._handle(*engine.queue.get_nowait())
+    assert not engine._urgent.is_set()
+
+    done = threading.Event()
+    threading.Thread(target=lambda: (engine._handle("mundur", 0, False), done.set()), daemon=True).start()
+    time.sleep(0.1)
+    engine.channel.busy = False  # suara "lengkap" selesai
+    assert done.wait(1.0)
+    assert engine.channel.played[-1] == "mundur"

@@ -68,6 +68,11 @@ class AudioEngine:
     def _handle(self, sound_name: str, min_interval: float, urgent: bool):
         """Memutar satu suara. Suara penting memotong yang sedang berbunyi;
         suara biasa menunggu channel kosong dan dibuang bila suara penting datang."""
+        if urgent:
+            # Direset paling awal: bila suara penting ini ternyata dilewati (jeda
+            # ulang, senyap, berkas hilang), tanda yang tertinggal akan membuang
+            # diam-diam setiap suara biasa berikutnya yang harus menunggu channel.
+            self._urgent.clear()
         if not self.enabled or self.is_muted:
             return
         now = time.time()
@@ -80,7 +85,6 @@ class AudioEngine:
 
         try:
             if urgent:
-                self._urgent.clear()
                 self.channel.stop()
             else:
                 while self.channel.get_busy() and self.is_running:
