@@ -135,13 +135,80 @@ def build_prompts(variant: str, items) -> tuple[str, str]:
         system = (f"{SHORT_HEADER}\n{rules}\n{REAL_PERSON_RULE}\n{SMOKING_RULE}\n"
                   f"Bentuk JSON:\n{minimal_shape(items)}")
         return system, SHORT_USER
+    if variant in BIT_VARIANTS:
+        keys = [k for k, _ in flag_keys(items, short=variant == "PC")]
+        if variant in ("PA", "PC"):
+            shape = "{" + ", ".join(f'"{k}": 0/1' for k in keys) + "}"
+        else:
+            shape = "[" + ", ".join(keys) + "]  (tulis sebagai larik angka 0/1, urutan persis seperti ini)"
+        rule = short_bit_rule(items) if variant == "PC" else BIT_RULE
+        system = (f"{SHORT_HEADER}\n\n{ppe_rules.build_prompt_rules(items)}\n\n{rule}\n\n"
+                  f"Bentuk JSON:\n{shape}")
+        return system, SHORT_USER
     raise ValueError(f"varian prompt tidak dikenal: {variant}")
 
 
-def to_production_payload(data: dict, variant: str) -> dict:
+# --- Jawaban 0/1 (uji T36a2) ---------------------------------------------------------
+# PA: objek kunci bernilai 0/1; PB: larik 0/1 berurutan; PC: seperti PA dengan kunci
+# syarat berbahasa Indonesia pendek (rompi_warna, sepatu_tertutup). Semua dengan skema
+# JSON yang dipaksakan (structured output Ollama), jadi bentuknya dijamin sah.
+BIT_VARIANTS = ("PA", "PB", "PC")
+# Nama pendek syarat (hanya untuk uji PC); syarat lain memakai kunci katalog
+QUALIFIER_SHORT = {"is_valid_color": "warna", "is_closed_shoes": "tertutup"}
+BIT_RULE = (
+    "Isi 1 = ya/terpenuhi, 0 = tidak. <item> = item dipakai (detected); "
+    "<item>_<syarat> = syarat item terpenuhi (mis. rompi_is_valid_color, sepatu_is_closed_shoes); "
+    f"{ppe_rules.REAL_PERSON_KEY} = 1 jika subjek orang fisik nyata."
+)
+
+
+def flag_keys(items, short: bool = False) -> list[tuple[str, tuple[str, str]]]:
+    """Kunci datar -> (item, field) sesuai katalog aktif, plus tanda orang nyata."""
+    out = []
+    for item in items:
+        out.append((item.key, (item.key, "detected")))
+        if item.qualifier is not None:
+            q = item.qualifier.key
+            name = QUALIFIER_SHORT.get(q, q) if short else q
+            out.append((f"{item.key}_{name}", (item.key, q)))
+    out.append((ppe_rules.REAL_PERSON_KEY, ("", "")))
+    return out
+
+
+def short_bit_rule(items) -> str:
+    """Aturan PC: arti tiap kunci syarat pendek dijelaskan dengan nama di aturan item."""
+    pairs = [f"{k} = {field}" for k, (_, field) in flag_keys(items, short=True) if field not in ("detected", "")]
+    return (f"Isi 1 = ya/terpenuhi, 0 = tidak. <item> = item dipakai (detected); {'; '.join(pairs)}; "
+            f"{ppe_rules.REAL_PERSON_KEY} = 1 jika subjek orang fisik nyata.")
+
+
+def bit_schema(variant: str, items) -> dict:
+    keys = [k for k, _ in flag_keys(items, short=variant == "PC")]
+    bit = {"type": "integer", "enum": [0, 1]}
+    if variant in ("PA", "PC"):
+        return {"type": "object", "properties": {k: bit for k in keys}, "required": keys,
+                "additionalProperties": False}
+    return {"type": "array", "items": bit, "minItems": len(keys), "maxItems": len(keys)}
+
+
+def output_format(variant: str, items):
+    return bit_schema(variant, items) if variant in BIT_VARIANTS else "json"
+
+
+def to_production_payload(data, variant: str, items=None) -> dict:
     """Jawaban ringkas → bentuk yang dipahami `_parse_vlm_payload` produksi."""
     if variant == "P0":
         return data
+    if variant in BIT_VARIANTS:
+        keys = flag_keys(items, short=variant == "PC")
+        values = data if variant == "PB" else [data.get(k) for k, _ in keys]
+        result = {"items": {}}
+        for (_, (item_key, field)), value in zip(keys, values):
+            if item_key:
+                result["items"].setdefault(item_key, {})[field] = value == 1
+            elif value == 0:
+                result["missing_items"] = [ppe_rules.SPOOF_MISSING_LABEL]
+        return result
     payload = {"items": data.get("items", {})}
     if data.get(REAL_PERSON_KEY) is False:
         payload["missing_items"] = [ppe_rules.SPOOF_MISSING_LABEL]
@@ -167,9 +234,9 @@ def ollama_root() -> str:
     return base[:-3] if base.rstrip("/").endswith("/v1") else base.rstrip("/")
 
 
-def call(client: httpx.Client, model: str, system: str, user: str, image_b64: str) -> dict:
+def call(client: httpx.Client, model: str, system: str, user: str, image_b64: str, fmt="json") -> dict:
     body = {
-        "model": model, "stream": False, "format": "json", "keep_alive": "10m",
+        "model": model, "stream": False, "format": fmt, "keep_alive": "10m",
         "options": {"temperature": cfg.VLM_TEMPERATURE},
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user, "images": [image_b64]}],
@@ -296,14 +363,14 @@ def main():
             start = time.time()
             resp = {}
             try:
-                resp = call(client, args.model, system, user, img)
+                resp = call(client, args.model, system, user, img, output_format(prompt, items))
                 raw = resp.get("message", {}).get("content", "")
                 if args.dump:
                     print(f"--- {row['variant']} {row['file']}", raw, sep="\n", flush=True)
                 parsed = json.loads(raw)
-                res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt), items)
+                res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt, items), items)
                 row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items),
-                           rokok=parsed.get(SMOKING_KEY), output_chars=len(raw))
+                           rokok=parsed.get(SMOKING_KEY) if isinstance(parsed, dict) else None, output_chars=len(raw))
             except Exception as e:
                 row.update(status="galat", error=str(e)[:160])
             row.update(
