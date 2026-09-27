@@ -273,8 +273,10 @@ def test_setelah_jalur_kosong_pekerja_berikutnya_diperiksa_dari_awal(gerbang, vl
     gerbang.update_frame_detections([])
     assert _active() is None and notifier.current_state == "OFF"
 
+    # Pekerja berikutnya = orang lain, jadi ID pelacak lain. ID yang sama dalam
+    # DECIDED_TRACK_MEMORY_SECONDS dianggap orang yang sama (T36c).
     vlm.reply = _balasan(helm=True)
-    _analisa_selesai(gerbang)
+    _analisa_selesai(gerbang, track_id=TRACK_ID + 1)
     assert _active()["session_id"] != sesi_pertama
     assert len(state_mgr.inspection_history) == riwayat + 1
     assert notifier.current_state == "RED"
@@ -313,3 +315,142 @@ def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, m
     assert _wait_for(lambda: len(state_mgr.inspection_history) == riwayat + 1)
     time.sleep(0.1)
     assert notifier.current_state == "OFF"
+
+
+# --- Ingatan keputusan per ID pelacak (T36c) -------------------------------------------
+
+def _jalur_kosong(gerbang):
+    gerbang.update_frame_detections([])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([])
+    assert _active() is None, "Sesi berakhir setelah jalur kosong"
+
+
+def test_id_yang_baru_lolos_tidak_diperiksa_ulang_di_sesi_berikutnya(gerbang, vlm):
+    # Orang yang lolos keluar jalur > jeda (mis. saat berjalan ke gerbang), lalu
+    # terlihat lagi dengan ID sama: keputusan lolos dipakai, tanpa VLM/audit ganda.
+    _analisa_selesai(gerbang)
+    panggilan, riwayat, sesi = vlm.calls, len(state_mgr.inspection_history), _active()["session_id"]
+    _jalur_kosong(gerbang)
+    assert notifier.current_state == "OFF"
+
+    vlm.reply = _balasan(rompi=True)  # seandainya dianalisa ulang, hasilnya akan berbeda
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 3):
+        gerbang.update_frame_detections([_det(full_body=True)])
+    time.sleep(0.2)
+
+    assert _active()["session_id"] != sesi, "Sesi baru dimulai"
+    assert _active()["state"] == TrackState.ANALYZED
+    assert _active()["vlm_result"]["is_complete"] is True, "Keputusan lolos dipakai"
+    assert vlm.calls == panggilan, "Tanpa panggilan VLM kedua"
+    assert len(state_mgr.inspection_history) == riwayat, "Tanpa baris audit ganda"
+    assert notifier.current_state == "GREEN", "Lampu kembali ke keputusan sebelumnya"
+
+
+def test_pekerja_ditolak_yang_memperbaiki_apd_diperiksa_ulang_walau_id_sama(gerbang, vlm):
+    # Temuan tinjauan (T36c): ditolak -> mundur selangkah, pakai helm, maju lagi
+    # dengan ID sama. Ia harus dianalisa ulang, bukan ditolak lagi dari ingatan.
+    vlm.reply = _balasan(helm=True)
+    _analisa_selesai(gerbang)
+    assert notifier.current_state == "RED"
+    _jalur_kosong(gerbang)
+
+    vlm.reply = _balasan()  # kini memakai helm
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai(gerbang)
+    assert _active()["vlm_result"]["is_complete"] is True
+    assert len(state_mgr.inspection_history) == riwayat + 1
+    assert notifier.current_state == "GREEN"
+
+
+def test_id_diperiksa_ulang_setelah_ingatan_kedaluwarsa(gerbang, vlm, monkeypatch):
+    monkeypatch.setattr(cfg, "DECIDED_TRACK_MEMORY_SECONDS", 0.1)
+    _analisa_selesai(gerbang)  # lolos -> diingat
+    _jalur_kosong(gerbang)
+    time.sleep(0.15)  # ingatan dihitung sejak sesi berakhir; tunggu melewatinya
+    vlm.reply = _balasan(rompi=True)
+    riwayat = len(state_mgr.inspection_history)
+
+    _analisa_selesai(gerbang)
+    assert _active()["vlm_result"]["is_complete"] is False
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+def test_orang_lain_setelah_sesi_tetap_diperiksa(gerbang, vlm):
+    _analisa_selesai(gerbang)
+    _jalur_kosong(gerbang)
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai(gerbang, track_id=TRACK_ID + 7)
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+def test_reset_operator_menghapus_ingatan_keputusan(gerbang, vlm):
+    _analisa_selesai(gerbang)
+    _jalur_kosong(gerbang)
+    gerbang.reset_all()
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai(gerbang)
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+# --- Zona titik berdiri (T36d) ----------------------------------------------------------
+
+@pytest.fixture
+def zona(monkeypatch):
+    from backend import zone as zones
+    import backend.state_manager as sm
+    store = zones.ZoneStore()
+    store.update(enabled=True, y_min=0.70, y_max=0.85)
+    monkeypatch.setattr(sm, "zone_store", store)
+    return store
+
+
+def test_antrean_di_belakang_zona_tidak_memulai_sesi(gerbang, zona):
+    riwayat = len(state_mgr.inspection_history)
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 3):
+        gerbang.update_frame_detections([_det(full_body=True, foot_y=0.5)])
+    time.sleep(0.2)
+    assert _active() is None
+    assert len(state_mgr.inspection_history) == riwayat
+
+
+def test_subjek_keluar_zona_mengakhiri_sesi_walau_antrean_terlihat(gerbang, zona, vlm):
+    subjek = dict(full_body=True, track_id=TRACK_ID, foot_y=0.78)
+    antrean = _det(full_body=True, track_id=TRACK_ID + 1, foot_y=0.5)
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(**subjek), antrean])
+    assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)
+    assert _active()["track_id"] == TRACK_ID, "antrean tidak menjadi subjek"
+
+    # Subjek berjalan ke gerbang (kaki melewati zona); antrean masih terlihat
+    gerbang.update_frame_detections([_det(full_body=True, track_id=TRACK_ID, foot_y=0.97), antrean])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([_det(full_body=True, track_id=TRACK_ID, foot_y=0.97), antrean])
+    assert _active() is None, "antrean di belakang zona tidak menahan sesi"
+
+    # Orang berikutnya maju ke zona dan diperiksa
+    riwayat = len(state_mgr.inspection_history)
+    _analisa_selesai_zona(gerbang, TRACK_ID + 1)
+    assert len(state_mgr.inspection_history) == riwayat + 1
+
+
+def _analisa_selesai_zona(gerbang, track_id):
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED):
+        gerbang.update_frame_detections([_det(full_body=True, track_id=track_id, foot_y=0.78)])
+    assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)
+
+
+def test_kaki_subjek_tertutup_sesaat_sesi_tetap_berjalan(gerbang, zona, monkeypatch, vlm):
+    # Temuan tinjauan T36d: orang lewat di depan subjek, pergelangan kaki tak
+    # terlihat dan kotak tubuh berhenti di pinggang (0,5). Tanpa ingatan kaki,
+    # subjek dianggap keluar zona dan sesi berakhir di tengah pemeriksaan.
+    monkeypatch.setattr(cfg, "FOOT_MEMORY_SECONDS", 2.0)
+    _analisa_selesai_zona(gerbang, TRACK_ID)
+    sesi, panggilan = _active()["session_id"], vlm.calls
+
+    tertutup = _det(full_body=True, track_id=TRACK_ID, foot_y=None, foot_y_box=0.5)
+    gerbang.update_frame_detections([tertutup])
+    time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.1)
+    gerbang.update_frame_detections([tertutup])
+    assert _active() is not None and _active()["session_id"] == sesi, "sesi tidak terputus"
+    assert vlm.calls == panggilan

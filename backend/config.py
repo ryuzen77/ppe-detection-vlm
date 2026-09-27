@@ -169,6 +169,17 @@ class Config:
     # Ambang kepercayaan deteksi keypoint pose tubuh (mata, bahu, lutut, kaki)
     KEYPOINT_CONF_THRESHOLD: float = 0.35
 
+    # Zona titik berdiri (T36d): pita posisi kaki relatif tinggi gambar (0 atas,
+    # 1 bawah). Bawaan nonaktif; diaktifkan lewat kalibrasi/Pengaturan.
+    ZONE_Y_MIN_DEFAULT: float = 0.70
+    ZONE_Y_MAX_DEFAULT: float = 0.85
+    # Toleransi atas-bawah saat kalibrasi dari orang yang berdiri di titik (±)
+    ZONE_CALIBRATE_MARGIN: float = float(_env("ZONE_CALIBRATE_MARGIN", "0.06"))
+    # Pita tersempit yang diterima, agar zona tidak mustahil dipenuhi
+    ZONE_MIN_HEIGHT: float = 0.04
+    # Lama posisi kaki terakhir yang jelas dipakai saat pergelangan kaki tertutup
+    FOOT_MEMORY_SECONDS: float = float(_env("FOOT_MEMORY_SECONDS", "2.0"))
+
     # --- VLM, bebas penyedia (T23) ---
     # gemini, openai, openrouter, qwen, deepseek, ollama, vllm, openai-compatible.
     # Nama lama GEMINI_API_KEY / GEMINI_MODEL tetap dibaca agar .env lama tidak rusak.
@@ -246,10 +257,18 @@ class Config:
     AUDIO_ANALYZING_DEBOUNCE_SECONDS: float = 2.0
     # Jeda pengulangan pengumuman "sistem sedang gangguan, mohon tunggu"
     AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS: float = 20.0
+    # Selang cek antrean & channel pemutar suara (T36b)
+    AUDIO_POLL_SECONDS: float = 0.05
     # Lama jalur inspeksi harus kosong sebelum sesi gerbang berakhir dan sistem
     # kembali ke tahap 1. Selama sesi berjalan keputusan terkunci; jeda ini juga
     # menyerap orang yang tertutup sesaat agar tidak dianggap sudah pergi.
-    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "3.0"))
+    # 1,5 dtk sejak T36c (sebelumnya 3): jeda ini menahan antrean tiap pekerja,
+    # sedangkan orang yang sama yang muncul lagi ditangani ingatan keputusan di bawah.
+    STANDBY_RESET_DELAY_SECONDS: float = float(_env("STANDBY_RESET_DELAY_SECONDS", "1.5"))
+    # Lama keputusan LOLOS per ID pelacak diingat setelah sesinya berakhir: orang
+    # yang lolos lalu keluar jalur sesaat (ID sama) tidak diperiksa ulang. Keputusan
+    # ditolak tidak diingat, jadi pekerja yang memperbaiki APD selalu diperiksa ulang (T36c).
+    DECIDED_TRACK_MEMORY_SECONDS: float = float(_env("DECIDED_TRACK_MEMORY_SECONDS", "10"))
     # Maximum history records kept in memory
     MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))
 

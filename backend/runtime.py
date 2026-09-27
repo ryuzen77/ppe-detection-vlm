@@ -9,6 +9,7 @@ import logging
 import threading
 
 from .config import cfg
+from .zone import zone_store
 from .logging_setup import setup_logging
 from .storage import prepare_data_dir
 from . import ppe_rules
@@ -42,6 +43,7 @@ def start():
     prepare_data_dir(cfg)
     # 3. Item APD aktif dimuat sebelum prompt VLM dirakit dari katalog
     ppe_rules.load_settings()
+    zone_store.load()
     report_mgr.open()
     audio_player.start()
     notifier.start()

@@ -65,6 +65,12 @@ API_CAMERA_RELEASED = "Melepas kamera, silakan pilih sumber baru."
 API_CAMERA_INDEX_INVALID = "Indeks kamera tidak valid"
 API_CAMERA_SWITCHING = "Berpindah ke kamera index {index}..."
 API_PPE_ACTIVE_FORMAT = 'Format: {"active": {"<kunci_item>": true/false}}'
+# Zona titik berdiri (T36d)
+ZONE_INVALID_RANGE = "Batas zona harus memenuhi 0 ≤ y_min < y_max ≤ 1."
+ZONE_TOO_NARROW = "Zona terlalu sempit (minimal {min:g} tinggi gambar)."
+ZONE_CALIBRATE_NO_PERSON = "Tidak ada orang di lorong pemeriksaan untuk dijadikan titik berdiri."
+ZONE_CALIBRATE_NO_FEET = "Kaki orang di titik berdiri belum terlihat kamera."
+ZONE_BODY_INVALID = "Isi harus objek JSON: {\"enabled\"?: bool, \"y_min\"?: angka, \"y_max\"?: angka}"
 API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
 
 # --- Prompt VLM ---
@@ -80,6 +86,22 @@ VLM_SYSTEM_PROMPT = (
 VLM_USER_PROMPT = "Nilai gambar ini. JSON saja."
 # Panggilan termurah untuk uji latensi & pemanasan
 VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
+
+# --- Suara gerbang (dibangkitkan jadi MP3 oleh generate_audio.py) ---
+# Sengaja singkat (T36b): suara hasil ikut menentukan kapan pekerja melangkah,
+# jadi tiap detik suara menambah waktu antrean. Suara per item APD ada di katalog
+# ppe_rules (`audio_missing_text`).
+VOICE_TEXTS = {
+    "mundur": "Mundur sampai seluruh tubuh terlihat.",
+    "mundur_kepala": "Mundur sedikit, kepala terpotong.",
+    "mundur_kaki": "Mundur satu langkah, kaki belum terlihat.",
+    "posisi_pas": "Posisi tepat. Mohon tunggu.",
+    "lengkap": "APD lengkap. Silakan masuk.",
+    "tidak_lengkap": "APD tidak lengkap. Akses ditolak.",
+    "sedang_analisa": "Mohon tunggu.",
+    # Utama & cadangan VLM gagal (T27): belum ada keputusan, pemeriksaan diulang otomatis
+    "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
+}
 
 # --- VLM tidak tersedia (utama & cadangan gagal) ---
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"

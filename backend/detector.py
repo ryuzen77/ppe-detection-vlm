@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 import numpy as np
 # Ultralytics memasang paket yang kurang secara otomatis saat berjalan (mis. `lap`
 # untuk pelacak). Dimatikan: semua dependensi berasal dari requirements.lock, dan
@@ -8,6 +9,7 @@ os.environ.setdefault("YOLO_AUTOINSTALL", "false")
 from ultralytics import YOLO  # noqa: E402
 import torch
 from .config import cfg
+from . import zone
 from . import messages
 
 logger = logging.getLogger(__name__)
@@ -15,7 +17,8 @@ logger = logging.getLogger(__name__)
 class DetectionResult:
     def __init__(self, track_id: int, bbox: list[int], is_full_body: bool, 
                  reason: str, is_inside_corridor: bool = True, keypoints=None, 
-                 crop_img=None, conf: float = 0.0, clip_type: str = "OPTIMAL"):
+                 crop_img=None, conf: float = 0.0, clip_type: str = "OPTIMAL",
+                 foot_y: Optional[float] = None, foot_y_box: Optional[float] = None):
         self.track_id = track_id
         self.bbox = bbox  # [x1, y1, x2, y2]
         self.is_full_body = is_full_body
@@ -25,6 +28,12 @@ class DetectionResult:
         self.crop_img = crop_img
         self.conf = conf
         self.clip_type = clip_type
+        # Posisi kaki relatif tinggi gambar, untuk zona titik berdiri (T36d):
+        # dari pergelangan kaki (None bila tertutup) dan dari tepi bawah kotak.
+        self.foot_y = foot_y
+        self.foot_y_box = foot_y_box
+        # Posisi yang dipakai zona setelah ingatan per ID (diisi state_manager)
+        self.zone_y = foot_y if foot_y is not None else foot_y_box
 
 class PersonDetector:
     """YOLO26-Small Pose Detector with tracking & robust Full-Body verification."""
@@ -206,7 +215,9 @@ class PersonDetector:
                 keypoints=kpts_to_save,
                 crop_img=crop_img,
                 conf=float(conf),
-                clip_type=clip_type
+                clip_type=clip_type,
+                foot_y=zone.ankle_y(kpts_to_save, h),
+                foot_y_box=zone.box_bottom_y([x1, y1, x2, y2], h),
             ))
 
         return detections

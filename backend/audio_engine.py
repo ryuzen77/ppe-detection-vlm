@@ -1,7 +1,7 @@
 import logging
 import time
 import threading
-from queue import Queue
+from queue import Empty, Queue
 import pygame
 from .config import cfg
 from . import ppe_rules
@@ -20,6 +20,9 @@ class AudioEngine:
         self.enabled = False
         self.channel = None
         self.worker = None
+        # Diset saat suara penting (hasil keputusan) masuk: suara biasa yang masih
+        # menunggu giliran dibuang, supaya hasil tidak tertahan "mohon tunggu".
+        self._urgent = threading.Event()
 
     def start(self):
         """Membuka mixer pygame dan menyalakan thread pemutar. Idempoten."""
@@ -51,42 +54,67 @@ class AudioEngine:
     def _process_queue(self):
         while self.is_running:
             try:
-                sound_name, min_interval = self.queue.get(timeout=0.1)
-            except Exception:
+                item = self.queue.get(timeout=cfg.AUDIO_POLL_SECONDS)
+            except Empty:
                 continue
-
-            if not self.enabled or self.is_muted:
-                self.queue.task_done()
-                continue
-
-            now = time.time()
-            last_time = self.last_played_time.get(sound_name, 0)
-            if now - last_time < min_interval:
-                self.queue.task_done()
-                continue
-
-            audio_file = self.audio_dir / f"{sound_name}.mp3"
-            if not audio_file.exists():
-                logger.warning(f"File not found: {audio_file}")
-                self.queue.task_done()
-                continue
-
             try:
+                self._handle(*item)
+            finally:
+                self.queue.task_done()
+
+    def _load(self, audio_file):
+        return pygame.mixer.Sound(str(audio_file))
+
+    def _handle(self, sound_name: str, min_interval: float, urgent: bool):
+        """Memutar satu suara. Suara penting memotong yang sedang berbunyi;
+        suara biasa menunggu channel kosong dan dibuang bila suara penting datang."""
+        if urgent:
+            # Direset paling awal: bila suara penting ini ternyata dilewati (jeda
+            # ulang, senyap, berkas hilang), tanda yang tertinggal akan membuang
+            # diam-diam setiap suara biasa berikutnya yang harus menunggu channel.
+            self._urgent.clear()
+        if not self.enabled or self.is_muted:
+            return
+        now = time.time()
+        if now - self.last_played_time.get(sound_name, 0) < min_interval:
+            return
+        audio_file = self.audio_dir / f"{sound_name}.mp3"
+        if not audio_file.exists():
+            logger.warning(f"File not found: {audio_file}")
+            return
+
+        try:
+            if urgent:
+                self.channel.stop()
+            else:
                 while self.channel.get_busy() and self.is_running:
-                    time.sleep(0.05)
+                    if self._urgent.is_set():
+                        return
+                    time.sleep(cfg.AUDIO_POLL_SECONDS)
+            self.channel.play(self._load(audio_file))
+            self.last_played_time[sound_name] = now
+        except Exception as e:
+            logger.warning(f"Error playing {sound_name}: {e}")
 
-                sound = pygame.mixer.Sound(str(audio_file))
-                self.channel.play(sound)
-                self.last_played_time[sound_name] = now
-            except Exception as e:
-                logger.warning(f"Error playing {sound_name}: {e}")
-
+    def _drop_pending(self):
+        """Membuang suara yang belum sempat diputar."""
+        while True:
+            try:
+                self.queue.get_nowait()
+            except Empty:
+                return
             self.queue.task_done()
 
-    def play(self, sound_name: str, min_interval: float = 1.0):
+    def play(self, sound_name: str, min_interval: float = 1.0, urgent: bool = False):
+        """Mengantrekan suara. `urgent` (hasil keputusan, gangguan sistem) langsung
+        memotong suara yang sedang berbunyi dan membuang antrean sebelumnya: di T35
+        suara hasil tertahan ~1,3 dtk menunggu "sedang menganalisa" selesai."""
         if not self.enabled:
             return
-        self.queue.put((sound_name, min_interval))
+        if urgent:
+            self._drop_pending()
+            self._urgent.set()
+        self.queue.put((sound_name, min_interval, urgent))
 
     def play_step_back(self, clip_type: str = "FEET_CLIPPED"):
         """Audio cue tailored to which part of the body is clipped (head or feet)."""
@@ -116,7 +144,8 @@ class AudioEngine:
 
     def play_result(self, is_complete: bool, missing_items: list[str] = None):
         """Plays corresponding voice based on PPE detection result."""
-        self.play(self.result_sound(is_complete, missing_items), min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS)
+        self.play(self.result_sound(is_complete, missing_items), min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS,
+                  urgent=True)
 
     def stop(self):
         self.is_running = False
