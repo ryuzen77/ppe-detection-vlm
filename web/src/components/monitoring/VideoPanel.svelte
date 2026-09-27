@@ -166,6 +166,7 @@
   .controls {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     border-top: 1px solid var(--border);

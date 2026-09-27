@@ -295,6 +295,24 @@ export const count = (n: number | null | undefined): string => (n ?? 0).toLocale
 export const percent = (n: number | null | undefined): string =>
   `${(n ?? 0).toLocaleString(LOCALE, { maximumFractionDigits: 1 })}%`
 
+// --- Pengaturan (T33 langkah 3) -------------------------------------------------------------
+
+export const SETTINGS_TAB = {
+  diagnostics: 'Diagnostik',
+  serverConnected: 'Server terhubung',
+  serverDisconnectedSince: (time: string) => `Server terputus sejak ${time}`,
+  serverDisconnected: 'Server terputus',
+  camera: 'Kamera',
+  pickCamera: 'Pilih Kamera',
+  ppeRequired: 'APD Wajib',
+  vlm: 'VLM (Visual Language Model)',
+  mainModel: 'Model Utama',
+  backupModel: 'Model Cadangan',
+  lightTest: 'Lampu & Tes',
+  testLightBtn: 'Tes Lampu',
+  latencyTestBtn: 'Uji Latensi VLM',
+} as const
+
 // --- Halaman yang belum dipindahkan (T33 langkah 3) ---------------------------------------
 
 export const PAGES = {
