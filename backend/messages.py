@@ -103,6 +103,17 @@ VOICE_TEXTS = {
     "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
 }
 
+# --- Catatan hidup server (T37) ---
+UPTIME_CLEAN_RESTART = "Server menyala. Sebelumnya berhenti rapi pada {since}; gerbang tidak aktif {down}."
+UPTIME_UNCLEAN_RESTART = ("Server menyala setelah BERHENTI MENDADAK (listrik padam/crash). "
+                          "Terakhir hidup {since}; gerbang tidak aktif sekitar {down}.")
+UPTIME_WRITE_FAILED = "Gagal menulis catatan hidup server: {error}"
+DURATION_HOURS = "{h} jam {m} menit"
+DURATION_MINUTES = "{m} menit {s} detik"
+DURATION_SECONDS = "{s} detik"
+SNAPSHOT_WRITE_FAILED = "Gagal menyimpan foto bukti {name}: {error}"
+SNAPSHOT_TMP_REMOVED = "Membuang {count} foto bukti setengah jadi dari penghentian mendadak sebelumnya."
+
 # --- VLM tidak tersedia (utama & cadangan gagal) ---
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "

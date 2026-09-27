@@ -9,6 +9,7 @@ import logging
 import threading
 
 from .config import cfg
+from .uptime import uptime_monitor
 from .zone import zone_store
 from .logging_setup import setup_logging
 from .storage import prepare_data_dir
@@ -41,6 +42,8 @@ def start():
     setup_logging(cfg)
     # 2. DATA_DIR siap dan data lama dipindah sebelum ada yang membaca berkasnya
     prepare_data_dir(cfg)
+    # Catat lama gerbang tidak aktif & apakah berhenti rapi sebelumnya (T37)
+    uptime_monitor.start()
     # 3. Item APD aktif dimuat sebelum prompt VLM dirakit dari katalog
     ppe_rules.load_settings()
     zone_store.load()
@@ -65,6 +68,7 @@ def start():
 
 def stop():
     _cleanup_stop.set()
+    uptime_monitor.stop()
     video_service.stop()
     audio_player.stop()
     notifier.stop()

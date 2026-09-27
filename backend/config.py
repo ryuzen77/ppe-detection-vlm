@@ -281,6 +281,9 @@ class Config:
     DB_PATH: Path = REPORTS_DIR / "audit.db"
     CAMERA_STATE_PATH: Path = DATA_DIR / "camera_state.json"
     RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
+    # Catatan hidup server: kapan terakhir hidup & apakah berhenti rapi (T37)
+    UPTIME_STATE_PATH: Path = DATA_DIR / "uptime.json"
+    UPTIME_HEARTBEAT_SECONDS: float = 30.0
 
     # Logging: konsol + berkas berotasi (5 MB x 5 berkas) di DATA_DIR/logs
     LOG_LEVEL: str = _env("LOG_LEVEL", "INFO").upper()
@@ -292,6 +295,9 @@ class Config:
     # Laporan & arsip foto
     SNAPSHOT_JPEG_QUALITY: int = 80           # Mutu foto bukti (~30-50 KB per foto)
     DB_TIMEOUT_SECONDS: float = 10.0          # Tunggu kunci SQLite sebelum menyerah
+    # Keputusan pengguna (27-09): baris audit tidak boleh hilang walau listrik
+    # padam mendadak. Pragma ini berlaku per koneksi, jadi disetel di tiap koneksi.
+    AUDIT_DB_SYNCHRONOUS: str = "FULL"
 
     # Retensi Data (T20)
     # Lama simpan foto wajah pekerja (hari) sebelum dihapus (hanya fotonya yang terhapus).
