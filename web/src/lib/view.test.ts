@@ -4,6 +4,8 @@ import type { CameraState } from './api/types'
 import { describeSource } from './format'
 import { gateView } from './gate'
 import { computeFit, detectionStyle, drawHud, withAlpha, type HudPalette } from './hud'
+import { STAND_ZONE } from './settings'
+import { zoneLineY } from './zone'
 import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, chipTitle, seconds } from './messages'
 import { detectEvents, initialWatch } from './notify'
 import { assessItem } from './ppe'
@@ -171,6 +173,62 @@ describe('describeSource', () => {
 })
 
 describe('overlay', () => {
+  it('draws zone correctly', () => {
+    const calls: { fn: string; args: any[]; style?: string }[] = []
+    const ctx = new Proxy({} as Record<string, unknown>, {
+      get(target, prop: string) {
+        if (prop in target) return target[prop]
+        if (prop === 'measureText') return () => ({ width: 50 })
+        return (...args: any[]) => calls.push({ fn: prop, args, style: String(target.strokeStyle ?? '') })
+      },
+      set(target, prop: string, value) {
+        target[prop] = value
+        return true
+      },
+    }) as unknown as CanvasRenderingContext2D
+    const p = { ok: 'ok', warn: 'warn', outside: 'out', text: 'txt', background: 'bg', font: 'sans' }
+    const fit = computeFit(100, 100, 1280, 720)
+
+    // a. zone.enabled = true, guides = true
+    let t = tele({ zone: { enabled: true, y_min: 0.7, y_max: 0.85 } })
+    drawHud(ctx, 100, 100, t, true, p)
+    const lineY1 = zoneLineY(0.7, fit.offsetY, fit.drawH)
+    const lineY2 = zoneLineY(0.85, fit.offsetY, fit.drawH)
+    
+    const moveTos = calls.filter(c => c.fn === 'moveTo' && (c.args[1] === lineY1 || c.args[1] === lineY2))
+    expect(moveTos).toHaveLength(2)
+
+    // zone.enabled = false -> tidak ada garis
+    calls.length = 0
+    t = tele({ zone: { enabled: false, y_min: 0.7, y_max: 0.85 } })
+    drawHud(ctx, 100, 100, t, true, p)
+    const moveTosFalse = calls.filter(c => c.fn === 'moveTo' && (c.args[1] === lineY1 || c.args[1] === lineY2))
+    expect(moveTosFalse).toHaveLength(0)
+
+    // b. zone.enabled = true dan detection in_zone = false -> strokeStyle kotak deteksi
+    calls.length = 0
+    t = tele({ 
+      zone: { enabled: true, y_min: 0.7, y_max: 0.85 },
+      detections: [{
+        track_id: 1,
+        bbox: [0, 0, 10, 10] as [number, number, number, number],
+        clip_type: 'OPTIMAL',
+        is_full_body: true,
+        is_inside_corridor: true,
+        keypoints: [],
+        foot_y: 0,
+        in_zone: false,
+        reason: '',
+        conf: 0.9
+      }]
+    })
+    drawHud(ctx, 100, 100, t, true, p)
+    
+    const bracketsStroke = calls.find(c => c.fn === 'stroke' && c.style !== 'txt' && c.style !== '')
+    const expectedColor = withAlpha(p.ok, STAND_ZONE.outsideAlpha)
+    expect(bracketsStroke?.style).toBe(expectedColor)
+  })
+
   const palette: HudPalette = { ok: '#00ff00', warn: '#ffaa00', outside: '#777777', text: '#ffffff', background: '#000000', font: 'sans-serif' }
 
   it('video 16:9 di kanvas 4:3 diberi bilah atas-bawah, bukan diregangkan', () => {

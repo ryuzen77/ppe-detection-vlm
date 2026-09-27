@@ -321,6 +321,7 @@ export const SETTINGS_TAB = {
   sliderTop: (v: string) => `Atas (y_min: ${v})`,
   sliderBottom: (v: string) => `Bawah (y_max: ${v})`,
   zoneInvalidBand: 'Pita zona tidak sah atau terlalu sempit',
+  zoneLoading: 'Memuat pengaturan zona...',
   camera: 'Kamera',
   pickCamera: 'Pilih Kamera',
   ppeRequired: 'APD Wajib',

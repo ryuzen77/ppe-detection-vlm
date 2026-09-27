@@ -19,13 +19,15 @@
 
   async function toggleZone(e: Event) {
     if (!zone) return
-    const checked = (e.target as HTMLInputElement).checked
+    const input = e.target as HTMLInputElement
+    const checked = input.checked
     try {
       zone = await api.setZone({ enabled: checked })
       errorMsg = ''
     } catch (e) {
       errorMsg = withError(SETTINGS_TAB.zoneSaveFailed, e)
       await reload()
+      input.checked = zone?.enabled ?? false
     }
   }
 
@@ -91,7 +93,7 @@
       </div>
     </div>
   {:else}
-    <p>Memuat pengaturan zona...</p>
+    <p>{SETTINGS_TAB.zoneLoading}</p>
   {/if}
 </section>
 
