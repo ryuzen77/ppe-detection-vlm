@@ -3,6 +3,7 @@
  * menggantikan fetch yang tersebar di app.js lama.
  */
 import type {
+  Zone,
   CameraCatalog,
   CameraMode,
   Health,
@@ -148,6 +149,11 @@ export class ApiClient {
   selectCamera = (index: number | null, mode?: CameraMode | null) =>
     this.request<{ status: string; pending_index: number | null; message: string }>(
       'POST', '/api/config/camera', { index, mode: mode ?? null })
+
+  // --- Zona Titik Berdiri (T36d)
+  zone = () => this.request<Zone>('GET', '/api/config/zone')
+  setZone = (cfg: Partial<Zone>) => this.request<Zone>('POST', '/api/config/zone', cfg)
+  calibrateZone = () => this.request<Zone>('POST', '/api/config/zone/calibrate')
 
   // --- Laporan
   reports = (params: { limit?: number; offset?: number; status?: ReportStatusFilter; date?: string } = {}) => {

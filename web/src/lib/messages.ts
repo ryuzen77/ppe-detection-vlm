@@ -295,6 +295,44 @@ export const count = (n: number | null | undefined): string => (n ?? 0).toLocale
 export const percent = (n: number | null | undefined): string =>
   `${(n ?? 0).toLocaleString(LOCALE, { maximumFractionDigits: 1 })}%`
 
+// --- Pengaturan (T33 langkah 3) -------------------------------------------------------------
+
+export const SETTINGS_TAB = {
+  diagnostics: 'Diagnostik',
+  serverConnected: 'Server terhubung',
+  serverDisconnectedSince: (time: string) => `Server terputus sejak ${time}`,
+  serverDisconnected: 'Server terputus',
+  zone: 'Titik Berdiri',
+  zoneEnabled: 'Gunakan zona titik berdiri',
+  zoneCalibrate: 'Jadikan Titik Berdiri',
+  zoneSource: (s: string) => `Sumber: ${s}`,
+  running: 'Menjalankan...',
+  success: 'Berhasil',
+  lightOnFailed: 'Gagal menyalakan lampu',
+  lightOffFailed: 'Gagal mematikan lampu',
+  pingFailed: 'Gagal ping VLM',
+  ppeUpdateFailed: 'Gagal mengubah aturan APD',
+  pingResult: (status: string, ms: number, msg: string) => `Status: ${status}. Latensi: ${ms}ms. ${msg}`,
+  zoneSaveFailed: 'Gagal mengubah zona',
+  zoneRangeFailed: 'Gagal mengubah batas zona',
+  zoneCalibrateFailed: 'Gagal kalibrasi',
+  zoneCalibrated: 'Titik berdiri berhasil dikalibrasi.',
+  zoneNoPerson: 'Tidak ada orang / kaki tidak terlihat.',
+  sliderTop: (v: string) => `Atas (y_min: ${v})`,
+  sliderBottom: (v: string) => `Bawah (y_max: ${v})`,
+  zoneInvalidBand: 'Pita zona tidak sah atau terlalu sempit',
+  zoneLoading: 'Memuat pengaturan zona...',
+  camera: 'Kamera',
+  pickCamera: 'Pilih Kamera',
+  ppeRequired: 'APD Wajib',
+  vlm: 'VLM (Visual Language Model)',
+  mainModel: 'Model Utama',
+  backupModel: 'Model Cadangan',
+  lightTest: 'Lampu & Tes',
+  testLightBtn: 'Tes Lampu',
+  latencyTestBtn: 'Uji Latensi VLM',
+} as const
+
 // --- Halaman yang belum dipindahkan (T33 langkah 3) ---------------------------------------
 
 export const PAGES = {

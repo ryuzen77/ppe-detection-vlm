@@ -30,8 +30,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T33 langkah 3 — tab Pengaturan + Diagnostik | Gemini (keputusan pengguna 27-09) | `gemini/t33-pengaturan` | antre | `web/src/pages/`, `web/src/components/settings/` (baru), `web/src/lib/` (tambah), `web/src/lib/messages.ts` (tambah) | Kamera, APD wajib (checkbox), lampu (tes), VLM (penyedia & model — area admin), Diagnostik (uji latensi VLM, tes lampu); dialog token pindah ke sini; tampilkan **sejak kapan server terputus**; rapikan tombol Monitoring yang terpotong di ~360 px. Memakai endpoint yang **sudah ada**. Setelah selesai & digabung: hapus UI lama (`frontend/`, `/legacy/`) sebagai langkah terpisah. **Revisi wajib (tinjauan Claude 27-09):** tipe `VlmInfo` (bukan `vlmInfo.main`, tanpa `any`); tombol Monitoring 360 px (`VideoPanel.svelte`) belum ada di commit; semua teks ke `messages.ts`; hasil Uji Latensi/Tes Lampu/galat checkbox APD ditampilkan; isi token jadi satu komponen (tanpa salinan dialog); `formatLostSince` pakai `LOCALE`. **Ditambah (keputusan pengguna 27-09): UI zona titik berdiri** sesuai "Kontrak API T36d" — kartu Titik berdiri di Pengaturan + pita zona di video Monitoring; tipe di `types.ts`. Setelah itu uji nyata gabungan |
-| T38 — crash Ollama & jatuh ke CPU | Claude | `claude/t38-ollama` | tinjau | `backend/local_model_guard.py` (baru), `backend/vlm_providers/base.py`, `backend/vlm_providers/openai_compatible.py`, `backend/vlm_analyzer.py`, `backend/runtime.py`, `backend/config.py`, `backend/messages.py`, `backend/.env.example`, `tests/test_local_model_guard.py` (baru) | Riset: crash saat menyandikan gambar Qwen2.5-VL = masalah hulu tanpa perbaikan (ollama#14170, llama.cpp#17422); log kita: `llama-server` mati di `encoding mtmd batch`. Crash tak bisa diperbaiki dari sini — dampaknya diatasi: adaptor Ollama membaca porsi GPU (`/api/ps`) & memuat ulang (keep_alive 0 → -1); penjaga memeriksa setelah VLM lokal gagal + tiap `LOCAL_GPU_CHECK_SECONDS` (60), memuat ulang bila < 99% GPU, hanya di antara inspeksi. Uji nyata Ollama: 0 → 1,00 setelah pemanasan, reload 7,6 dtk → 1,00. 11 tes baru; 2 mutasi gagal. Belum terbukti pada kejadian jatuh-ke-CPU sungguhan (tidak bisa dipicu sengaja) — dipantau di uji nyata |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
 
 ### Kontrak API T36d — zona titik berdiri (disetujui 27-09)
@@ -48,11 +46,9 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 
 | # | Risiko | Task | Alasan risiko / isi |
 | :-- | :-- | :-- | :-- |
-| 3 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Perubahan besar T36a–d belum diuji di gerbang nyata (keputusan, suara, sesi, zona) + beban GPU. Menunggu UI T33 (keputusan pengguna) |
-| 4 | **Tinggi** | **T38 — crash Ollama & jatuh ke CPU** | Saat internet putus, cadangan bisa ~31 dtk/inspeksi atau gangguan terus → gerbang praktis tidak berfungsi |
+| 3 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Perubahan besar T36a–d, T37, T38, T39a + UI T33 belum diuji di gerbang nyata (keputusan, suara, sesi, zona, pemulihan GPU). **Siap dijalankan** |
 | 5 | **Tinggi** | **T30 — login + lindungi data baca** | Foto bukti (wajah), video langsung, dan CSV terbuka tanpa token di jaringan → kebocoran data pribadi |
 | 6 | **Tinggi** | **Hapus UI lama (`frontend/`, `/legacy/`) + T18** | UI lama masih disajikan dan punya jalur XSS; dihapus setelah T33 digabung |
-| 7 | Sedang | T33 langkah 3 — tab Pengaturan + UI zona (Gemini, sedang dikerjakan) | UI admin; semua fungsinya tetap bisa lewat API bila UI bermasalah |
 | 8 | Sedang | T29 — operasi otomatis + Docker | Gerbang belum menyala sendiri setelah listrik padam (risiko naik jadi Tinggi saat produksi) |
 | 9 | Sedang | T39b — profil penyedia VLM (sisa T39) | Salah konfigurasi penyedia/mode berpikir; `.env.example` netral |
 | 10 | Sedang | Helm di atas rambut lebat (`apd_10`), sepatu tertutup (`apd_4`) | Pekerja patuh salah ditolak (2/26 foto) |
@@ -99,6 +95,8 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 | T36d | Zona titik berdiri dari posisi kaki (pergelangan paling bawah + ingatan per ID saat tertutup — temuan Gemini); API & telemetri sesuai kontrak; bawaan nonaktif |
 | T37 | Ketahanan: audit `synchronous=FULL` per koneksi (eksplisit), foto bukti atomik (+ bug `imwrite` tak diperiksa), catatan hidup server `uptime.json` (+ balapan detak/stop dari tinjauan Gemini) |
 | T39a | Validasi Gemini (VLM utama) dengan prompt T36a pada 10 foto tersulit: **10/10 benar setelah perbaikan**, 0 APD kurang lolos, 0 lengkap ditolak, median ~2,5 dtk. Menemukan & memperbaiki bug `"color": null` yang menggagalkan jawaban Gemini untuk orang tanpa rompi (digabung segera karena Tinggi; tinjauan Gemini menyusul). Uji penuh 84 foto Gemini tetap di T39b bila kuota diizinkan |
+| T33 langkah 3 | Tab Pengaturan (Gemini): token admin, titik berdiri (sakelar, slider, kalibrasi), kamera, APD wajib, VLM, tes lampu, diagnostik (terputus sejak, uji latensi); pita zona di video; Monitoring 360 px. Empat putaran tinjauan Claude |
+| T38 | Penjaga model lokal: porsi GPU Ollama diperiksa setelah gagal & tiap 60 dtk, dimuat ulang bila < 99% (crash hulu ollama#14170). Digabung sebelum tinjauan Gemini (izin pengguna); tinjauan menyusul |
 | T33 langkah 2 | Tab Laporan di UI baru: 6 statistik (kepatuhan dengan meter), saring status & tanggal, halaman, foto bukti, APD per item, "Dinilai oleh" tanpa nama penyedia, ekspor CSV, muat ulang otomatis. Ditinjau Gemini |
 | T33 perbaikan bilah atas | Bilah atas responsif 360–1440 px tanpa scroll horizontal (chip menyempit → ikon → baris kedua). Ditinjau Gemini |
 

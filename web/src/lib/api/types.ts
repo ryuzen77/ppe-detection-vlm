@@ -7,6 +7,13 @@
  * yang ikut terdampak, hal yang dulu baru ketahuan saat dijalankan.
  */
 
+export interface Zone {
+  enabled: boolean
+  y_min: number
+  y_max: number
+  source: string
+}
+
 // --- Katalog APD (GET /api/ppe-rules) --------------------------------------
 
 export interface PpeQualifier {
@@ -127,6 +134,8 @@ export interface Detection {
   conf: number
   /** Keypoint pose [x, y, conf] per titik, atau null */
   keypoints: number[][] | null
+  foot_y: number | null
+  in_zone: boolean
 }
 
 export type TrackState =
@@ -204,6 +213,7 @@ export interface Telemetry {
   active_track: ActiveTrack | null
   detections: Detection[]
   corridor: { enabled: boolean; left_ratio: number; right_ratio: number }
+  zone: Omit<Zone, 'source'>
   light: LightStatus
   history: HistoryRecord[]
   stable_frames_required: number

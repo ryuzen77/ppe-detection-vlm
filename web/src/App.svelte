@@ -4,7 +4,6 @@
   import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
   import { api } from './lib/api/client'
-  import { PAGES } from './lib/messages'
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
   import { adminToken } from './lib/stores/adminToken.svelte'
@@ -13,7 +12,7 @@
   import { toasts } from './lib/stores/toasts.svelte'
   import Laporan from './pages/Laporan.svelte'
   import Monitoring from './pages/Monitoring.svelte'
-  import NotYetMigrated from './pages/NotYetMigrated.svelte'
+  import Pengaturan from './pages/Pengaturan.svelte'
 
   onMount(() => {
     router.start()
@@ -46,7 +45,7 @@
   {:else if router.current === 'laporan'}
     <Laporan />
   {:else}
-    <NotYetMigrated {...PAGES.pengaturan} />
+    <Pengaturan />
   {/if}
 </main>
 <Toasts />

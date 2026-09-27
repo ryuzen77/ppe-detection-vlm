@@ -166,6 +166,7 @@
   .controls {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     border-top: 1px solid var(--border);
@@ -184,5 +185,16 @@
   .error {
     color: var(--danger);
     font-size: var(--text-sm);
+  }
+  @media (max-width: 400px) {
+    .controls .btn {
+      flex: 1 1 40%;
+      padding: var(--space-2) var(--space-1);
+      font-size: var(--text-xs);
+    }
+    .camera-name {
+      width: 100%;
+      margin-bottom: var(--space-2);
+    }
   }
 </style>
