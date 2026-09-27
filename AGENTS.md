@@ -69,6 +69,22 @@ Claude Code dan Gemini (Antigravity) boleh bekerja **bersamaan**, dengan aturan:
 - Pembagian bawaan: **Claude = UI (`web/`)**, **Gemini = backend (`backend/`,
   `tests/`, `tools/`)**, kecuali pengguna menentukan lain.
 
+### 2.2a Prioritas: risiko tertinggi dikerjakan lebih dulu
+
+Setiap task baru, dan setiap kali rencana disusun ulang, diberi **tingkat risiko**
+dengan alasan satu kalimat. Urutan kerja: **Tinggi → Sedang → Rendah**; dalam
+tingkat yang sama, task yang memblokir task lain lebih dulu. Pengguna boleh
+menimpa urutan. Risiko dinilai ulang setelah ada hasil uji atau temuan baru.
+
+| Tingkat | Kapan |
+| :-- | :-- |
+| **Tinggi** | Bisa membuat gerbang meloloskan APD kurang atau keputusan yang tidak tervalidasi; kebocoran data pribadi / akses tanpa hak; hilang atau rusaknya data audit; gerbang tidak berfungsi |
+| **Sedang** | Pekerja patuh salah ditolak; antrean lambat; keandalan menurun tetapi ada jalan pintas manual; salah konfigurasi yang terdeteksi |
+| **Rendah** | Tampilan, kerapian kode, dokumentasi, fitur baru yang belum dipakai |
+
+Fitur besar yang masih tahap perencanaan (mis. identitas wajah, IoT/palang) dinilai
+risikonya saat rencananya matang, sebelum dikerjakan.
+
 ### 2.3 Berkas bersama (titik rawan bentrok)
 
 Berkas ini dipakai hampir semua task. Aturannya: **hanya menambah** (entri baru

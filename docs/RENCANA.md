@@ -44,20 +44,22 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - Telemetri WebSocket: `"zone": {"enabled", "y_min", "y_max"}`; tiap `detections[i]` + `"foot_y": number | null`, `"in_zone": bool`
 - Orang di belakang zona (antrean) diabaikan; subjek yang keluar zona mengakhiri sesi setelah jeda jalur kosong. Pengaturan persisten di `data/runtime_settings.json`
 
-## Antrean berikutnya (urut)
+## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09)
 
-| # | Task | Isi |
-| :-- | :-- | :-- |
-| 1 | **T36 a→d — perbaikan antrean** (Claude) | Lihat papan tugas; satu sub-langkah per giliran, masing-masing dites & ditinjau |
-| 2 | **T35 Uji 2 & 3** | Uji 2: beban GPU saat gerbang + kamera berjalan (`ollama ps`, `nvidia-smi`). Uji 3: 20 lintasan/mode dengan protokol "langsung jalan", diukur dari log; hitung ulang skenario 100 orang |
-| 2b | **T39 — profil penyedia VLM + validasi model** (Claude, setelah uji nyata) | Katalog profil per penyedia di kode (`backend/vlm_providers/profiles.py`): cara panggil, cara memaksa JSON/skema, mode berpikir (parameter & nilai "mati" per penyedia; ganti `GEMINI_THINKING_LEVEL` dengan `VLM_THINKING` umum), jeda minimal, batas waktu, pemanasan, lokasi data. `.env` hanya memilih penyedia + model + key; nilai profil bisa ditimpa per engine. `.env.example` netral (bagian umum + contoh per penyedia). Daftar model tervalidasi dari `tools/bench_vlm.py` (syarat 0 APD kurang lolos + latensi < batas waktu); model belum tervalidasi = **peringatan** (log, nanti Pengaturan), tidak memblokir. Resmi untuk demo: gemini & ollama; lainnya eksperimental. Uji ulang Gemini dengan prompt T36a (belum). Fondasi T28 |
-| 3 | **T37 — ketahanan sistem utama** (Claude) | SQLite `synchronous=FULL` (keputusan pengguna 27-09); foto bukti ditulis atomik (berkas sementara → ganti nama); log lama server terputus. Server menyala ulang otomatis ikut T29 |
-| 4 | T38 — crash Ollama pada gambar tertentu | `apd_19`, `no_23` selalu 500; kadang runner dimuat ulang sebagian ke CPU (`GPU discovery watchdog timed out`) → tiap inspeksi ~31 dtk sampai Ollama dimuat ulang. Selidiki versi Ollama & pemulihan otomatis (cek porsi GPU setelah galat) |
-| 5 | T30 — autentikasi Pengaturan | Login untuk Pengaturan & semua endpoint yang mengubah state; wajib di produksi |
-| 6 | T28 — penyedia VLM dipilih dari dashboard | Utama & cadangan dari Pengaturan, persisten, tanpa restart, uji koneksi per penyedia. Menyerap T17 |
-| 7 | T29 — operasi otomatis + Docker | Produksi Linux lewat Docker Compose; `restart: unless-stopped` |
-| 8 | T26 sisa — evaluasi Gemini; T25 sisa latensi | |
-| — | **Ditunda** | Aturan helm untuk rambut lebat (`apd_10`); akurasi sepatu tertutup (`apd_4`) |
+| # | Risiko | Task | Alasan risiko / isi |
+| :-- | :-- | :-- | :-- |
+| 1 | **Tinggi** | **T39a — validasi VLM utama (Gemini) dengan prompt T36a** | VLM utama di produksi memakai prompt yang baru divalidasi di Qwen lokal; model peka susunan prompt (T35) → akurasi Gemini belum diketahui. 84 foto lewat `tools/bench_vlm.py` versi cloud (~84 panggilan, butuh izin kuota). Syarat: 0 APD kurang lolos |
+| 2 | **Tinggi** | **Gabung T37 — ketahanan** | Sudah jadi & ditinjau; melindungi audit/foto dari listrik padam. Tinggal izin gabung |
+| 3 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Perubahan besar T36a–d belum diuji di gerbang nyata (keputusan, suara, sesi, zona) + beban GPU. Menunggu UI T33 (keputusan pengguna) |
+| 4 | **Tinggi** | **T38 — crash Ollama & jatuh ke CPU** | Saat internet putus, cadangan bisa ~31 dtk/inspeksi atau gangguan terus → gerbang praktis tidak berfungsi |
+| 5 | **Tinggi** | **T30 — login + lindungi data baca** | Foto bukti (wajah), video langsung, dan CSV terbuka tanpa token di jaringan → kebocoran data pribadi |
+| 6 | **Tinggi** | **Hapus UI lama (`frontend/`, `/legacy/`) + T18** | UI lama masih disajikan dan punya jalur XSS; dihapus setelah T33 digabung |
+| 7 | Sedang | T33 langkah 3 — tab Pengaturan + UI zona (Gemini, sedang dikerjakan) | UI admin; semua fungsinya tetap bisa lewat API bila UI bermasalah |
+| 8 | Sedang | T29 — operasi otomatis + Docker | Gerbang belum menyala sendiri setelah listrik padam (risiko naik jadi Tinggi saat produksi) |
+| 9 | Sedang | T39b — profil penyedia VLM (sisa T39) | Salah konfigurasi penyedia/mode berpikir; `.env.example` netral |
+| 10 | Sedang | Helm di atas rambut lebat (`apd_10`), sepatu tertutup (`apd_4`) | Pekerja patuh salah ditolak (2/26 foto) |
+| 11 | Rendah | T28 — penyedia VLM dari dashboard | Kenyamanan admin; bisa lewat `.env` |
+| 12 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 
 ### Rencana (belum dikerjakan) — setelah sistem utama lolos semua tes
 
