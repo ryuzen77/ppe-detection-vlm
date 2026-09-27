@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import cfg, LOCAL_VLM_PROVIDERS
+from .local_model_guard import LocalModelGuard
 from .api_monitor import api_monitor
 from . import messages
 from . import ppe_rules
@@ -236,6 +237,8 @@ class VLMAnalyzer:
         self.primary_failures = 0
         self.primary_down_since: Optional[float] = None
         self.primary_last_attempt = 0.0
+        # Menjaga model lokal tetap penuh di GPU setelah crash Ollama (T38)
+        self.local_guard = LocalModelGuard(self.api_lock, self._local_engine)
 
     def start(self):
         """Merakit VLM utama & cadangan sesuai konfigurasi. Dipanggil saat startup."""
@@ -271,6 +274,13 @@ class VLMAnalyzer:
     def source_label(self) -> str:
         """Label sumber keputusan utama untuk audit, mis. VLM_LIVE:gemini/gemini-3.5-flash-lite."""
         return self.primary.label if self.primary else ""
+
+    def _local_engine(self) -> Optional[VLMEngine]:
+        """Engine lokal (Ollama) yang dijaga porsi GPU-nya: cadangan, atau utama bila lokal."""
+        for e in (self.backup, self.primary):
+            if e is not None and e.is_local and e.provider is not None:
+                return e
+        return None
 
     def _engines(self) -> list[VLMEngine]:
         return [e for e in (self.primary, self.backup) if e is not None and e.provider is not None]
@@ -427,6 +437,9 @@ class VLMAnalyzer:
                     reason = self._describe(e, self.backup)
                     reasons.append(f"cadangan: {reason}")
                     logger.warning(f"VLM {self.backup.who} gagal ({reason}).")
+                    if self.backup.is_local:
+                        # Crash Ollama bisa meninggalkan model sebagian di CPU (T38)
+                        self.local_guard.trigger()
             else:
                 reasons.append("cadangan: tidak tersedia")
 

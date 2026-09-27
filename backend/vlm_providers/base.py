@@ -32,6 +32,13 @@ class VLMProvider(ABC):
         """
         self.ping()
 
+    def gpu_residency(self) -> "float | None":
+        """Porsi model di GPU (0-1) untuk model lokal; None bila tidak berlaku (cloud)."""
+        return None
+
+    def reload(self):
+        """Memuat ulang model lokal (mis. setelah sebagian jatuh ke CPU). Bawaan: tidak ada."""
+
     def analyze(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> dict:
         """Memanggil model lalu mengurai jawabannya sebagai objek JSON."""
         return parse_json_reply(self.generate(image_jpeg, system_prompt, user_prompt))

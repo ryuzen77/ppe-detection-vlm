@@ -56,6 +56,7 @@ def start():
     # 5. VLM dipanaskan sebelum video berjalan: gerbang baru menerima pekerja
     # setelah panggilan VLM pertama terbukti cepat
     vlm_analyzer.warm_up()
+    vlm_analyzer.local_guard.start()
     video_service.start()
     
     global _cleanup_thread
@@ -69,6 +70,7 @@ def start():
 def stop():
     _cleanup_stop.set()
     uptime_monitor.stop()
+    vlm_analyzer.local_guard.stop()
     video_service.stop()
     audio_player.stop()
     notifier.stop()

@@ -114,6 +114,13 @@ DURATION_SECONDS = "{s} detik"
 SNAPSHOT_WRITE_FAILED = "Gagal menyimpan foto bukti {name}: {error}"
 SNAPSHOT_TMP_REMOVED = "Membuang {count} foto bukti setengah jadi dari penghentian mendadak sebelumnya."
 
+# --- Penjaga model lokal (T38) ---
+LOCAL_MODEL_PARTIAL_GPU = "VLM {who} hanya {pct}% di GPU (sisanya CPU, inspeksi sangat lambat); memuat ulang model."
+LOCAL_MODEL_RELOADED = "VLM {who} dimuat ulang: {pct}% di GPU."
+LOCAL_MODEL_RELOAD_FAILED = ("VLM {who} tetap {pct}% di GPU setelah dimuat ulang; periksa VRAM/driver "
+                             "atau nyalakan ulang Ollama.")
+LOCAL_MODEL_CHECK_FAILED = "Pemeriksaan porsi GPU VLM lokal gagal: {error}"
+
 # --- VLM tidak tersedia (utama & cadangan gagal) ---
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "
