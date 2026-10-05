@@ -53,7 +53,25 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T30 — login + lindungi data baca (backend) | Claude | `claude/t30-login` | dikerjakan | `backend/auth.py` (baru), `backend/api/routes_auth.py` (baru), `backend/api/deps.py`, `backend/api/websocket.py` (cek sesi), `backend/app.py` (**hanya** tupel pendaftaran router, baris ~130; Gemini menyunting bagian `/legacy` di bawahnya — hunk berbeda), `backend/config.py`/`messages.py`/`.env.example` (tambah), `tests/test_auth.py` (baru) | Diklaim 05-10. Demo: admin saja, kata sandi = `ADMIN_TOKEN`. UI login (Gemini) setelah T47-UI, ikut kontrak di bawah |
 | T39b — profil penyedia VLM + daftar model tervalidasi | Claude | `claude/t39b-provider-profiles` | selesai | `backend/vlm_providers/profiles.py` (baru), `vlm_providers/__init__.py`, `openai_compatible.py`, `backend/vlm_analyzer.py`, `backend/config.py` (bagian VLM), `backend/messages.py` (tambah), `backend/.env.example` (bagian VLM), `tests/test_vlm_profiles.py` (baru) | Katalog profil = satu sumber (alamat/model bawaan, lokal, mode berpikir, lokasi data); `VLM_THINKING` umum (off=Gemini minimal, nama lama dibaca); daftar validasi: ollama qwen2.5vl:7b tervalidasi, gemini parsial (10 foto), qwen2.5vl:3b TIDAK AMAN; peringatan log untuk eksperimental/belum tervalidasi/kedaluwarsa/tidak aman; `PROMPT_VERSION` + tes sidik jari prompt (prompt berubah tanpa naik versi = gagal). Konfigurasi sekarang tidak berubah perilaku (Gemini tetap MINIMAL). Tes 14 baru. **Terbuka:** uji 84 foto Gemini (perlu izin kuota ~84 panggilan) |
 | T48 — longgarkan aturan helm & sepatu (yang penting APD dipakai) | Claude | `claude/t48-relax-helmet-shoes` | tinjau | `backend/ppe_rules.py` (teks helm & sepatu), `backend/messages.py` (`PROMPT_VERSION`=T48), `backend/vlm_providers/profiles.py`, `backend/vlm_analyzer.py` (find_validation), `tests/test_vlm_profiles.py` | Ditumpuk di atas T39b (gabung T39b dulu). Hasil: Gemini T48 12/12 benar, 0 lolos (10 foto kurang helm/sepatu); Ollama sepatu apd_4 0/3 → 2/4 benar, helm apd_10 tetap salah (→ T40); Ollama 10 foto 0 lolos. Usulan diterima pengguna: gabung |
+| T49 — ringkasan laporan harian/mingguan/bulanan (backend) | Claude | `claude/t49-report-summary` | dikerjakan | `backend/report_manager.py`, `backend/api/routes_reports.py`, `backend/config.py`/`messages.py` (tambah), `tests/test_report_summary.py` (baru) | Diklaim 05-10, disetujui pengguna (paket perapian UI sebelum uji nyata; risiko Rendah, urutan ditimpa pengguna). UI (Gemini, T49-UI): pemilih periode + 2 grafik SVG tanpa pustaka baru, ikut kontrak di bawah |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
+
+### Kontrak API T49 — ringkasan laporan (disetujui 05-10)
+
+Tanggal = waktu lokal server (`YYYY-MM-DD`). Minggu = Senin–Minggu.
+
+- `GET /api/reports/summary?period=day|week|month&date=YYYY-MM-DD` (`date` kosong = hari ini) →
+  `{"period": str, "range": {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"},
+    "totals": {"total": int, "passed": int, "rejected": int, "compliance_rate": number | null},
+    "buckets": [{"start": str, "label": str, "passed": int, "rejected": int}],
+    "missing_items": [{"key": str | null, "label": str, "count": int}]}`
+  — `buckets` lengkap termasuk yang nol: harian 24 jam (`start` "HH:00", `label` "07"), mingguan 7 hari dan bulanan
+  semua tanggal (`start` "YYYY-MM-DD", `label` "Sen"/"1"); `missing_items` urut terbanyak; `compliance_rate` null bila total 0.
+  400 `{"detail"}` untuk `period`/`date` tidak sah.
+- `GET /api/reports` dan `GET /api/reports/export` menerima `from` & `to` (`YYYY-MM-DD`, inklusif); `date` lama tetap jalan.
+  Ekspor CSV hanya berisi rentang itu; nama berkas memuat rentangnya.
+- Grafik UI: batang bertumpuk lolos (hijau) / APD kurang (merah) per bucket + batang mendatar `missing_items` dengan angka
+  di ujung batang. Kartu, grafik, tabel, dan CSV memakai rentang yang sama; ◀ ▶ pindah periode.
 
 ### Kontrak API T30 — login admin (disetujui 05-10)
 
