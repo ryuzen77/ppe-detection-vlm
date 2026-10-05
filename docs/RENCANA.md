@@ -47,6 +47,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T46 — potret setelah pekerja siap | Claude | `claude/t46-ready-capture` | dikerjakan | `backend/state_manager.py`, `backend/frame_quality.py`, `backend/config.py` (tambah), `backend/messages.py` (tambah), `backend/.env.example` (tambah), `tests/test_frame_quality.py`, `tests/test_lifecycle.py`, tests baru | Disetujui 05-10, sebelum T45. Tanpa perubahan API; bila UI perlu status "tahan posisi", kontrak ditulis di sini dulu |
+| Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | dikerjakan | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
 
 ### Kontrak API T36d — zona titik berdiri (disetujui 27-09)
