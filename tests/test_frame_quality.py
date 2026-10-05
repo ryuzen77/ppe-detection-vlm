@@ -117,6 +117,7 @@ def terkirim(monkeypatch, catalog_defaults):
 
     monkeypatch.setattr(vlm_analyzer, "analyze_person", catat)
     monkeypatch.setattr(cfg, "STABLE_FRAMES_REQUIRED", 3)
+    monkeypatch.setattr(cfg, "READY_HOLD_SECONDS", 0.0)   # jendela diam diuji di test_readiness.py
     was_muted = audio_player.is_muted
     audio_player.set_muted(True)
     state_mgr.reset_all()

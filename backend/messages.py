@@ -126,6 +126,10 @@ VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "
                          "pekerja diminta menunggu dan diperiksa ulang otomatis.")
 
+# --- Kesiapan pemotretan (T46) ---
+LOG_SESSION_READY = ("Sesi #{session}: pekerja siap setelah diam {held:.1f} dtk "
+                     "(jendela diam diulang {restarts}x, {frames} frame).")
+
 # --- Ekspor CSV audit ---
 CSV_HEADER_LEADING = ["No", "Tanggal", "Waktu", "ID Pekerja", "Status Kelulusan"]
 CSV_HEADER_TRAILING = ["Item Kurang / Pelanggaran", "Sumber Analisis", "Waktu Proses (ms)",

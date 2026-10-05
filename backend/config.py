@@ -254,6 +254,16 @@ class Config:
     # Jumlah frame tubuh-utuh berturut-turut yang dikumpulkan sebelum analisa;
     # dari kandidat ini SATU frame terbaik dikirim ke VLM (frame_quality, T25a).
     STABLE_FRAMES_REQUIRED: int = int(_env("STABLE_FRAMES_REQUIRED", "3"))
+    # Pekerja siap dipotret (T46): tubuh utuh, menghadap kamera, dan diam selama
+    # ini. Uji nyata 28-09: tanpa syarat waktu, foto diambil saat masih melangkah.
+    READY_HOLD_SECONDS: float = float(_env("READY_HOLD_SECONDS", "1.0"))
+    # "Diam" = titik tengah / tinggi tubuh bergeser kurang dari ini (relatif tinggi
+    # tubuh) terhadap awal jendela. Goyangan kotak YOLO orang berdiri ~1-2%.
+    READY_MAX_DRIFT: float = float(_env("READY_MAX_DRIFT", "0.05"))
+    # Kedua bahu harus terlihat (pekerja tidak menyamping)
+    READY_REQUIRE_SHOULDERS: bool = _env("READY_REQUIRE_SHOULDERS", "true").lower() == "true"
+    # Kandidat terakhir yang dinilai frame_quality; membatasi memori & waktu penilaian
+    READY_MAX_CANDIDATES: int = 10
     # Audio warning "Silakan mundur" debounce in seconds per person
     AUDIO_STEP_BACK_DEBOUNCE_SECONDS: float = 6.0
     # Maximum times the step-back voice prompt plays for the same person

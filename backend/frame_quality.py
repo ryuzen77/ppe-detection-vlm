@@ -12,9 +12,12 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from . import pose_keypoints as kp
+
 # Titik COCO yang menentukan apakah APD terlihat jelas: kepala (helm), bahu
 # (rompi), lutut (celana), pergelangan kaki (sepatu)
-_POSE_POINTS = (0, 1, 2, 5, 6, 13, 14, 15, 16)
+_POSE_POINTS = (kp.NOSE, kp.LEFT_EYE, kp.RIGHT_EYE, kp.LEFT_SHOULDER, kp.RIGHT_SHOULDER,
+                kp.LEFT_KNEE, kp.RIGHT_KNEE, kp.LEFT_ANKLE, kp.RIGHT_ANKLE)
 # Tinggi normalisasi ketajaman: crop dari jarak berbeda dinilai pada skala sama
 _SHARPNESS_HEIGHT = 256
 # Bobot skor akhir. Ketajaman paling menentukan mutu bacaan VLM.

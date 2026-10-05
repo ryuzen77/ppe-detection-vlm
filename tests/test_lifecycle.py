@@ -91,6 +91,8 @@ def vlm(monkeypatch):
 def gerbang(monkeypatch, catalog_defaults, vlm):
     """State machine bersih, VLM tiruan, audio senyap, dan jeda standby dipersingkat."""
     monkeypatch.setattr(cfg, "STANDBY_RESET_DELAY_SECONDS", 0.2)
+    # Jendela diam T46 diuji di test_readiness.py; di sini alur gerbangnya
+    monkeypatch.setattr(cfg, "READY_HOLD_SECONDS", 0.0)
     was_muted = audio_player.is_muted
     audio_player.set_muted(True)
     state_mgr.reset_all()
