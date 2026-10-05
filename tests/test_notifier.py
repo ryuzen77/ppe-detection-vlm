@@ -78,6 +78,20 @@ def test_balasan_ok_menandai_tersambung(link):
     assert st["connected"] is True and st["error"] is None and st["last_ack_age_s"] == 0.0
 
 
+def test_balasan_terbaca_walau_in_waiting_bukan_jumlah_byte():
+    """Backend socket:// pyserial mengisi in_waiting 0/1 (temuan smoke test T47)."""
+    class SocketLikePort(FakePort):
+        @property
+        def in_waiting(self):
+            return 1 if self.rx else 0
+
+    clock = Clock()
+    lnk = GateLightLink(opener=lambda *a: SocketLikePort(), clock=clock)
+    lnk.tick()                 # tulis + balasan masuk
+    lnk.tick()
+    assert lnk.status()["connected"] is True
+
+
 def test_tanpa_balasan_dianggap_terputus(link):
     lnk, clock, ports = link
     lnk.tick()

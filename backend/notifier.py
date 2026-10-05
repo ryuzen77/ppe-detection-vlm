@@ -138,10 +138,13 @@ class GateLightLink:
             return False
 
     def _read_acks(self):
-        waiting = self._conn.in_waiting
-        if not waiting:
+        # Port dibuka non-blocking (timeout 0): read() langsung mengembalikan yang
+        # tersedia. `in_waiting` tidak dipakai karena di sebagian backend pyserial
+        # (mis. socket:// Wokwi) isinya 0/1, bukan jumlah byte (temuan smoke test).
+        data = self._conn.read(cfg.IOT_RX_MAX_BYTES)
+        if not data:
             return
-        self._rx += self._conn.read(waiting)
+        self._rx += data
         *lines, self._rx = self._rx.split(b"\n")
         if any(line.strip().startswith(ACK_PREFIX) for line in lines):
             self.last_ack = self._clock()
