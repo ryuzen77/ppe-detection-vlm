@@ -72,6 +72,11 @@ ZONE_CALIBRATE_NO_PERSON = "Tidak ada orang di lorong pemeriksaan untuk dijadika
 ZONE_CALIBRATE_NO_FEET = "Kaki orang di titik berdiri belum terlihat kamera."
 ZONE_BODY_INVALID = "Isi harus objek JSON: {\"enabled\"?: bool, \"y_min\"?: angka, \"y_max\"?: angka}"
 API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
+# Ringkasan laporan (T49)
+API_REPORT_PERIOD_INVALID = "Periode harus salah satu dari: {periods}."
+API_REPORT_DATE_INVALID = "Tanggal harus berformat YYYY-MM-DD."
+WEEKDAY_SHORT = ("Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min")   # Senin = 0 (date.weekday)
+REPORT_CSV_FILENAME = "laporan_inspeksi_apd_{suffix}.csv"
 
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
