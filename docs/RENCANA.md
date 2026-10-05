@@ -48,7 +48,22 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T46 — potret setelah pekerja siap | Claude | `claude/t46-ready-capture` | dikerjakan | `backend/state_manager.py`, `backend/frame_quality.py`, `backend/config.py` (tambah), `backend/messages.py` (tambah), `backend/.env.example` (tambah), `tests/test_frame_quality.py`, `tests/test_lifecycle.py`, tests baru | Disetujui 05-10, sebelum T45. Tanpa perubahan API; bila UI perlu status "tahan posisi", kontrak ditulis di sini dulu |
 | Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | dikerjakan | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 |
+| T47 — IoT lampu demo (ESP32, merah/kuning/hijau) | Claude | `claude/t47-iot-lights` | dikerjakan | `iot/esp32_gate_controller/` (firmware), `iot/wokwi_simulation/` kecuali README, `iot/test_serial_lights.py`, `IOT_HARDWARE_SPEC.md`, `backend/notifier.py`, `backend/api/routes_system.py` (uji lampu), `backend/api/websocket.py` (telemetri `iot`), `backend/config.py`/`messages.py`/`.env.example` (tambah), `tests/test_notifier.py` (baru) | Diklaim 05-10. Tidak menyentuh `state_manager.py` (T46). UI (status IoT, tombol uji kuning) oleh Gemini setelah kontrak di bawah disetujui |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
+
+### Kontrak API T47 — lampu kuning & status IoT (usulan 05-10, menunggu persetujuan)
+
+- Telemetri `light.light_state`: `"OFF" | "GREEN" | "RED" | "YELLOW"`. `YELLOW` = sistem gangguan / pekerja diminta menunggu
+  (sebelumnya `OFF`). Merah tetap khusus APD kurang. Gangguan kamera (T45) dan arahan posisi memakai `YELLOW` setelah T46 digabung.
+- Telemetri baru `iot` (selalu ada):
+  `{"enabled": bool, "connected": bool, "last_ack_age_s": number | null, "error": string | null}`
+  — `connected` = balasan `OK` dari papan diterima dalam `IOT_ACK_TIMEOUT_SECONDS`; `error` = teks Indonesia dari `messages.py`.
+- `POST /api/iot/test` (token admin), body `{"action": "green" | "red" | "yellow" | "off"}`
+  → 200 `{"status": "success", "action": string, "light_state": LightState}`;
+  **409** `{"detail"}` bila ada pekerja di jalur (sesi berjalan) supaya lampu uji tidak terlihat pekerja sungguhan;
+  400 `{"detail"}` untuk `action` lain (sebelumnya diam-diam dianggap `off`).
+- UI (Gemini): chip/baris status "Lampu gerbang: tersambung / terputus / nonaktif" di Pengaturan & TopBar, tombol uji
+  **Kuning**, tampilkan pesan 409. Nama port tidak ditampilkan ke operator.
 
 ### Kontrak API T36d — zona titik berdiri (disetujui 27-09)
 
