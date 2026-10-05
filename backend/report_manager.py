@@ -6,12 +6,14 @@ import time
 import os
 import csv
 import io
+from datetime import date
 from pathlib import Path
 from typing import Optional, List, Dict
 import cv2
 import numpy as np
 
 from . import ppe_rules
+from . import report_summary
 from .config import cfg
 from . import messages
 
@@ -55,7 +57,21 @@ _CREATE_TABLE_V1 = """
 _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_timestamp ON worker_inspections(timestamp DESC)",
     "CREATE INDEX IF NOT EXISTS idx_is_complete ON worker_inspections(is_complete)",
+    # Filter & ringkasan per rentang tanggal (T49); tanpa ini laporan bulanan memindai seluruh tabel
+    "CREATE INDEX IF NOT EXISTS idx_date_str ON worker_inspections(date_str)",
 )
+
+
+def _range_clause(date_from: Optional[str], date_to: Optional[str]) -> tuple[list[str], list]:
+    """Syarat SQL rentang tanggal inklusif (T49); sisi yang kosong tidak membatasi."""
+    conditions, params = [], []
+    if date_from:
+        conditions.append("date_str >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("date_str <= ?")
+        params.append(date_to)
+    return conditions, params
 
 
 def _legacy_row_to_items(row: sqlite3.Row) -> dict:
@@ -343,7 +359,8 @@ class ReportManager:
         rec["items"] = _parse_json(rec.pop("items_json"), {})
         return rec
 
-    def get_reports(self, limit: int = 50, offset: int = 0, status_filter: str = "all", date_filter: Optional[str] = None) -> dict:
+    def get_reports(self, limit: int = 50, offset: int = 0, status_filter: str = "all", date_filter: Optional[str] = None,
+                    date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
         """Retrieves paginated inspection records with summary statistics."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -374,6 +391,9 @@ class ReportManager:
             if date_filter:
                 conditions.append("date_str = ?")
                 params.append(date_filter)
+            range_conditions, range_params = _range_clause(date_from, date_to)
+            conditions += range_conditions
+            params += range_params
 
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -415,7 +435,21 @@ class ReportManager:
             return item.qualifier.fail_label.upper()
         return item.fail_label.upper()
 
-    def export_csv_text(self) -> str:
+    def get_summary(self, period: str, anchor: Optional[str] = None) -> dict:
+        """Ringkasan harian/mingguan/bulanan untuk grafik Laporan (kontrak T49).
+
+        ValueError untuk periode/tanggal tidak sah (API membalas 400).
+        """
+        start, end = report_summary.period_range(period, report_summary.parse_date(anchor, date.today()))
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT date_str, time_str, is_complete, missing_items FROM worker_inspections "
+                "WHERE date_str BETWEEN ? AND ?", (start.isoformat(), end.isoformat())).fetchall()
+        audit = [report_summary.AuditRow(r["date_str"], r["time_str"], bool(r["is_complete"]), r["missing_items"])
+                 for r in rows]
+        return report_summary.summarize(period, start, end, audit)
+
+    def export_csv_text(self, date_from: Optional[str] = None, date_to: Optional[str] = None) -> str:
         """Exports all inspection records to a standard CSV string for HSE/K3 audit.
 
         Kolom per item APD dibangkitkan dari katalog `ppe_rules`.
@@ -432,8 +466,9 @@ class ReportManager:
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM worker_inspections ORDER BY id ASC")
-            rows = cursor.fetchall()
+            conditions, params = _range_clause(date_from, date_to)
+            where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            rows = cursor.execute(f"SELECT * FROM worker_inspections {where} ORDER BY id ASC", params).fetchall()
 
             for i, row in enumerate(rows, start=1):
                 missing_list = _parse_json(row["missing_items"], [])
