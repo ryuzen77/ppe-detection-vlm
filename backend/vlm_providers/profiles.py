@@ -81,8 +81,11 @@ class ModelValidation:
 
 
 VALIDATIONS = (
-    ModelValidation("ollama", "qwen2.5vl:7b", "T36a", "2026-09-27", photos=84, missed=0, false_rejects=2,
-                    median_seconds=3.6, complete=True, note="T35 Uji 1, RTX 4060 Laptop, 100% GPU"),
+    # T48 (prompt helm/sepatu dilonggarkan): 10 foto, sama dengan sebelum pelonggaran
+    # (apd_10 & apd_4 tetap salah tolak). Hasil 84 foto prompt T36a: 0/58 lolos, 2/26 salah tolak.
+    ModelValidation("ollama", "qwen2.5vl:7b", "T48", "2026-10-05", photos=10, missed=0, false_rejects=2,
+                    median_seconds=5.7, complete=False,
+                    note="T48 10 foto (data/eval/20261005-171212); prompt T36a sebelumnya 84 foto 0 lolos"),
     # Free tier tidak cukup untuk 84 foto sekaligus (keputusan pengguna 05-10): diuji bertahap,
     # 10 foto per sesi dengan jeda 4 dtk (15 RPM). Satu jawaban 4,08 dtk > batas 4 dtk.
     ModelValidation("gemini", "gemini-3.5-flash-lite", "T36a", "2026-10-05", photos=20, missed=0, false_rejects=0,

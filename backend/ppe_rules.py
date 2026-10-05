@@ -112,11 +112,16 @@ PPE_ITEMS: list[PPEItem] = [
         audio_missing_text="Helm belum dipakai. Akses ditolak.",
         ok_label="Terpasang",
         fail_label="Tidak Ada",
+        # T48 (keputusan pengguna 05-10): yang dinilai helm DIPAKAI, bukan dipakai
+        # sempurna. Helm di atas rambut lebat (apd_10) sempat ditolak.
         prompt_rule=(
             "HELM KESELAMATAN (Safety Helmet / Hard Hat):\n"
-            "   - Wajib memakai helm keselamatan proyek/industri.\n"
+            "   - Wajib memakai helm keselamatan proyek/industri DI KEPALA.\n"
             "   - WARNA BEBAS (putih, kuning, merah, biru, orange, dll semuanya sah dan diizinkan).\n"
-            "   - Topi kain biasa atau kupluk BUKAN helm keselamatan."
+            "   - Tetap sah walau rambut tebal/panjang terlihat di bawahnya, posisinya agak miring,\n"
+            "     atau tali dagu tidak terlihat.\n"
+            "   - Topi kain biasa, topi baseball, atau kupluk BUKAN helm keselamatan;\n"
+            "     helm yang dipegang atau digantung (tidak di kepala) = tidak dipakai."
         ),
     ),
     PPEItem(
@@ -181,10 +186,13 @@ PPE_ITEMS: list[PPEItem] = [
         audio_missing_text="Sepatu tertutup belum dipakai. Akses ditolak.",
         ok_label="Tertutup",
         fail_label="Terbuka/Sandal",
+        # T48: jenis, warna, dan merek tidak dinilai; yang penting kaki tertutup
+        # (apd_4 bersepatu tertutup sempat ditolak).
         prompt_rule=(
             "SEPATU TERTUTUP:\n"
-            "   - Wajib memakai sepatu tertutup (safety boots, sepatu kets/sneaker, "
-            "sepatu kerja apapun asalkan tertutup penuh)."
+            "   - Wajib alas kaki tertutup yang menutupi jari dan punggung kaki: safety boots,\n"
+            "     sepatu kerja, sepatu kets/sneaker, sepatu kulit. Jenis, warna, dan merek bebas.\n"
+            "   - Tetap sah walau sebagian sepatu tertutup ujung celana, asalkan bentuk sepatunya terlihat."
         ),
         qualifier=Qualifier(
             key="is_closed_shoes",
