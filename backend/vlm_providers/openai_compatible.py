@@ -9,21 +9,11 @@ import base64
 import httpx
 
 from .. import messages
+from . import profiles
 from .base import VLMProvider
 
-# Alamat bawaan per penyedia. VLM_BASE_URL (T23) selalu menang atas nilai ini.
-PRESETS = {
-    "openai": "https://api.openai.com/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    # Region internasional; akun Tiongkok daratan memakai dashscope.aliyuncs.com
-    "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-    # Hanya model yang mendukung gambar (mis. deepseek-flash). deepseek-v4-pro
-    # hanya teks menurut dokumentasi DeepSeek (Sep 2026).
-    "deepseek": "https://api.deepseek.com",
-    "ollama": "http://localhost:11434/v1",
-    # vLLM tidak punya port bawaan yang aman: 8000 dipakai server ini sendiri
-    "vllm": "",
-}
+# Alamat bawaan per penyedia, dari katalog profil (T39b). VLM_BASE_URL selalu menang.
+PRESETS = {name: p.base_url for name, p in profiles.PROFILES.items() if p.api == profiles.API_OPENAI_COMPATIBLE}
 
 
 class OpenAICompatibleProvider(VLMProvider):
