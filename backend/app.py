@@ -9,7 +9,7 @@ if not __package__:
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -18,6 +18,7 @@ from .logging_setup import setup_logging
 from .shutdown import install_shutdown_hook
 from . import runtime
 from .api import (
+    routes_auth,
     routes_cameras,
     routes_ppe,
     routes_reports,
@@ -27,6 +28,7 @@ from .api import (
     routes_zone,
     websocket,
 )
+from .api.deps import require_session
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +129,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Semua API wajib login bila ADMIN_TOKEN terisi (T30); hanya rute login yang bebas.
+# WebSocket memeriksa sesinya sendiri (dependensi HTTP tidak berlaku untuk /ws).
+app.include_router(routes_auth.router)
 for _module in (routes_system, routes_vlm, routes_cameras, routes_ppe,
-                routes_reports, routes_stream, routes_zone, websocket):
-    app.include_router(_module.router)
+                routes_reports, routes_stream, routes_zone):
+    app.include_router(_module.router, dependencies=[Depends(require_session)])
+app.include_router(websocket.router)
 
 
 class RevalidatingStaticFiles(StaticFiles):

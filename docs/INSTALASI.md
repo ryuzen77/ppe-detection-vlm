@@ -83,6 +83,8 @@ berkas contoh itu. Yang wajib diperhatikan:
   dipasang dengan `ollama pull qwen2.5vl:7b`.
 - **Keamanan**: `ADMIN_TOKEN` wajib bila `HOST` bukan localhost. Tanpa token,
   server menolak menyala, kecuali `ALLOW_INSECURE_DEMO=true`.
+  Bila `ADMIN_TOKEN` terisi, dashboard meminta **login** dengan nilai itu sebagai kata
+  sandi; foto bukti, video, CSV, dan telemetri tertutup tanpa login (sesi `SESSION_HOURS`).
 - **Data**: `DATA_DIR`. Bawaannya `data/` di akar repo. Untuk produksi, pakai
   jalur absolut di luar repo supaya deploy ulang tidak menyentuh data.
 

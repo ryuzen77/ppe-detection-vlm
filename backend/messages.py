@@ -94,6 +94,10 @@ REPORT_CSV_FILENAME = "laporan_inspeksi_apd_{suffix}.csv"
 # Uji lampu gerbang (T47)
 API_LIGHT_TEST_BUSY = "Ada pekerja di jalur pemeriksaan; uji lampu ditunda supaya tidak terlihat sebagai keputusan."
 API_LIGHT_TEST_INVALID = "Aksi uji lampu harus salah satu dari: {actions}."
+# Login admin (T30)
+API_LOGIN_REQUIRED = "Silakan login terlebih dahulu."
+API_LOGIN_FAILED = "Kata sandi salah."
+API_LOGIN_LOCKED = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.

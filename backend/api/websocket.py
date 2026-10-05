@@ -4,6 +4,7 @@ import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .. import auth
 from ..config import cfg
 from ..shutdown import SHUTTING_DOWN
 from ..state_manager import state_mgr
@@ -12,6 +13,8 @@ from ..notifier import notifier
 from ..video.capture import video_service
 
 router = APIRouter()
+# Kode tutup WebSocket bila sesi tidak sah (kontrak T30)
+WS_CLOSE_LOGIN_REQUIRED = 4401
 
 
 # --- WEBSOCKET FOR REAL-TIME TELEMETRY (<10ms) ---
@@ -40,6 +43,12 @@ ws_manager = ConnectionManager()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    if not auth.is_authorized(websocket.cookies.get(auth.SESSION_COOKIE), websocket.headers.get(auth.ADMIN_HEADER)):
+        # Diterima dulu lalu ditutup dengan kode khusus, supaya UI bisa membedakan
+        # "harus login" dari server mati (handshake yang ditolak tidak membawa kode).
+        await websocket.accept()
+        await websocket.close(code=WS_CLOSE_LOGIN_REQUIRED)
+        return
     await ws_manager.connect(websocket)
     try:
         while not SHUTTING_DOWN.is_set():

@@ -66,6 +66,10 @@ class Config:
     # supaya demo lokal tidak terhambat. Isi kalau server dipakai di jaringan bersama.
     ADMIN_TOKEN: str = _env("ADMIN_TOKEN", "")
     ALLOW_INSECURE_DEMO: bool = _env("ALLOW_INSECURE_DEMO", "false").lower() == "true"
+    # Login admin (T30): kata sandi = ADMIN_TOKEN; sesi 1 shift; tebak sandi ditahan
+    SESSION_HOURS: float = float(_env("SESSION_HOURS", "8"))
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_LOCKOUT_SECONDS: float = 60.0
 
     # Camera Settings (Webcam / USB Camera default: 0)
     CAMERA_INDEX: int = int(_env("CAMERA_INDEX", "0"))
