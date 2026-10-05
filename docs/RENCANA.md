@@ -50,7 +50,21 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | dikerjakan | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 |
 | T47 — IoT lampu demo (ESP32, merah/kuning/hijau) | Claude | `claude/t47-iot-lights` | dikerjakan | `iot/esp32_gate_controller/` (firmware), `iot/wokwi_simulation/` kecuali README, `iot/test_serial_lights.py`, `IOT_HARDWARE_SPEC.md`, `backend/notifier.py`, `backend/api/routes_system.py` (uji lampu), `backend/api/websocket.py` (telemetri `iot`), `backend/config.py`/`messages.py`/`.env.example` (tambah), `tests/test_notifier.py` (baru) | Diklaim 05-10. Tidak menyentuh `state_manager.py` (T46). UI (status IoT, tombol uji kuning) oleh Gemini setelah kontrak di bawah disetujui |
 | T47-UI — lampu kuning & status lampu gerbang di UI | Gemini | `gemini/t47-iot-ui` | antre | `web/src/lib/api/types.ts`, `web/src/lib/api/client.ts`, `web/src/lib/messages.ts`, `web/src/lib/settings.ts` (tambah), `web/src/lib/status.ts` + tesnya (chip lampu, di samping `cameraChip`), `web/src/components/TopBar.svelte`, `web/src/pages/Pengaturan.svelte` | Mulai setelah tugas Gemini "Hapus UI lama" selesai (satu agen satu task). Ikuti kontrak T47 di atas. Uji langsung setelah `claude/t47-iot-lights` digabung; sebelum itu cukup vitest dengan telemetri tiruan |
+| T30 — login + lindungi data baca (backend) | Claude | `claude/t30-login` | dikerjakan | `backend/auth.py` (baru), `backend/api/routes_auth.py` (baru), `backend/api/deps.py`, `backend/api/websocket.py` (cek sesi), `backend/app.py` (**hanya** tupel pendaftaran router, baris ~130; Gemini menyunting bagian `/legacy` di bawahnya — hunk berbeda), `backend/config.py`/`messages.py`/`.env.example` (tambah), `tests/test_auth.py` (baru) | Diklaim 05-10. Demo: admin saja, kata sandi = `ADMIN_TOKEN`. UI login (Gemini) setelah T47-UI, ikut kontrak di bawah |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
+
+### Kontrak API T30 — login admin (disetujui 05-10)
+
+Berlaku bila `ADMIN_TOKEN` terisi. Tanpa `ADMIN_TOKEN` (hanya `HOST=127.0.0.1` / `ALLOW_INSECURE_DEMO`) semua terbuka seperti sebelumnya.
+
+- `POST /api/login` `{"password": string}` → 200 `{"expires_in_s": number}` + cookie sesi `HttpOnly; SameSite=Strict; Path=/`;
+  401 `{"detail"}` salah; 429 `{"detail", "retry_after_s"}` setelah 5 gagal (jeda 60 dtk, per alamat klien).
+- `POST /api/logout` → 204, cookie dihapus.
+- `GET /api/session` (bebas login) → 200 `{"authenticated": bool, "auth_required": bool, "expires_in_s": number | null}`.
+- Semua `/api/*` lain (termasuk `/api/stream`, foto bukti, CSV, `/api/health`) → **401** tanpa sesi sah; `/ws` diterima lalu
+  ditutup dengan kode **4401**. Header `X-Admin-Token` lama tetap diterima (alat/skrip).
+- Sesi 8 jam (`SESSION_HOURS`), disimpan di memori server: server dinyalakan ulang = login ulang.
+- UI (Gemini): halaman login (menggantikan dialog token admin), tombol keluar, 401/4401 → halaman login, 429 → tampilkan sisa detik.
 
 ### Kontrak API T47 — lampu kuning & status IoT (disetujui 05-10)
 
