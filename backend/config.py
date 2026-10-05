@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+from .vlm_providers import profiles as vlm_profiles
+
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
 
@@ -21,16 +23,15 @@ def _env(name: str, default: str = "") -> str:
     return default if value is None or value.strip() == "" else value.strip()
 
 
-# Model bawaan per penyedia bila VLM_MODEL kosong. Penyedia cloud lain wajib
-# menyebut modelnya sendiri karena daftar model vision mereka sering berganti.
-_DEFAULT_VLM_MODELS = {
-    "gemini": "gemini-3.5-flash-lite",
-    # T26 (84 foto): satu-satunya model lokal yang tidak meloloskan APD kurang
-    # (0/58, akurasi 94%); qwen2.5vl:3b lebih cepat tetapi meloloskan 11/58.
-    "ollama": "qwen2.5vl:7b",
-}
-# Penyedia yang berjalan di mesin sendiri: tanpa API key dan tanpa kuota
-LOCAL_VLM_PROVIDERS = ("ollama", "vllm")
+# Model bawaan & letak (lokal/cloud) tiap penyedia VLM ada di katalog profil (T39b).
+# Penyedia yang berjalan di mesin sendiri: tanpa API key dan tanpa kuota.
+LOCAL_VLM_PROVIDERS = tuple(name for name, p in vlm_profiles.PROFILES.items() if p.is_local)
+
+
+def _legacy_thinking(gemini_level: str) -> str:
+    """GEMINI_THINKING_LEVEL lama -> VLM_THINKING umum ("minimal" = berpikir dimatikan)."""
+    level = gemini_level.strip().lower()
+    return "off" if level == "minimal" else level
 
 
 def _resolve_data_dir(value: str) -> Path:
@@ -189,8 +190,8 @@ class Config:
     VLM_API_KEY: str = _env("VLM_API_KEY", _env("GEMINI_API_KEY", "") if VLM_PROVIDER == "gemini" else "")
     VLM_MODEL: str = _env(
         "VLM_MODEL",
-        _env("GEMINI_MODEL", _DEFAULT_VLM_MODELS["gemini"]) if VLM_PROVIDER == "gemini"
-        else _DEFAULT_VLM_MODELS.get(VLM_PROVIDER, ""),
+        _env("GEMINI_MODEL", vlm_profiles.default_model("gemini")) if VLM_PROVIDER == "gemini"
+        else vlm_profiles.default_model(VLM_PROVIDER),
     )
     # Kosong = alamat bawaan penyedia (lihat vlm_providers/openai_compatible.py)
     VLM_BASE_URL: str = _env("VLM_BASE_URL", "")
@@ -198,8 +199,10 @@ class Config:
     # server yang tidak mengenalnya
     VLM_JSON_MODE: bool = _env("VLM_JSON_MODE", "true").lower() == "true"
     VLM_IS_LOCAL: bool = VLM_PROVIDER in LOCAL_VLM_PROVIDERS
-    # Khusus Gemini. minimal / low / medium / high; kosong = tidak dikirim.
-    GEMINI_THINKING_LEVEL: str = _env("GEMINI_THINKING_LEVEL", "minimal")
+    # Mode "berpikir" model, umum untuk semua penyedia (T39b): off / low / medium / high.
+    # Diterjemahkan profil ke parameter penyedia; penyedia yang tidak bisa diatur
+    # mengabaikannya. Nama lama GEMINI_THINKING_LEVEL tetap dibaca.
+    VLM_THINKING: str = _env("VLM_THINKING", _legacy_thinking(_env("GEMINI_THINKING_LEVEL", "minimal"))).lower()
     # Suhu sampling VLM. Rendah = jawaban konsisten untuk foto yang sama
     # (penilaian APD bukan tugas kreatif). Berlaku untuk semua penyedia.
     VLM_TEMPERATURE: float = float(_env("VLM_TEMPERATURE", "0.1"))
@@ -209,7 +212,7 @@ class Config:
     # lokal lewat Ollama bila utama berada di cloud; "none" = tanpa cadangan.
     # Lokasi tanpa internet cukup menjadikan VLM lokal sebagai utama.
     VLM_BACKUP_PROVIDER: str = _env("VLM_BACKUP_PROVIDER", "none" if VLM_IS_LOCAL else "ollama").lower()
-    VLM_BACKUP_MODEL: str = _env("VLM_BACKUP_MODEL", _DEFAULT_VLM_MODELS.get(VLM_BACKUP_PROVIDER, ""))
+    VLM_BACKUP_MODEL: str = _env("VLM_BACKUP_MODEL", vlm_profiles.default_model(VLM_BACKUP_PROVIDER))
     VLM_BACKUP_BASE_URL: str = _env("VLM_BACKUP_BASE_URL", "")
     VLM_BACKUP_API_KEY: str = _env("VLM_BACKUP_API_KEY", "")
 

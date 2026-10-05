@@ -1,8 +1,9 @@
 """Adaptor penyedia VLM. Menambah penyedia baru = satu kelas turunan `VLMProvider`."""
+from . import profiles
 from .base import VLMProvider, parse_json_reply
 
-# Nama penyedia yang dilayani adaptor OpenAI-compatible
-OPENAI_COMPATIBLE = ("openai", "openrouter", "qwen", "deepseek", "ollama", "vllm", "openai-compatible")
+# Nama penyedia yang dilayani adaptor OpenAI-compatible (dari katalog profil)
+OPENAI_COMPATIBLE = tuple(name for name, p in profiles.PROFILES.items() if p.api == profiles.API_OPENAI_COMPATIBLE)
 
 
 def create_provider(name: str, api_key: str, model: str, base_url: str = "", **options) -> VLMProvider:
@@ -17,10 +18,10 @@ def create_provider(name: str, api_key: str, model: str, base_url: str = "", **o
         from .gemini import GeminiProvider
         return GeminiProvider(api_key=api_key, model=model, **options)
     if key in OPENAI_COMPATIBLE:
-        from .openai_compatible import PRESETS, OpenAICompatibleProvider
+        from .openai_compatible import OpenAICompatibleProvider
         return OpenAICompatibleProvider(
             api_key=api_key, model=model, name=key,
-            base_url=base_url or PRESETS.get(key, ""), **options,
+            base_url=base_url or profiles.PROFILES[key].base_url, **options,
         )
     raise ValueError(f"Penyedia VLM tidak dikenal: {name!r}")
 

@@ -7,11 +7,12 @@ from typing import Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .config import cfg, LOCAL_VLM_PROVIDERS
+from .config import cfg
 from .local_model_guard import LocalModelGuard
 from .api_monitor import api_monitor
 from . import messages
 from . import ppe_rules
+from .vlm_providers import profiles as vlm_profiles
 from .vlm_providers import create_provider
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,37 @@ def build_system_prompt(items=None) -> str:
     )
 
 
+def thinking_option(provider_name: str, level: str) -> Optional[str]:
+    """Nilai mode berpikir untuk adaptor; peringatan bila tidak dikenal/tidak didukung (T39b)."""
+    if level not in vlm_profiles.THINKING_LEVELS:
+        logger.warning(messages.VLM_THINKING_INVALID.format(value=level, choices=", ".join(vlm_profiles.THINKING_LEVELS)))
+        level = "off"
+    value = vlm_profiles.thinking_value(provider_name, level)
+    if value is None and level != "off":
+        logger.warning(messages.VLM_THINKING_UNSUPPORTED.format(value=level, provider=provider_name))
+    return value
+
+
+def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
+    """Peringatan katalog profil & validasi model. Gerbang tetap menyala (keputusan pengguna)."""
+    warnings = []
+    profile = vlm_profiles.get_profile(provider_name)
+    if profile is not None and profile.support == vlm_profiles.EXPERIMENTAL:
+        warnings.append(messages.VLM_PROVIDER_EXPERIMENTAL.format(who=who))
+    status = vlm_profiles.validation_status(provider_name, model, messages.PROMPT_VERSION)
+    record = vlm_profiles.find_validation(provider_name, model)
+    if status == vlm_profiles.UNVALIDATED:
+        warnings.append(messages.VLM_MODEL_UNVALIDATED.format(who=who))
+    elif status == vlm_profiles.UNSAFE:
+        warnings.append(messages.VLM_MODEL_UNSAFE.format(who=who, missed=record.missed, photos=record.photos))
+    elif status == vlm_profiles.OUTDATED:
+        warnings.append(messages.VLM_MODEL_OUTDATED.format(who=who, old=record.prompt_version,
+                                                           current=messages.PROMPT_VERSION))
+    elif status == vlm_profiles.PARTIAL:
+        warnings.append(messages.VLM_MODEL_PARTIAL.format(who=who, note=record.note))
+    return warnings
+
+
 class VLMEngine:
     """Satu VLM (utama atau cadangan): adaptor penyedia + batas waktu + jeda kuota.
 
@@ -122,7 +154,7 @@ class VLMEngine:
         self.model_name = model or ""
         self.api_key = (api_key or "").strip()
         self.base_url = base_url or ""
-        self.is_local = self.provider_name in LOCAL_VLM_PROVIDERS
+        self.is_local = vlm_profiles.is_local(self.provider_name)
         self.timeout = cfg.VLM_LOCAL_TIMEOUT_SECONDS if self.is_local else cfg.VLM_CLOUD_TIMEOUT_SECONDS
         self.min_interval = 0.0 if self.is_local else cfg.VLM_MIN_INTERVAL_SECONDS
         self.provider = None
@@ -156,7 +188,7 @@ class VLMEngine:
                 # Klien HTTP dibatalkan sedikit sesudah batas waktu aplikasi
                 http_timeout = self.timeout + 1.0
                 common = {"http_timeout": http_timeout, "temperature": cfg.VLM_TEMPERATURE}
-                options = ({**common, "thinking_level": cfg.GEMINI_THINKING_LEVEL}
+                options = ({**common, "thinking_level": thinking_option(self.provider_name, cfg.VLM_THINKING) or ""}
                            if self.provider_name == "gemini" else
                            {**common, "base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE,
                             "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS})
@@ -170,6 +202,8 @@ class VLMEngine:
         else:
             logger.info(f"VLM {self.role} siap: {self.provider_name} ({self.model_name}), "
                         f"batas waktu {self.timeout:g} dtk")
+            for warning in profile_warnings(self.provider_name, self.model_name, self.who):
+                logger.warning(warning)
         return self.provider is not None
 
     def warm_up(self) -> Optional[float]:
@@ -214,6 +248,9 @@ class VLMEngine:
             "is_live": self.provider is not None,
             "timeout_s": self.timeout,
             "error": self.error,
+            # T39b, untuk Pengaturan admin (T28): resmi/eksperimental & status validasi model
+            "support": getattr(vlm_profiles.get_profile(self.provider_name), "support", None),
+            "validated": vlm_profiles.validation_status(self.provider_name, self.model_name, messages.PROMPT_VERSION),
         }
 
 

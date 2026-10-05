@@ -76,6 +76,10 @@ API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
 # Jawaban ringkas (hanya nilai per item) — lihat ppe_rules.build_json_shape.
+# Versi prompt VLM. NAIKKAN setiap kali isi prompt atau aturan item berubah:
+# validasi model di vlm_providers/profiles.py berlaku untuk versi tertentu (T39b).
+PROMPT_VERSION = "T36a"
+
 VLM_SYSTEM_PROMPT = (
     "Anda inspektur K3. Nilai APD orang di gambar. "
     "Jawab HANYA JSON sesuai bentuk di bawah, tanpa teks lain.\n\n"
@@ -113,6 +117,19 @@ DURATION_MINUTES = "{m} menit {s} detik"
 DURATION_SECONDS = "{s} detik"
 SNAPSHOT_WRITE_FAILED = "Gagal menyimpan foto bukti {name}: {error}"
 SNAPSHOT_TMP_REMOVED = "Membuang {count} foto bukti setengah jadi dari penghentian mendadak sebelumnya."
+
+# --- Profil penyedia & validasi model (T39b) ---
+VLM_PROVIDER_EXPERIMENTAL = ("Penyedia VLM {who} eksperimental: belum pernah diuji di gerbang ini. "
+                             "Uji dulu dengan tools/bench_vlm.py sebelum dipakai di lapangan.")
+VLM_MODEL_UNVALIDATED = ("Model VLM {who} BELUM TERVALIDASI dengan foto berlabel; keputusan APD-nya "
+                         "belum terbukti aman (lihat vlm_providers/profiles.py).")
+VLM_MODEL_PARTIAL = "Model VLM {who} baru tervalidasi sebagian: {note}."
+VLM_MODEL_OUTDATED = ("Model VLM {who} tervalidasi untuk prompt {old}, sekarang {current}; "
+                      "ulangi uji foto berlabel.")
+VLM_MODEL_UNSAFE = ("Model VLM {who} pernah MELOLOSKAN pekerja ber-APD kurang ({missed} dari {photos} foto). "
+                    "Jangan dipakai di gerbang.")
+VLM_THINKING_INVALID = "VLM_THINKING={value} tidak dikenal (pilihan: {choices}); dianggap off."
+VLM_THINKING_UNSUPPORTED = "VLM_THINKING={value} diabaikan: penyedia {provider} tidak bisa mengatur mode berpikir."
 
 # --- Penjaga model lokal (T38) ---
 LOCAL_MODEL_PARTIAL_GPU = "VLM {who} hanya {pct}% di GPU (sisanya CPU, inspeksi sangat lambat); memuat ulang model."
