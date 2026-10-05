@@ -1,4 +1,4 @@
-"""UI baru (web/dist) di "/" dan UI lama utuh di "/legacy/" sebagai cadangan (T33)."""
+"""UI baru (web/dist) di "/". UI lama telah dihapus."""
 import re
 
 import pytest
@@ -28,20 +28,11 @@ def test_ui_baru_di_akar(klien):
         assert klien.get(path).status_code == 200, path
 
 
-def test_ui_lama_utuh_di_legacy(klien):
-    r = klien.get("/legacy/")
-    assert r.status_code == 200
-    assert "js/app.js" in r.text
-    # Rujukan relatif UI lama harus terjangkau dari /legacy/
-    assert klien.get("/legacy/js/app.js").status_code == 200
-    assert klien.get("/legacy/css/style.css").status_code == 200
-    assert 'href="/"' in r.text, "UI lama punya jalan kembali ke tampilan baru"
+def test_ui_lama_sudah_dihapus_404(klien):
+    assert klien.get("/legacy/").status_code == 404
+    assert klien.get("/legacy/index.html").status_code == 404
 
 
-@pytest.mark.parametrize("alamat, tujuan", [("/legacy", "/legacy/"), ("/app", "/"), ("/app/", "/")])
-def test_alamat_lama_dan_tanpa_garis_miring_diarahkan(klien, alamat, tujuan):
-    r = klien.get(alamat, follow_redirects=False)
-    assert r.status_code in (301, 302, 307, 308) and r.headers["location"] == tujuan
 
 
 def test_api_tidak_tertutup_mount_frontend(klien):

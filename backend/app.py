@@ -10,7 +10,6 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -55,7 +54,7 @@ async def lifespan(app: FastAPI):
     runtime.start()
     base = f"http://localhost:{cfg.PORT}"
     if web_dist_dir.exists():
-        logger.info("Dashboard: %s/  |  tampilan lama (cadangan): %s/legacy/", base, base)
+        logger.info("Dashboard: %s/", base)
     yield
     runtime.stop()
 
@@ -149,32 +148,12 @@ class RevalidatingStaticFiles(StaticFiles):
 
 
 # Frontend (T33). UI baru (Svelte + TypeScript, hasil build web/dist) menjadi
-# halaman utama di "/"; UI lama tetap utuh di "/legacy/" sebagai cadangan.
-# Dipasang setelah semua router, karena mount "/" menangkap semua path sisa.
+# halaman utama di "/"; Dipasang setelah semua router, karena mount "/" menangkap semua path sisa.
 web_dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
-frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 
-
-# Alamat lama UI baru selama migrasi (/app/) tetap berfungsi
-@app.get("/app", include_in_schema=False)
-@app.get("/app/", include_in_schema=False)
-async def _app_redirect():
-    return RedirectResponse("/")
-
-
-if frontend_dir.exists():
-    # Tanpa garis miring, rujukan relatif UI lama (css/, js/) salah alamat
-    @app.get("/legacy", include_in_schema=False)
-    async def _legacy_redirect():
-        return RedirectResponse("/legacy/")
-
-    app.mount("/legacy", RevalidatingStaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 if web_dist_dir.exists():
     app.mount("/", RevalidatingStaticFiles(directory=str(web_dist_dir), html=True), name="web")
-elif frontend_dir.exists():
-    # web/dist belum dibangun: UI lama tetap tersedia di akar
-    app.mount("/", RevalidatingStaticFiles(directory=str(frontend_dir), html=True), name="frontend-root")
 
 def run():
     """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""

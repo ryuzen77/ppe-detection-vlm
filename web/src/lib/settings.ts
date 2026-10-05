@@ -9,7 +9,6 @@ export const LOCALE = 'id-ID'
 
 export const URLS = {
   /** Tampilan lama (cadangan) selama redesign belum lengkap */
-  legacy: '/legacy/',
 } as const
 
 export const TELEMETRY = {

@@ -161,7 +161,6 @@ describe('describeSource', () => {
     ['VLM_LIVE:gemini/g', 'utama', 'gemini/g'],
     ['VLM_CADANGAN:ollama/qwen2.5vl:7b', 'cadangan', 'ollama/qwen2.5vl:7b'],
     ['VLM_GANGGUAN', 'gangguan', ''],
-    ['GEMINI_LIVE', 'utama', 'gemini'],
     ['LOCAL_FAST_PASS', 'lama', 'LOCAL_FAST_PASS'],
   ])('%s', (src, role, label) => {
     expect(describeSource(src)).toEqual({ role, label })

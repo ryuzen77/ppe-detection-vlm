@@ -9,7 +9,7 @@ export interface SourceInfo {
 }
 
 /** Awalan `inference_source` dari backend (VLMEngine.label & _no_decision) */
-const SOURCE_PREFIX = { primary: 'VLM_LIVE:', backup: 'VLM_CADANGAN:', outage: 'VLM_GANGGUAN', legacyGemini: 'GEMINI' } as const
+const SOURCE_PREFIX = { primary: 'VLM_LIVE:', backup: 'VLM_CADANGAN:', outage: 'VLM_GANGGUAN' } as const
 
 /**
  * Asal keputusan dari `inference_source`. Label lama tetap terbaca:
@@ -21,6 +21,5 @@ export function describeSource(source: string | null | undefined): SourceInfo {
   if (s.startsWith(SOURCE_PREFIX.primary)) return { role: 'utama', label: s.slice(SOURCE_PREFIX.primary.length) }
   if (s.startsWith(SOURCE_PREFIX.backup)) return { role: 'cadangan', label: s.slice(SOURCE_PREFIX.backup.length) }
   if (s === SOURCE_PREFIX.outage) return { role: 'gangguan', label: '' }
-  if (s.includes(SOURCE_PREFIX.legacyGemini)) return { role: 'utama', label: 'gemini' }
   return { role: 'lama', label: s }
 }
