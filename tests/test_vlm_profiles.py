@@ -42,13 +42,16 @@ def test_satu_sumber_untuk_adaptor_dan_config():
 def test_status_model_saat_ini():
     v = messages.PROMPT_VERSION
     assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.PARTIAL
-    assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.OUTDATED
+    assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.PARTIAL
+    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", v).prompt_version == v
     assert profiles.validation_status("openrouter", "model-baru", v) == profiles.UNVALIDATED
     assert profiles.validation_status("ollama", "qwen2.5vl:3b", v) == profiles.UNSAFE
 
 
 def test_validasi_prompt_lama_kedaluwarsa():
     assert profiles.validation_status("ollama", "qwen2.5vl:7b", "T99") == profiles.OUTDATED
+    # tanpa catatan untuk versi itu, yang dipakai catatan terbaru
+    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", "T99").prompt_version == "T48"
 
 
 def test_model_yang_pernah_meloloskan_apd_kurang_ditandai_tidak_aman():
@@ -63,7 +66,7 @@ def test_peringatan_penyedia_eksperimental_dan_model_belum_tervalidasi():
     assert warnings == [messages.VLM_PROVIDER_EXPERIMENTAL.format(who="utama openrouter/x"),
                         messages.VLM_MODEL_UNVALIDATED.format(who="utama openrouter/x")]
     assert profile_warnings("ollama", "qwen2.5vl:7b", "cadangan") == [
-        messages.VLM_MODEL_PARTIAL.format(who="cadangan", note=profiles.find_validation("ollama", "qwen2.5vl:7b").note)]
+        messages.VLM_MODEL_PARTIAL.format(who="cadangan", note=profiles.find_validation("ollama", "qwen2.5vl:7b", messages.PROMPT_VERSION).note)]
 
 
 def test_info_menyertakan_dukungan_dan_validasi():

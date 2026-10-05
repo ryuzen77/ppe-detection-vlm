@@ -86,6 +86,11 @@ VALIDATIONS = (
     ModelValidation("ollama", "qwen2.5vl:7b", "T48", "2026-10-05", photos=10, missed=0, false_rejects=2,
                     median_seconds=5.7, complete=False,
                     note="T48 10 foto (data/eval/20261005-171212); prompt T36a sebelumnya 84 foto 0 lolos"),
+    # T48 (helm/sepatu dilonggarkan): 2 foto lengkap yang ditolak model lokal + 10 foto
+    # yang kurangnya hanya helm/sepatu (paling berisiko lolos bila aturan longgar).
+    ModelValidation("gemini", "gemini-3.5-flash-lite", "T48", "2026-10-05", photos=12, missed=0, false_rejects=0,
+                    median_seconds=2.21, complete=False,
+                    note="T48: apd_10, apd_4 + 10 foto kurang helm/sepatu; data/eval 20261005-172017, -172428"),
     # Free tier tidak cukup untuk 84 foto sekaligus (keputusan pengguna 05-10): diuji bertahap,
     # 10 foto per sesi dengan jeda 4 dtk (15 RPM). Satu jawaban 4,08 dtk > batas 4 dtk.
     ModelValidation("gemini", "gemini-3.5-flash-lite", "T36a", "2026-10-05", photos=20, missed=0, false_rejects=0,
@@ -119,20 +124,22 @@ def is_local(name: str) -> bool:
     return bool(profile and profile.is_local)
 
 
-def find_validation(provider: str, model: str) -> Optional[ModelValidation]:
+def find_validation(provider: str, model: str, prompt_version: str = "") -> Optional[ModelValidation]:
+    """Catatan untuk versi prompt itu; bila tidak ada, catatan terbaru model tersebut."""
     key = ((provider or "").strip().lower(), (model or "").strip())
-    for v in VALIDATIONS:
-        if (v.provider, v.model) == key:
-            return v
-    return None
+    records = [v for v in VALIDATIONS if (v.provider, v.model) == key]
+    exact = [v for v in records if v.prompt_version == prompt_version]
+    return (exact or sorted(records, key=lambda v: v.date, reverse=True) or [None])[0]
 
 
 def validation_status(provider: str, model: str, prompt_version: str) -> str:
-    v = find_validation(provider, model)
+    # Pernah meloloskan APD kurang di versi prompt mana pun = tidak aman
+    key = ((provider or "").strip().lower(), (model or "").strip())
+    if any((v.provider, v.model) == key and v.missed > 0 for v in VALIDATIONS):
+        return UNSAFE
+    v = find_validation(provider, model, prompt_version)
     if v is None:
         return UNVALIDATED
-    if v.missed > 0:
-        return UNSAFE
     if v.prompt_version != prompt_version:
         return OUTDATED
     return VALIDATED if v.complete else PARTIAL
