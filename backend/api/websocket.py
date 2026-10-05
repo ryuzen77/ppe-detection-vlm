@@ -8,6 +8,7 @@ from ..config import cfg
 from ..shutdown import SHUTTING_DOWN
 from ..state_manager import state_mgr
 from ..audio_engine import audio_player
+from ..notifier import notifier
 from ..video.capture import video_service
 
 router = APIRouter()
@@ -50,6 +51,7 @@ async def websocket_endpoint(websocket: WebSocket):
             telemetry["frame_width"] = video_service.frame_width
             telemetry["frame_height"] = video_service.frame_height
             telemetry["camera"] = video_service.get_camera_status()
+            telemetry["iot"] = notifier.iot_status()
             await websocket.send_json(telemetry)
             await asyncio.sleep(cfg.TELEMETRY_INTERVAL_SECONDS)
         # Server sedang berhenti: tutup rapi agar uvicorn tidak menunggu

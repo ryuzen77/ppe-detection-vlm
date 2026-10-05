@@ -31,7 +31,8 @@ print(json.dumps({
     "yolo_loaded": detector.model is not None,
     "mixer_initialized": mixer_on,
     "audio_thread": audio_player.worker is not None,
-    "serial_open": notifier.iot.serial_conn is not None,
+    "serial_open": notifier.link is not None and (notifier.link._conn is not None
+                                                  or notifier.link._thread is not None),
     "vlm_provider": vlm_analyzer.provider is not None,
     "db_opened": report_mgr._opened,
     "video_running": video_service.is_running,

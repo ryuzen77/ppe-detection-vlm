@@ -19,6 +19,7 @@ LIGHT_POSITION_WARNING = "Peringatan: {reason}"
 LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan otomatis"
 LIGHT_TEST_GREEN = "Uji Coba Manual - Lampu Hijau"
 LIGHT_TEST_RED = "Uji Coba Manual - Lampu Merah"
+LIGHT_TEST_YELLOW = "Uji Coba Manual - Lampu Kuning"
 
 # --- Arahan posisi dari detektor full-body ---
 POSE_OK = "Full body terdeteksi sempurna"
@@ -72,6 +73,9 @@ ZONE_CALIBRATE_NO_PERSON = "Tidak ada orang di lorong pemeriksaan untuk dijadika
 ZONE_CALIBRATE_NO_FEET = "Kaki orang di titik berdiri belum terlihat kamera."
 ZONE_BODY_INVALID = "Isi harus objek JSON: {\"enabled\"?: bool, \"y_min\"?: angka, \"y_max\"?: angka}"
 API_SNAPSHOT_NOT_FOUND = "Snapshot image not found"
+# Uji lampu gerbang (T47)
+API_LIGHT_TEST_BUSY = "Ada pekerja di jalur pemeriksaan; uji lampu ditunda supaya tidak terlihat sebagai keputusan."
+API_LIGHT_TEST_INVALID = "Aksi uji lampu harus salah satu dari: {actions}."
 
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
@@ -125,6 +129,14 @@ LOCAL_MODEL_CHECK_FAILED = "Pemeriksaan porsi GPU VLM lokal gagal: {error}"
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "
                          "pekerja diminta menunggu dan diperiksa ulang otomatis.")
+
+# --- Lampu gerbang fisik (T47) ---
+IOT_CONNECTED = "Lampu gerbang tersambung di {port}."
+IOT_OPEN_FAILED = "Port lampu gerbang {port} tidak bisa dibuka: {error}. Dicoba lagi otomatis."
+IOT_LINK_LOST = "Sambungan lampu gerbang terputus: {error}. Dicoba lagi otomatis."
+IOT_NO_ACK = "Papan lampu gerbang belum membalas."
+IOT_TYPE_UNSUPPORTED = ("IOT_TYPE={iot_type} tidak didukung; lampu fisik dimatikan. "
+                        "Pakai IOT_TYPE=serial (ESP32 lewat USB).")
 
 # --- Ekspor CSV audit ---
 CSV_HEADER_LEADING = ["No", "Tanggal", "Waktu", "ID Pekerja", "Status Kelulusan"]

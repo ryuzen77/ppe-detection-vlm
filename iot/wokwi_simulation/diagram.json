@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "author": "SAFEGUARD AI",
+  "author": "DEPRO",
   "editor": "wokwi",
   "parts": [
     {
-      "type": "wokwi-arduino-uno",
-      "id": "uno",
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
       "top": 120,
       "left": 40,
       "attrs": {}
@@ -14,83 +14,226 @@
       "type": "wokwi-relay-module",
       "id": "relay_green",
       "top": 30,
-      "left": 400,
-      "attrs": { "transistor": "pnp" }
-    },
-    {
-      "type": "wokwi-relay-module",
-      "id": "relay_red",
-      "top": 240,
-      "left": 400,
-      "attrs": { "transistor": "pnp" }
+      "left": 380,
+      "attrs": {
+        "transistor": "pnp"
+      }
     },
     {
       "type": "wokwi-resistor",
       "id": "res_green",
       "top": 70,
-      "left": 620,
-      "attrs": { "value": "220" }
+      "left": 600,
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_green",
       "top": 60,
-      "left": 720,
-      "attrs": { "color": "green", "label": "LAMPU BULAT HIJAU (AKSES DIIZINKAN)" }
+      "left": 700,
+      "attrs": {
+        "color": "green",
+        "label": "HIJAU (LOLOS)"
+      }
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay_red",
+      "top": 180,
+      "left": 380,
+      "attrs": {
+        "transistor": "pnp"
+      }
     },
     {
       "type": "wokwi-resistor",
       "id": "res_red",
-      "top": 280,
-      "left": 620,
-      "attrs": { "value": "220" }
+      "top": 220,
+      "left": 600,
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_red",
-      "top": 270,
-      "left": 720,
-      "attrs": { "color": "red", "label": "LAMPU BULAT MERAH (AKSES DITOLAK)" }
+      "top": 210,
+      "left": 700,
+      "attrs": {
+        "color": "red",
+        "label": "MERAH (APD KURANG)"
+      }
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay_yellow",
+      "top": 330,
+      "left": 380,
+      "attrs": {
+        "transistor": "pnp"
+      }
     },
     {
       "type": "wokwi-resistor",
-      "id": "pd_green",
-      "top": 30,
-      "left": 230,
-      "attrs": { "value": "10000" }
+      "id": "res_yellow",
+      "top": 370,
+      "left": 600,
+      "attrs": {
+        "value": "220"
+      }
     },
     {
-      "type": "wokwi-resistor",
-      "id": "pd_red",
-      "top": 70,
-      "left": 230,
-      "attrs": { "value": "10000" }
+      "type": "wokwi-led",
+      "id": "led_yellow",
+      "top": 360,
+      "left": 700,
+      "attrs": {
+        "color": "yellow",
+        "label": "KUNING (GANGGUAN / SISTEM TIDAK AKTIF)"
+      }
     }
   ],
   "connections": [
-    [ "uno:5V", "relay_green:VCC", "red", [ "v-30", "h250" ] ],
-    [ "uno:5V", "relay_red:VCC", "red", [ "v-30", "h250" ] ],
-    [ "uno:GND.1", "relay_green:GND", "black", [ "v-40", "h260" ] ],
-    [ "uno:GND.1", "relay_red:GND", "black", [ "v-40", "h260" ] ],
-    
-    [ "uno:2", "relay_green:IN", "green", [ "v-10", "h220" ] ],
-    [ "uno:3", "relay_red:IN", "orange", [ "v10", "h220" ] ],
-
-    [ "uno:2", "pd_green:1", "green", [ "v-10", "h40" ] ],
-    [ "pd_green:2", "uno:GND.1", "black", [ "v-20", "h-50" ] ],
-    [ "uno:3", "pd_red:1", "orange", [ "v10", "h40" ] ],
-    [ "pd_red:2", "uno:GND.1", "black", [ "v-20", "h-50" ] ],
-
-    [ "uno:5V", "relay_green:COM", "red", [ "v-30", "h270" ] ],
-    [ "uno:5V", "relay_red:COM", "red", [ "v-30", "h270" ] ],
-
-    [ "relay_green:NO", "res_green:1", "green", [ "h40" ] ],
-    [ "res_green:2", "led_green:A", "green", [ "h40" ] ],
-    [ "led_green:C", "uno:GND.2", "black", [ "v120", "h-450" ] ],
-
-    [ "relay_red:NO", "res_red:1", "red", [ "h40" ] ],
-    [ "res_red:2", "led_red:A", "red", [ "h40" ] ],
-    [ "led_red:C", "uno:GND.2", "black", [ "v70", "h-450" ] ]
+    [
+      "esp:TX0",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX0",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "esp:3V3",
+      "relay_green:VCC",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "relay_green:GND",
+      "black",
+      []
+    ],
+    [
+      "esp:D18",
+      "relay_green:IN",
+      "green",
+      []
+    ],
+    [
+      "esp:VIN",
+      "relay_green:COM",
+      "red",
+      []
+    ],
+    [
+      "relay_green:NO",
+      "res_green:1",
+      "green",
+      []
+    ],
+    [
+      "res_green:2",
+      "led_green:A",
+      "green",
+      []
+    ],
+    [
+      "led_green:C",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "esp:3V3",
+      "relay_red:VCC",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "relay_red:GND",
+      "black",
+      []
+    ],
+    [
+      "esp:D19",
+      "relay_red:IN",
+      "red",
+      []
+    ],
+    [
+      "esp:VIN",
+      "relay_red:COM",
+      "red",
+      []
+    ],
+    [
+      "relay_red:NO",
+      "res_red:1",
+      "red",
+      []
+    ],
+    [
+      "res_red:2",
+      "led_red:A",
+      "red",
+      []
+    ],
+    [
+      "led_red:C",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "esp:3V3",
+      "relay_yellow:VCC",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "relay_yellow:GND",
+      "black",
+      []
+    ],
+    [
+      "esp:D21",
+      "relay_yellow:IN",
+      "yellow",
+      []
+    ],
+    [
+      "esp:VIN",
+      "relay_yellow:COM",
+      "red",
+      []
+    ],
+    [
+      "relay_yellow:NO",
+      "res_yellow:1",
+      "yellow",
+      []
+    ],
+    [
+      "res_yellow:2",
+      "led_yellow:A",
+      "yellow",
+      []
+    ],
+    [
+      "led_yellow:C",
+      "esp:GND.2",
+      "black",
+      []
+    ]
   ],
   "dependencies": {}
 }

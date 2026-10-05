@@ -322,11 +322,16 @@ class Config:
 
     # IoT / Hardware Output (Ready for Stage 2)
     IOT_ENABLED: bool = _env("IOT_ENABLED", "false").lower() == "true"
-    IOT_TYPE: str = _env("IOT_TYPE", "serial")  # "serial", "http", or "mqtt"
+    # Hanya "serial" (ESP32 lewat USB). HTTP/Wi-Fi tanpa tanda tangan dibuang di T47.
+    IOT_TYPE: str = _env("IOT_TYPE", "serial")
     IOT_SERIAL_PORT: str = _env("IOT_SERIAL_PORT", "COM3")
     IOT_SERIAL_BAUD: int = 9600
     IOT_SERIAL_TIMEOUT_SECONDS: float = 1.0
-    IOT_HTTP_TIMEOUT_SECONDS: float = 1.5
-    IOT_HTTP_URL: str = _env("IOT_HTTP_URL", "http://192.168.1.50")
+    # Heartbeat lampu (T47): keadaan dikirim ulang tiap ini; firmware menyalakan
+    # kuning berkedip bila 3 dtk tanpa perintah, jadi nilai ini harus jauh di bawahnya.
+    IOT_HEARTBEAT_SECONDS: float = 1.0
+    IOT_ACK_TIMEOUT_SECONDS: float = 3.0      # tanpa balasan "OK:" selama ini = terputus
+    IOT_RECONNECT_SECONDS: float = 2.0        # jeda mencoba membuka ulang port
+    IOT_RX_MAX_BYTES: int = 256               # sisa data tanpa baris baru yang disimpan
 
 cfg = Config()

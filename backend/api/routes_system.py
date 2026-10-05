@@ -1,5 +1,5 @@
 """Status server, reset pelacakan, koridor, audio, dan uji lampu IoT."""
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..config import cfg
 from .. import messages
@@ -48,15 +48,21 @@ async def set_corridor_filter(request: Request):
 
 @router.post("/api/iot/test", dependencies=[Depends(require_admin)])
 async def test_iot_light(request: Request):
-    """Allows manual operator testing of physical gate lights (green/red/off) from Settings tab."""
+    """Uji lampu gerbang dari tab Pengaturan. Ditolak (409) bila ada pekerja di jalur,
+    supaya lampu uji tidak terbaca sebagai keputusan oleh pekerja sungguhan."""
     data = await request.json()
-    action = data.get("action", "off").lower()
-    if action == "green":
-        notifier.set_complete(messages.LIGHT_TEST_GREEN)
-    elif action == "red":
-        notifier.set_incomplete(messages.LIGHT_TEST_RED)
-    else:
-        notifier.set_idle()
+    action = str(data.get("action", "")).lower()
+    tests = {
+        "green": lambda: notifier.set_complete(messages.LIGHT_TEST_GREEN),
+        "red": lambda: notifier.set_incomplete(messages.LIGHT_TEST_RED),
+        "yellow": lambda: notifier.set_waiting(messages.LIGHT_TEST_YELLOW),
+        "off": notifier.set_idle,
+    }
+    if action not in tests:
+        raise HTTPException(status_code=400, detail=messages.API_LIGHT_TEST_INVALID.format(actions=", ".join(tests)))
+    if state_mgr.session is not None:
+        raise HTTPException(status_code=409, detail=messages.API_LIGHT_TEST_BUSY)
+    tests[action]()
     return {
         "status": "success",
         "action": action,

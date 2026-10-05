@@ -1,131 +1,142 @@
 /**
- * ===================================================================
- * DEPRO - ESP32 DevKit V1 (USB Serial Demo Mode)
- * Pengendali Lampu Bulat Hijau & Merah Terpisah via Kabel USB Laptop
- * 
- * Keunggulan Mode Demo:
- * 1. Booting Instan (< 0.1 detik) tanpa menunggu koneksi Wi-Fi.
- * 2. Handal 100% di lokasi demo tanpa risiko Wi-Fi terputus.
- * 3. Latensi Nol (< 1ms) langsung dari backend Python via Serial COM.
- * 4. Self-test kedipan lampu otomatis saat baru dicolok ke USB.
- * ===================================================================
+ * DEPRO - ESP32 DevKit V1 gate light controller (USB serial), T47.
+ *
+ * Lampu: merah (APD kurang), kuning (gangguan / menunggu), hijau (lolos),
+ * buzzer cadangan (mati bawaan; suara utama dari speaker server).
+ *
+ * Protokol (9600 baud, satu perintah per baris, maks. 31 karakter):
+ *   LIGHT_GREEN | LIGHT_RED | LIGHT_YELLOW | LIGHT_OFF  -> balas "OK:<STATE>"
+ *   PING                                              -> balas "OK:<STATE>"
+ *   lainnya -> "ERR:UNKNOWN", baris terlalu panjang -> "ERR:TOO_LONG"
+ *
+ * Server mengirim ulang keadaan lampu tiap ~1 dtk sebagai heartbeat. Bila
+ * tidak ada perintah sah selama HEARTBEAT_TIMEOUT_MS, papan sendiri memadamkan
+ * hijau/merah dan menyalakan KUNING BERKEDIP ("sistem tidak aktif"), supaya
+ * hijau tidak pernah tertinggal menyala saat server crash atau kabel lepas.
+ * Saat baru menyala papan juga mulai dari kuning berkedip (bukan self-test
+ * hijau), sampai server mengirim perintah pertama.
  */
 
-// -------------------------------------------------------------
-// 1. DEFINISI PIN GPIO (ESP32 DevKit V1)
-// -------------------------------------------------------------
-// Menggunakan GPIO 18 dan 19 (Aman, bebas interferensi boot strapping)
-const int PIN_RELAY_GREEN = 18; // GPIO 18 -> IN1 Modul Relay (Lampu Hijau)
-const int PIN_RELAY_RED   = 19; // GPIO 19 -> IN2 Modul Relay (Lampu Merah)
+// --- Pin (GPIO bebas strapping boot ESP32) ---
+const int PIN_GREEN  = 18;
+const int PIN_RED    = 19;
+const int PIN_YELLOW = 21;
+const int PIN_BUZZER = 22;
+const bool BUZZER_ENABLED = false;   // cadangan: hidupkan hanya bila diputuskan
 
-// Logika Relay: Sebagian besar modul relay 5V bersifat Active-LOW
-// (LOW = Relay ON/Menyala, HIGH = Relay OFF/Padam)
+// Modul relay optocoupler umumnya Active-LOW. Untuk modul Active-HIGH tukar keduanya.
 const int RELAY_ON  = LOW;
 const int RELAY_OFF = HIGH;
 
-// Safety Watchdog: Matikan lampu jika laptop tidak mengirim perintah > 15 detik
-unsigned long lastCommandTime = 0;
-const unsigned long TIMEOUT_WATCHDOG_MS = 15000;
+const unsigned long SERIAL_BAUD          = 9600;
+const unsigned long HEARTBEAT_TIMEOUT_MS = 3000;
+const unsigned long BLINK_INTERVAL_MS    = 500;
+const size_t MAX_LINE = 32;           // termasuk terminator
 
-String inputBuffer = "";
-String currentLightState = "OFF";
+enum LightState { STATE_OFF, STATE_GREEN, STATE_RED, STATE_YELLOW, STATE_LOST };
 
-// -------------------------------------------------------------
-// 2. FUNGSI LOGIKA KENDALI LAMPU
-// -------------------------------------------------------------
-void setLightState(String state) {
-  state.trim();
-  state.toUpperCase();
-  lastCommandTime = millis();
+LightState state = STATE_LOST;
+unsigned long lastCommandMs = 0;
+unsigned long lastBlinkMs = 0;
+bool blinkOn = false;
+char line[MAX_LINE];
+size_t lineLen = 0;
+bool lineOverflow = false;
 
-  if (state == "LIGHT_GREEN" || state == "GREEN") {
-    // Akses Diizinkan: Hijau NYALA, Merah PADAM
-    digitalWrite(PIN_RELAY_GREEN, RELAY_ON);
-    digitalWrite(PIN_RELAY_RED, RELAY_OFF);
-    currentLightState = "GREEN";
-    Serial.println(F("[ESP32] OK:GREEN_ACTIVE -> LAMPU HIJAU NYALA (AKSES DIIZINKAN)"));
-  } 
-  else if (state == "LIGHT_RED" || state == "RED") {
-    // Akses Ditolak: Merah NYALA, Hijau PADAM
-    digitalWrite(PIN_RELAY_GREEN, RELAY_OFF);
-    digitalWrite(PIN_RELAY_RED, RELAY_ON);
-    currentLightState = "RED";
-    Serial.println(F("[ESP32] OK:RED_ACTIVE -> LAMPU MERAH NYALA (AKSES DITOLAK)"));
-  } 
-  else if (state == "LIGHT_OFF" || state == "OFF") {
-    // Standby: Kedua lampu PADAM
-    turnOffAll();
-    currentLightState = "OFF";
-    Serial.println(F("[ESP32] OK:ALL_OFF -> MODE STANDBY (LAMPU PADAM)"));
+// Nilai keluaran ditulis sebelum pin dijadikan OUTPUT supaya relay tidak
+// sempat menyala sesaat saat boot.
+void initRelayPin(int pin) {
+  digitalWrite(pin, RELAY_OFF);
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, RELAY_OFF);
+}
+
+void writeLamps(bool green, bool red, bool yellow) {
+  digitalWrite(PIN_GREEN,  green  ? RELAY_ON : RELAY_OFF);
+  digitalWrite(PIN_RED,    red    ? RELAY_ON : RELAY_OFF);
+  digitalWrite(PIN_YELLOW, yellow ? RELAY_ON : RELAY_OFF);
+}
+
+void applyState(LightState next) {
+  state = next;
+  writeLamps(next == STATE_GREEN, next == STATE_RED, next == STATE_YELLOW);
+}
+
+const char* stateName(LightState s) {
+  switch (s) {
+    case STATE_GREEN:  return "GREEN";
+    case STATE_RED:    return "RED";
+    case STATE_YELLOW: return "YELLOW";
+    case STATE_OFF:    return "OFF";
+    default:           return "LOST";
   }
 }
 
-void turnOffAll() {
-  digitalWrite(PIN_RELAY_GREEN, RELAY_OFF);
-  digitalWrite(PIN_RELAY_RED, RELAY_OFF);
+void reply(const char* prefix, const char* detail) {
+  Serial.print(prefix);
+  Serial.println(detail);
 }
 
-void selfTest() {
-  // Kedipkan lampu hijau 300ms lalu merah 300ms saat baru dicolok ke USB
-  digitalWrite(PIN_RELAY_GREEN, RELAY_ON);
-  delay(300);
-  digitalWrite(PIN_RELAY_GREEN, RELAY_OFF);
-  
-  digitalWrite(PIN_RELAY_RED, RELAY_ON);
-  delay(300);
-  digitalWrite(PIN_RELAY_RED, RELAY_OFF);
+void handleCommand(const char* cmd) {
+  LightState next;
+  if (strcmp(cmd, "LIGHT_GREEN") == 0)       next = STATE_GREEN;
+  else if (strcmp(cmd, "LIGHT_RED") == 0)    next = STATE_RED;
+  else if (strcmp(cmd, "LIGHT_YELLOW") == 0) next = STATE_YELLOW;
+  else if (strcmp(cmd, "LIGHT_OFF") == 0)    next = STATE_OFF;
+  else if (strcmp(cmd, "PING") == 0)         next = state;
+  else {
+    reply("ERR:", "UNKNOWN");
+    return;
+  }
+  lastCommandMs = millis();
+  if (next != STATE_LOST && next != state) applyState(next);
+  reply("OK:", stateName(state));
 }
 
-// -------------------------------------------------------------
-// 3. SETUP & INISIALISASI
-// -------------------------------------------------------------
-void setup() {
-  // Inisialisasi Pin Output Relay
-  pinMode(PIN_RELAY_GREEN, OUTPUT);
-  pinMode(PIN_RELAY_RED, OUTPUT);
-
-  // Set kondisi awal: Semua Lampu MATI
-  digitalWrite(PIN_RELAY_GREEN, RELAY_OFF);
-  digitalWrite(PIN_RELAY_RED, RELAY_OFF);
-
-  // Inisialisasi Serial UART pada 9600 Baud
-  Serial.begin(9600);
-  while (!Serial) { ; } // Tunggu port serial siap
-
-  // Uji coba kedipan lampu hardware saat boot
-  selfTest();
-
-  Serial.println(F("=================================================="));
-  Serial.println(F(" DEPRO - ESP32 GATE CONTROLLER (DEMO USB)        "));
-  Serial.println(F(" Status: SIAP MENERIMA PERINTAH SERIAL DARI LAPTOP"));
-  Serial.println(F(" Perintah: LIGHT_GREEN | LIGHT_RED | LIGHT_OFF    "));
-  Serial.println(F("=================================================="));
-
-  lastCommandTime = millis();
-}
-
-// -------------------------------------------------------------
-// 4. MAIN LOOP
-// -------------------------------------------------------------
-void loop() {
-  // 1. Membaca Perintah Serial dari Backend Python (Laptop)
+void readSerial() {
   while (Serial.available() > 0) {
     char c = (char)Serial.read();
     if (c == '\n' || c == '\r') {
-      if (inputBuffer.length() > 0) {
-        setLightState(inputBuffer);
-        inputBuffer = "";
+      if (lineOverflow) reply("ERR:", "TOO_LONG");
+      else if (lineLen > 0) {
+        line[lineLen] = '\0';
+        handleCommand(line);
       }
+      lineLen = 0;
+      lineOverflow = false;
+    } else if (lineLen < MAX_LINE - 1) {
+      line[lineLen++] = c;
     } else {
-      inputBuffer += c;
+      lineOverflow = true;   // buang sisa baris; RAM tidak bertambah
     }
   }
+}
 
-  // 2. Failsafe Safety Timeout
-  // Jika laptop terputus atau server mati > 15 detik, matikan semua lampu
-  if (millis() - lastCommandTime > TIMEOUT_WATCHDOG_MS && currentLightState != "OFF") {
-    turnOffAll();
-    currentLightState = "OFF";
-    Serial.println(F("[ESP32] Watchdog: Timeout sinyal dari laptop. Lampu dipadamkan."));
+// Server diam terlalu lama: padamkan keputusan lama, kuning berkedip.
+void checkHeartbeat(unsigned long now) {
+  if (state != STATE_LOST && now - lastCommandMs > HEARTBEAT_TIMEOUT_MS) {
+    applyState(STATE_LOST);
+    reply("WARN:", "HEARTBEAT_LOST");
   }
+  if (state == STATE_LOST && now - lastBlinkMs >= BLINK_INTERVAL_MS) {
+    lastBlinkMs = now;
+    blinkOn = !blinkOn;
+    writeLamps(false, false, blinkOn);
+  }
+}
+
+void setup() {
+  initRelayPin(PIN_GREEN);
+  initRelayPin(PIN_RED);
+  initRelayPin(PIN_YELLOW);
+  initRelayPin(PIN_BUZZER);
+  (void)BUZZER_ENABLED;
+  Serial.begin(SERIAL_BAUD);
+  applyState(STATE_LOST);
+  reply("READY:", "DEPRO_GATE_LIGHTS");
+}
+
+void loop() {
+  readSerial();
+  checkHeartbeat(millis());
 }
