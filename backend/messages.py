@@ -18,6 +18,8 @@ LIGHT_DENIED_MISSING = "AKSES DITOLAK - Belum memakai: {missing}"
 LIGHT_POSITION_WARNING = "Peringatan: {reason}"
 LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan otomatis"
 # Gangguan kamera (T45): kuning, bukan merah — tidak ada pekerja yang ditolak
+# Suara per jenis gangguan (kunci VOICE_TEXTS); membeku ditangani seperti terputus
+CAMERA_FAULT_SOUND = {"lost": "kamera_terputus", "frozen": "kamera_terputus", "blocked": "kamera_terhalang"}
 LIGHT_CAMERA_FAULT = {
     "lost": "KAMERA TERPUTUS - Gerbang berhenti memeriksa, mohon tunggu petugas",
     "blocked": "KAMERA TERTUTUP / TERLALU GELAP - Gerbang berhenti memeriksa, mohon tunggu petugas",
@@ -47,6 +49,7 @@ CAMERA_DISCONNECTED = "Kamera terputus atau dicabut"
 CAMERA_STALLED = "Kamera berhenti mengirim frame wajar"
 CAMERA_FROZEN = "Gambar kamera membeku (frame identik); menyambung ulang"
 LOG_CAMERA_RECONNECT = "{reason}. Menunggu untuk disambung ulang."
+LOG_CAMERA_WAITING = "Masih menunggu kamera '{name}' ({seconds:.0f} dtk); perangkat yang terlihat sistem: {seen}"
 LOG_CAMERA_FAULT_START = "Gangguan kamera ({fault}): pemeriksaan dihentikan, lampu kuning."
 LOG_CAMERA_FAULT_END = "Gangguan kamera ({fault}) selesai setelah {seconds:.0f} dtk; gerbang siaga lagi."
 
@@ -55,7 +58,7 @@ FRAME_TITLE = "ZONA INSPEKSI K3 (STANDBY)"
 FRAME_NO_CAMERA = "Kamera fisik belum terhubung - Mode Simulasi Kamera"
 FRAME_OPTIMIZING = "Mengoptimalkan kamera - mengukur resolusi terbaik..."
 FRAME_SELECT_SOURCE = "Pilih sumber kamera di dashboard untuk memulai"
-FRAME_WAITING_DEVICE = "Kamera terputus - menunggu perangkat tersambung..."
+FRAME_WAITING_DEVICE = "Kamera terputus - colok ulang (port USB lain bila tidak muncul dalam 30 dtk)"
 FRAME_RECONNECTING = "Kamera terputus - mencoba menyambung ulang..."
 
 # --- HUD di atas video ---
@@ -124,8 +127,9 @@ VOICE_TEXTS = {
     "sedang_analisa": "Mohon tunggu.",
     # Utama & cadangan VLM gagal (T27): belum ada keputusan, pemeriksaan diulang otomatis
     "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
-    # Kamera terputus/tertutup/membeku (T45): diputar sekali saat gangguan mulai
-    "gangguan_kamera": "Kamera gerbang terganggu. Mohon tunggu petugas.",
+    # Gangguan kamera (T45/T45b): terputus dan terhalang dibedakan, diputar sekali per kejadian
+    "kamera_terputus": "Kamera gerbang terputus. Mohon tunggu petugas.",
+    "kamera_terhalang": "Kamera gerbang terhalang. Mohon singkirkan penghalang di depan kamera.",
 }
 
 # --- Catatan hidup server (T37) ---

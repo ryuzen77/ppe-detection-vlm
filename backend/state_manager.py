@@ -105,7 +105,8 @@ class StateManager:
         # Gangguan kamera yang sedang berlaku (T45): None | "lost" | "blocked" | "frozen"
         self.camera_fault: Optional[str] = None
         self.camera_fault_since = 0.0
-        self.camera_fault_sound_at = float("-inf")
+        # Kapan tiap suara gangguan terakhir diputar (per jenis suara, T45b)
+        self.camera_fault_sound_at: dict[str, float] = {}
 
     def set_camera_fault(self, fault: Optional[str]):
         """Dipanggil tiap frame oleh thread inferensi; hanya PERUBAHAN keadaan yang bertindak.
@@ -125,13 +126,25 @@ class StateManager:
                 return
             if previous is None:
                 self.camera_fault_since = now
-                logger.warning(messages.LOG_CAMERA_FAULT_START.format(fault=fault))
-                if now - self.camera_fault_sound_at >= cfg.CAMERA_FAULT_SOUND_COOLDOWN_SECONDS:
-                    self.camera_fault_sound_at = now
-                    audio_player.play("gangguan_kamera", urgent=True)
+            logger.warning(messages.LOG_CAMERA_FAULT_START.format(fault=fault))
+            self._announce_camera_fault(fault, previous, now)
             # Hasil VLM yang tiba belakangan untuk sesi ini diabaikan (cek id sesi)
             self.session = None
             notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[fault])
+
+    def _announce_camera_fault(self, fault: str, previous: Optional[str], now: float):
+        """Suara gangguan: terputus & terhalang dibedakan (uji fisik 06-10).
+
+        Pengulangan suara yang SAMA ditahan CAMERA_FAULT_SOUND_COOLDOWN_SECONDS (mis. kamera
+        putus-sambung), tetapi pergantian jenis (terhalang -> terputus) tetap diumumkan.
+        """
+        sound = messages.CAMERA_FAULT_SOUND[fault]
+        if previous is not None and messages.CAMERA_FAULT_SOUND[previous] == sound:
+            return
+        if now - self.camera_fault_sound_at.get(sound, float("-inf")) < cfg.CAMERA_FAULT_SOUND_COOLDOWN_SECONDS:
+            return
+        self.camera_fault_sound_at[sound] = now
+        audio_player.play(sound, urgent=True)
 
     @staticmethod
     def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int]) -> DetectionResult:

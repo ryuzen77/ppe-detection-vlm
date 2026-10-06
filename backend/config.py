@@ -131,6 +131,8 @@ class Config:
     CAMERA_HEALTHY_SECONDS: float = 1.0
     # Suara gangguan tidak diulang dalam selang ini, walau gangguan putus-sambung (T45b)
     CAMERA_FAULT_SOUND_COOLDOWN_SECONDS: float = 30.0
+    # Selang log "masih menunggu kamera" selama kamera belum dicolok ulang (T45b)
+    CAMERA_WAITING_LOG_SECONDS: float = 10.0
     # Indeks tertinggi yang dicoba saat pemindaian bila nama perangkat tidak bisa
     # dibaca dari sistem operasi (bila bisa, jumlah perangkat itu yang dipakai)
     CAMERA_SCAN_MAX_INDEX: int = 6

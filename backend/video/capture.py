@@ -52,6 +52,9 @@ class VideoCaptureService:
         self._health = CameraHealth()
         # Gangguan yang dibawa melewati pembukaan ulang kamera (T45b)
         self._carry_fault = None
+        # Menunggu kamera dicolok ulang (T45b): kapan mulai & kapan terakhir dicatat
+        self._waiting_since = None
+        self._waiting_logged_at = 0.0
         # Slot frame mentah terbaru: pembaca kamera dan inferensi dipisah agar
         # inferensi YOLO tidak memblokir pembacaan dan buffer kamera tidak menumpuk.
         self.raw_lock = threading.Lock()
@@ -196,6 +199,20 @@ class VideoCaptureService:
         if self.camera_name not in names:
             logger.warning(f"'{self.camera_name}' hilang dari daftar perangkat sistem.")
             self._device_missing = True
+
+    def _log_waiting(self, now: float):
+        """Uji fisik 06-10: kamera yang dicolok ulang tidak muncul ±1 menit dan log diam
+        sama sekali. Kini tiap CAMERA_WAITING_LOG_SECONDS dicatat apa yang terlihat sistem."""
+        self._waiting_since = self._waiting_since or now
+        if now - self._waiting_logged_at < cfg.CAMERA_WAITING_LOG_SECONDS:
+            return
+        self._waiting_logged_at = now
+        try:
+            seen = ", ".join(camera_manager.list_device_names()) or "-"
+        except Exception as e:
+            seen = str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+        logger.warning(messages.LOG_CAMERA_WAITING.format(
+            name=self.camera_name, seconds=now - self._waiting_since, seen=seen))
 
     def _find_index_by_name(self, name: str) -> int | None:
         """Mencari indeks terkini sebuah kamera berdasarkan namanya."""
@@ -448,6 +465,7 @@ class VideoCaptureService:
                         # jadi dicari ulang lewat namanya sebelum dibuka.
                         target_index = self._find_index_by_name(self.camera_name)
                         if target_index is None:
+                            self._log_waiting(now)
                             time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
                             with self.raw_lock:
                                 self.latest_raw = self._generate_synthetic_frame(
@@ -457,6 +475,7 @@ class VideoCaptureService:
                             continue
                         if self._init_camera(target_index, lost_mode):
                             logger.info("Kamera tersambung kembali.")
+                            self._waiting_since = None
                             consecutive_failures = 0
                             lost_mode = None
                             self._device_missing = False
