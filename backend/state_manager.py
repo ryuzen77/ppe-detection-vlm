@@ -9,6 +9,7 @@ from .config import cfg
 from . import messages
 from .detector import DetectionResult
 from . import frame_quality
+from .readiness import ReadinessTracker
 from .vlm_analyzer import vlm_analyzer, InspectionResult
 from .audio_engine import audio_player
 from .notifier import notifier
@@ -71,6 +72,22 @@ class GateSession:
         self.candidates: List[frame_quality.FrameCandidate] = []
         # Kotak tubuh frame sebelum kandidat pertama, untuk menilai gerakan
         self.prev_bbox: Optional[list] = None
+        # Jendela "diam & menghadap kamera" sebelum dipotret (T46)
+        self.readiness = ReadinessTracker()
+
+    def restart_candidates(self, bbox: list):
+        """Rangkaian kandidat terputus: frame lama tidak boleh ikut dinilai."""
+        self.stable_frames = 0
+        self.candidates = []
+        self.prev_bbox = bbox
+
+    def add_candidate(self, candidate: "frame_quality.FrameCandidate"):
+        """Menyimpan kandidat terbaru; yang tertua dibuang di atas READY_MAX_CANDIDATES."""
+        self.stable_frames += 1
+        self.candidates.append(candidate)
+        if len(self.candidates) > cfg.READY_MAX_CANDIDATES:
+            # Kotak frame yang dibuang jadi acuan gerak kandidat tertua berikutnya
+            self.prev_bbox = self.candidates.pop(0).bbox
 
 
 class StateManager:
@@ -171,8 +188,8 @@ class StateManager:
                     return
                 logger.info(f"Sesi #{session.session_id}: mencoba ulang pemeriksaan setelah gangguan sistem.")
                 session.state = TrackState.INITIAL
-                session.stable_frames = 0
-                session.candidates = []
+                session.restart_candidates(det.bbox)
+                session.readiness.reset()
 
             # Keputusan sesi terkunci sampai jalur kosong: tidak ada panggilan VLM kedua
             if session.state in (TrackState.ANALYZING, TrackState.ANALYZED):
@@ -180,10 +197,9 @@ class StateManager:
 
             if not det.is_full_body:
                 session.state = TrackState.STEP_BACK_WARNING
-                session.stable_frames = 0
                 # Kandidat hanya dari rangkaian tubuh-utuh yang tidak terputus
-                session.candidates = []
-                session.prev_bbox = det.bbox
+                session.restart_candidates(det.bbox)
+                session.readiness.reset()
                 # Arahan posisi hanya lewat suara dan dashboard. LED merah khusus
                 # untuk APD tidak lengkap, jadi lampu tidak disentuh di sini.
                 # Smart Limiter: Max repeats (default 2x) per session with debounce so it doesn't spam
@@ -195,15 +211,25 @@ class StateManager:
                 return
 
             session.step_back_warning_count = 0
-            session.stable_frames += 1
             session.state = TrackState.STABILIZING
+            # Pekerja masih melangkah atau menyamping: kumpulan kandidat dimulai ulang (T46)
+            if session.readiness.update(det.bbox, det.keypoints, now):
+                session.restart_candidates(session.candidates[-1].bbox if session.candidates else det.bbox)
+            if not session.readiness.holding:
+                return
             if det.crop_img is not None:
-                session.candidates.append(frame_quality.FrameCandidate(
+                session.add_candidate(frame_quality.FrameCandidate(
                     crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id))
+            else:
+                session.stable_frames += 1
 
-            # Setelah STABLE_FRAMES_REQUIRED frame tubuh-utuh terkumpul, kirim SATU
-            # frame terbaik (paling tajam, paling diam, pose paling jelas) ke VLM
-            if session.stable_frames >= cfg.STABLE_FRAMES_REQUIRED:
+            # Setelah pekerja diam READY_HOLD_SECONDS (minimal STABLE_FRAMES_REQUIRED
+            # frame), kirim SATU frame terbaik (paling tajam, paling diam, pose
+            # paling jelas) dari jendela itu ke VLM
+            if session.stable_frames >= cfg.STABLE_FRAMES_REQUIRED and session.readiness.ready(now):
+                logger.info(messages.LOG_SESSION_READY.format(
+                    session=session.session_id, held=session.readiness.held_seconds(now),
+                    restarts=session.readiness.restarts, frames=session.stable_frames))
                 session.state = TrackState.ANALYZING
                 crop_to_analyze, track_id = None, det.track_id
                 if session.candidates:
