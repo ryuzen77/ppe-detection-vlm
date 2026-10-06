@@ -180,7 +180,7 @@ export interface HistoryRecord {
   snapshot_filename: string
 }
 
-export type CameraState = 'IDLE' | 'OPENING' | 'OK' | 'OPTIMIZING' | 'LOST' | 'SYNTHETIC'
+export type CameraState = 'IDLE' | 'OPENING' | 'OK' | 'OPTIMIZING' | 'LOST' | 'SYNTHETIC' | 'BLOCKED'
 
 export interface CameraMode {
   width: number
@@ -216,6 +216,7 @@ export interface Telemetry {
   zone: Omit<Zone, 'source'>
   light: LightStatus
   iot: { enabled: boolean; connected: boolean; last_ack_age_s: number | null; error: string | null }
+  camera_fault: string | null
   history: HistoryRecord[]
   stable_frames_required: number
   /** Ambang keyakinan titik pose — sama dengan detektor backend */
