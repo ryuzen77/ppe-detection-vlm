@@ -66,7 +66,10 @@ class Config:
     # supaya demo lokal tidak terhambat. Isi kalau server dipakai di jaringan bersama.
     ADMIN_TOKEN: str = _env("ADMIN_TOKEN", "")
     ALLOW_INSECURE_DEMO: bool = _env("ALLOW_INSECURE_DEMO", "false").lower() == "true"
-    # Login admin (T30): kata sandi = ADMIN_TOKEN; sesi 1 shift; tebak sandi ditahan
+    # Login admin (T30): kata sandi = ADMIN_TOKEN; sesi 1 shift; tebak sandi ditahan.
+    # Panjang minimal kata sandi (keputusan pengguna 06-10): kurang = server menolak menyala
+    # di jaringan, peringatan di localhost.
+    ADMIN_TOKEN_MIN_LENGTH: int = 16
     SESSION_HOURS: float = float(_env("SESSION_HOURS", "8"))
     LOGIN_MAX_FAILURES: int = 5
     LOGIN_LOCKOUT_SECONDS: float = 60.0

@@ -34,12 +34,20 @@ logger = logging.getLogger(__name__)
 
 def insecure_network_reason(host: str, token: str, allow_demo: bool) -> str | None:
     from .config import cfg
-    from .messages import STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
-    if host not in cfg.LOCALHOST_IPS and not token:
+    from .messages import ADMIN_TOKEN_TOO_SHORT, STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
+    on_network = host not in cfg.LOCALHOST_IPS
+    if on_network and not token:
         if not allow_demo:
             return STARTUP_INSECURE_LAN.format(host=host)
         else:
             logger.warning(INSECURE_DEMO_WARNING)
+    if token and len(token) < cfg.ADMIN_TOKEN_MIN_LENGTH:
+        # Kata sandi pendek bisa ditebak walau ada penahan per-IP (tinjauan T30: IP bisa
+        # dirotasi). Di jaringan = ditolak; di localhost = peringatan saja. Nilainya tidak dicetak.
+        short = ADMIN_TOKEN_TOO_SHORT.format(length=len(token), minimum=cfg.ADMIN_TOKEN_MIN_LENGTH)
+        if on_network and not allow_demo:
+            return short
+        logger.warning(short)
     return None
 
 class PayloadTooLargeError(Exception):

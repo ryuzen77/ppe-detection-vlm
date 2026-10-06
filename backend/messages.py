@@ -200,3 +200,5 @@ STARTUP_INSECURE_LAN = "Server berjalan di jaringan terbuka (HOST={host}) tanpa 
 
 PAYLOAD_TOO_LARGE = "Payload Too Large"
 INSECURE_DEMO_WARNING = "Menjalankan mode demo tidak aman di LAN karena ALLOW_INSECURE_DEMO aktif."
+ADMIN_TOKEN_TOO_SHORT = ("ADMIN_TOKEN (kata sandi login) hanya {length} karakter; minimal {minimum} supaya tidak bisa "
+                         "ditebak. Ganti di backend/.env dengan kalimat sandi panjang.")

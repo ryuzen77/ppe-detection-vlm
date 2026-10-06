@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app import app, insecure_network_reason
 from backend.config import cfg
+from backend import messages
 from backend.messages import STARTUP_INSECURE_LAN
 
 client = TestClient(app)
@@ -55,7 +56,7 @@ def test_insecure_network_reason_direct():
     assert insecure_network_reason("127.0.0.1", "", False) is None
     
     # 4. LAN dengan token -> kembalikan None
-    assert insecure_network_reason("192.168.1.10", "secret", False) is None
+    assert insecure_network_reason("192.168.1.10", "kalimat-sandi-panjang-uji", False) is None
 
 def test_startup_insecure_lan_lifespan(monkeypatch):
     from backend import runtime
@@ -100,3 +101,23 @@ def test_startup_subprocess():
     assert result.returncode == 1
     assert "Server berjalan di jaringan terbuka" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+
+# --- Panjang minimal kata sandi admin (T30, keputusan 06-10) -------------------------------
+
+def test_kata_sandi_pendek_ditolak_di_jaringan():
+    reason = insecure_network_reason("192.168.1.10", "pendek123", False)
+    assert reason == messages.ADMIN_TOKEN_TOO_SHORT.format(length=9, minimum=cfg.ADMIN_TOKEN_MIN_LENGTH)
+    assert "pendek123" not in reason, "nilai kata sandi tidak boleh dicetak"
+
+
+def test_kata_sandi_pendek_di_localhost_hanya_peringatan(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING):
+        assert insecure_network_reason("127.0.0.1", "pendek123", False) is None
+    assert "minimal" in caplog.text and "pendek123" not in caplog.text
+
+
+def test_kata_sandi_cukup_panjang_diterima():
+    assert insecure_network_reason("192.168.1.10", "x" * cfg.ADMIN_TOKEN_MIN_LENGTH, False) is None
