@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import runtime_settings, zone as zones
+from backend import pose_keypoints as kp, runtime_settings, zone as zones
 from backend.app import app
 from backend.config import cfg
 from backend.detector import DetectionResult
@@ -15,8 +15,8 @@ def _kpts(ankle_y=None, conf=0.9):
     """17 titik pose; hanya pergelangan kaki (15, 16) yang diisi."""
     pts = [[0.0, 0.0, 0.0] for _ in range(17)]
     if ankle_y is not None:
-        pts[zones.LEFT_ANKLE] = [100.0, ankle_y - 10, conf]
-        pts[zones.RIGHT_ANKLE] = [140.0, ankle_y + 10, conf]
+        pts[kp.LEFT_ANKLE] = [100.0, ankle_y - 10, conf]
+        pts[kp.RIGHT_ANKLE] = [140.0, ankle_y + 10, conf]
     return pts
 
 
@@ -36,7 +36,7 @@ def test_posisi_kaki_dari_pergelangan_paling_bawah():
 
 def test_satu_kaki_terangkat_tidak_menarik_posisi_mundur():
     pts = _kpts(800)
-    pts[zones.LEFT_ANKLE][1] = 600.0  # kaki kiri terangkat jauh
+    pts[kp.LEFT_ANKLE][1] = 600.0  # kaki kiri terangkat jauh
     assert zones.ankle_y(pts, FRAME_H) == pytest.approx(0.81)
 
 

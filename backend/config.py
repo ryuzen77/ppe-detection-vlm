@@ -187,6 +187,17 @@ class Config:
     MAX_PERSON_HEIGHT_RATIO: float = 0.96
     # Ambang kepercayaan deteksi keypoint pose tubuh (mata, bahu, lutut, kaki)
     KEYPOINT_CONF_THRESHOLD: float = 0.35
+    # Geometri kepala untuk cek kepala terpotong (T41: dulu tertulis di detector.py).
+    # Bahu tak terlihat -> diperkirakan sekian tinggi kotak dari atas kotak.
+    POSE_SHOULDER_FALLBACK_RATIO: float = 0.20
+    # Skala kepala (jarak hidung-bahu) minimal / bila hidung tak terlihat, relatif tinggi kotak
+    POSE_HEAD_SCALE_MIN_RATIO: float = 0.12
+    POSE_HEAD_SCALE_FALLBACK_RATIO: float = 0.15
+    # Puncak helm diperkirakan sekian kali skala kepala di atas hidung; harus masih di dalam gambar
+    POSE_HELMET_HEADROOM_FACTOR: float = 0.65
+    # Tepi tambahan potongan orang untuk VLM (konteks helm & sepatu), relatif ukuran kotak
+    CROP_MARGIN_Y_RATIO: float = 0.05
+    CROP_MARGIN_X_RATIO: float = 0.08
 
     # Zona titik berdiri (T36d): pita posisi kaki relatif tinggi gambar (0 atas,
     # 1 bawah). Bawaan nonaktif; diaktifkan lewat kalibrasi/Pengaturan.

@@ -14,10 +14,10 @@ from dataclasses import asdict, dataclass
 from typing import Optional
 
 from . import messages, runtime_settings
+from . import pose_keypoints as kp
 from .config import cfg
 
 # Indeks titik pose COCO untuk pergelangan kaki kiri & kanan
-LEFT_ANKLE, RIGHT_ANKLE = 15, 16
 SETTINGS_KEY = "zone"
 SOURCE_DEFAULT, SOURCE_CALIBRATED, SOURCE_MANUAL = "bawaan", "kalibrasi", "manual"
 
@@ -51,7 +51,7 @@ def ankle_y(keypoints, frame_h: int) -> Optional[float]:
     if frame_h <= 0:
         return None
     ys = []
-    for idx in (LEFT_ANKLE, RIGHT_ANKLE):
+    for idx in (kp.LEFT_ANKLE, kp.RIGHT_ANKLE):
         try:
             _, y, conf = keypoints[idx][:3]
         except (TypeError, IndexError, ValueError):
