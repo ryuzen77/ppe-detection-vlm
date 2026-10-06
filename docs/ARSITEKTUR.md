@@ -53,7 +53,7 @@ Prompt juga meminta VLM menolak foto di layar atau cetakan (`orang_nyata`).
 | Data | SQLite (WAL, `synchronous=FULL`), foto JPEG ditulis atomik; retensi otomatis (foto 30 hari, audit 1 tahun, batas 2 GB) |
 | Suara | pygame mixer (antrean non-blocking; hasil keputusan memotong suara lain), MP3 dari gTTS |
 | UI | Svelte 5 + TypeScript + Vite (`web/`, hasil build di-commit); UI lama `frontend/` akan dihapus |
-| IoT | ESP32/Arduino lewat serial 9600 baud atau HTTP; simulasi Wokwi |
+| IoT | ESP32 lewat USB serial (heartbeat 1 dtk, kuning berkedip bila server diam); lampu merah/kuning/hijau; simulasi Wokwi |
 
 ## Dashboard
 
@@ -101,7 +101,7 @@ web/                  UI Svelte (src/, dist/ di-commit)
 frontend/             UI lama (akan dihapus)
 tests/                pytest (termasuk tests/test_code_hygiene.py)
 tools/                eval_vlm.py, bench_vlm.py
-iot/                  Firmware ESP32/Arduino & simulasi Wokwi
+iot/                  Firmware ESP32 & simulasi Wokwi
 deploy/               Unit systemd
 scripts/check.py      Pemeriksaan sebelum commit (sama dengan CI)
 data/                 DATA_DIR bawaan: audit, foto, log (diabaikan git)

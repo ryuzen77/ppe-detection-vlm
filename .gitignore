@@ -32,3 +32,6 @@ picture_test/
 
 # Dependensi frontend baru (hasil build web/dist SENGAJA dilacak git: gerbang tanpa Node.js)
 web/node_modules/
+
+# Hasil kompilasi firmware ESP32 (T47)
+iot/esp32_gate_controller/build/

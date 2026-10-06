@@ -176,8 +176,8 @@ def test_orang_di_luar_koridor_tidak_dianalisa(gerbang):
 
 
 def test_vlm_tidak_menjawab_pekerja_diminta_menunggu_lalu_diperiksa_ulang(gerbang, vlm, monkeypatch):
-    # Utama gagal dan tidak ada cadangan (T27): TIDAK ada keputusan. Lampu tidak
-    # merah (merah khusus APD kurang), tidak ada baris audit, pekerja menunggu.
+    # Utama gagal dan tidak ada cadangan (T27): TIDAK ada keputusan. Lampu kuning
+    # (T47; merah khusus APD kurang), tidak ada baris audit, pekerja menunggu.
     monkeypatch.setattr(cfg, "VLM_SYSTEM_RETRY_SECONDS", 0.3)
     vlm.error = RuntimeError("503 UNAVAILABLE")
     riwayat = len(state_mgr.inspection_history)
@@ -186,7 +186,7 @@ def test_vlm_tidak_menjawab_pekerja_diminta_menunggu_lalu_diperiksa_ulang(gerban
 
     assert _wait_for(lambda: _active()["state"] == TrackState.WAITING_SYSTEM)
     assert _active()["vlm_result"] is None, "Belum ada item yang dinilai"
-    assert notifier.current_state == "OFF"
+    assert notifier.current_state == "YELLOW"
     assert notifier.message == messages.LIGHT_SYSTEM_WAIT
     assert len(state_mgr.inspection_history) == riwayat, "Gangguan tidak dicatat sebagai inspeksi"
 

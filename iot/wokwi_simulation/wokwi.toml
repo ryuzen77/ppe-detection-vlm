@@ -1,5 +1,7 @@
 [wokwi]
 version = 1
-firmware = "sketch.ino"
-elf = ""
+# Wokwi for VS Code menjalankan firmware hasil kompilasi, bukan .ino. Kompilasi
+# iot/esp32_gate_controller lebih dulu (lihat IOT_HARDWARE_SPEC.md, bagian Wokwi).
+firmware = "../esp32_gate_controller/build/esp32.esp32.esp32/esp32_gate_controller.ino.bin"
+elf = "../esp32_gate_controller/build/esp32.esp32.esp32/esp32_gate_controller.ino.elf"
 rfc2217ServerPort = 4000

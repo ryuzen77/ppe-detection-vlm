@@ -19,6 +19,7 @@ LIGHT_POSITION_WARNING = "Peringatan: {reason}"
 LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan otomatis"
 LIGHT_TEST_GREEN = "Uji Coba Manual - Lampu Hijau"
 LIGHT_TEST_RED = "Uji Coba Manual - Lampu Merah"
+LIGHT_TEST_YELLOW = "Uji Coba Manual - Lampu Kuning"
 
 # --- Arahan posisi dari detektor full-body ---
 POSE_OK = "Full body terdeteksi sempurna"
@@ -77,6 +78,9 @@ API_REPORT_PERIOD_INVALID = "Periode harus salah satu dari: {periods}."
 API_REPORT_DATE_INVALID = "Tanggal harus berformat YYYY-MM-DD."
 WEEKDAY_SHORT = ("Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min")   # Senin = 0 (date.weekday)
 REPORT_CSV_FILENAME = "laporan_inspeksi_apd_{suffix}.csv"
+# Uji lampu gerbang (T47)
+API_LIGHT_TEST_BUSY = "Ada pekerja di jalur pemeriksaan; uji lampu ditunda supaya tidak terlihat sebagai keputusan."
+API_LIGHT_TEST_INVALID = "Aksi uji lampu harus salah satu dari: {actions}."
 
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
@@ -151,6 +155,14 @@ VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason
 # --- Kesiapan pemotretan (T46) ---
 LOG_SESSION_READY = ("Sesi #{session}: pekerja siap setelah diam {held:.1f} dtk "
                      "(jendela diam diulang {restarts}x, {frames} frame).")
+
+# --- Lampu gerbang fisik (T47) ---
+IOT_CONNECTED = "Lampu gerbang tersambung di {port}."
+IOT_OPEN_FAILED = "Port lampu gerbang {port} tidak bisa dibuka: {error}. Dicoba lagi otomatis."
+IOT_LINK_LOST = "Sambungan lampu gerbang terputus: {error}. Dicoba lagi otomatis."
+IOT_NO_ACK = "Papan lampu gerbang belum membalas."
+IOT_TYPE_UNSUPPORTED = ("IOT_TYPE={iot_type} tidak didukung; lampu fisik dimatikan. "
+                        "Pakai IOT_TYPE=serial (ESP32 lewat USB).")
 
 # --- Ekspor CSV audit ---
 CSV_HEADER_LEADING = ["No", "Tanggal", "Waktu", "ID Pekerja", "Status Kelulusan"]

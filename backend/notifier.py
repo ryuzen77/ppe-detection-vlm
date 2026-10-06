@@ -1,126 +1,215 @@
+"""Lampu gerbang: status untuk dashboard + lampu fisik ESP32 lewat USB serial (T47).
+
+Lampu fisik dikendalikan satu thread `GateLightLink` yang memegang port serial:
+- port dibuka TANPA menyentuh DTR/RTS, karena keduanya me-reset ESP32/Arduino
+  (papan reboot tiap server start dan perintah pertama hilang);
+- keadaan lampu dikirim ulang tiap IOT_HEARTBEAT_SECONDS. Firmware menyalakan
+  kuning berkedip bila heartbeat hilang, jadi hijau tidak tertinggal menyala
+  saat server crash;
+- balasan `OK:` dari papan menandai sambungan sehat; port yang galat ditutup
+  dan dibuka ulang otomatis (kabel dicabut lalu dicolok lagi).
+
+Hanya USB serial yang didukung. Perintah lewat HTTP/Wi-Fi tanpa tanda tangan
+bisa dipalsukan siapa pun di jaringan yang sama (analisa T47), jadi dibuang.
+"""
 import logging
+import threading
 import time
-from .config import cfg
+from typing import Optional
+
 from . import messages
+from .config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class LightState:
     OFF = "OFF"
     GREEN = "GREEN"
     RED = "RED"
+    # Gangguan sistem / pekerja diminta menunggu. Merah khusus APD kurang.
+    YELLOW = "YELLOW"
 
-class IoTNotifier:
-    """Modular IoT Hardware Controller for Physical Tower Lights / Relays.
-    
-    Can be connected to Arduino/ESP32 via Serial, or a smart relay via HTTP/MQTT.
-    Prepared for Stage 2 after system logic is fully validated.
-    """
-    def __init__(self):
-        self.enabled = cfg.IOT_ENABLED
-        self.iot_type = cfg.IOT_TYPE
-        self.serial_conn = None
 
-    def connect(self):
-        """Membuka port serial bila IoT serial aktif. Idempoten."""
-        if self.enabled and self.iot_type == "serial" and self.serial_conn is None:
-            try:
-                import serial
-                if cfg.IOT_SERIAL_PORT.startswith("rfc2217://") or cfg.IOT_SERIAL_PORT.startswith("socket://"):
-                    import serial.rfc2217
-                    self.serial_conn = serial.serial_for_url(cfg.IOT_SERIAL_PORT, baudrate=cfg.IOT_SERIAL_BAUD, timeout=cfg.IOT_SERIAL_TIMEOUT_SECONDS)
-                else:
-                    self.serial_conn = serial.Serial(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, timeout=cfg.IOT_SERIAL_TIMEOUT_SECONDS)
-                logger.info(f"Connected to Serial port {cfg.IOT_SERIAL_PORT}")
-            except Exception as e:
-                logger.warning(f"Serial connection failed: {e}")
+# Perintah firmware iot/esp32_gate_controller untuk tiap keadaan lampu
+COMMANDS = {
+    LightState.OFF: "LIGHT_OFF",
+    LightState.GREEN: "LIGHT_GREEN",
+    LightState.RED: "LIGHT_RED",
+    LightState.YELLOW: "LIGHT_YELLOW",
+}
+ACK_PREFIX = b"OK:"
+SERIAL_URL_SCHEMES = ("rfc2217://", "socket://")   # simulator Wokwi
 
-    def send_command(self, cmd: str):
-        if not self.enabled:
+
+def open_serial(port: str, baud: int, timeout: float):
+    """Membuka port tanpa memicu auto-reset papan (DTR/RTS diset sebelum open)."""
+    import serial
+    if port.startswith(SERIAL_URL_SCHEMES):
+        conn = serial.serial_for_url(port, do_not_open=True)
+    else:
+        conn = serial.Serial()
+        conn.port = port
+    conn.baudrate = baud
+    conn.timeout = 0
+    conn.write_timeout = timeout
+    conn.dtr = False
+    conn.rts = False
+    conn.open()
+    return conn
+
+
+class GateLightLink:
+    """Thread tunggal pemegang port serial lampu gerbang."""
+
+    def __init__(self, opener=open_serial, clock=time.monotonic):
+        self._opener = opener
+        self._clock = clock
+        self._conn = None
+        self._desired = LightState.OFF
+        self._wake = threading.Event()
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._thread: Optional[threading.Thread] = None
+        self._rx = b""
+        self.last_ack: Optional[float] = None
+        self.error: Optional[str] = None
+        self._next_open_at = 0.0
+
+    # --- API untuk NotifierManager ------------------------------------------------
+
+    def start(self):
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, name="GateLightLink", daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        self._wake.set()
+        if self._thread is not None:
+            self._thread.join(timeout=cfg.THREAD_STOP_TIMEOUT_SECONDS)
+        self._close()
+
+    def set_state(self, state: str):
+        with self._lock:
+            self._desired = state
+        self._wake.set()   # kirim segera, tidak menunggu heartbeat berikutnya
+
+    def status(self) -> dict:
+        now = self._clock()
+        age = None if self.last_ack is None else round(now - self.last_ack, 1)
+        connected = age is not None and age <= cfg.IOT_ACK_TIMEOUT_SECONDS
+        return {"enabled": True, "connected": connected, "last_ack_age_s": age,
+                "error": None if connected else (self.error or messages.IOT_NO_ACK)}
+
+    # --- Satu putaran thread (dipanggil langsung oleh tes) ----------------------------
+
+    def tick(self):
+        if self._conn is None and not self._try_open():
             return
         try:
-            if self.iot_type == "serial" and self.serial_conn:
-                self.serial_conn.write(f"{cmd}\n".encode())
-            elif self.iot_type == "http":
-                import threading
-                threading.Thread(target=self._send_http, args=(cmd,), daemon=True).start()
+            with self._lock:
+                command = COMMANDS[self._desired]
+            self._conn.write(f"{command}\n".encode())
+            self._read_acks()
         except Exception as e:
-            logger.warning(f"Failed to send command '{cmd}': {e}")
+            self._fail(messages.IOT_LINK_LOST.format(error=str(e)[:120]))
 
-    def _send_http(self, cmd: str):
-        import urllib.request
-        state_map = {
-            "LIGHT_GREEN": "green",
-            "LIGHT_RED": "red",
-            "LIGHT_OFF": "off"
-        }
-        state = state_map.get(cmd, "off")
-        base_url = cfg.IOT_HTTP_URL.rstrip('/')
-        url = f"{base_url}/api/light?state={state}"
+    def _run(self):
+        while not self._stop.is_set():
+            self.tick()
+            self._wake.wait(cfg.IOT_HEARTBEAT_SECONDS)
+            self._wake.clear()
+
+    # --- Rincian ----------------------------------------------------------------------
+
+    def _try_open(self) -> bool:
+        if self._clock() < self._next_open_at:
+            return False
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "DEPRO/1.0"})
-            # Isi balasan ESP32 tidak dipakai; cukup dipastikan permintaan diterima
-            with urllib.request.urlopen(req, timeout=cfg.IOT_HTTP_TIMEOUT_SECONDS):
-                pass
+            self._conn = self._opener(cfg.IOT_SERIAL_PORT, cfg.IOT_SERIAL_BAUD, cfg.IOT_SERIAL_TIMEOUT_SECONDS)
+            self._rx = b""
+            logger.info(messages.IOT_CONNECTED.format(port=cfg.IOT_SERIAL_PORT))
+            return True
         except Exception as e:
-            logger.warning(f"Wireless HTTP to ESP32 failed ({url}): {e}")
+            self._fail(messages.IOT_OPEN_FAILED.format(port=cfg.IOT_SERIAL_PORT, error=str(e)[:120]))
+            return False
 
-    def close(self):
-        if self.serial_conn is not None:
+    def _read_acks(self):
+        # Port dibuka non-blocking (timeout 0): read() langsung mengembalikan yang
+        # tersedia. `in_waiting` tidak dipakai karena di sebagian backend pyserial
+        # (mis. socket:// Wokwi) isinya 0/1, bukan jumlah byte (temuan smoke test).
+        data = self._conn.read(cfg.IOT_RX_MAX_BYTES)
+        if not data:
+            return
+        self._rx += data
+        *lines, self._rx = self._rx.split(b"\n")
+        if any(line.strip().startswith(ACK_PREFIX) for line in lines):
+            self.last_ack = self._clock()
+            self.error = None
+        # Sisa tanpa baris baru dibatasi supaya data sampah tidak menumpuk
+        self._rx = self._rx[-cfg.IOT_RX_MAX_BYTES:]
+
+    def _fail(self, message: str):
+        if message != self.error:
+            logger.warning(message)
+        self.error = message
+        self.last_ack = None
+        self._close()
+        self._next_open_at = self._clock() + cfg.IOT_RECONNECT_SECONDS
+
+    def _close(self):
+        if self._conn is not None:
             try:
-                self.serial_conn.close()
+                self._conn.close()
             except Exception:
                 pass
-            self.serial_conn = None
-
-    def set_green(self):
-        self.send_command("LIGHT_GREEN")
-
-    def set_red(self):
-        self.send_command("LIGHT_RED")
-
-    def set_off(self):
-        self.send_command("LIGHT_OFF")
+            self._conn = None
 
 
 class NotifierManager:
-    """Manages visual light status (UI state + optional IoT physical light)."""
+    """Keadaan lampu untuk dashboard, diteruskan ke lampu fisik bila IoT aktif."""
+
     def __init__(self):
         self.current_state = LightState.OFF
         self.last_change_time = time.time()
-        self.iot = IoTNotifier()
         self.message = messages.LIGHT_BOOT
+        self.link: Optional[GateLightLink] = GateLightLink() if cfg.IOT_ENABLED else None
 
     def start(self):
-        """Menyambungkan lampu gerbang fisik (bila IoT aktif)."""
-        self.iot.connect()
+        if self.link is None:
+            return
+        if cfg.IOT_TYPE != "serial":
+            logger.error(messages.IOT_TYPE_UNSUPPORTED.format(iot_type=cfg.IOT_TYPE))
+            self.link = None
+            return
+        self.link.start()
 
     def stop(self):
-        self.iot.close()
+        if self.link is not None:
+            self.link.stop()
+
+    def _set(self, state: str, msg: str):
+        self.current_state = state
+        self.message = msg
+        self.last_change_time = time.time()
+        if self.link is not None:
+            self.link.set_state(state)
 
     def set_complete(self, msg: str = messages.LIGHT_GRANTED_DEFAULT):
-        self.current_state = LightState.GREEN
-        self.message = msg
-        self.last_change_time = time.time()
-        self.iot.set_green()
+        self._set(LightState.GREEN, msg)
 
     def set_incomplete(self, msg: str = messages.LIGHT_DENIED_DEFAULT):
-        self.current_state = LightState.RED
-        self.message = msg
-        self.last_change_time = time.time()
-        self.iot.set_red()
+        self._set(LightState.RED, msg)
 
     def set_waiting(self, msg: str = messages.LIGHT_SYSTEM_WAIT):
-        """Sistem gangguan: belum ada keputusan. Lampu padam — merah khusus APD kurang."""
-        self.current_state = LightState.OFF
-        self.message = msg
-        self.last_change_time = time.time()
-        self.iot.set_off()
+        """Sistem gangguan: belum ada keputusan, pekerja diminta menunggu (kuning)."""
+        self._set(LightState.YELLOW, msg)
 
     def set_idle(self):
-        self.current_state = LightState.OFF
-        self.message = messages.LIGHT_IDLE
-        self.iot.set_off()
+        self._set(LightState.OFF, messages.LIGHT_IDLE)
 
     def get_status(self) -> dict:
         return {
@@ -128,5 +217,12 @@ class NotifierManager:
             "message": self.message,
             "timestamp": self.last_change_time
         }
+
+    def iot_status(self) -> dict:
+        """Status lampu fisik untuk telemetri (kontrak T47)."""
+        if self.link is None:
+            return {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None}
+        return self.link.status()
+
 
 notifier = NotifierManager()
