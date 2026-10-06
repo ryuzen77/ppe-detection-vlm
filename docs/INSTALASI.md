@@ -58,6 +58,21 @@ uv pip compile requirements-dev.txt --universal --python-version 3.12 --torch-ba
   `opencv-python` (varian GUI), yang bila ikut terpasang menimpa folder `cv2`
   milik varian headless.
 
+### Mesin gerbang: GPU & VLM lokal
+
+VLM cadangan (Ollama) sangat peka terhadap clock GPU. Terukur 06-10 di laptop RTX 4060:
+dengan GPU ditahan manajemen daya (900–1.400 MHz) waktu baca prompt 3,1 dtk; setelah mode
+dGPU + overclock aktif (±2.600 MHz) 1,4 dtk — latensi VLM lokal 5,3 → 3,5 dtk.
+
+- **Mode GPU dGPU** (Legion: Lenovo Vantage / Legion Space → GPU mode dGPU, aktif setelah restart)
+  dan **GPU Overclock / Dynamic Boost** menyala; rencana daya **Performance**.
+- NVIDIA Control Panel → Manage 3D settings → Preferred graphics processor →
+  **High-performance NVIDIA processor**.
+- **Kunci versi Ollama** (validasi model dilakukan di 0.34.4) dan **matikan update otomatis**
+  di aplikasi Ollama (Settings), supaya kecepatan & perilaku tidak berubah diam-diam.
+- Cek cepat: `python tools/bench_vlm.py picture_test --prompts P0 --limit 3` — waktu baca
+  masukan (`baca_input_median_ms`) harus ±1.500 ms; bila ±3.000 ms, GPU sedang ditahan.
+
 ## 2. Konfigurasi (`backend/.env`)
 
 Salin `backend/.env.example` menjadi `backend/.env`. Setiap variabel dijelaskan di

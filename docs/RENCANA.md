@@ -230,6 +230,11 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - **Buzzer = cadangan** (kanal relay ke-4 disiapkan, mati bawaan) supaya tidak tumpang tindih dengan suara speaker.
 - **Gangguan (kamera, VLM, sistem mati) = kuning**, bukan merah; merah tetap khusus APD kurang (§5).
 
+**Mesin gerbang (06-10)**
+- VLM lokal lambat di uji nyata 06-10 (7,5 dtk) karena GPU laptop ditahan manajemen daya, BUKAN versi Ollama (diuji: 0.34.4 = 0.35.1).
+  Setelah mode dGPU + overclock (restart): baca prompt 3,1 → 1,4 dtk, latensi bench 5,3 → 3,5 dtk. Pengaturan di docs/INSTALASI.md.
+- Ollama dikunci di **0.34.4** (versi validasi), update otomatis dimatikan. Produksi (T29/Docker): versi image dikunci.
+
 **Operasi**
 - OS produksi belum tentu Windows; produksi lewat Docker di Linux, pengembangan di Windows dengan venv.
 - Belum ada layar untuk pekerja di gerbang (suara & lampu saja); mode kios = rencana ke depan.
