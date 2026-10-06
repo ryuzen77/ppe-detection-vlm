@@ -9,7 +9,7 @@ if not __package__:
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -18,6 +18,7 @@ from .logging_setup import setup_logging
 from .shutdown import install_shutdown_hook
 from . import runtime
 from .api import (
+    routes_auth,
     routes_cameras,
     routes_ppe,
     routes_reports,
@@ -27,17 +28,26 @@ from .api import (
     routes_zone,
     websocket,
 )
+from .api.deps import require_session
 
 logger = logging.getLogger(__name__)
 
 def insecure_network_reason(host: str, token: str, allow_demo: bool) -> str | None:
     from .config import cfg
-    from .messages import STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
-    if host not in cfg.LOCALHOST_IPS and not token:
+    from .messages import ADMIN_TOKEN_TOO_SHORT, STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
+    on_network = host not in cfg.LOCALHOST_IPS
+    if on_network and not token:
         if not allow_demo:
             return STARTUP_INSECURE_LAN.format(host=host)
         else:
             logger.warning(INSECURE_DEMO_WARNING)
+    if token and len(token) < cfg.ADMIN_TOKEN_MIN_LENGTH:
+        # Kata sandi pendek bisa ditebak walau ada penahan per-IP (tinjauan T30: IP bisa
+        # dirotasi). Di jaringan = ditolak; di localhost = peringatan saja. Nilainya tidak dicetak.
+        short = ADMIN_TOKEN_TOO_SHORT.format(length=len(token), minimum=cfg.ADMIN_TOKEN_MIN_LENGTH)
+        if on_network and not allow_demo:
+            return short
+        logger.warning(short)
     return None
 
 class PayloadTooLargeError(Exception):
@@ -127,9 +137,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Semua API wajib login bila ADMIN_TOKEN terisi (T30); hanya rute login yang bebas.
+# WebSocket memeriksa sesinya sendiri (dependensi HTTP tidak berlaku untuk /ws).
+app.include_router(routes_auth.router)
 for _module in (routes_system, routes_vlm, routes_cameras, routes_ppe,
-                routes_reports, routes_stream, routes_zone, websocket):
-    app.include_router(_module.router)
+                routes_reports, routes_stream, routes_zone):
+    app.include_router(_module.router, dependencies=[Depends(require_session)])
+app.include_router(websocket.router)
 
 
 class RevalidatingStaticFiles(StaticFiles):

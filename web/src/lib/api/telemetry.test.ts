@@ -1,16 +1,16 @@
-import { describe, expect, it } from 'vitest'
-import { INITIAL_RECONNECT_MS, MAX_RECONNECT_MS, TelemetryClient, telemetryUrl, type SocketLike } from './telemetry'
+import { describe, expect, it, vi } from 'vitest'
+import { INITIAL_RECONNECT_MS, MAX_RECONNECT_MS, TelemetryClient, telemetryUrl, type SocketLike, WS_CLOSE_LOGIN_REQUIRED } from './telemetry'
 
 class FakeSocket implements SocketLike {
   onopen: ((ev: unknown) => void) | null = null
   onmessage: ((ev: { data: unknown }) => void) | null = null
-  onclose: ((ev: unknown) => void) | null = null
+  onclose: ((ev: { code?: number; reason?: string }) => void) | null = null
   onerror: ((ev: unknown) => void) | null = null
   closed = false
-  close() {
+  close(code?: number, reason?: string) {
     if (this.closed) return
     this.closed = true
-    this.onclose?.({})
+    this.onclose?.({ code, reason })
   }
 }
 
@@ -19,9 +19,11 @@ function setup() {
   const timers: { fn: () => void; ms: number }[] = []
   const messages: unknown[] = []
   const statuses: string[] = []
+  const onLoginRequired = vi.fn()
   const client = new TelemetryClient('ws://x/ws', {
     onMessage: (d) => messages.push(d),
     onStatus: (s) => statuses.push(s),
+    onLoginRequired,
     createSocket: () => {
       const s = new FakeSocket()
       sockets.push(s)
@@ -34,7 +36,7 @@ function setup() {
     clearTimer: () => {},
   })
   const runNextTimer = () => timers.shift()!.fn()
-  return { client, sockets, timers, messages, statuses, runNextTimer }
+  return { client, sockets, timers, messages, statuses, runNextTimer, onLoginRequired }
 }
 
 describe('TelemetryClient', () => {
@@ -101,6 +103,24 @@ describe('TelemetryClient', () => {
     expect(timers).toHaveLength(1)
   })
 })
+
+  it('stop() lalu start() lagi -> koneksi baru dibuat', () => {
+    const { client, sockets } = setup()
+    client.start()
+    client.stop()
+    expect(sockets[0].closed).toBe(true)
+    client.start()
+    expect(sockets).toHaveLength(2)
+    expect(sockets[1].closed).toBe(false)
+  })
+
+  it('tutup biasa (mis. 1006) -> tetap sambung ulang', () => {
+    const { client, sockets, timers, onLoginRequired } = setup()
+    client.start()
+    sockets[0].close(1006)
+    expect(timers).toHaveLength(1)
+    expect(onLoginRequired).not.toHaveBeenCalled()
+  })
 
 describe('telemetryUrl', () => {
   it('mengikuti protokol halaman', () => {

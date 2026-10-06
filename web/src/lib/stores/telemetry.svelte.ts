@@ -4,6 +4,7 @@
  */
 import { TelemetryClient, telemetryUrl, type ConnectionStatus } from '../api/telemetry'
 import type { Telemetry } from '../api/types'
+import { session } from './session.svelte'
 
 class TelemetryStore {
   data = $state<Telemetry | null>(null)
@@ -21,6 +22,9 @@ class TelemetryStore {
       onStatus: (s) => {
         this.status = s
       },
+      onLoginRequired: () => {
+        session.clear()
+      },
     })
     this.client.start()
   }
@@ -28,6 +32,8 @@ class TelemetryStore {
   stop(): void {
     this.client?.stop()
     this.client = null
+    this.data = null
+    this.status = 'disconnected'
   }
 }
 

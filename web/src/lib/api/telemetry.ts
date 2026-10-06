@@ -13,7 +13,7 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 export interface SocketLike {
   onopen: ((ev: unknown) => void) | null
   onmessage: ((ev: { data: unknown }) => void) | null
-  onclose: ((ev: unknown) => void) | null
+  onclose: ((ev: { code?: number; reason?: string }) => void) | null
   onerror: ((ev: unknown) => void) | null
   close(): void
 }
@@ -23,6 +23,7 @@ export type SocketFactory = (url: string) => SocketLike
 export interface TelemetryClientOptions {
   onMessage: (data: Telemetry) => void
   onStatus?: (status: ConnectionStatus) => void
+  onLoginRequired?: () => void
   createSocket?: SocketFactory
   initialDelayMs?: number
   maxDelayMs?: number
@@ -30,12 +31,13 @@ export interface TelemetryClientOptions {
   clearTimer?: (handle: unknown) => void
 }
 
+export const WS_CLOSE_LOGIN_REQUIRED = 4401
 export const INITIAL_RECONNECT_MS = TELEMETRY.reconnectInitialMs
 export const MAX_RECONNECT_MS = TELEMETRY.reconnectMaxMs
 
 export class TelemetryClient {
   private readonly url: string
-  private readonly opts: Required<Omit<TelemetryClientOptions, 'onStatus'>> & Pick<TelemetryClientOptions, 'onStatus'>
+  private readonly opts: Required<Omit<TelemetryClientOptions, 'onStatus' | 'onLoginRequired'>> & Pick<TelemetryClientOptions, 'onStatus' | 'onLoginRequired'>
   private socket: SocketLike | null = null
   private timer: unknown = null
   private delay: number
@@ -104,10 +106,15 @@ export class TelemetryClient {
       this.opts.onMessage(data)
     }
     socket.onerror = () => socket.close()
-    socket.onclose = () => {
+    socket.onclose = (ev) => {
       if (this.socket === socket) this.socket = null
       this.opts.onStatus?.('disconnected')
-      this.scheduleReconnect()
+      if (ev && ev.code === WS_CLOSE_LOGIN_REQUIRED) {
+        this.stopped = true
+        this.opts.onLoginRequired?.()
+      } else {
+        this.scheduleReconnect()
+      }
     }
   }
 

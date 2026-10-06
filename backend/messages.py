@@ -94,6 +94,10 @@ REPORT_CSV_FILENAME = "laporan_inspeksi_apd_{suffix}.csv"
 # Uji lampu gerbang (T47)
 API_LIGHT_TEST_BUSY = "Ada pekerja di jalur pemeriksaan; uji lampu ditunda supaya tidak terlihat sebagai keputusan."
 API_LIGHT_TEST_INVALID = "Aksi uji lampu harus salah satu dari: {actions}."
+# Login admin (T30)
+API_LOGIN_REQUIRED = "Silakan login terlebih dahulu."
+API_LOGIN_FAILED = "Kata sandi salah."
+API_LOGIN_LOCKED = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 
 # --- Prompt VLM ---
 # Prompt sistem dirakit dari item APD aktif (ppe_rules); di sini hanya kerangkanya.
@@ -212,3 +216,5 @@ STARTUP_INSECURE_LAN = "Server berjalan di jaringan terbuka (HOST={host}) tanpa 
 
 PAYLOAD_TOO_LARGE = "Payload Too Large"
 INSECURE_DEMO_WARNING = "Menjalankan mode demo tidak aman di LAN karena ALLOW_INSECURE_DEMO aktif."
+ADMIN_TOKEN_TOO_SHORT = ("ADMIN_TOKEN (kata sandi login) hanya {length} karakter; minimal {minimum} supaya tidak bisa "
+                         "ditebak. Ganti di backend/.env dengan kalimat sandi panjang.")

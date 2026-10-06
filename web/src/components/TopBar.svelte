@@ -3,17 +3,18 @@
   // (keputusan gerbang, kamera, VLM, koneksi, jam) — keputusan UX T33.
   import Camera from '@lucide/svelte/icons/camera'
   import Cpu from '@lucide/svelte/icons/cpu'
-  import KeyRound from '@lucide/svelte/icons/key-round'
-  import Lightbulb from '@lucide/svelte/icons/lightbulb'
+    import Lightbulb from '@lucide/svelte/icons/lightbulb'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
-  import { ADMIN_TOKEN, BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
+  import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
   import { cameraChip, vlmChip, iotChip } from '../lib/status'
-  import { adminToken } from '../lib/stores/adminToken.svelte'
+  import { session } from '../lib/stores/session.svelte'
+import { LOGIN } from '../lib/messages'
+import LogOut from '@lucide/svelte/icons/log-out'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
   let now = $state(new Date())
@@ -60,11 +61,11 @@
       <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
       <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
     {/if}
-    <button class="key" class:unset={!adminToken.hasToken} onclick={() => adminToken.open()}
-            title={adminToken.hasToken ? ADMIN_TOKEN.buttonSet : ADMIN_TOKEN.buttonUnset}
-            aria-label={adminToken.hasToken ? ADMIN_TOKEN.buttonSet : ADMIN_TOKEN.buttonUnset}>
-      <KeyRound size={16} aria-hidden="true" />
-    </button>
+        {#if session.authRequired && session.authenticated}
+      <button class="key" onclick={() => session.logout()} title={LOGIN.logoutBtn} aria-label={LOGIN.logoutBtn}>
+        <LogOut size={16} aria-hidden="true" />
+      </button>
+    {/if}
     <span class="clock mono">{now.toLocaleTimeString(CLOCK.locale, { hour12: false })}</span>
   </div>
 </header>
