@@ -294,7 +294,7 @@ describe('chip status', () => {
 
   it('kamera: nada per status', () => {
     expect(cameraChip(tele()).tone).toBe('ok')
-    expect(cameraChip(tele({ camera: { ...tele().camera, status: 'LOST' } })).tone).toBe('danger')
+    expect(cameraChip(tele({ camera: { ...tele().camera, status: 'LOST' } })).tone).toBe('warn')
     expect(cameraChip(null).tone).toBe('neutral')
   })
 })
