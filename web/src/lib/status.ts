@@ -1,7 +1,7 @@
 /** Status kamera & VLM → nada warna + teks chip (logika murni, teruji). */
 import type { Telemetry } from './api/types'
 import type { Tone } from './gate'
-import { CAMERA_CHIP, VLM_CHIP, cameraChipOk } from './messages'
+import { CAMERA_CHIP, VLM_CHIP, IOT_CHIP, cameraChipOk } from './messages'
 
 export interface Chip {
   tone: Tone
@@ -24,4 +24,17 @@ export function vlmChip(t: Telemetry | null): Chip {
   const mode = t?.api_monitor?.mode
   const label = mode ? VLM_CHIP[mode] : VLM_CHIP.UNKNOWN
   return { tone: (mode && VLM_TONE[mode]) || 'neutral', text: label.text, hint: label.hint }
+}
+
+
+
+export function iotChip(t: Telemetry | null): Chip {
+  const iot = t?.iot
+  if (!iot) return { tone: 'neutral', text: IOT_CHIP.disabled, hint: '' }
+  if (!iot.enabled) return { tone: 'neutral', text: IOT_CHIP.disabled, hint: '' }
+  return {
+    tone: iot.connected ? 'ok' : 'warn',
+    text: iot.connected ? IOT_CHIP.connected : IOT_CHIP.disconnected,
+    hint: iot.error || ''
+  }
 }

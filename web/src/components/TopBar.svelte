@@ -4,6 +4,7 @@
   import Camera from '@lucide/svelte/icons/camera'
   import Cpu from '@lucide/svelte/icons/cpu'
   import KeyRound from '@lucide/svelte/icons/key-round'
+  import Lightbulb from '@lucide/svelte/icons/lightbulb'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import { onDestroy } from 'svelte'
@@ -11,7 +12,7 @@
   import { ADMIN_TOKEN, BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
-  import { cameraChip, vlmChip } from '../lib/status'
+  import { cameraChip, vlmChip, iotChip } from '../lib/status'
   import { adminToken } from '../lib/stores/adminToken.svelte'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
@@ -23,6 +24,7 @@
   const gate = $derived(gateView(t, telemetry.status))
   const camera = $derived(cameraChip(t))
   const vlm = $derived(vlmChip(t))
+  const iot = $derived(iotChip(t))
 </script>
 
 <header class="topbar">
@@ -47,9 +49,14 @@
         <span class="label">{GATE_CHIP.text(gate.title, gate.trackId)}</span>
       </a>
     {/if}
+
     {#if telemetry.status !== 'connected'}
       <span class="chip tone-danger" title={CONNECTION.lost}><WifiOff size={14} aria-hidden="true" /> <span class="label">{CONNECTION.lost}</span></span>
     {:else}
+      {#if t?.iot}
+        <span class="chip tone-{iot.tone}" title={chipTitle(iot.text, iot.hint)}><Lightbulb size={14} aria-hidden="true" /> <span class="label">{iot.text}</span></span>
+      {/if}
+
       <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
       <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
     {/if}

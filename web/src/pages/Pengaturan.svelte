@@ -9,6 +9,7 @@
   import { telemetry } from '../lib/stores/telemetry.svelte'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { formatLostSince } from '../lib/diagnostics'
+  import { iotChip } from '../lib/status'
   import { withError } from '../lib/messages'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
@@ -25,16 +26,18 @@
     api.vlmInfo().then(info => vlmInfo = info).catch(() => {})
   })
 
+  const gateIot = $derived(iotChip(telemetry.data))
+
   const lostSince = $derived.by(() => formatLostSince(
     telemetry.lastMessageAt,
     SETTINGS_TAB.serverDisconnected,
     SETTINGS_TAB.serverDisconnectedSince
   ))
 
-  async function testLight() {
+  async function testLight(color: 'green' | 'yellow' = 'green') {
     lightStatus = SETTINGS_TAB.running
     try {
-      await api.testLight('green')
+      await api.testLight(color)
       setTimeout(async () => {
         try {
           await api.testLight('off')
@@ -115,7 +118,9 @@
 
     <section class="card">
       <h2>{SETTINGS_TAB.lightTest}</h2>
-      <button class="btn btn-primary" onclick={testLight}>{SETTINGS_TAB.testLightBtn}</button>
+      <p class="status-msg" style="margin-bottom: var(--space-2); margin-top: 0">Status: {gateIot.text} {#if gateIot.hint}({gateIot.hint}){/if}</p>
+      <button class="btn btn-primary" onclick={() => testLight('green')}>{SETTINGS_TAB.testLightBtn}</button>
+      <button class="btn btn-primary" onclick={() => testLight('yellow')}>{SETTINGS_TAB.testYellowBtn}</button>
       {#if lightStatus}<p class="status-msg">{lightStatus}</p>{/if}
     </section>
 

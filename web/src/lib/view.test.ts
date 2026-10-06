@@ -10,7 +10,7 @@ import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, chipTitle, seconds } from './mess
 import { detectEvents, initialWatch } from './notify'
 import { assessItem } from './ppe'
 import { parseRoute } from './router.svelte'
-import { cameraChip, vlmChip } from './status'
+import { cameraChip, vlmChip, iotChip } from './status'
 import { readItem, writeItem } from './storage'
 
 // --- data tiruan ---------------------------------------------------------------
@@ -34,7 +34,7 @@ function tele(over: Partial<Telemetry> = {}): Telemetry {
     timestamp: 0, frame_width: 1280, frame_height: 720, has_person: false, active_track: null, detections: [],
     corridor: { enabled: true, left_ratio: 0.3, right_ratio: 0.7 },
     zone: { enabled: false, y_min: 0.7, y_max: 0.85 },
-    light: { light_state: 'OFF', message: '', timestamp: 0 }, history: [], stable_frames_required: 3,
+    light: { light_state: 'OFF', message: '', timestamp: 0 }, iot: { enabled: true, connected: true, last_ack_age_s: null, error: null }, camera_fault: null, history: [], stable_frames_required: 3,
     keypoint_conf_threshold: 0.35,
     is_live_vlm: true,
     vlm: { role: 'utama', provider: 'gemini', model: 'm', is_local: false, needs_key: true, has_key: true, is_live: true, timeout_s: 4, error: '', backup: null, primary_down: false },
@@ -283,6 +283,15 @@ describe('chip status', () => {
     }
     expect(vlmChip(tele({ api_monitor: { mode: 'CADANGAN' } as Telemetry['api_monitor'] })).tone).toBe('warn')
   })
+
+  it('iotChip: nada dan teks sesuai status', () => {
+    expect(iotChip(null).tone).toBe('neutral')
+    expect(iotChip(tele({ iot: { enabled: false, connected: true, last_ack_age_s: null, error: null } })).tone).toBe('neutral')
+    expect(iotChip(tele({ iot: { enabled: true, connected: true, last_ack_age_s: null, error: null } })).tone).toBe('ok')
+    expect(iotChip(tele({ iot: { enabled: true, connected: false, last_ack_age_s: null, error: 'lost' } })).tone).toBe('warn')
+    expect(iotChip(tele({ iot: { enabled: true, connected: false, last_ack_age_s: null, error: 'lost' } })).hint).toBe('lost')
+  })
+
   it('kamera: nada per status', () => {
     expect(cameraChip(tele()).tone).toBe('ok')
     expect(cameraChip(tele({ camera: { ...tele().camera, status: 'LOST' } })).tone).toBe('danger')

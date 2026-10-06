@@ -32,6 +32,7 @@ export const CAMERA_CHIP: Record<CameraState | 'UNKNOWN', string> = {
   OPENING: 'Kamera menyiapkan',
   OPTIMIZING: 'Kamera menyiapkan',
   LOST: 'Kamera terputus',
+  BLOCKED: 'Kamera tertutup',
   SYNTHETIC: 'Kamera tidak dapat dibuka',
   UNKNOWN: 'Kamera',
 }
@@ -43,6 +44,13 @@ export const VLM_CHIP: Record<VlmMode | 'UNKNOWN', { text: string; hint: string 
   GANGGUAN: { text: 'VLM gangguan', hint: 'VLM utama & cadangan tidak menjawab' },
   UNKNOWN: { text: 'VLM', hint: '' },
 }
+
+
+export const IOT_CHIP = {
+  connected: 'Lampu gerbang: tersambung',
+  disconnected: 'Lampu gerbang: terputus',
+  disabled: 'Lampu gerbang: nonaktif'
+} as const
 
 export const GATE_CHIP = {
   title: 'Buka Monitoring',
@@ -76,6 +84,7 @@ export const CAMERA_NOT_READY: Record<CameraState, string> = {
   LOST: 'Kamera terputus, menyambung ulang…',
   SYNTHETIC: 'Kamera tidak dapat dibuka.',
   OK: '',
+  BLOCKED: 'Kamera tertutup / terlalu gelap.',
 }
 
 /** Arahan posisi per jenis potongan tubuh dari detektor (clip_type) */
@@ -139,6 +148,7 @@ export const VIDEO = {
     OPENING: 'Menyiapkan kamera…',
     OPTIMIZING: 'Menyiapkan kamera…',
     OK: '',
+  BLOCKED: 'Kamera tertutup / terlalu gelap.',
   } as Record<CameraState, string>,
   pickCamera: 'Pilih kamera',
   changeCamera: 'Ganti kamera',
@@ -347,6 +357,7 @@ export const SETTINGS_TAB = {
   backupModel: 'Model Cadangan',
   lightTest: 'Lampu & Tes',
   testLightBtn: 'Tes Lampu',
+  testYellowBtn: 'Kuning',
   latencyTestBtn: 'Uji Latensi VLM',
 } as const
 
