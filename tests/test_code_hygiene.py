@@ -28,7 +28,6 @@ LONG_FUNCTIONS_DEBT = {
     "backend/video/capture.py::_reader_loop",
     "tools/bench_vlm.py::main",
     "tools/eval_vlm.py::main",
-    "backend/state_manager.py::update_frame_detections",
     "backend/video/capture.py::_init_camera",
     "backend/report_manager.py::cleanup_old_data",
     "backend/video/hud.py::draw_hud",

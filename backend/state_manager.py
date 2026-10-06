@@ -176,119 +176,144 @@ class StateManager:
             notifier.set_incomplete(messages.LIGHT_DENIED_MISSING.format(missing=", ".join(result.missing_items)))
 
     def update_frame_detections(self, detections: list[DetectionResult]):
-        """Processes detections from the current frame."""
-        now = time.time()
+        """Satu frame: siapa di jalur -> sesi -> arahan posisi / kumpulkan frame -> analisa VLM.
 
+        Dipecah per langkah (T42a/b); perilaku dijaga tests/test_state_characterization.py.
+        """
+        now = time.time()
         with self.lock:
             self.latest_detections = detections
             if self.camera_fault is not None:
                 return          # gambar tidak bisa dipercaya: tidak ada sesi baru (T45)
-            for d in detections:
-                d.zone_y = self.foot_memory.resolve(d.track_id, getattr(d, "foot_y", None),
-                                                    getattr(d, "foot_y_box", None), now)
-            # Hanya orang di jalur inspeksi yang dihitung; orang yang lewat di
-            # luar jalur tidak memulai sesi dan tidak menahan reset. Bila zona
-            # titik berdiri aktif (T36d), antrean di belakang zona juga diabaikan,
-            # jadi sesi berakhir begitu subjek keluar zona dan orang berikutnya maju.
-            active_zone = zone_store.get()
-            in_lane = [d for d in detections if getattr(d, "is_inside_corridor", True)
-                       and zones.in_zone(getattr(d, "zone_y", None), active_zone)]
-
+            in_lane = self._people_in_lane(detections, now)
             if not in_lane:
-                if self.session is not None and (now - self.session.last_seen) > cfg.STANDBY_RESET_DELAY_SECONDS:
-                    logger.info(f"Sesi #{self.session.session_id} selesai: jalur kosong. Gerbang standby.")
-                    if self.session.vlm_result is not None:
-                        # ID terakhir subjek (bisa berbeda dari ID saat dianalisa)
-                        self._remember_decision(self.session.track_id, self.session.vlm_result, now)
-                    self.session = None
-                    notifier.set_idle()
+                self._close_session_if_lane_empty(now)
                 return
-
-            session = self.session
-            if session is None:
-                subject = self._pick_subject(in_lane, None)
-                session = self.session = GateSession(subject.track_id, now)
-                logger.info(f"Sesi #{session.session_id} dimulai.")
-                previous = self._recent_decision(subject.track_id, now)
-                if previous is not None:
-                    # Orang yang sama baru saja diputuskan: keputusan tetap berlaku
-                    session.vlm_result = previous
-                    session.state = TrackState.ANALYZED
-                    session.analysis_timestamp = now
-                    self._show_decision(previous)
-                    logger.info(f"Sesi #{session.session_id}: Track #{subject.track_id} baru saja diputuskan; "
-                                f"keputusan dipakai ulang tanpa analisa baru.")
-
-            det = self._pick_subject(in_lane, session.track_id)
-            session.track_id = det.track_id
-            session.last_seen = now
-            session.is_full_body_now = det.is_full_body
-            session.current_reason = det.reason
-            session.clip_type = getattr(det, "clip_type", "OPTIMAL")
-
-            # Gangguan sistem: tunggu jeda, lalu kumpulkan frame dan periksa ulang
-            # orang yang sama selama ia masih di jalur
-            if session.state == TrackState.WAITING_SYSTEM:
-                if now < session.retry_at:
-                    return
-                logger.info(f"Sesi #{session.session_id}: mencoba ulang pemeriksaan setelah gangguan sistem.")
-                session.state = TrackState.INITIAL
-                session.restart_candidates(det.bbox)
-                session.readiness.reset()
-
-            # Keputusan sesi terkunci sampai jalur kosong: tidak ada panggilan VLM kedua
-            if session.state in (TrackState.ANALYZING, TrackState.ANALYZED):
+            session = self._session_for(in_lane, now)
+            det = self._follow_subject(session, in_lane, now)
+            if not self._may_inspect(session, det, now):
                 return
-
             if not det.is_full_body:
-                session.state = TrackState.STEP_BACK_WARNING
-                # Kandidat hanya dari rangkaian tubuh-utuh yang tidak terputus
-                session.restart_candidates(det.bbox)
-                session.readiness.reset()
-                # Arahan posisi hanya lewat suara dan dashboard. LED merah khusus
-                # untuk APD tidak lengkap, jadi lampu tidak disentuh di sini.
-                # Smart Limiter: Max repeats (default 2x) per session with debounce so it doesn't spam
-                if session.step_back_warning_count < cfg.AUDIO_STEP_BACK_MAX_REPEATS:
-                    if (now - session.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
-                        audio_player.play_step_back(clip_type=session.clip_type)
-                        session.last_step_back_audio_time = now
-                        session.step_back_warning_count += 1
+                self._guide_position(session, det, now)
                 return
+            if self._collect_candidate(session, det, now):
+                self._start_analysis(session, det, now)
 
-            session.step_back_warning_count = 0
-            session.state = TrackState.STABILIZING
-            # Pekerja masih melangkah atau menyamping: kumpulan kandidat dimulai ulang (T46)
-            if session.readiness.update(det.bbox, det.keypoints, now):
-                session.restart_candidates(session.candidates[-1].bbox if session.candidates else det.bbox)
-            if not session.readiness.holding:
-                return
-            if det.crop_img is not None:
-                session.add_candidate(frame_quality.FrameCandidate(
-                    crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id))
-            else:
-                session.stable_frames += 1
+    def _people_in_lane(self, detections: list[DetectionResult], now: float) -> list[DetectionResult]:
+        """Hanya orang di jalur inspeksi yang dihitung; orang yang lewat di luar jalur
+        tidak memulai sesi dan tidak menahan reset. Bila zona titik berdiri aktif
+        (T36d), antrean di belakang zona juga diabaikan, jadi sesi berakhir begitu
+        subjek keluar zona dan orang berikutnya maju."""
+        for d in detections:
+            d.zone_y = self.foot_memory.resolve(d.track_id, getattr(d, "foot_y", None),
+                                                getattr(d, "foot_y_box", None), now)
+        active_zone = zone_store.get()
+        return [d for d in detections if getattr(d, "is_inside_corridor", True)
+                and zones.in_zone(getattr(d, "zone_y", None), active_zone)]
 
-            # Setelah pekerja diam READY_HOLD_SECONDS (minimal STABLE_FRAMES_REQUIRED
-            # frame), kirim SATU frame terbaik (paling tajam, paling diam, pose
-            # paling jelas) dari jendela itu ke VLM
-            if session.stable_frames >= cfg.STABLE_FRAMES_REQUIRED and session.readiness.ready(now):
-                logger.info(messages.LOG_SESSION_READY.format(
-                    session=session.session_id, held=session.readiness.held_seconds(now),
-                    restarts=session.readiness.restarts, frames=session.stable_frames))
-                session.state = TrackState.ANALYZING
-                crop_to_analyze, track_id = None, det.track_id
-                if session.candidates:
-                    best = frame_quality.choose_best(session.candidates, session.prev_bbox)
-                    crop_to_analyze, track_id = best.crop, best.track_id
-                    logger.info(
-                        f"Sesi #{session.session_id}: frame terbaik #{session.candidates.index(best) + 1} dari "
-                        f"{len(session.candidates)} | skor " + ", ".join(
-                            f"{c.score:.2f} (tajam {c.sharpness:.0f}, gerak {c.motion:.3f}, pose {c.pose:.2f})"
-                            for c in session.candidates))
-                session.candidates = []
-                logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{track_id} (1 frame)...")
-                audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
-                self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze)
+    def _close_session_if_lane_empty(self, now: float):
+        if self.session is None or (now - self.session.last_seen) <= cfg.STANDBY_RESET_DELAY_SECONDS:
+            return
+        logger.info(f"Sesi #{self.session.session_id} selesai: jalur kosong. Gerbang standby.")
+        if self.session.vlm_result is not None:
+            # ID terakhir subjek (bisa berbeda dari ID saat dianalisa)
+            self._remember_decision(self.session.track_id, self.session.vlm_result, now)
+        self.session = None
+        notifier.set_idle()
+
+    def _session_for(self, in_lane: list[DetectionResult], now: float) -> GateSession:
+        """Sesi yang berjalan, atau sesi baru untuk orang paling dekat di jalur."""
+        if self.session is not None:
+            return self.session
+        subject = self._pick_subject(in_lane, None)
+        session = self.session = GateSession(subject.track_id, now)
+        logger.info(f"Sesi #{session.session_id} dimulai.")
+        previous = self._recent_decision(subject.track_id, now)
+        if previous is not None:
+            # Orang yang sama baru saja diputuskan: keputusan tetap berlaku
+            session.vlm_result = previous
+            session.state = TrackState.ANALYZED
+            session.analysis_timestamp = now
+            self._show_decision(previous)
+            logger.info(f"Sesi #{session.session_id}: Track #{subject.track_id} baru saja diputuskan; "
+                        f"keputusan dipakai ulang tanpa analisa baru.")
+        return session
+
+    def _follow_subject(self, session: GateSession, in_lane: list[DetectionResult], now: float) -> DetectionResult:
+        det = self._pick_subject(in_lane, session.track_id)
+        session.track_id = det.track_id
+        session.last_seen = now
+        session.is_full_body_now = det.is_full_body
+        session.current_reason = det.reason
+        session.clip_type = getattr(det, "clip_type", "OPTIMAL")
+        return det
+
+    def _may_inspect(self, session: GateSession, det: DetectionResult, now: float) -> bool:
+        """False selama menunggu ulang gangguan sistem atau keputusan sesi sudah terkunci."""
+        # Gangguan sistem: tunggu jeda, lalu kumpulkan frame dan periksa ulang
+        # orang yang sama selama ia masih di jalur
+        if session.state == TrackState.WAITING_SYSTEM:
+            if now < session.retry_at:
+                return False
+            logger.info(f"Sesi #{session.session_id}: mencoba ulang pemeriksaan setelah gangguan sistem.")
+            session.state = TrackState.INITIAL
+            session.restart_candidates(det.bbox)
+            session.readiness.reset()
+        # Keputusan sesi terkunci sampai jalur kosong: tidak ada panggilan VLM kedua
+        return session.state not in (TrackState.ANALYZING, TrackState.ANALYZED)
+
+    def _guide_position(self, session: GateSession, det: DetectionResult, now: float):
+        """Tubuh belum utuh: arahan posisi lewat suara & dashboard. LED merah khusus APD
+        tidak lengkap, jadi lampu tidak disentuh di sini."""
+        session.state = TrackState.STEP_BACK_WARNING
+        # Kandidat hanya dari rangkaian tubuh-utuh yang tidak terputus
+        session.restart_candidates(det.bbox)
+        session.readiness.reset()
+        # Batas pengulangan suara per sesi (bawaan 2x) dengan jeda, supaya tidak berisik
+        if session.step_back_warning_count >= cfg.AUDIO_STEP_BACK_MAX_REPEATS:
+            return
+        if (now - session.last_step_back_audio_time) > cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS:
+            audio_player.play_step_back(clip_type=session.clip_type)
+            session.last_step_back_audio_time = now
+            session.step_back_warning_count += 1
+
+    def _collect_candidate(self, session: GateSession, det: DetectionResult, now: float) -> bool:
+        """Tubuh utuh: kumpulkan frame selama pekerja diam (T46). True = siap dianalisa."""
+        session.step_back_warning_count = 0
+        session.state = TrackState.STABILIZING
+        # Pekerja masih melangkah atau menyamping: kumpulan kandidat dimulai ulang (T46)
+        if session.readiness.update(det.bbox, det.keypoints, now):
+            session.restart_candidates(session.candidates[-1].bbox if session.candidates else det.bbox)
+        if not session.readiness.holding:
+            return False
+        if det.crop_img is not None:
+            session.add_candidate(frame_quality.FrameCandidate(
+                crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id))
+        else:
+            session.stable_frames += 1
+        # Setelah pekerja diam READY_HOLD_SECONDS (minimal STABLE_FRAMES_REQUIRED frame)
+        return session.stable_frames >= cfg.STABLE_FRAMES_REQUIRED and session.readiness.ready(now)
+
+    def _start_analysis(self, session: GateSession, det: DetectionResult, now: float):
+        """Kirim SATU frame terbaik (paling tajam, paling diam, pose paling jelas) dari
+        jendela diam ke VLM; keputusan sesi terkunci sejak titik ini."""
+        logger.info(messages.LOG_SESSION_READY.format(
+            session=session.session_id, held=session.readiness.held_seconds(now),
+            restarts=session.readiness.restarts, frames=session.stable_frames))
+        session.state = TrackState.ANALYZING
+        crop_to_analyze, track_id = None, det.track_id
+        if session.candidates:
+            best = frame_quality.choose_best(session.candidates, session.prev_bbox)
+            crop_to_analyze, track_id = best.crop, best.track_id
+            logger.info(
+                f"Sesi #{session.session_id}: frame terbaik #{session.candidates.index(best) + 1} dari "
+                f"{len(session.candidates)} | skor " + ", ".join(
+                    f"{c.score:.2f} (tajam {c.sharpness:.0f}, gerak {c.motion:.3f}, pose {c.pose:.2f})"
+                    for c in session.candidates))
+        session.candidates = []
+        logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{track_id} (1 frame)...")
+        audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
+        self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze)
 
     def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray]):
         if crop_img is None:
