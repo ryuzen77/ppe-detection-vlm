@@ -239,6 +239,7 @@ export const REPORTS = {
     prev: 'Sebelumnya',
     next: 'Berikutnya',
     today: 'Hari ini',
+    jumpToDate: 'Lompat ke tanggal',
     formatDate: (d: string) => shortDate(d),
   },
   charts: {

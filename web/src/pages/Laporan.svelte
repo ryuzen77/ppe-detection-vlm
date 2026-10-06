@@ -143,7 +143,7 @@
   </section>
 
   <div class="chart-row">
-    <ReportChart buckets={summary?.buckets ?? []} />
+    <ReportChart buckets={summary?.buckets ?? []} totals={{ total: summary?.totals.total ?? 0 }} />
     <MissingItemsChart items={summary?.missing_items ?? []} />
   </div>
 

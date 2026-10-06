@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
-import { clampPercent, complianceTone, historyHead, pageInfo, resultKind, sourceText, offsetDate, formatReportRange } from './reports'
+import { clampPercent, complianceTone, historyHead, pageInfo, resultKind, sourceText, offsetDate, formatReportRange, calculateYAxis } from './reports'
 import { REPORTS } from './settings'
 
 describe('resultKind', () => {
@@ -91,5 +91,23 @@ describe('formatReportRange', () => {
     const f = (d: string) => d // dummy formatter
     expect(formatReportRange('2026-10-01', '2026-10-01', f)).toBe('2026-10-01')
     expect(formatReportRange('2026-10-01', '2026-10-05', f)).toBe('2026-10-01 – 2026-10-05')
+  })
+})
+
+describe('calculateYAxis', () => {
+  it('maxTotal 0 atau 1 -> tick bulat', () => {
+    // maxTotal 0 -> harusnya 1
+    const ticks0 = calculateYAxis(0, 10, 100)
+    // maxTotal 1
+    const ticks1 = calculateYAxis(1, 10, 100)
+    // Cek tick memiliki nilai bulat dan menurun dari bawah ke atas (karena y dari SVG)
+    expect(ticks1.length).toBeGreaterThan(0)
+    expect(Number.isInteger(ticks1[0].value)).toBe(true)
+    // y menurun (tick 0 di bawah -> y besar, tick 1 di atas -> y kecil)
+    const val0 = ticks1.find(t => t.value === 0)
+    const val1 = ticks1.find(t => t.value === 1)
+    if (val0 && val1) {
+      expect(val1.y).toBeLessThan(val0.y)
+    }
   })
 })

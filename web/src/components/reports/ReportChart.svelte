@@ -3,7 +3,7 @@
   import { REPORTS as TEXT } from '../../lib/messages'
   import { CHART } from '../../lib/settings'
 
-  let { buckets }: { buckets: ReportBucket[] } = $props()
+  let { buckets, totals }: { buckets: ReportBucket[], totals: { total: number } } = $props()
 
   // Find max total to scale the chart
   const maxTotal = $derived(Math.max(1, ...buckets.map(b => b.passed + b.rejected)))
@@ -41,7 +41,7 @@
     </div>
   </div>
   
-  {#if buckets.length === 0}
+  {#if totals.total === 0}
     <div class="empty">{TEXT.charts.noData}</div>
   {:else}
     <div class="svg-scroll">

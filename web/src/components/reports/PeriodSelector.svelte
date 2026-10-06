@@ -63,7 +63,7 @@
            disabled={loading} 
            onchange={(e) => { date = e.currentTarget.value }} 
            class="date-input" 
-           title="Lompat ke tanggal" />
+           title={TEXT.period.jumpToDate} />
 
     {#if date !== ''}
       <button class="btn today" onclick={goToday} disabled={loading}>{TEXT.period.today}</button>
@@ -125,11 +125,11 @@
   .btn.today {
     margin-left: var(--space-2);
     font-size: var(--text-xs);
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
   }
   .date-input {
     margin-left: var(--space-2);
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     background: var(--surface-2);
