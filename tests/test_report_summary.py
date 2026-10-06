@@ -135,3 +135,20 @@ def test_indeks_baru_dibuat_di_database_lama(tmp_path):
     with sqlite3.connect(db) as c:
         names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
     assert "idx_date_str" in names
+
+
+# --- Ekspor CSV bertahap (T43) --------------------------------------------------------------
+
+def test_ekspor_dikirim_per_potongan_dengan_nomor_berlanjut(mgr, monkeypatch):
+    from backend.config import cfg
+    monkeypatch.setattr(cfg, "CSV_EXPORT_BATCH_ROWS", 2)
+    chunks = list(mgr.iter_csv_chunks())
+    assert len(chunks) == 1 + 2, "header + 2 potongan untuk 4 baris"
+    rows = list(csv.reader(io.StringIO("".join(chunks))))
+    assert [r[0] for r in rows[1:]] == ["1", "2", "3", "4"], "nomor urut tidak mulai ulang tiap potongan"
+    assert "".join(chunks) == mgr.export_csv_text()
+
+
+def test_api_ekspor_mengalir_sama_dengan_teks_utuh(mgr):
+    r = TestClient(app).get("/api/reports/export", params={"from": "2026-10-01", "to": "2026-10-31"})
+    assert r.status_code == 200 and r.text == mgr.export_csv_text("2026-10-01", "2026-10-31")

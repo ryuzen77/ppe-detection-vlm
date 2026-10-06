@@ -459,41 +459,43 @@ class ReportManager:
                  for r in rows]
         return report_summary.summarize(period, start, end, audit)
 
-    def export_csv_text(self, date_from: Optional[str] = None, date_to: Optional[str] = None) -> str:
-        """Exports all inspection records to a standard CSV string for HSE/K3 audit.
+    @staticmethod
+    def _csv_text(rows: list[list]) -> str:
+        buffer = io.StringIO()
+        csv.writer(buffer).writerows(rows)
+        return buffer.getvalue()
 
+    def _csv_row(self, number: int, row, items) -> list:
+        missing_list = _parse_json(row["missing_items"], [])
+        results = _parse_json(row["items_json"], {})
+        status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
+        return ([number, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str]
+                + [self._item_csv_text(item, results.get(item.key)) for item in items]
+                + ["; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
+                   row["inference_source"], row["inference_time_ms"], row["notes"], row["snapshot_filename"]])
+
+    def iter_csv_chunks(self, date_from: Optional[str] = None, date_to: Optional[str] = None):
+        """CSV audit HSE/K3 per potongan CSV_EXPORT_BATCH_ROWS baris (T43).
+
+        Dulu seluruh berkas dibangun di RAM (terukur 16,8 MB untuk 100 rb baris);
+        kini dikirim bertahap, jadi memori tetap kecil berapa pun rentangnya.
         Kolom per item APD dibangkitkan dari katalog `ppe_rules`.
         """
-        output = io.StringIO()
-        writer = csv.writer(output)
         items = ppe_rules.get_items()
-
-        writer.writerow(
-            messages.CSV_HEADER_LEADING
-            + [item.label for item in items]
-            + messages.CSV_HEADER_TRAILING
-        )
-
+        yield self._csv_text([messages.CSV_HEADER_LEADING + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
+        conditions, params = _range_clause(date_from, date_to)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        number = 0
         with self._get_connection() as conn:
-            cursor = conn.cursor()
-            conditions, params = _range_clause(date_from, date_to)
-            where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-            rows = cursor.execute(f"SELECT * FROM worker_inspections {where} ORDER BY id ASC", params).fetchall()
+            cursor = conn.execute(f"SELECT * FROM worker_inspections {where} ORDER BY id ASC", params)
+            while batch := cursor.fetchmany(cfg.CSV_EXPORT_BATCH_ROWS):
+                rows = [self._csv_row(number + i, row, items) for i, row in enumerate(batch, start=1)]
+                number += len(batch)
+                yield self._csv_text(rows)
 
-            for i, row in enumerate(rows, start=1):
-                missing_list = _parse_json(row["missing_items"], [])
-                results = _parse_json(row["items_json"], {})
-                status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
-
-                writer.writerow(
-                    [i, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str]
-                    + [self._item_csv_text(item, results.get(item.key)) for item in items]
-                    + ["; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
-                       row["inference_source"], row["inference_time_ms"],
-                       row["notes"], row["snapshot_filename"]]
-                )
-
-        return output.getvalue()
+    def export_csv_text(self, date_from: Optional[str] = None, date_to: Optional[str] = None) -> str:
+        """Seluruh CSV sebagai satu teks (alat & tes); API memakai iter_csv_chunks."""
+        return "".join(self.iter_csv_chunks(date_from, date_to))
 
     def get_snapshot_path(self, filename: str) -> Optional[Path]:
         """Resolves snapshot image path safely to avoid path traversal."""

@@ -4,7 +4,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from .. import messages
 from ..report_manager import report_mgr
@@ -61,11 +61,10 @@ async def export_worker_reports_csv(date_from: Optional[str] = Query(None, alias
                                     date_to: Optional[str] = Query(None, alias="to")):
     """Generates and downloads a CSV audit report for HSE/K3 compliance (rentang opsional, T49)."""
     _checked_dates(date_from, date_to)
-    csv_data = report_mgr.export_csv_text(date_from, date_to)
     suffix = "_".join(v for v in (date_from, date_to) if v) or time.strftime("%Y-%m-%d")
     filename = messages.REPORT_CSV_FILENAME.format(suffix=suffix)
-    return Response(
-        content=csv_data,
+    return StreamingResponse(
+        report_mgr.iter_csv_chunks(date_from, date_to),
         media_type="text/csv",
         headers={
             "Content-Disposition": f"attachment; filename={filename}",
