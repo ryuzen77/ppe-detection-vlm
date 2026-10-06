@@ -8,8 +8,11 @@
   import ReportTable from '../components/reports/ReportTable.svelte'
   import SnapshotDialog from '../components/reports/SnapshotDialog.svelte'
   import StatTile from '../components/reports/StatTile.svelte'
+  import PeriodSelector from '../components/reports/PeriodSelector.svelte'
+  import ReportChart from '../components/reports/ReportChart.svelte'
+  import MissingItemsChart from '../components/reports/MissingItemsChart.svelte'
   import { api } from '../lib/api/client'
-  import type { ReportRecord, ReportsPage, ReportStatusFilter } from '../lib/api/types'
+  import type { ReportRecord, ReportsPage, ReportStatusFilter, ReportPeriod, ReportSummary } from '../lib/api/types'
   import { REPORTS as TEXT, count, percent, withError } from '../lib/messages'
   import { complianceTone, historyHead, pageInfo } from '../lib/reports'
   import { REPORTS } from '../lib/settings'
@@ -18,10 +21,15 @@
 
   const STATUSES: ReportStatusFilter[] = ['all', 'complete', 'incomplete']
 
+
   let status = $state<ReportStatusFilter>('all')
+  let period = $state<ReportPeriod>('day')
   let date = $state('')
   let offset = $state(0)
+  
+  let summary = $state<ReportSummary | null>(null)
   let page = $state<ReportsPage | null>(null)
+  
   let loading = $state(false)
   let error = $state('')
   let photo = $state<ReportRecord | null>(null)
@@ -29,13 +37,26 @@
   // Hanya balasan permintaan terakhir yang dipakai (saringan bisa berganti cepat)
   let requestSeq = 0
 
+
   async function load() {
     const seq = ++requestSeq
     loading = true
     try {
-      const data = await api.reports({ limit: REPORTS.pageSize, offset, status, date: date || undefined })
+      const sumData = await api.reportsSummary({ period, date: date || undefined })
       if (seq !== requestSeq) return
-      page = data
+      summary = sumData
+
+      // Use summary's range to fetch the table data so they match exactly
+      const pageData = await api.reports({ 
+        limit: REPORTS.pageSize, 
+        offset, 
+        status, 
+        from: summary.range.from, 
+        to: summary.range.to 
+      })
+      if (seq !== requestSeq) return
+      page = pageData
+      
       error = ''
     } catch (e) {
       if (seq !== requestSeq) return
@@ -47,9 +68,10 @@
 
   // Muat ulang setiap saringan atau halaman berubah
   $effect(() => {
-    void [status, date, offset]
+    void [period, date, status, offset]
     load()
   })
+
 
   function setFilter(apply: () => void) {
     apply()
@@ -88,25 +110,42 @@
       <button class="btn" onclick={load} disabled={loading}>
         <RefreshCw size={16} aria-hidden="true" />{TEXT.refresh}
       </button>
-      <a class="btn" href={api.exportCsvUrl()} download title={TEXT.exportHint}>
+      <a class="btn" href={api.exportCsvUrl(summary?.range.from, summary?.range.to)} download title={TEXT.exportHint}>
         <Download size={16} aria-hidden="true" />{TEXT.exportCsv}
       </a>
     </div>
   </header>
 
+  <PeriodSelector bind:period bind:date range={summary?.range ?? null} {loading} />
+
   <section aria-label={TEXT.stats.ariaLabel}>
-    <p class="scope">{TEXT.stats.scopeAll}</p>
+    <p class="scope">
+      {#if summary}
+        {#if summary.range.from === summary.range.to}
+          {TEXT.period.formatDate(summary.range.from)}
+        {:else}
+          {TEXT.period.formatDate(summary.range.from)} – {TEXT.period.formatDate(summary.range.to)}
+        {/if}
+      {:else}
+        {TEXT.stats.scopeAll}
+      {/if}
+    </p>
     <div class="tiles">
-      <StatTile label={TEXT.stats.total} value={count(page?.total_all)} />
-      <StatTile label={TEXT.stats.passed} value={count(page?.complete_count)} />
-      <StatTile label={TEXT.stats.denied} value={count(page?.violation_count)} />
-      <StatTile label={TEXT.stats.compliance} value={percent(page?.compliance_rate)}
-                meter={page ? page.compliance_rate : null} tone={complianceTone(page?.compliance_rate ?? 0)} />
+      <StatTile label={TEXT.stats.total} value={count(summary?.totals.total)} />
+      <StatTile label={TEXT.stats.passed} value={count(summary?.totals.passed)} />
+      <StatTile label={TEXT.stats.denied} value={count(summary?.totals.rejected)} />
+      <StatTile label={TEXT.stats.compliance} value={summary?.totals.compliance_rate === null ? '–' : percent(summary?.totals.compliance_rate)}
+                meter={summary?.totals.compliance_rate ?? null} tone={complianceTone(summary?.totals.compliance_rate ?? null)} />
       <StatTile label={TEXT.stats.backup} value={count(page?.backup_count)} />
       <StatTile label={TEXT.stats.outages} value={count(page?.system_outages)} 
                 note={TEXT.stats.scopeSinceStart} hint={TEXT.stats.outagesHint} />
     </div>
   </section>
+
+  <div class="chart-row">
+    <ReportChart buckets={summary?.buckets ?? []} totals={{ total: summary?.totals.total ?? 0 }} />
+    <MissingItemsChart items={summary?.missing_items ?? []} />
+  </div>
 
   <section class="card">
     <div class="filters" role="group" aria-label={TEXT.filters.ariaLabel}>
@@ -116,13 +155,6 @@
                   onclick={() => setFilter(() => (status = s))}>{TEXT.filters.status[s]}</button>
         {/each}
       </div>
-      <label class="date">
-        <span>{TEXT.filters.date}</span>
-        <input type="date" value={date} onchange={(e) => setFilter(() => (date = e.currentTarget.value))} />
-      </label>
-      {#if date}
-        <button class="btn" onclick={() => setFilter(() => (date = ''))}>{TEXT.filters.clearDate}</button>
-      {/if}
     </div>
 
     {#if error}
@@ -132,7 +164,7 @@
     {#if records.length}
       <ReportTable {records} items={catalog.items} onOpen={(r) => (photo = r)} />
     {:else if !error}
-      <p class="state">{loading ? TEXT.loading : filtered ? TEXT.emptyFiltered : TEXT.empty}</p>
+      <p class="state">{loading ? TEXT.loading : (summary?.totals.total === 0 ? TEXT.emptyPeriod : (filtered ? TEXT.emptyFiltered : TEXT.empty))}</p>
     {/if}
 
     {#if info.total > 0 || info.hasPrev}
@@ -150,6 +182,14 @@
 <SnapshotDialog bind:record={photo} />
 
 <style>
+
+  .chart-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    align-items: stretch;
+  }
+
   .laporan {
     display: flex;
     flex-direction: column;
@@ -224,21 +264,6 @@
   .segmented button.active {
     background: var(--accent-soft);
     color: var(--text);
-  }
-  .date {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-  }
-  .date input {
-    padding: 4px 8px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    color: var(--text);
-    font: inherit;
   }
   .state {
     margin: var(--space-6) 0;

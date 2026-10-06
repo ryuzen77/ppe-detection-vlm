@@ -11,7 +11,7 @@ import type {
   MonitorStatus,
   PingResult,
   PpeCatalog,
-  ReportsPage,
+  ReportsPage, ReportSummary, ReportPeriod,
   ReportStatusFilter,
   VlmInfo,
 } from './types'
@@ -156,17 +156,31 @@ export class ApiClient {
   calibrateZone = () => this.request<Zone>('POST', '/api/config/zone/calibrate')
 
   // --- Laporan
-  reports = (params: { limit?: number; offset?: number; status?: ReportStatusFilter; date?: string } = {}) => {
+  reportsSummary = (params: { period?: ReportPeriod; date?: string } = {}) => {
+    const q = new URLSearchParams()
+    if (params.period) q.set('period', params.period)
+    if (params.date) q.set('date', params.date)
+    const qs = q.toString()
+    return this.request<ReportSummary>('GET', `/api/reports/summary${qs ? `?${qs}` : ''}`)
+  }
+  reports = (params: { limit?: number; offset?: number; status?: ReportStatusFilter; from?: string; to?: string } = {}) => {
     const q = new URLSearchParams()
     if (params.limit !== undefined) q.set('limit', String(params.limit))
     if (params.offset !== undefined) q.set('offset', String(params.offset))
     if (params.status) q.set('status', params.status)
-    if (params.date) q.set('date', params.date)
+    if (params.from) q.set('from', params.from)
+    if (params.to) q.set('to', params.to)
     const qs = q.toString()
     return this.request<ReportsPage>('GET', `/api/reports${qs ? `?${qs}` : ''}`)
   }
   snapshotUrl = (filename: string) => this.url(`/api/reports/snapshots/${encodeURIComponent(filename)}`)
-  exportCsvUrl = () => this.url('/api/reports/export')
+  exportCsvUrl = (from?: string, to?: string) => {
+    const q = new URLSearchParams()
+    if (from) q.set('from', from)
+    if (to) q.set('to', to)
+    const qs = q.toString()
+    return this.url(`/api/reports/export${qs ? `?${qs}` : ''}`)
+  }
   streamUrl = () => this.url('/api/stream')
 }
 

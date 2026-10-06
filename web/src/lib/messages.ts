@@ -233,6 +233,22 @@ export const REPORTS = {
   refresh: 'Muat ulang',
   exportCsv: 'Ekspor CSV',
   exportHint: 'Unduh seluruh audit sebagai CSV',
+  period: {
+    ariaLabel: 'Pilih periode laporan',
+    options: { day: 'Harian', week: 'Mingguan', month: 'Bulanan' } as Record<string, string>,
+    prev: 'Sebelumnya',
+    next: 'Berikutnya',
+    today: 'Hari ini',
+    jumpToDate: 'Lompat ke tanggal',
+    formatDate: (d: string) => shortDate(d),
+  },
+  charts: {
+    passed: 'Lolos',
+    rejected: 'Ditolak',
+    missingItemsTitle: 'Item APD terbanyak yang kurang',
+    complianceTitle: 'Kepatuhan & Volume Inspeksi',
+    noData: 'Tidak ada data untuk periode ini.',
+  },
   stats: {
     ariaLabel: 'Statistik kepatuhan',
     scopeAll: 'Seluruh riwayat',
@@ -270,6 +286,7 @@ export const REPORTS = {
   loading: 'Memuat riwayat…',
   empty: 'Belum ada pemeriksaan.',
   emptyFiltered: 'Tidak ada pemeriksaan yang cocok dengan saringan.',
+  emptyPeriod: 'Belum ada pemeriksaan pada periode ini.',
   loadFailed: 'Gagal memuat riwayat',
   page: {
     ariaLabel: 'Halaman riwayat',

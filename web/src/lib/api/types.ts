@@ -229,6 +229,42 @@ export interface Telemetry {
 
 // --- Laporan (GET /api/reports) ----------------------------------------------------------
 
+export type ReportPeriod = 'day' | 'week' | 'month'
+
+export interface ReportRange {
+  from: string
+  to: string
+}
+
+export interface ReportTotals {
+  total: number
+  passed: number
+  rejected: number
+  compliance_rate: number | null
+}
+
+export interface ReportBucket {
+  start: string
+  label: string
+  passed: number
+  rejected: number
+}
+
+export interface MissingItemStat {
+  key: string | null
+  label: string
+  count: number
+}
+
+export interface ReportSummary {
+  period: ReportPeriod
+  range: ReportRange
+  totals: ReportTotals
+  buckets: ReportBucket[]
+  missing_items: MissingItemStat[]
+}
+
+
 export interface ReportRecord {
   id: number
   track_id: number

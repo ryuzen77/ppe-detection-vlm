@@ -57,8 +57,8 @@ describe('ApiClient', () => {
   it('parameter laporan dan URL berkas dibentuk dengan aman', async () => {
     const { fn, calls } = fakeFetch(200, { page_records: [] })
     const api = new ApiClient({ fetch: fn, baseUrl: 'http://gerbang:8000/' })
-    await api.reports({ limit: 20, offset: 40, status: 'incomplete', date: '2026-09-24' })
-    expect(calls[0].url).toBe('http://gerbang:8000/api/reports?limit=20&offset=40&status=incomplete&date=2026-09-24')
+    await api.reports({ limit: 20, offset: 40, status: 'incomplete', from: '2026-09-24', to: '2026-09-24' })
+    expect(calls[0].url).toBe('http://gerbang:8000/api/reports?limit=20&offset=40&status=incomplete&from=2026-09-24&to=2026-09-24')
     expect(api.snapshotUrl('a b/../x.jpg')).toBe('http://gerbang:8000/api/reports/snapshots/a%20b%2F..%2Fx.jpg')
   })
 
