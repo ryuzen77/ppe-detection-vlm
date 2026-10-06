@@ -10,7 +10,7 @@ import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, chipTitle, seconds } from './mess
 import { detectEvents, initialWatch } from './notify'
 import { assessItem } from './ppe'
 import { parseRoute } from './router.svelte'
-import { cameraChip, vlmChip } from './status'
+import { cameraChip, vlmChip, iotChip } from './status'
 import { readItem, writeItem } from './storage'
 
 // --- data tiruan ---------------------------------------------------------------
@@ -283,6 +283,15 @@ describe('chip status', () => {
     }
     expect(vlmChip(tele({ api_monitor: { mode: 'CADANGAN' } as Telemetry['api_monitor'] })).tone).toBe('warn')
   })
+
+  it('iotChip: nada dan teks sesuai status', () => {
+    expect(iotChip(null).tone).toBe('neutral')
+    expect(iotChip(tele({ iot: { enabled: false, connected: true, last_ack_age_s: null, error: null } })).tone).toBe('neutral')
+    expect(iotChip(tele({ iot: { enabled: true, connected: true, last_ack_age_s: null, error: null } })).tone).toBe('ok')
+    expect(iotChip(tele({ iot: { enabled: true, connected: false, last_ack_age_s: null, error: 'lost' } })).tone).toBe('warn')
+    expect(iotChip(tele({ iot: { enabled: true, connected: false, last_ack_age_s: null, error: 'lost' } })).hint).toBe('lost')
+  })
+
   it('kamera: nada per status', () => {
     expect(cameraChip(tele()).tone).toBe('ok')
     expect(cameraChip(tele({ camera: { ...tele().camera, status: 'LOST' } })).tone).toBe('danger')

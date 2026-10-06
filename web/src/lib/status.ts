@@ -33,7 +33,7 @@ export function iotChip(t: Telemetry | null): Chip {
   if (!iot) return { tone: 'neutral', text: IOT_CHIP.disabled, hint: '' }
   if (!iot.enabled) return { tone: 'neutral', text: IOT_CHIP.disabled, hint: '' }
   return {
-    tone: iot.connected ? 'ok' : 'danger',
+    tone: iot.connected ? 'ok' : 'warn',
     text: iot.connected ? IOT_CHIP.connected : IOT_CHIP.disconnected,
     hint: iot.error || ''
   }
