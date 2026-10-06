@@ -21,6 +21,7 @@ export function describeSource(source: string | null | undefined): SourceInfo {
   if (s.startsWith(SOURCE_PREFIX.primary)) return { role: 'utama', label: s.slice(SOURCE_PREFIX.primary.length) }
   if (s.startsWith(SOURCE_PREFIX.backup)) return { role: 'cadangan', label: s.slice(SOURCE_PREFIX.backup.length) }
   if (s === SOURCE_PREFIX.outage) return { role: 'gangguan', label: '' }
+    // label sumber audit sebelum T23 (data lama), bukan UI lama
   if (s.includes(SOURCE_PREFIX.legacyGemini)) return { role: 'utama', label: 'gemini' }
   return { role: 'lama', label: s }
 }

@@ -95,7 +95,7 @@ PowerShell tidak menjalankan skrip di folder aktif tanpa awalan `.\`.
 
 Buka <http://localhost:8000>. Saat pertama dibuka, dashboard meminta Anda memilih
 kamera; video belum tersambung sebelum kamera dipilih. Tampilan lama masih ada
-di `/legacy/` dan akan dihapus.
+
 
 ## 4. Pengembangan
 
