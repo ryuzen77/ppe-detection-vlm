@@ -108,6 +108,20 @@ PowerShell tidak menjalankan skrip di folder aktif tanpa awalan `.\`.
 - **Linux (menyala saat boot):** pasang `deploy/safeguard.service`; petunjuknya
   ada di dalam berkas itu. Server berhenti bersih saat menerima `SIGTERM`.
 
+### Menyala sendiri (Windows, demo) — T29
+
+1. Di `backend/.env`: `CAMERA_AUTOSTART=true` dan `CAMERA_NAME=<nama kamera eksternal>` (nama persis seperti di
+   daftar kamera dashboard, mis. `HD Pro Webcam C920`). Kamera **hanya** dicari lewat nama: bila belum terlihat
+   (Windows bisa butuh ±30 dtk setelah dicolok), gerbang menunggu dengan lampu kuning, tidak membuka kamera lain.
+2. Pasang sekali: `powershell -ExecutionPolicy Bypass -File deploy\windows\install_autostart.ps1`
+   (pintasan di folder Startup pengguna; lepas dengan `uninstall_autostart.ps1`). Ollama sudah menyala sendiri
+   lewat pintasannya; matikan update otomatisnya.
+3. `start_system.bat` menjalankan `python -m backend.supervisor`: server dinyalakan ulang bila crash
+   (jeda 5 dtk, berlipat bila crash beruntun, maks. 60 dtk; catatan di `DATA_DIR/logs/supervisor.log`).
+   Berhenti rapi dengan `Ctrl+C`.
+4. Saat menyala, server memeriksa CUDA, versi Ollama (`OLLAMA_VALIDATED_VERSION`), dan kamera target;
+   peringatannya di log dan `GET /api/health` → `startup_warnings`.
+
 Buka <http://localhost:8000>. Saat pertama dibuka, dashboard meminta Anda memilih
 kamera; video belum tersambung sebelum kamera dipilih. Tampilan lama masih ada
 

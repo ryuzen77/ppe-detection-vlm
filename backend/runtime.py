@@ -37,6 +37,17 @@ def _retention_loop():
 
 
 
+def _run_startup_checks():
+    """Peringatan kesehatan saat menyala (T29); tidak pernah menghentikan server."""
+    import torch
+    from . import camera_manager, startup_checks
+    local = vlm_analyzer._local_engine()
+    ollama_url = (local.provider.base_url if local is not None and local.provider_name == "ollama"
+                  and local.provider is not None else None)
+    camera = camera_manager.autostart_target()[0] if cfg.CAMERA_AUTOSTART else ""
+    startup_checks.run(torch.cuda.is_available(), ollama_url, camera, camera_manager.list_device_names)
+
+
 def start():
     # 1. Logging lebih dulu, supaya seluruh langkah berikutnya tercatat
     setup_logging(cfg)
@@ -57,6 +68,7 @@ def start():
     # setelah panggilan VLM pertama terbukti cepat
     vlm_analyzer.warm_up()
     vlm_analyzer.local_guard.start()
+    _run_startup_checks()
     video_service.start()
     
     global _cleanup_thread

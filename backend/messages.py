@@ -132,6 +132,22 @@ VOICE_TEXTS = {
     "kamera_terhalang": "Kamera gerbang terhalang. Mohon singkirkan penghalang di depan kamera.",
 }
 
+# --- Berjalan sendiri (T29) ---
+SUPERVISOR_START = "Penjaga proses gerbang mulai; server dinyalakan ulang otomatis bila crash."
+SUPERVISOR_RESTART = "Server berhenti tidak wajar (kode {code}) setelah {ran:.0f} dtk; dinyalakan ulang dalam {delay:.0f} dtk."
+SUPERVISOR_CLEAN_EXIT = "Server berhenti rapi; penjaga proses selesai."
+SUPERVISOR_STOPPED = "Penjaga proses dihentikan operator."
+STARTUP_NO_CUDA = "CUDA tidak tersedia: YOLO berjalan di CPU, pemeriksaan sangat lambat. Periksa driver/mode GPU."
+STARTUP_OLLAMA_UNREACHABLE = "Ollama (VLM cadangan) tidak terjangkau saat start; dicoba lagi saat inspeksi. Pastikan aplikasi Ollama menyala."
+STARTUP_OLLAMA_VERSION = ("Versi Ollama {found} berbeda dari versi validasi {expected}: kecepatan & akurasi VLM lokal "
+                          "belum terjamin. Kembalikan versinya atau validasi ulang (tools/bench_vlm.py).")
+STARTUP_CAMERA_MISSING = "Kamera '{name}' belum terlihat sistem (terlihat: {seen}); gerbang menunggu kamera itu."
+STARTUP_ALL_OK = "Pemeriksaan saat start: semua baik."
+CAMERA_AUTOSTART_NO_NAME = ("CAMERA_AUTOSTART aktif tetapi belum ada nama kamera (CAMERA_NAME kosong & belum pernah "
+                            "dipilih); menunggu operator memilih kamera.")
+CAMERA_AUTOSTART_OPENED = "Kamera otomatis: '{name}'."
+CAMERA_AUTOSTART_WAITING = "Kamera '{name}' belum terlihat sistem; menunggu (tidak membuka kamera lain)."
+
 # --- Catatan hidup server (T37) ---
 UPTIME_CLEAN_RESTART = "Server menyala. Sebelumnya berhenti rapi pada {since}; gerbang tidak aktif {down}."
 UPTIME_UNCLEAN_RESTART = ("Server menyala setelah BERHENTI MENDADAK (listrik padam/crash). "
