@@ -10,6 +10,7 @@ import numpy as np
 from ..config import cfg
 from .. import messages
 from .. import camera_manager
+from ..camera_health import FAULT_FROZEN, CameraHealth
 from ..camera_manager import camera_mgr
 from ..detector import detector
 from ..state_manager import state_mgr
@@ -43,8 +44,12 @@ class VideoCaptureService:
         self._pending_mode = None
         self._pending_optimize = False
         self._pending_idle = False
-        # Disetel thread pengawas ketika perangkat aktif hilang dari daftar OS
+        # Disetel thread pengawas ketika perangkat aktif hilang dari daftar OS,
+        # atau oleh pemeriksa kesehatan gambar saat gambar membeku (T45)
         self._device_missing = False
+        self._missing_reason = messages.CAMERA_UNPLUGGED
+        # Gambar tertutup / membeku (T45); dibaca thread inferensi saja
+        self._health = CameraHealth()
         # Slot frame mentah terbaru: pembaca kamera dan inferensi dipisah agar
         # inferensi YOLO tidak memblokir pembacaan dan buffer kamera tidak menumpuk.
         self.raw_lock = threading.Lock()
@@ -88,12 +93,33 @@ class VideoCaptureService:
         self._pending_idle = True
         logger.info("Permintaan melepas kamera diterima.")
 
+    def _camera_fault(self, frame, now: float):
+        """Gangguan kamera untuk gerbang (T45): None | "lost" | "blocked" | "frozen".
+
+        Saat kamera sedang dibuka/dipindai atau belum dipilih, gerbang memang tidak
+        beroperasi atas perintah operator — itu bukan gangguan.
+        """
+        if self.camera_status == "LOST" or (self.camera_status == "SYNTHETIC" and self.camera_index is not None):
+            self._health.reset()
+            return FAULT_FROZEN if self.camera_error == messages.CAMERA_FROZEN else "lost"
+        if self.camera_status != "OK":
+            self._health.reset()
+            return None
+        fault = self._health.update(frame, now)
+        if fault == FAULT_FROZEN and not self._device_missing:
+            # Driver mengirim frame identik: buka ulang lewat jalur "perangkat hilang"
+            logger.warning(messages.CAMERA_FROZEN)
+            self._missing_reason = messages.CAMERA_FROZEN
+            self._device_missing = True
+        return fault
+
     def get_camera_status(self) -> dict:
+        blocked = self.camera_status == "OK" and self._health.fault == "blocked"
         return {
             "index": self.camera_index,
             "name": self.camera_name,
             "selected": self.camera_index is not None,
-            "status": self.camera_status,
+            "status": "BLOCKED" if blocked else self.camera_status,
             "error": self.camera_error,
             "mode": self.active_mode,
             "optimizing": self.camera_status == "OPTIMIZING",
@@ -381,7 +407,8 @@ class VideoCaptureService:
                     lost_mode = self.active_mode
                     self._release_camera()
                     self.camera_status = "LOST"
-                    self.camera_error = messages.CAMERA_UNPLUGGED
+                    self.camera_error = self._missing_reason
+                    self._missing_reason = messages.CAMERA_UNPLUGGED
                     self._device_missing = False
                     last_reconnect_attempt = time.time()
                     continue
@@ -533,6 +560,9 @@ class VideoCaptureService:
                 if dt > 0 and seen_first_frame:
                     self.fps = (1 - cfg.FPS_SMOOTHING) * self.fps + cfg.FPS_SMOOTHING * (1.0 / dt)
                 seen_first_frame = True
+
+                # Kamera terputus/tertutup/membeku: gerbang berhenti memeriksa (T45)
+                state_mgr.set_camera_fault(self._camera_fault(frame, now))
 
                 # Run YOLO Person & Pose Detection
                 detections = detector.detect_and_track(frame)

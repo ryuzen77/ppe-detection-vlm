@@ -17,6 +17,12 @@ LIGHT_GRANTED = "AKSES DIIZINKAN - APD LENGKAP"
 LIGHT_DENIED_MISSING = "AKSES DITOLAK - Belum memakai: {missing}"
 LIGHT_POSITION_WARNING = "Peringatan: {reason}"
 LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan otomatis"
+# Gangguan kamera (T45): kuning, bukan merah — tidak ada pekerja yang ditolak
+LIGHT_CAMERA_FAULT = {
+    "lost": "KAMERA TERPUTUS - Gerbang berhenti memeriksa, mohon tunggu petugas",
+    "blocked": "KAMERA TERTUTUP / TERLALU GELAP - Gerbang berhenti memeriksa, mohon tunggu petugas",
+    "frozen": "GAMBAR KAMERA MEMBEKU - Menyambung ulang, mohon tunggu",
+}
 LIGHT_TEST_GREEN = "Uji Coba Manual - Lampu Hijau"
 LIGHT_TEST_RED = "Uji Coba Manual - Lampu Merah"
 LIGHT_TEST_YELLOW = "Uji Coba Manual - Lampu Kuning"
@@ -39,6 +45,9 @@ CAMERA_NO_FRAMES = "Kamera index {index} terbuka tetapi tidak mengirim frame"
 CAMERA_UNPLUGGED = "Kamera dicabut dari sistem"
 CAMERA_DISCONNECTED = "Kamera terputus atau dicabut"
 CAMERA_STALLED = "Kamera berhenti mengirim frame wajar"
+CAMERA_FROZEN = "Gambar kamera membeku (frame identik); menyambung ulang"
+LOG_CAMERA_FAULT_START = "Gangguan kamera ({fault}): pemeriksaan dihentikan, lampu kuning."
+LOG_CAMERA_FAULT_END = "Gangguan kamera ({fault}) selesai setelah {seconds:.0f} dtk; gerbang siaga lagi."
 
 # --- Layar tunggu (frame sintetis) ---
 FRAME_TITLE = "ZONA INSPEKSI K3 (STANDBY)"
@@ -114,6 +123,8 @@ VOICE_TEXTS = {
     "sedang_analisa": "Mohon tunggu.",
     # Utama & cadangan VLM gagal (T27): belum ada keputusan, pemeriksaan diulang otomatis
     "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
+    # Kamera terputus/tertutup/membeku (T45): diputar sekali saat gangguan mulai
+    "gangguan_kamera": "Kamera gerbang terganggu. Mohon tunggu petugas.",
 }
 
 # --- Catatan hidup server (T37) ---

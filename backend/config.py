@@ -115,6 +115,19 @@ class Config:
     CAMERA_PRESENCE_CHECK_SECONDS: float = 2.0
     # Jeda antar upaya menyambung ulang kamera yang lepas
     CAMERA_RECONNECT_INTERVAL_SECONDS: float = 2.0
+    # Kesehatan gambar (T45). Tertutup = rata-rata kecerahan di luar rentang atau
+    # nyaris seragam (simpangan baku kecil) pada gambar kecil skala abu-abu (0-255).
+    CAMERA_HEALTH_SAMPLE_WIDTH: int = 64
+    CAMERA_HEALTH_SAMPLE_HEIGHT: int = 36
+    CAMERA_DARK_MEAN: float = float(_env("CAMERA_DARK_MEAN", "25"))
+    CAMERA_BRIGHT_MEAN: float = float(_env("CAMERA_BRIGHT_MEAN", "235"))
+    CAMERA_UNIFORM_STD: float = float(_env("CAMERA_UNIFORM_STD", "6"))
+    CAMERA_BLOCKED_SECONDS: float = float(_env("CAMERA_BLOCKED_SECONDS", "3.0"))
+    # Membeku = cuplikan berjarak (tanpa dirata-rata, derau sensor terlihat) identik
+    CAMERA_FROZEN_SAMPLE_STEP: int = 4
+    CAMERA_FROZEN_SECONDS: float = float(_env("CAMERA_FROZEN_SECONDS", "3.0"))
+    # Gambar harus sehat selama ini sebelum gangguan dianggap selesai
+    CAMERA_HEALTHY_SECONDS: float = 1.0
     # Indeks tertinggi yang dicoba saat pemindaian bila nama perangkat tidak bisa
     # dibaca dari sistem operasi (bila bisa, jumlah perangkat itu yang dipakai)
     CAMERA_SCAN_MAX_INDEX: int = 6

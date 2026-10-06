@@ -102,6 +102,33 @@ class StateManager:
         self.foot_memory = zones.FootMemory()
         # ID pelacak -> (waktu, keputusan) untuk sesi yang LOLOS (T36c)
         self.recent_decisions: dict[int, tuple[float, InspectionResult]] = {}
+        # Gangguan kamera yang sedang berlaku (T45): None | "lost" | "blocked" | "frozen"
+        self.camera_fault: Optional[str] = None
+        self.camera_fault_since = 0.0
+
+    def set_camera_fault(self, fault: Optional[str]):
+        """Dipanggil tiap frame oleh thread inferensi; hanya PERUBAHAN keadaan yang bertindak.
+
+        Selama kamera bermasalah gerbang tidak boleh memutuskan apa pun dari gambar
+        yang tidak bisa dipercaya: sesi & keputusan dibatalkan (termasuk hijau yang
+        sedang menyala), lampu kuning tetap, suara gangguan sekali (keputusan pengguna).
+        """
+        with self.lock:
+            if fault == self.camera_fault:
+                return
+            previous, self.camera_fault = self.camera_fault, fault
+            now = time.time()
+            if fault is None:
+                logger.info(messages.LOG_CAMERA_FAULT_END.format(fault=previous, seconds=now - self.camera_fault_since))
+                notifier.set_idle()
+                return
+            if previous is None:
+                self.camera_fault_since = now
+                logger.warning(messages.LOG_CAMERA_FAULT_START.format(fault=fault))
+                audio_player.play("gangguan_kamera", urgent=True)
+            # Hasil VLM yang tiba belakangan untuk sesi ini diabaikan (cek id sesi)
+            self.session = None
+            notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[fault])
 
     @staticmethod
     def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int]) -> DetectionResult:
@@ -138,6 +165,8 @@ class StateManager:
 
         with self.lock:
             self.latest_detections = detections
+            if self.camera_fault is not None:
+                return          # gambar tidak bisa dipercaya: tidak ada sesi baru (T45)
             for d in detections:
                 d.zone_y = self.foot_memory.resolve(d.track_id, getattr(d, "foot_y", None),
                                                     getattr(d, "foot_y_box", None), now)
@@ -343,6 +372,11 @@ class StateManager:
             # Reset operator = mulai bersih: orang yang sama boleh diperiksa ulang
             self.recent_decisions.clear()
             self.foot_memory.clear()
+            if self.camera_fault is not None:
+                # Mis. kamera tersambung ulang: thread pembaca me-reset gerbang
+                logger.info(messages.LOG_CAMERA_FAULT_END.format(
+                    fault=self.camera_fault, seconds=time.time() - self.camera_fault_since))
+            self.camera_fault = None
             notifier.set_idle()
 
     def get_telemetry(self) -> dict:
@@ -395,6 +429,7 @@ class StateManager:
                 "zone": {"enabled": active_zone.enabled, "y_min": active_zone.y_min,
                          "y_max": active_zone.y_max},
                 "light": notifier.get_status(),
+                "camera_fault": self.camera_fault,
                 "history": self.inspection_history[:cfg.TELEMETRY_HISTORY_RECORDS],
                 # Frontend butuh angka ini untuk indikator "stabil x / y";
                 # dulu ditulis tetap "/ 2" dan akan salah begitu config diubah.
