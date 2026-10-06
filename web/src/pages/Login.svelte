@@ -2,6 +2,7 @@
   import { LOGIN } from '../lib/messages'
   import { session } from '../lib/stores/session.svelte'
   import { ApiError } from '../lib/api/client'
+  import { tickCountdown } from '../lib/sessionLogic'
   
   let password = $state('')
   let loading = $state(false)
@@ -14,12 +15,10 @@
     if (waitSecs !== null && waitSecs > 0) {
       if (!timer) {
         timer = setInterval(() => {
-          if (waitSecs !== null && waitSecs > 0) {
-            waitSecs--
-          } else {
+          waitSecs = tickCountdown(waitSecs, 1)
+          if (waitSecs === null) {
             clearInterval(timer!)
             timer = null
-            waitSecs = null
           }
         }, 1000)
       }
@@ -30,6 +29,10 @@
       }
     }
   })
+
+  function focus(node: HTMLElement) {
+    node.focus()
+  }
 
   async function handleLogin(e: Event) {
     e.preventDefault()
@@ -71,7 +74,7 @@
     
     <div class="input-group">
       <label for="password">{LOGIN.password}</label>
-      <input type="password" id="password" bind:value={password} disabled={loading || waitSecs !== null} autofocus />
+      <input type="password" id="password" bind:value={password} disabled={loading || waitSecs !== null} use:focus />
     </div>
     
     <button type="submit" class="btn btn-primary" disabled={!password || loading || waitSecs !== null}>

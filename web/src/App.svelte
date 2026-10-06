@@ -6,6 +6,7 @@
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
   import { session } from './lib/stores/session.svelte'
+  import { shouldShowLogin } from './lib/sessionLogic'
 import Login from './pages/Login.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
@@ -16,13 +17,22 @@ import Login from './pages/Login.svelte'
 
   onMount(() => {
     router.start()
-    telemetry.start()
     session.load()
     catalog.load()
     // Perintah mana pun yang ditolak karena token → buka isian token
     api.onUnauthorized = () => { session.clear() }
   })
   onDestroy(() => telemetry.stop())
+
+  $effect(() => {
+    if (!shouldShowLogin(session)) {
+      if (telemetry.status === 'disconnected' && !telemetry.data) {
+        telemetry.start()
+      }
+    } else {
+      telemetry.stop()
+    }
+  })
 
   // Notifikasi kejadian penting hanya saat operator TIDAK melihat Monitoring;
   // di Monitoring panel keputusan sudah menampilkannya.
@@ -41,7 +51,7 @@ import Login from './pages/Login.svelte'
 
 <TopBar />
 <main>
-  {#if session.authRequired && !session.authenticated}
+  {#if shouldShowLogin(session)}
     <Login />
   {:else if router.current === 'monitoring'}
     <Monitoring />
