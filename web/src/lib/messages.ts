@@ -44,6 +44,13 @@ export const VLM_CHIP: Record<VlmMode | 'UNKNOWN', { text: string; hint: string 
   UNKNOWN: { text: 'VLM', hint: '' },
 }
 
+
+export const IOT_CHIP = {
+  connected: 'Lampu gerbang: tersambung',
+  disconnected: 'Lampu gerbang: terputus',
+  disabled: 'Lampu gerbang: nonaktif'
+} as const
+
 export const GATE_CHIP = {
   title: 'Buka Monitoring',
   text: (title: string, trackId: number | null) => `Gerbang: ${title}${trackId ? ` · #${trackId}` : ''}`,
@@ -347,6 +354,7 @@ export const SETTINGS_TAB = {
   backupModel: 'Model Cadangan',
   lightTest: 'Lampu & Tes',
   testLightBtn: 'Tes Lampu',
+  testYellowBtn: 'Kuning',
   latencyTestBtn: 'Uji Latensi VLM',
 } as const
 

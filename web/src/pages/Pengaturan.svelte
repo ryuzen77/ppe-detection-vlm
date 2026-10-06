@@ -31,10 +31,10 @@
     SETTINGS_TAB.serverDisconnectedSince
   ))
 
-  async function testLight() {
+  async function testLight(color: 'green' | 'yellow' = 'green') {
     lightStatus = SETTINGS_TAB.running
     try {
-      await api.testLight('green')
+      await api.testLight(color)
       setTimeout(async () => {
         try {
           await api.testLight('off')
@@ -115,7 +115,8 @@
 
     <section class="card">
       <h2>{SETTINGS_TAB.lightTest}</h2>
-      <button class="btn btn-primary" onclick={testLight}>{SETTINGS_TAB.testLightBtn}</button>
+      <button class="btn btn-primary" onclick={() => testLight('green')}>{SETTINGS_TAB.testLightBtn}</button>
+      <button class="btn btn-primary" onclick={() => testLight('yellow')}>{SETTINGS_TAB.testYellowBtn}</button>
       {#if lightStatus}<p class="status-msg">{lightStatus}</p>{/if}
     </section>
 
