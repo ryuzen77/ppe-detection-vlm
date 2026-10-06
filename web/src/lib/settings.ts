@@ -86,3 +86,9 @@ export const STAND_ZONE = {
 export const LIGHT_TEST = {
   offDelayMs: 2000,
 } as const;
+
+export const CHART = {
+  height: 240,
+  barWidth: 32,
+  missingItemHeight: 32,
+} as const

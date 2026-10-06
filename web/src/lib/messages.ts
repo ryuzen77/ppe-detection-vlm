@@ -233,6 +233,22 @@ export const REPORTS = {
   refresh: 'Muat ulang',
   exportCsv: 'Ekspor CSV',
   exportHint: 'Unduh seluruh audit sebagai CSV',
+  period: {
+    ariaLabel: 'Pilih periode laporan',
+    options: { day: 'Harian', week: 'Mingguan', month: 'Bulanan' } as Record<string, string>,
+    prev: 'Sebelumnya',
+    next: 'Berikutnya',
+    today: 'Hari ini',
+    formatDate: (d: string) => shortDate(d),
+    formatRange: (from: string, to: string) => `${shortDate(from)} – ${shortDate(to)}`,
+  },
+  charts: {
+    passed: 'Lolos',
+    rejected: 'Ditolak',
+    missingItemsTitle: 'Item APD terbanyak yang kurang',
+    complianceTitle: 'Kepatuhan & Volume Inspeksi',
+    noData: 'Tidak ada data untuk periode ini.',
+  },
   stats: {
     ariaLabel: 'Statistik kepatuhan',
     scopeAll: 'Seluruh riwayat',
