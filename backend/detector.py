@@ -11,6 +11,7 @@ import torch
 from .config import cfg
 from . import zone
 from . import messages
+from . import pose_keypoints as kp
 
 logger = logging.getLogger(__name__)
 
@@ -137,28 +138,29 @@ class PersonDetector:
             elif has_pose and keypoints_data is not None and idx < len(keypoints_data):
                 kpts = keypoints_data[idx]
                 
-                # Head / Face keypoints: 0=nose, 1=left eye, 2=right eye, 5=left shoulder, 6=right shoulder
-                nose_conf = kpts[0][2]
-                nose_y = kpts[0][1]
-                l_eye_conf = kpts[1][2]
-                r_eye_conf = kpts[2][2]
-                l_sh_conf = kpts[5][2]
-                r_sh_conf = kpts[6][2]
+                # Indeks titik pose dari satu sumber (pose_keypoints, T41)
+                nose_conf = kpts[kp.NOSE][kp.CONFIDENCE]
+                nose_y = kpts[kp.NOSE][kp.Y]
+                l_eye_conf = kpts[kp.LEFT_EYE][kp.CONFIDENCE]
+                r_eye_conf = kpts[kp.RIGHT_EYE][kp.CONFIDENCE]
+                l_sh_conf = kpts[kp.LEFT_SHOULDER][kp.CONFIDENCE]
+                r_sh_conf = kpts[kp.RIGHT_SHOULDER][kp.CONFIDENCE]
 
-                # Leg / Feet keypoints: 13=left knee, 14=right knee, 15=left ankle, 16=right ankle
-                l_ankle_conf = kpts[15][2]
-                r_ankle_conf = kpts[16][2]
-                l_knee_conf = kpts[13][2]
-                r_knee_conf = kpts[14][2]
+                l_ankle_conf = kpts[kp.LEFT_ANKLE][kp.CONFIDENCE]
+                r_ankle_conf = kpts[kp.RIGHT_ANKLE][kp.CONFIDENCE]
+                l_knee_conf = kpts[kp.LEFT_KNEE][kp.CONFIDENCE]
+                r_knee_conf = kpts[kp.RIGHT_KNEE][kp.CONFIDENCE]
 
                 # Calculate head scale from shoulder-to-nose distance (for tall person headroom validation)
                 sh_y_candidates = []
-                if l_sh_conf >= cfg.KEYPOINT_CONF_THRESHOLD: sh_y_candidates.append(kpts[5][1])
-                if r_sh_conf >= cfg.KEYPOINT_CONF_THRESHOLD: sh_y_candidates.append(kpts[6][1])
-                sh_y = float(np.mean(sh_y_candidates)) if sh_y_candidates else (y1 + box_h * 0.20)
+                if l_sh_conf >= cfg.KEYPOINT_CONF_THRESHOLD: sh_y_candidates.append(kpts[kp.LEFT_SHOULDER][kp.Y])
+                if r_sh_conf >= cfg.KEYPOINT_CONF_THRESHOLD: sh_y_candidates.append(kpts[kp.RIGHT_SHOULDER][kp.Y])
+                sh_y = float(np.mean(sh_y_candidates)) if sh_y_candidates else (y1 + box_h * cfg.POSE_SHOULDER_FALLBACK_RATIO)
 
-                head_scale = max(sh_y - nose_y, box_h * 0.12) if (nose_conf >= cfg.KEYPOINT_CONF_THRESHOLD and sh_y > nose_y) else (box_h * 0.15)
-                expected_helmet_top = nose_y - 0.65 * head_scale
+                head_scale = (max(sh_y - nose_y, box_h * cfg.POSE_HEAD_SCALE_MIN_RATIO)
+                              if (nose_conf >= cfg.KEYPOINT_CONF_THRESHOLD and sh_y > nose_y)
+                              else (box_h * cfg.POSE_HEAD_SCALE_FALLBACK_RATIO))
+                expected_helmet_top = nose_y - cfg.POSE_HELMET_HEADROOM_FACTOR * head_scale
 
                 # Check A: Head / Hard Hat clipping
                 # For tall workers, ensure helmet headroom exists above the nose
@@ -172,8 +174,8 @@ class PersonDetector:
                 knees_visible = (l_knee_conf >= cfg.KEYPOINT_CONF_THRESHOLD or r_knee_conf >= cfg.KEYPOINT_CONF_THRESHOLD)
 
                 ankle_y_max = 0.0
-                if l_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[15][1]))
-                if r_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[16][1]))
+                if l_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[kp.LEFT_ANKLE][kp.Y]))
+                if r_ankle_conf >= cfg.KEYPOINT_CONF_THRESHOLD: ankle_y_max = max(ankle_y_max, float(kpts[kp.RIGHT_ANKLE][kp.Y]))
 
                 if y2 >= (h - margin_bottom) or (ankle_y_max > 0 and ankle_y_max >= (h - ankle_touch_bottom)):
                     is_full_body = False
@@ -197,8 +199,8 @@ class PersonDetector:
                     clip_type = "FEET_CLIPPED"
 
             # Extract crop for VLM (add slight margin around bbox for context)
-            margin_y = int(box_h * 0.05)
-            margin_x = int(box_w * 0.08)
+            margin_y = int(box_h * cfg.CROP_MARGIN_Y_RATIO)
+            margin_x = int(box_w * cfg.CROP_MARGIN_X_RATIO)
             crop_y1 = max(0, y1 - margin_y)
             crop_y2 = min(h, y2 + margin_y)
             crop_x1 = max(0, x1 - margin_x)

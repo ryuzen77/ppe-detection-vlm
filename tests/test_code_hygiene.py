@@ -121,3 +121,16 @@ def test_secret_pattern_catches_real_shapes():
     assert SECRET_PATTERN.search('GEMINI_API_KEY="AIza' + "x" * 35 + '"')
     assert SECRET_PATTERN.search("key = 'sk-" + "a" * 24 + "'")
     assert not SECRET_PATTERN.search('api_key="kunci-uji"')
+
+
+# Indeks titik pose COCO ditulis langsung, mis. kpts[15] atau LEFT_ANKLE = 15 (T41)
+POSE_INDEX_LITERAL = re.compile(r"(kpts|keypoints|points|pts)\[\s*\d+\s*\]|^\s*(NOSE|LEFT_\w+|RIGHT_\w+)\s*(,\s*\w+\s*)*=\s*\d+",
+                                re.MULTILINE)
+POSE_SOURCE = "backend/pose_keypoints.py"
+
+
+def test_indeks_pose_hanya_di_satu_sumber():
+    offenders = [rel for rel, text in _text_files(p for p in _tracked_files()
+                                                  if p.startswith("backend/") and p.endswith(".py") and p != POSE_SOURCE)
+                 if POSE_INDEX_LITERAL.search(text)]
+    assert not offenders, f"Indeks titik pose ditulis langsung (pakai {POSE_SOURCE}): {offenders}"
