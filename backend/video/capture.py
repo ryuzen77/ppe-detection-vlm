@@ -50,6 +50,8 @@ class VideoCaptureService:
         self._missing_reason = messages.CAMERA_UNPLUGGED
         # Gambar tertutup / membeku (T45); dibaca thread inferensi saja
         self._health = CameraHealth()
+        # Gangguan yang dibawa melewati pembukaan ulang kamera (T45b)
+        self._carry_fault = None
         # Slot frame mentah terbaru: pembaca kamera dan inferensi dipisah agar
         # inferensi YOLO tidak memblokir pembacaan dan buffer kamera tidak menumpuk.
         self.raw_lock = threading.Lock()
@@ -100,16 +102,20 @@ class VideoCaptureService:
         beroperasi atas perintah operator — itu bukan gangguan.
         """
         if self.camera_status == "LOST" or (self.camera_status == "SYNTHETIC" and self.camera_index is not None):
-            self._health.reset()
+            self._health.reset(self._carry_fault)
             return FAULT_FROZEN if self.camera_error == messages.CAMERA_FROZEN else "lost"
         if self.camera_status != "OK":
-            self._health.reset()
-            return None
+            # Sedang dibuka ulang setelah membeku: gangguan belum selesai
+            self._health.reset(self._carry_fault)
+            return self._carry_fault
         fault = self._health.update(frame, now)
-        if fault == FAULT_FROZEN and not self._device_missing:
+        if fault is None:
+            self._carry_fault = None
+        elif fault == FAULT_FROZEN and not self._device_missing:
             # Driver mengirim frame identik: buka ulang lewat jalur "perangkat hilang"
             logger.warning(messages.CAMERA_FROZEN)
             self._missing_reason = messages.CAMERA_FROZEN
+            self._carry_fault = FAULT_FROZEN
             self._device_missing = True
         return fault
 
@@ -403,7 +409,7 @@ class VideoCaptureService:
 
                 # 3. Perangkat hilang dari daftar OS -> vonis lepas
                 if self._device_missing and self.camera_status == "OK":
-                    logger.warning("Kamera dicabut. Menunggu untuk disambung ulang.")
+                    logger.warning(messages.LOG_CAMERA_RECONNECT.format(reason=self._missing_reason))
                     lost_mode = self.active_mode
                     self._release_camera()
                     self.camera_status = "LOST"

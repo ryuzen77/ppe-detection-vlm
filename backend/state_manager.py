@@ -105,6 +105,7 @@ class StateManager:
         # Gangguan kamera yang sedang berlaku (T45): None | "lost" | "blocked" | "frozen"
         self.camera_fault: Optional[str] = None
         self.camera_fault_since = 0.0
+        self.camera_fault_sound_at = float("-inf")
 
     def set_camera_fault(self, fault: Optional[str]):
         """Dipanggil tiap frame oleh thread inferensi; hanya PERUBAHAN keadaan yang bertindak.
@@ -125,7 +126,9 @@ class StateManager:
             if previous is None:
                 self.camera_fault_since = now
                 logger.warning(messages.LOG_CAMERA_FAULT_START.format(fault=fault))
-                audio_player.play("gangguan_kamera", urgent=True)
+                if now - self.camera_fault_sound_at >= cfg.CAMERA_FAULT_SOUND_COOLDOWN_SECONDS:
+                    self.camera_fault_sound_at = now
+                    audio_player.play("gangguan_kamera", urgent=True)
             # Hasil VLM yang tiba belakangan untuk sesi ini diabaikan (cek id sesi)
             self.session = None
             notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[fault])
@@ -372,12 +375,12 @@ class StateManager:
             # Reset operator = mulai bersih: orang yang sama boleh diperiksa ulang
             self.recent_decisions.clear()
             self.foot_memory.clear()
+            # Gangguan kamera TIDAK dihapus di sini (mis. thread pembaca me-reset gerbang
+            # setelah kamera dibuka ulang): baru selesai bila gambarnya sehat lagi (T45b)
             if self.camera_fault is not None:
-                # Mis. kamera tersambung ulang: thread pembaca me-reset gerbang
-                logger.info(messages.LOG_CAMERA_FAULT_END.format(
-                    fault=self.camera_fault, seconds=time.time() - self.camera_fault_since))
-            self.camera_fault = None
-            notifier.set_idle()
+                notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[self.camera_fault])
+            else:
+                notifier.set_idle()
 
     def get_telemetry(self) -> dict:
         """Constructs comprehensive real-time payload for WebSocket clients."""

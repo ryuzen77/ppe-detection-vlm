@@ -46,6 +46,7 @@ CAMERA_UNPLUGGED = "Kamera dicabut dari sistem"
 CAMERA_DISCONNECTED = "Kamera terputus atau dicabut"
 CAMERA_STALLED = "Kamera berhenti mengirim frame wajar"
 CAMERA_FROZEN = "Gambar kamera membeku (frame identik); menyambung ulang"
+LOG_CAMERA_RECONNECT = "{reason}. Menunggu untuk disambung ulang."
 LOG_CAMERA_FAULT_START = "Gangguan kamera ({fault}): pemeriksaan dihentikan, lampu kuning."
 LOG_CAMERA_FAULT_END = "Gangguan kamera ({fault}) selesai setelah {seconds:.0f} dtk; gerbang siaga lagi."
 

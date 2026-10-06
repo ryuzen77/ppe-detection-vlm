@@ -82,8 +82,11 @@ def test_pulih_harus_stabil_sebentar():
 def gate(monkeypatch, catalog_defaults):
     played = []
     monkeypatch.setattr(audio_player, "play", lambda name, *a, **k: played.append(name))
+    monkeypatch.setattr(state_mgr, "camera_fault_sound_at", float("-inf"))
+    state_mgr.set_camera_fault(None)
     state_mgr.reset_all()
     yield played
+    state_mgr.set_camera_fault(None)
     state_mgr.reset_all()
 
 
@@ -161,3 +164,50 @@ def test_status_kamera_tertutup_di_telemetri(cam):
 def test_suara_gangguan_kamera_tersedia():
     assert "gangguan_kamera" in messages.VOICE_TEXTS
     assert (cfg.AUDIO_DIR / "gangguan_kamera.mp3").exists()
+
+
+# --- Regresi uji fisik 06-10 (T45b) --------------------------------------------------------
+
+def black():
+    """Lensa kamera laptop tertutup rapat: hitam pekat, TANPA derau (frame identik)."""
+    return np.zeros((480, 864, 3), np.uint8)
+
+
+def test_lensa_tertutup_rapat_bukan_membeku(cam):
+    """Dulu: hitam pekat identik -> 'membeku' -> kamera dibuka ulang tiap ±7 dtk."""
+    fault = None
+    for i in range(10 * 30):                       # ditutup 10 dtk, 30 FPS
+        fault = cam._camera_fault(black(), i / 30)
+    assert fault == ch.FAULT_BLOCKED
+    assert not cam._device_missing, "tidak boleh membuka ulang kamera"
+
+
+def test_reaksi_tertutup_cepat():
+    h = ch.CameraHealth()
+    assert cfg.CAMERA_BLOCKED_SECONDS <= 1.5
+    assert feed(h, [black()] * int(cfg.CAMERA_BLOCKED_SECONDS * 10 + 2)) == ch.FAULT_BLOCKED
+
+
+def test_membeku_tetap_berlaku_selama_dibuka_ulang(cam):
+    frozen = scene()
+    for i in range(int(cfg.CAMERA_FROZEN_SECONDS * 10) + 2):
+        cam._camera_fault(frozen, i / 10)
+    cam._device_missing = False                    # thread pembaca menangani penanda
+    cam.camera_status = "OPENING"
+    assert cam._camera_fault(scene(), 10.0) == ch.FAULT_FROZEN, "sedang dibuka ulang: belum selesai"
+    cam.camera_status, cam.camera_error = "OK", ""
+    assert cam._camera_fault(scene(), 10.1) == ch.FAULT_FROZEN, "frame sehat pertama belum cukup"
+    assert cam._camera_fault(scene(), 10.1 + cfg.CAMERA_HEALTHY_SECONDS) is None
+
+
+def test_reset_gerbang_tidak_menghapus_gangguan(gate):
+    state_mgr.set_camera_fault("frozen")
+    state_mgr.reset_all()                          # mis. setelah kamera dibuka ulang
+    assert state_mgr.camera_fault == "frozen" and notifier.current_state == "YELLOW"
+
+
+def test_suara_tidak_diulang_saat_gangguan_putus_sambung(gate):
+    for _ in range(5):                             # pola log 06-10: mulai, selesai, mulai lagi...
+        state_mgr.set_camera_fault("blocked")
+        state_mgr.set_camera_fault(None)
+    assert gate == ["gangguan_kamera"]
