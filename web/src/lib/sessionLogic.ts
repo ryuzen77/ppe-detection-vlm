@@ -1,6 +1,7 @@
 export interface AuthState {
   authenticated: boolean
   authRequired: boolean
+  loaded?: boolean
 }
 
 /** Menentukan apakah halaman Login harus ditampilkan. */
@@ -16,4 +17,10 @@ export function tickCountdown(currentWait: number | null, elapsedSecs = 1): numb
   if (currentWait === null || currentWait <= 0) return null
   const next = currentWait - elapsedSecs
   return next > 0 ? next : null
+}
+
+export function telemetryAction(state: AuthState): 'start' | 'stop' | 'wait' {
+  if (state.loaded === false) return 'wait'
+  if (!state.authRequired || state.authenticated) return 'start'
+  return 'stop'
 }

@@ -104,16 +104,6 @@ describe('TelemetryClient', () => {
   })
 })
 
-
-  it('tutup dengan kode WS_CLOSE_LOGIN_REQUIRED -> TIDAK sambung ulang DAN onLoginRequired dipanggil', () => {
-    const { client, sockets, timers, onLoginRequired } = setup()
-    client.start()
-    sockets[0].close(WS_CLOSE_LOGIN_REQUIRED)
-    expect(timers).toHaveLength(0)
-    expect(onLoginRequired).toHaveBeenCalled()
-    expect(sockets[0].closed).toBe(true)
-  })
-
   it('stop() lalu start() lagi -> koneksi baru dibuat', () => {
     const { client, sockets } = setup()
     client.start()

@@ -6,7 +6,7 @@
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
   import { session } from './lib/stores/session.svelte'
-  import { shouldShowLogin } from './lib/sessionLogic'
+  import { shouldShowLogin, telemetryAction } from './lib/sessionLogic'
 import Login from './pages/Login.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
@@ -25,11 +25,10 @@ import Login from './pages/Login.svelte'
   onDestroy(() => telemetry.stop())
 
   $effect(() => {
-    if (!shouldShowLogin(session)) {
-      if (telemetry.status === 'disconnected') {
-        telemetry.start()
-      }
-    } else {
+    const action = telemetryAction(session)
+    if (action === 'start') {
+      telemetry.start()
+    } else if (action === 'stop') {
       telemetry.stop()
     }
   })

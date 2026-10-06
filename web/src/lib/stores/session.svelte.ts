@@ -3,6 +3,7 @@ import { api } from '../api/client'
 class SessionStore {
   authenticated = $state(false)
   authRequired = $state(false)
+  loaded = $state(false)
   expiresInS = $state<number | null>(null)
   
   // Waktu polling
@@ -18,6 +19,7 @@ class SessionStore {
     } catch {
       this.authenticated = false
     }
+    this.loaded = true
   }
 
   private startCountdown() {

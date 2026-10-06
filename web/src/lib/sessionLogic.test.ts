@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldShowLogin, tickCountdown } from './sessionLogic'
+import { shouldShowLogin, tickCountdown, telemetryAction } from './sessionLogic'
 
 describe('sessionLogic', () => {
   it('shouldShowLogin: true jika authRequired dan !authenticated', () => {
@@ -20,5 +20,18 @@ describe('sessionLogic', () => {
     expect(tickCountdown(0)).toBe(null)
     expect(tickCountdown(5)).toBe(4)
     expect(tickCountdown(1)).toBe(null)
+  })
+
+  it('telemetryAction: belum dimuat -> wait', () => {
+    expect(telemetryAction({ loaded: false, authRequired: true, authenticated: false })).toBe('wait')
+  })
+  it('telemetryAction: tanpa login -> start', () => {
+    expect(telemetryAction({ loaded: true, authRequired: false, authenticated: false })).toBe('start')
+  })
+  it('telemetryAction: cookie berlaku -> start', () => {
+    expect(telemetryAction({ loaded: true, authRequired: true, authenticated: true })).toBe('start')
+  })
+  it('telemetryAction: perlu login -> stop', () => {
+    expect(telemetryAction({ loaded: true, authRequired: true, authenticated: false })).toBe('stop')
   })
 })
