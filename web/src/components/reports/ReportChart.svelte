@@ -8,19 +8,24 @@
   // Find max total to scale the chart
   const maxTotal = $derived(Math.max(1, ...buckets.map(b => b.passed + b.rejected)))
   
+  import { calculateYAxis } from '../../lib/reports'
+
   // Chart dimensions
   const height = CHART.height
   const barWidth = CHART.barWidth
-  const gap = 16
-  const paddingY = 24
+  const gap = CHART.gap
+  const paddingY = CHART.paddingY
+  const axisXStart = CHART.axisXStart
   const usableHeight = height - paddingY * 2
   
   // Calculate total width based on number of buckets
-  const width = $derived(Math.max(600, buckets.length * (barWidth + gap) + 40))
+  const width = $derived(Math.max(CHART.minWidth, buckets.length * (barWidth + gap) + axisXStart))
   
   function getBarHeight(val: number) {
     return (val / maxTotal) * usableHeight
   }
+  
+  const yTicks = $derived(calculateYAxis(maxTotal, paddingY, usableHeight))
 </script>
 
 <div class="chart-container" role="figure" aria-label={TEXT.charts.complianceTitle}>
@@ -42,19 +47,19 @@
     <div class="svg-scroll">
       <svg {width} {height} viewBox="0 0 {width} {height}">
         <!-- Y Axis Guidelines -->
-        {#each [0, 0.25, 0.5, 0.75, 1] as tick}
-          <line x1="40" y1={paddingY + usableHeight * (1 - tick)} 
-                x2={width} y2={paddingY + usableHeight * (1 - tick)} 
+        {#each yTicks as t}
+          <line x1={axisXStart} y1={t.y} 
+                x2={width} y2={t.y} 
                 stroke="var(--border-strong)" stroke-dasharray="4 4" />
-          <text x="32" y={paddingY + usableHeight * (1 - tick) + 4} 
+          <text x={axisXStart - 8} y={t.y + 4} 
                 class="axis-label" text-anchor="end">
-            {Math.round(maxTotal * tick)}
+            {t.value}
           </text>
         {/each}
         
         <!-- Bars -->
         {#each buckets as b, i}
-          {@const x = 40 + gap + i * (barWidth + gap)}
+          {@const x = axisXStart + gap + i * (barWidth + gap)}
           {@const passedH = getBarHeight(b.passed)}
           {@const rejectedH = getBarHeight(b.rejected)}
           {@const totalH = passedH + rejectedH}

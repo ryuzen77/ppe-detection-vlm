@@ -91,4 +91,10 @@ export const CHART = {
   height: 240,
   barWidth: 32,
   missingItemHeight: 32,
+  gap: 16,
+  paddingY: 24,
+  axisXStart: 40,
+  missingLabelWidth: 150,
+  minWidth: 600,
+  maxMissingItems: 5,
 } as const

@@ -240,7 +240,6 @@ export const REPORTS = {
     next: 'Berikutnya',
     today: 'Hari ini',
     formatDate: (d: string) => shortDate(d),
-    formatRange: (from: string, to: string) => `${shortDate(from)} – ${shortDate(to)}`,
   },
   charts: {
     passed: 'Lolos',
@@ -286,6 +285,7 @@ export const REPORTS = {
   loading: 'Memuat riwayat…',
   empty: 'Belum ada pemeriksaan.',
   emptyFiltered: 'Tidak ada pemeriksaan yang cocok dengan saringan.',
+  emptyPeriod: 'Belum ada pemeriksaan pada periode ini.',
   loadFailed: 'Gagal memuat riwayat',
   page: {
     ariaLabel: 'Halaman riwayat',

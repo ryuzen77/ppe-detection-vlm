@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
-import { clampPercent, complianceTone, historyHead, pageInfo, resultKind, sourceText } from './reports'
+import { clampPercent, complianceTone, historyHead, pageInfo, resultKind, sourceText, offsetDate, formatReportRange } from './reports'
 import { REPORTS } from './settings'
 
 describe('resultKind', () => {
@@ -47,6 +47,9 @@ describe('pageInfo', () => {
 })
 
 describe('complianceTone', () => {
+  it('rate null = neutral', () => {
+    expect(complianceTone(null)).toBe('neutral')
+  })
   it('mengikuti ambang di settings', () => {
     expect(complianceTone(REPORTS.complianceGood)).toBe('ok')
     expect(complianceTone(REPORTS.complianceGood - 0.1)).toBe('warn')
@@ -72,5 +75,21 @@ describe('historyHead', () => {
     expect(historyHead([b, a])).not.toBe(historyHead([a]))
     expect(historyHead([])).toBe('')
     expect(historyHead(null)).toBe('')
+  })
+})
+
+describe('offsetDate', () => {
+  it('geser tanggal melewati batas bulan/tahun', () => {
+    expect(offsetDate('2026-12-31', 1)).toBe('2027-01-01')
+    expect(offsetDate('2026-03-01', -1)).toBe('2026-02-28') // bukan kabisat
+    expect(offsetDate('2024-03-01', -1)).toBe('2024-02-29') // kabisat
+  })
+})
+
+describe('formatReportRange', () => {
+  it('format rentang', () => {
+    const f = (d: string) => d // dummy formatter
+    expect(formatReportRange('2026-10-01', '2026-10-01', f)).toBe('2026-10-01')
+    expect(formatReportRange('2026-10-01', '2026-10-05', f)).toBe('2026-10-01 – 2026-10-05')
   })
 })

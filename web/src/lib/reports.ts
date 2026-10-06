@@ -44,10 +44,38 @@ export function pageInfo(offset: number, shown: number, total: number): PageInfo
 }
 
 /** Nada meter kepatuhan (fill membawa tingkat keparahan) */
-export function complianceTone(rate: number): Tone {
+export function complianceTone(rate: number | null): Tone {
+  if (rate === null) return 'neutral'
   if (rate >= REPORTS.complianceGood) return 'ok'
   if (rate >= REPORTS.complianceWarn) return 'warn'
   return 'danger'
+}
+
+export function offsetDate(base: string, days: number): string {
+  if (!base) return ''
+  const d = new Date(base + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export function formatReportRange(from: string, to: string, formatDate: (d: string) => string): string {
+  if (from === to) return formatDate(from)
+  return `${formatDate(from)} – ${formatDate(to)}`
+}
+
+export interface YAxisTick {
+  y: number
+  value: number
+}
+
+export function calculateYAxis(maxTotal: number, paddingY: number, usableHeight: number): YAxisTick[] {
+  return [0, 0.25, 0.5, 0.75, 1].map(tick => ({
+    y: paddingY + usableHeight * (1 - tick),
+    value: Math.round(maxTotal * tick)
+  }))
 }
 
 /** Batasi 0..100 untuk lebar meter */

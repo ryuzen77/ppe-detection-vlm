@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ReportPeriod, ReportRange } from '../../lib/api/types'
   import { REPORTS as TEXT } from '../../lib/messages'
+  import { offsetDate, formatReportRange } from '../../lib/reports'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
 
@@ -15,15 +16,6 @@
     range: ReportRange | null
     loading?: boolean
   } = $props()
-
-  function offsetDate(base: string, days: number) {
-    const d = new Date(base + 'T00:00:00')
-    d.setDate(d.getDate() + days)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
 
   function goPrev() {
     if (range) date = offsetDate(range.from, -1)
@@ -54,20 +46,25 @@
     <button class="btn icon" onclick={goPrev} disabled={loading || !range} title={TEXT.period.prev}>
       <ChevronLeft size={16} aria-hidden="true" />
     </button>
+    
     <span class="range-text" aria-live="polite">
       {#if range}
-        {#if range.from === range.to}
-          {TEXT.period.formatDate(range.from)}
-        {:else}
-          {TEXT.period.formatRange(range.from, range.to)}
-        {/if}
+        {formatReportRange(range.from, range.to, TEXT.period.formatDate)}
       {:else}
         ...
       {/if}
     </span>
+    
     <button class="btn icon" onclick={goNext} disabled={loading || !range} title={TEXT.period.next}>
       <ChevronRight size={16} aria-hidden="true" />
     </button>
+    
+    <input type="date" value={date || (range?.from ?? '')} 
+           disabled={loading} 
+           onchange={(e) => { date = e.currentTarget.value }} 
+           class="date-input" 
+           title="Lompat ke tanggal" />
+
     {#if date !== ''}
       <button class="btn today" onclick={goToday} disabled={loading}>{TEXT.period.today}</button>
     {/if}
@@ -118,7 +115,7 @@
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text);
-    min-width: 200px;
+    min-width: 180px;
     text-align: center;
   }
   .btn.icon {
@@ -129,5 +126,15 @@
     margin-left: var(--space-2);
     font-size: var(--text-xs);
     padding: 4px 8px;
+  }
+  .date-input {
+    margin-left: var(--space-2);
+    padding: 4px 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
   }
 </style>

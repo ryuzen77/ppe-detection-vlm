@@ -124,7 +124,7 @@
         {#if summary.range.from === summary.range.to}
           {TEXT.period.formatDate(summary.range.from)}
         {:else}
-          {TEXT.period.formatRange(summary.range.from, summary.range.to)}
+          {TEXT.period.formatDate(summary.range.from)} – {TEXT.period.formatDate(summary.range.to)}
         {/if}
       {:else}
         {TEXT.stats.scopeAll}
@@ -134,8 +134,8 @@
       <StatTile label={TEXT.stats.total} value={count(summary?.totals.total)} />
       <StatTile label={TEXT.stats.passed} value={count(summary?.totals.passed)} />
       <StatTile label={TEXT.stats.denied} value={count(summary?.totals.rejected)} />
-      <StatTile label={TEXT.stats.compliance} value={percent(summary?.totals.compliance_rate)}
-                meter={summary ? summary.totals.compliance_rate : null} tone={complianceTone(summary?.totals.compliance_rate ?? 0)} />
+      <StatTile label={TEXT.stats.compliance} value={summary?.totals.compliance_rate === null ? '–' : percent(summary?.totals.compliance_rate)}
+                meter={summary?.totals.compliance_rate ?? null} tone={complianceTone(summary?.totals.compliance_rate ?? null)} />
       <StatTile label={TEXT.stats.backup} value={count(page?.backup_count)} />
       <StatTile label={TEXT.stats.outages} value={count(page?.system_outages)} 
                 note={TEXT.stats.scopeSinceStart} hint={TEXT.stats.outagesHint} />
@@ -164,7 +164,7 @@
     {#if records.length}
       <ReportTable {records} items={catalog.items} onOpen={(r) => (photo = r)} />
     {:else if !error}
-      <p class="state">{loading ? TEXT.loading : filtered ? TEXT.emptyFiltered : TEXT.empty}</p>
+      <p class="state">{loading ? TEXT.loading : (summary?.totals.total === 0 ? TEXT.emptyPeriod : (filtered ? TEXT.emptyFiltered : TEXT.empty))}</p>
     {/if}
 
     {#if info.total > 0 || info.hasPrev}

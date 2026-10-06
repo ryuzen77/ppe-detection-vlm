@@ -5,13 +5,13 @@
 
   let { items }: { items: MissingItemStat[] } = $props()
   
-  // Show top 5 missing items
-  const displayItems = $derived(items.slice(0, 5))
+  // Show top missing items
+  const displayItems = $derived(items.slice(0, CHART.maxMissingItems))
   const maxCount = $derived(Math.max(1, ...displayItems.map(i => i.count)))
   
   const itemHeight = CHART.missingItemHeight
   const paddingY = 16
-  const labelWidth = 150
+  const labelWidth = CHART.missingLabelWidth
   const height = $derived(displayItems.length * itemHeight + paddingY * 2)
   const width = '100%'
   
