@@ -355,6 +355,7 @@ class Config:
     # Laporan & arsip foto
     SNAPSHOT_JPEG_QUALITY: int = 80           # Mutu foto bukti (~30-50 KB per foto)
     DB_TIMEOUT_SECONDS: float = 10.0          # Tunggu kunci SQLite sebelum menyerah
+    CSV_EXPORT_BATCH_ROWS: int = 500          # Baris per potongan ekspor CSV bertahap (T43)
     # Keputusan pengguna (27-09): baris audit tidak boleh hilang walau listrik
     # padam mendadak. Pragma ini berlaku per koneksi, jadi disetel di tiap koneksi.
     AUDIT_DB_SYNCHRONOUS: str = "FULL"
