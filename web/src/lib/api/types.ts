@@ -319,6 +319,12 @@ export interface CameraCatalog {
 
 // --- Lain-lain -------------------------------------------------------------------------------
 
+export interface SessionStatus {
+  authenticated: boolean
+  auth_required: boolean
+  expires_in_s: number | null
+}
+
 export interface Health {
   status: string
   fps: number

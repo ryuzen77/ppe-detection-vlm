@@ -368,3 +368,12 @@ export const PAGES = {
   notMigrated: 'Bagian ini belum dipindahkan ke tampilan baru. Sementara itu gunakan tampilan lama:',
   openLegacy: 'Buka tampilan lama',
 } as const
+
+export const LOGIN = {
+  title: 'Login Admin',
+  password: 'Kata Sandi',
+  loginBtn: 'Masuk',
+  logoutBtn: 'Keluar',
+  errorTitle: 'Galat Login',
+  waitInfo: 'Coba lagi dalam {s} detik',
+}

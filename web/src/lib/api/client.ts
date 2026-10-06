@@ -14,11 +14,12 @@ import type {
   ReportsPage, ReportSummary, ReportPeriod,
   ReportStatusFilter,
   VlmInfo,
+  SessionStatus,
 } from './types'
-import { STORAGE } from '../settings'
 
-/** Kunci yang sama dengan UI lama, supaya token admin berlaku di kedua UI. */
-export const ADMIN_TOKEN_STORAGE_KEY = STORAGE.adminToken
+export const WS_CLOSE_LOGIN_REQUIRED = 4401
+
+
 
 export class ApiError extends Error {
   readonly status: number
@@ -35,54 +36,22 @@ export class ApiError extends Error {
 /** HTTP 401: server menolak karena token admin kosong/salah */
 export const HTTP_UNAUTHORIZED = 401
 
-/**
- * Token yang gagal disimpan di browser (mode privat ketat, penyimpanan penuh)
- * tetap berlaku selama halaman terbuka. null = penyimpanan browser berfungsi.
- */
-let memoryFallback: string | null = null
-
-/** Token admin: dari penyimpanan browser, atau cadangan memori bila penyimpanan gagal. */
-export function readAdminToken(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): string {
-  if (memoryFallback !== null) return memoryFallback
-  try {
-    return storage?.getItem(ADMIN_TOKEN_STORAGE_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-export function writeAdminToken(token: string, storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = globalThis.localStorage): void {
-  // Spasi di tepi hampir selalu ikut saat token ditempel dari pesan/dokumen
-  const value = token.trim()
-  try {
-    if (!storage) throw new Error('penyimpanan browser tidak tersedia')
-    if (value) storage.setItem(ADMIN_TOKEN_STORAGE_KEY, value)
-    else storage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
-    memoryFallback = null
-  } catch {
-    // Penyimpanan diblokir: token hidup di memori sampai halaman ditutup
-    memoryFallback = value
-  }
-}
 
 export interface ApiClientOptions {
   /** Awalan URL backend; kosong = asal yang sama (disajikan FastAPI atau proxy Vite) */
   baseUrl?: string
   fetch?: typeof globalThis.fetch
-  getAdminToken?: () => string
 }
 
 export class ApiClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof globalThis.fetch
-  private readonly getAdminToken: () => string
   /** Dipanggil saat server menolak token admin, sebelum galatnya dilempar (mis. membuka isian token) */
   onUnauthorized: ((error: ApiError) => void) | null = null
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? '').replace(/\/$/, '')
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis)
-    this.getAdminToken = options.getAdminToken ?? (() => readAdminToken())
   }
 
   url(path: string): string {
@@ -92,11 +61,6 @@ export class ApiClient {
   private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
-    // Header admin hanya untuk perintah yang mengubah state (sama dengan UI lama)
-    if (method === 'POST') {
-      const token = this.getAdminToken()
-      if (token) headers['X-Admin-Token'] = token
-    }
     const response = await this.fetchImpl(this.url(path), {
       method,
       headers,
@@ -119,6 +83,12 @@ export class ApiClient {
     }
     return data as T
   }
+
+
+  // --- Auth (T30)
+  session = () => this.request<SessionStatus>('GET', '/api/session')
+  login = (password: string) => this.request<{ expires_in_s: number }>('POST', '/api/login', { password })
+  logout = () => this.request<void>('POST', '/api/logout')
 
   // --- Sistem
   health = () => this.request<Health>('GET', '/api/health')

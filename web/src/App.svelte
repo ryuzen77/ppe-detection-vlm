@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
-  import AdminTokenDialog from './components/AdminTokenDialog.svelte'
-  import Toasts from './components/Toasts.svelte'
+    import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
   import { api } from './lib/api/client'
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
-  import { adminToken } from './lib/stores/adminToken.svelte'
+  import { session } from './lib/stores/session.svelte'
+import Login from './pages/Login.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
   import { toasts } from './lib/stores/toasts.svelte'
@@ -17,9 +17,10 @@
   onMount(() => {
     router.start()
     telemetry.start()
+    session.load()
     catalog.load()
     // Perintah mana pun yang ditolak karena token → buka isian token
-    api.onUnauthorized = () => adminToken.open('rejected')
+    api.onUnauthorized = () => { session.clear() }
   })
   onDestroy(() => telemetry.stop())
 
@@ -40,7 +41,9 @@
 
 <TopBar />
 <main>
-  {#if router.current === 'monitoring'}
+  {#if session.authRequired && !session.authenticated}
+    <Login />
+  {:else if router.current === 'monitoring'}
     <Monitoring />
   {:else if router.current === 'laporan'}
     <Laporan />
@@ -49,4 +52,4 @@
   {/if}
 </main>
 <Toasts />
-<AdminTokenDialog />
+
