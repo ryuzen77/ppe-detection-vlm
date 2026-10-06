@@ -12,7 +12,7 @@ export interface Chip {
 export function cameraChip(t: Telemetry | null): Chip {
   const c = t?.camera
   if (!c) return { tone: 'neutral', text: CAMERA_CHIP.UNKNOWN, hint: '' }
-  const tone: Tone = c.status === 'OK' ? 'ok' : c.status === 'LOST' ? 'danger' : 'warn'
+  const tone: Tone = c.status === 'OK' ? 'ok' : 'warn'
   const text = c.status === 'OK' ? cameraChipOk(t!.fps) : CAMERA_CHIP[c.status]
   return { tone, text, hint: c.name }
 }

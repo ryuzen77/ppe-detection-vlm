@@ -216,7 +216,7 @@ export interface Telemetry {
   zone: Omit<Zone, 'source'>
   light: LightStatus
   iot: { enabled: boolean; connected: boolean; last_ack_age_s: number | null; error: string | null }
-  camera_fault: string | null
+  camera_fault: 'lost' | 'blocked' | 'frozen' | null
   history: HistoryRecord[]
   stable_frames_required: number
   /** Ambang keyakinan titik pose — sama dengan detektor backend */
