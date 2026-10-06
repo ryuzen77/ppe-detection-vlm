@@ -122,3 +122,16 @@ def test_tabel_dan_csv_mengikuti_rentang(mgr):
     assert "2026-10-05_2026-10-11" in r.headers["content-disposition"]
     assert len(list(csv.reader(io.StringIO(r.text)))) == 1 + 2, "header + 2 baris dalam rentang"
     assert client.get("/api/reports", params={"from": "kemarin"}).status_code == 400
+
+
+def test_indeks_baru_dibuat_di_database_lama(tmp_path):
+    """Temuan 06-10: DB yang skemanya sudah terbaru tidak pernah mendapat idx_date_str."""
+    db = tmp_path / "audit.db"
+    m = ReportManager(db_path=db, snapshots_dir=tmp_path / "snap")
+    m.save_inspection(1, True, {}, [], "", "VLM_LIVE:x", 1.0)
+    with sqlite3.connect(db) as c:
+        c.execute("DROP INDEX idx_date_str")          # meniru DB yang dibuat sebelum T49
+    ReportManager(db_path=db, snapshots_dir=tmp_path / "snap").open()
+    with sqlite3.connect(db) as c:
+        names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
+    assert "idx_date_str" in names

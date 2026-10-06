@@ -193,8 +193,18 @@ class ReportManager:
         try:
             conn.execute("PRAGMA journal_mode = WAL;")
             self._migrate(conn)
+            self._ensure_indexes(conn)
         finally:
             conn.close()
+
+    @staticmethod
+    def _ensure_indexes(conn: sqlite3.Connection):
+        """Indeks dipastikan ada setiap kali DB dibuka, bukan hanya saat migrasi skema:
+        indeks baru (mis. idx_date_str, T49) tidak pernah dibuat di database yang
+        skemanya sudah terbaru (temuan 06-10). IF NOT EXISTS = aman diulang."""
+        for sql in _CREATE_INDEXES:
+            conn.execute(sql)
+        conn.commit()
 
     def _migrate(self, conn: sqlite3.Connection):
         """Membawa database ke `SCHEMA_VERSION` dalam satu transaksi.
