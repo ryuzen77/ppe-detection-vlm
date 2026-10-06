@@ -64,6 +64,48 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T42b — pecah `state_manager.update_frame_detections` (cicilan utang kode) | Claude | `claude/t42b-state-split` | selesai | `backend/state_manager.py`, `tests/test_state_characterization.py` (baru) + acuan, `tests/test_code_hygiene.py` (daftar utang) | Diklaim 06-10. Tes karakterisasi dibuat & acuannya direkam dari kode sekarang SEBELUM refaktor — Selesai: ±100 baris → 9 langkah bernama ≤30 baris (`_people_in_lane`, `_close_session_if_lane_empty`, `_session_for`, `_follow_subject`, `_may_inspect`, `_guide_position`, `_collect_candidate`, `_start_analysis`). Tes karakterisasi baru 18 skenario × 1200 frame (acuan di-commit `cd2e47e` sebelum refaktor) identik; 3 mutasi tertangkap; keluar dari daftar utang Digabung 06-10 (tinjauan Gemini menyusul) |
 | T28 — penyedia VLM dari dashboard (bagian backend) | — | — | antre | `backend/vlm_analyzer.py`, `backend/api/routes_vlm.py`, `backend/runtime_settings.py`, `tests/` | Setelah T36 (sama-sama menyentuh `vlm_analyzer.py`). Kontrak API ditulis di sini dulu |
 
+### Rancangan T28 — ganti penyedia VLM dari dashboard (usulan 06-10, menunggu persetujuan; dikerjakan setelah T30)
+
+**Backend (Claude)**
+1. **Key per penyedia di `.env`** (keputusan e): `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`,
+   `DASHSCOPE_API_KEY` (Qwen), `MOONSHOT_API_KEY` (Kimi), `ANTHROPIC_API_KEY` (Claude). Profil (`vlm_providers/profiles.py`)
+   mendapat `key_env`. `VLM_API_KEY`/`VLM_BACKUP_API_KEY` lama tetap menang bila diisi (kompatibel). Dashboard tidak pernah
+   menerima, menyimpan, atau menampilkan key; hanya tahu `has_key`.
+2. **Hapus** `POST /api/config/vlm-key` + alias `/api/config/gemini-key` (+ `update_api_key`, `setVlmKey` di klien UI):
+   bertentangan dengan keputusan (e).
+3. **Adaptor Claude** (`vlm_providers/anthropic.py`): Messages API lewat `httpx` (tanpa dependensi baru), gambar base64
+   JPEG, `system` = prompt sistem, jawaban teks diurai `parse_json_reply`. Profil `anthropic` (eksperimental, lokasi data
+   Anthropic AS). **Profil `kimi`** (Moonshot, OpenAI-compatible, eksperimental); nama model diisi saat uji (tidak ditebak).
+4. **Pilihan dari dashboard disimpan** di `runtime_settings` (`vlm_selection`: utama & cadangan = penyedia + model) dan
+   menang atas `.env` saat start; `source` = `"env"` | `"dashboard"`. Tombol kembali ke `.env` = hapus pilihan.
+5. **Ganti tanpa restart**: engine baru dirakit & dipanaskan dulu; baru ditukar di bawah gembok inspeksi saat **jalur
+   kosong** (b). Gagal rakit/panaskan → engine lama tetap dipakai.
+6. **Jejak (c)**: setiap pergantian ditulis ke log + `DATA_DIR/reports/vlm_changes.jsonl` (waktu, peran, dari → ke,
+   status validasi, sumber sesi admin), ditulis atomik + fsync seperti audit.
+
+**Kontrak API (semua wajib login admin, T30)**
+- `GET /api/config/vlm/providers` → `{"current": {"primary": Sel, "backup": Sel | null}, "prompt_version": str,
+  "providers": [{"name", "label", "support": "official"|"experimental", "is_local", "has_key", "data_location",
+  "default_model", "models": [{"model", "validated": "validated"|"partial"|"outdated"|"unsafe"|"unvalidated",
+  "photos", "missed", "false_rejects", "median_seconds"}]}]}`, dengan `Sel = {"provider", "model", "source"}`.
+  Daftar `models` = model di daftar validasi + model yang sedang dipakai; model lain boleh diketik bebas.
+- `POST /api/config/vlm/test` `{"role", "provider", "model"}` → `{"ok", "latency_ms", "json_ok", "error"}` — 1 panggilan
+  ping + 1 panggilan gambar sintetis (memakai kuota penyedia itu).
+- `POST /api/config/vlm/apply` `{"primary": {"provider","model"}, "backup": {...} | null, "confirm_unvalidated": bool}` →
+  200 bentuk `current`; **409** pekerja di jalur; **400** penyedia tak dikenal / key tidak ada di `.env` / model
+  `unsafe` (selalu ditolak) / model belum tervalidasi tanpa `confirm_unvalidated` (bila keputusan d = boleh dengan konfirmasi).
+- `DELETE /api/config/vlm/selection` → kembali ke `.env` (aturan 409 sama).
+
+**UI (Gemini, setelah kontrak disetujui)**: kartu "VLM" di Pengaturan admin — pilih penyedia (hanya yang `has_key`)
+& model untuk utama/cadangan, lencana validasi + angka (akurasi, latensi), lokasi data, tombol Uji & Terapkan,
+peringatan **kuning/oranye** (bukan merah) untuk model belum tervalidasi. Operator biasa tidak melihat kartu ini.
+
+**Tes**: tiap rambu (a)–(e) punya tes; adaptor Claude dites dengan server HTTP tiruan (tanpa kuota); pertukaran engine
+saat inspeksi berjalan tidak boleh memotong pemeriksaan (tes konkurensi).
+
+**Terbuka (d)**: model belum tervalidasi — (1) hanya model tervalidasi yang bisa dipilih, atau (2) boleh dipilih dengan
+konfirmasi. Model `unsafe` (pernah meloloskan APD kurang) selalu ditolak di kedua pilihan.
+
 ### Kontrak API T45 — gangguan kamera (06-10)
 
 - Telemetri `camera.status` bertambah nilai **`"BLOCKED"`**: kamera tersambung tetapi gambar terlalu gelap, terlalu terang, atau
