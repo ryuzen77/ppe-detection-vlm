@@ -26,7 +26,7 @@ import Login from './pages/Login.svelte'
 
   $effect(() => {
     if (!shouldShowLogin(session)) {
-      if (telemetry.status === 'disconnected' && !telemetry.data) {
+      if (telemetry.status === 'disconnected') {
         telemetry.start()
       }
     } else {

@@ -31,6 +31,7 @@ export interface TelemetryClientOptions {
   clearTimer?: (handle: unknown) => void
 }
 
+export const WS_CLOSE_LOGIN_REQUIRED = 4401
 export const INITIAL_RECONNECT_MS = TELEMETRY.reconnectInitialMs
 export const MAX_RECONNECT_MS = TELEMETRY.reconnectMaxMs
 
@@ -108,7 +109,7 @@ export class TelemetryClient {
     socket.onclose = (ev) => {
       if (this.socket === socket) this.socket = null
       this.opts.onStatus?.('disconnected')
-      if (ev && ev.code === 4401) {
+      if (ev && ev.code === WS_CLOSE_LOGIN_REQUIRED) {
         this.stopped = true
         this.opts.onLoginRequired?.()
       } else {
