@@ -26,7 +26,6 @@ COLOR_SOURCE = "web/src/styles/tokens.css"
 # panjang ditolak, dan entri yang sudah dipendekkan wajib dihapus dari sini.
 LONG_FUNCTIONS_DEBT = {
     "backend/video/capture.py::_reader_loop",
-    "backend/detector.py::detect_and_track",
     "tools/bench_vlm.py::main",
     "tools/eval_vlm.py::main",
     "backend/state_manager.py::update_frame_detections",
