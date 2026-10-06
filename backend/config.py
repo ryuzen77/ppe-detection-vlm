@@ -82,6 +82,10 @@ class Config:
     # terlanjur dibuka lalu diganti. Set true untuk langsung memakai pilihan
     # terakhir tanpa bertanya (mis. kios yang menyala sendiri).
     CAMERA_AUTOSTART: bool = _env("CAMERA_AUTOSTART", "false").lower() == "true"
+    # Kamera yang dibuka otomatis, DIPILIH LEWAT NAMA (T29). Kosong = pilihan terakhir operator.
+    # Indeks tidak pernah dipakai: kamera USB eksternal berpindah indeks, dan Windows bisa
+    # butuh ±30 dtk memunculkannya — gerbang menunggu, bukan membuka kamera lain.
+    CAMERA_NAME: str = _env("CAMERA_NAME", "")
     CAMERA_AUTO_MODE: bool = _env("CAMERA_AUTO_MODE", "true").lower() == "true"
     CAMERA_TARGET_FPS: float = 25.0        # Sudah dianggap cukup lancar
     # Permintaan bawaan saat kamera dibuka tanpa mode tersimpan. Dipilih karena
@@ -270,6 +274,14 @@ class Config:
     LOCAL_GPU_CHECK_SECONDS: float = float(_env("LOCAL_GPU_CHECK_SECONDS", "60"))
     # Lama menunggu jeda antar-inspeksi sebelum memuat ulang (jangan putus pekerja)
     LOCAL_GPU_REPAIR_WAIT_SECONDS: float = 30.0
+    # Versi Ollama tempat model lokal divalidasi (06-10); berbeda = peringatan saat start (T29)
+    OLLAMA_VALIDATED_VERSION: str = _env("OLLAMA_VALIDATED_VERSION", "0.34.4")
+    STARTUP_CHECK_TIMEOUT_SECONDS: float = 2.0
+    # Penjaga proses (T29): jeda nyala ulang setelah crash, berlipat bila crash beruntun
+    SUPERVISOR_RESTART_DELAY_SECONDS: float = 5.0
+    SUPERVISOR_MAX_DELAY_SECONDS: float = 60.0
+    SUPERVISOR_STABLE_SECONDS: float = 60.0   # hidup selama ini = bukan crash beruntun
+    SUPERVISOR_LOG_FILE: str = "supervisor.log"
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
     VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
     # Jeda minimum antar panggilan ke VLM cloud untuk menjaga kuota (free tier

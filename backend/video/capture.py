@@ -200,6 +200,29 @@ class VideoCaptureService:
             logger.warning(f"'{self.camera_name}' hilang dari daftar perangkat sistem.")
             self._device_missing = True
 
+    def _autostart_camera(self):
+        """Membuka kamera otomatis LEWAT NAMA (T29); mengembalikan mode untuk penyambungan ulang.
+
+        Kamera yang belum terlihat sistem tidak diganti kamera lain (dulu: jatuh ke
+        indeks 0 = kamera bawaan laptop, diam-diam). Gerbang masuk keadaan "terputus"
+        sehingga lampu kuning menyala dan jalur sambung ulang berbasis nama menunggunya.
+        """
+        name, mode, index_hint = camera_manager.autostart_target()
+        if not name:
+            self.camera_status = "IDLE"
+            logger.warning(messages.CAMERA_AUTOSTART_NO_NAME)
+            return None
+        index = self._find_index_by_name(name)
+        if index is not None and self._init_camera(index, mode):
+            logger.info(messages.CAMERA_AUTOSTART_OPENED.format(name=name))
+            return None
+        logger.warning(messages.CAMERA_AUTOSTART_WAITING.format(name=name))
+        self.camera_index = index_hint if index_hint is not None else index or 0
+        self.camera_name, self.camera_name_verified = name, True
+        self.camera_status = "LOST"
+        self.camera_error = messages.CAMERA_AUTOSTART_WAITING.format(name=name)
+        return mode
+
     def _log_waiting(self, now: float):
         """Uji fisik 06-10: kamera yang dicolok ulang tidak muncul ±1 menit dan log diam
         sama sekali. Kini tiap CAMERA_WAITING_LOG_SECONDS dicatat apa yang terlihat sistem."""
@@ -355,14 +378,9 @@ class VideoCaptureService:
         # Secara bawaan tidak ada kamera yang dibuka: operator memilih sumbernya
         # dari dashboard lebih dulu, sehingga tidak ada perangkat yang terlanjur
         # dipakai lalu diganti.
+        autostart_mode = None
         if cfg.CAMERA_AUTOSTART:
-            saved = camera_manager.load_saved_selection()
-            resolved = camera_manager.resolve_saved_index(saved) if saved else None
-            if resolved is not None:
-                logger.info(f"Autostart: memakai {saved.get('name') or resolved}")
-                self._init_camera(resolved, saved.get("mode"))
-            else:
-                self._init_camera(cfg.CAMERA_INDEX)
+            autostart_mode = self._autostart_camera()
         else:
             self.camera_status = "IDLE"
             logger.info("Menunggu operator memilih sumber kamera di dashboard.")
@@ -371,7 +389,7 @@ class VideoCaptureService:
         last_reconnect_attempt = 0.0
         # Mode yang berlaku saat kamera hilang, supaya penyambungan ulang memulihkan
         # mode hasil optimasi dan bukan jatuh ke permintaan bawaan.
-        lost_mode = None
+        lost_mode = autostart_mode
 
         # Pemantauan laju baca untuk mendeteksi kamera yang "hidup tapi ambruk"
         window_start = time.time()

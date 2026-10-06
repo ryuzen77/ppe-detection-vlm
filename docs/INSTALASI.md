@@ -108,8 +108,38 @@ PowerShell tidak menjalankan skrip di folder aktif tanpa awalan `.\`.
 - **Linux (menyala saat boot):** pasang `deploy/safeguard.service`; petunjuknya
   ada di dalam berkas itu. Server berhenti bersih saat menerima `SIGTERM`.
 
+### Menyala sendiri (Windows, demo) — T29
+
+1. Di `backend/.env`: `CAMERA_AUTOSTART=true` dan `CAMERA_NAME=<nama kamera eksternal>` (nama persis seperti di
+   daftar kamera dashboard, mis. `HD Pro Webcam C920`). Kamera **hanya** dicari lewat nama: bila belum terlihat
+   (Windows bisa butuh ±30 dtk setelah dicolok), gerbang menunggu dengan lampu kuning, tidak membuka kamera lain.
+2. Pasang sekali: `powershell -ExecutionPolicy Bypass -File deploy\windows\install_autostart.ps1`
+   (pintasan di folder Startup pengguna; lepas dengan `uninstall_autostart.ps1`). Ollama sudah menyala sendiri
+   lewat pintasannya; matikan update otomatisnya.
+3. `start_system.bat` menjalankan `python -m backend.supervisor`: server dinyalakan ulang bila crash
+   (jeda 5 dtk, berlipat bila crash beruntun, maks. 60 dtk; catatan di `DATA_DIR/logs/supervisor.log`).
+   Berhenti rapi dengan `Ctrl+C`.
+4. Saat menyala, server memeriksa CUDA, versi Ollama (`OLLAMA_VALIDATED_VERSION`), dan kamera target;
+   peringatannya di log dan `GET /api/health` → `startup_warnings`.
+
 Buka <http://localhost:8000>. Saat pertama dibuka, dashboard meminta Anda memilih
 kamera; video belum tersambung sebelum kamera dipilih. Tampilan lama masih ada
+
+### Daftar persiapan demo
+
+Kamera di lokasi demo belum tentu sama dengan kamera pengembangan, jadi **`CAMERA_NAME` dikosongkan**: gerbang
+mengikuti kamera yang dipilih operator di lokasi (cukup sekali; sesudahnya dibuka otomatis lewat namanya).
+
+1. `backend/.env`: `CAMERA_AUTOSTART=true`, `CAMERA_NAME=` (kosong), `ADMIN_TOKEN` terisi, `IOT_*` sesuai perangkat.
+2. Mesin: mode GPU dGPU + rencana daya Performance, Ollama **0.34.4** dengan update otomatis mati
+   (lihat "Mesin gerbang: GPU & VLM lokal"); pintasan Startup terpasang (`install_autostart.ps1`).
+3. Di lokasi: colok kamera eksternal → buka dashboard → **Pilih Kamera** (Pengaturan) → pilih kamera eksternal.
+   Bila laptop masih mengingat kamera lain, gerbang menunggu kamera itu dengan lampu kuning: cukup pilih ulang.
+4. Uji cepat: tutup lensa (kuning + suara "terhalang"), satu giliran APD lengkap (hijau), satu giliran tanpa
+   helm (merah), lalu cabut-colok kamera sekali (kuning + suara "terputus", tersambung lagi sendiri).
+5. Restart PC sekali: server, Ollama, dan kamera harus menyala sendiri tanpa memilih ulang.
+6. `GET /api/health` → `startup_warnings` kosong (atau baca log): bila ada peringatan CUDA/Ollama/kamera,
+   bereskan sebelum demo dimulai.
 
 
 ## 4. Pengembangan

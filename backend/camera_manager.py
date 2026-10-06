@@ -288,6 +288,18 @@ def load_saved_selection() -> Optional[dict]:
     return None
 
 
+def autostart_target() -> tuple[str, Optional[dict], Optional[int]]:
+    """Kamera yang dibuka otomatis (T29): (nama, mode, petunjuk indeks untuk tampilan).
+
+    `CAMERA_NAME` menang atas pilihan terakhir. Mode tersimpan hanya dipakai bila
+    milik kamera yang sama.
+    """
+    saved = load_saved_selection() or {}
+    name = cfg.CAMERA_NAME or saved.get("name", "")
+    same = bool(name) and saved.get("name") == name
+    return name, (saved.get("mode") if same else None), (saved.get("index") if same else None)
+
+
 def save_selection(index: int, mode: Optional[dict], name: str = ""):
     """Menyimpan pilihan kamera. Kegagalan di sini tidak boleh menghentikan sistem.
 

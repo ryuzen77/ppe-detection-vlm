@@ -22,6 +22,7 @@ if not exist "%PYEXE%" (
 )
 
 echo Menjalankan backend server pada http://localhost:8000...
+echo Server dinyalakan ulang otomatis bila crash. Hentikan dengan Ctrl+C.
 cd /d "%~dp0"
-"%PYEXE%" -m backend
+"%PYEXE%" -m backend.supervisor
 pause
