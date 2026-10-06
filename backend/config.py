@@ -122,12 +122,17 @@ class Config:
     CAMERA_DARK_MEAN: float = float(_env("CAMERA_DARK_MEAN", "25"))
     CAMERA_BRIGHT_MEAN: float = float(_env("CAMERA_BRIGHT_MEAN", "235"))
     CAMERA_UNIFORM_STD: float = float(_env("CAMERA_UNIFORM_STD", "6"))
-    CAMERA_BLOCKED_SECONDS: float = float(_env("CAMERA_BLOCKED_SECONDS", "3.0"))
+    # 1,5 dtk: uji fisik 06-10 — 3 dtk terasa terlalu lama bagi pengguna
+    CAMERA_BLOCKED_SECONDS: float = float(_env("CAMERA_BLOCKED_SECONDS", "1.5"))
     # Membeku = cuplikan berjarak (tanpa dirata-rata, derau sensor terlihat) identik
     CAMERA_FROZEN_SAMPLE_STEP: int = 4
     CAMERA_FROZEN_SECONDS: float = float(_env("CAMERA_FROZEN_SECONDS", "3.0"))
     # Gambar harus sehat selama ini sebelum gangguan dianggap selesai
     CAMERA_HEALTHY_SECONDS: float = 1.0
+    # Suara gangguan tidak diulang dalam selang ini, walau gangguan putus-sambung (T45b)
+    CAMERA_FAULT_SOUND_COOLDOWN_SECONDS: float = 30.0
+    # Selang log "masih menunggu kamera" selama kamera belum dicolok ulang (T45b)
+    CAMERA_WAITING_LOG_SECONDS: float = 10.0
     # Indeks tertinggi yang dicoba saat pemindaian bila nama perangkat tidak bisa
     # dibaca dari sistem operasi (bila bisa, jumlah perangkat itu yang dipakai)
     CAMERA_SCAN_MAX_INDEX: int = 6

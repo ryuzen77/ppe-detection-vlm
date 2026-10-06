@@ -1,5 +1,6 @@
 {
-  "gangguan_kamera": "Kamera gerbang terganggu. Mohon tunggu petugas.",
+  "kamera_terhalang": "Kamera gerbang terhalang. Mohon singkirkan penghalang di depan kamera.",
+  "kamera_terputus": "Kamera gerbang terputus. Mohon tunggu petugas.",
   "kurang_celana": "Celana panjang belum dipakai. Akses ditolak.",
   "kurang_helm": "Helm belum dipakai. Akses ditolak.",
   "kurang_kacamata": "Kacamata safety belum dipakai. Akses ditolak.",

@@ -48,11 +48,13 @@ class CameraHealth:
     def __init__(self):
         self.reset()
 
-    def reset(self):
+    def reset(self, carry: Optional[str] = None):
+        """`carry` = gangguan yang masih berlaku setelah kamera dibuka ulang: baru dianggap
+        selesai setelah gambar sehat CAMERA_HEALTHY_SECONDS (uji fisik 06-10)."""
         self._previous: Optional[np.ndarray] = None
         self._since: dict[str, Optional[float]] = {FAULT_BLOCKED: None, FAULT_FROZEN: None}
         self._healthy_since: Optional[float] = None
-        self.fault: Optional[str] = None
+        self.fault: Optional[str] = carry
 
     def _track(self, name: str, present: bool, now: float) -> bool:
         """True bila kondisi `name` sudah bertahan cukup lama."""
@@ -66,10 +68,14 @@ class CameraHealth:
     def update(self, frame: np.ndarray, now: float) -> Optional[str]:
         """Gangguan yang sedang berlaku (FAULT_*), atau None bila gambar sehat."""
         current = sample(frame)
-        frozen = self._previous is not None and np.array_equal(current, self._previous)
+        blocked = is_blocked(frame)
+        # Gambar tertutup rapat (hitam pekat) memang identik antar-frame tanpa derau:
+        # itu bukan driver macet. Uji fisik 06-10: dulu dinilai "membeku" dan kamera
+        # dibuka ulang berulang-ulang. Membeku hanya dinilai pada gambar berdetail.
+        frozen = not blocked and self._previous is not None and np.array_equal(current, self._previous)
         self._previous = current
         detected = (FAULT_FROZEN if self._track(FAULT_FROZEN, frozen, now)
-                    else FAULT_BLOCKED if self._track(FAULT_BLOCKED, is_blocked(frame), now) else None)
+                    else FAULT_BLOCKED if self._track(FAULT_BLOCKED, blocked, now) else None)
         if detected is not None:
             self.fault, self._healthy_since = detected, None
         elif self.fault is not None:

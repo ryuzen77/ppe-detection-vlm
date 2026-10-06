@@ -82,8 +82,11 @@ def test_pulih_harus_stabil_sebentar():
 def gate(monkeypatch, catalog_defaults):
     played = []
     monkeypatch.setattr(audio_player, "play", lambda name, *a, **k: played.append(name))
+    monkeypatch.setattr(state_mgr, "camera_fault_sound_at", {})
+    state_mgr.set_camera_fault(None)
     state_mgr.reset_all()
     yield played
+    state_mgr.set_camera_fault(None)
     state_mgr.reset_all()
 
 
@@ -105,7 +108,7 @@ def test_gangguan_membatalkan_hijau_dan_menyalakan_kuning(gate):
 def test_suara_gangguan_hanya_sekali_saat_mulai(gate):
     for fault in ("lost", "lost", "frozen", "lost"):
         state_mgr.set_camera_fault(fault)
-    assert gate == ["gangguan_kamera"]
+    assert gate == ["kamera_terputus"], "membeku & terputus = satu jenis suara"
 
 
 def test_selama_gangguan_tidak_ada_sesi_baru(gate):
@@ -159,5 +162,80 @@ def test_status_kamera_tertutup_di_telemetri(cam):
 
 
 def test_suara_gangguan_kamera_tersedia():
-    assert "gangguan_kamera" in messages.VOICE_TEXTS
-    assert (cfg.AUDIO_DIR / "gangguan_kamera.mp3").exists()
+    for sound in set(messages.CAMERA_FAULT_SOUND.values()):
+        assert sound in messages.VOICE_TEXTS
+        assert (cfg.AUDIO_DIR / f"{sound}.mp3").exists()
+
+
+# --- Regresi uji fisik 06-10 (T45b) --------------------------------------------------------
+
+def black():
+    """Lensa kamera laptop tertutup rapat: hitam pekat, TANPA derau (frame identik)."""
+    return np.zeros((480, 864, 3), np.uint8)
+
+
+def test_lensa_tertutup_rapat_bukan_membeku(cam):
+    """Dulu: hitam pekat identik -> 'membeku' -> kamera dibuka ulang tiap ±7 dtk."""
+    fault = None
+    for i in range(10 * 30):                       # ditutup 10 dtk, 30 FPS
+        fault = cam._camera_fault(black(), i / 30)
+    assert fault == ch.FAULT_BLOCKED
+    assert not cam._device_missing, "tidak boleh membuka ulang kamera"
+
+
+def test_reaksi_tertutup_cepat():
+    h = ch.CameraHealth()
+    assert cfg.CAMERA_BLOCKED_SECONDS <= 1.5
+    assert feed(h, [black()] * int(cfg.CAMERA_BLOCKED_SECONDS * 10 + 2)) == ch.FAULT_BLOCKED
+
+
+def test_membeku_tetap_berlaku_selama_dibuka_ulang(cam):
+    frozen = scene()
+    for i in range(int(cfg.CAMERA_FROZEN_SECONDS * 10) + 2):
+        cam._camera_fault(frozen, i / 10)
+    cam._device_missing = False                    # thread pembaca menangani penanda
+    cam.camera_status = "OPENING"
+    assert cam._camera_fault(scene(), 10.0) == ch.FAULT_FROZEN, "sedang dibuka ulang: belum selesai"
+    cam.camera_status, cam.camera_error = "OK", ""
+    assert cam._camera_fault(scene(), 10.1) == ch.FAULT_FROZEN, "frame sehat pertama belum cukup"
+    assert cam._camera_fault(scene(), 10.1 + cfg.CAMERA_HEALTHY_SECONDS) is None
+
+
+def test_reset_gerbang_tidak_menghapus_gangguan(gate):
+    state_mgr.set_camera_fault("frozen")
+    state_mgr.reset_all()                          # mis. setelah kamera dibuka ulang
+    assert state_mgr.camera_fault == "frozen" and notifier.current_state == "YELLOW"
+
+
+def test_suara_tidak_diulang_saat_gangguan_putus_sambung(gate):
+    for _ in range(5):                             # pola log 06-10: mulai, selesai, mulai lagi...
+        state_mgr.set_camera_fault("blocked")
+        state_mgr.set_camera_fault(None)
+    assert gate == ["kamera_terhalang"]
+
+
+def test_terhalang_lalu_dicabut_tetap_diumumkan(gate):
+    """Uji fisik 06-10: lensa ditutup lalu kamera dicabut <30 dtk -> dulu tanpa suara."""
+    state_mgr.set_camera_fault("blocked")
+    state_mgr.set_camera_fault("lost")
+    assert gate == ["kamera_terhalang", "kamera_terputus"]
+
+
+def test_terputus_dan_terhalang_beda_pesan_lampu(gate):
+    state_mgr.set_camera_fault("lost")
+    lost_msg = notifier.message
+    state_mgr.set_camera_fault("blocked")
+    assert notifier.message != lost_msg and notifier.current_state == "YELLOW"
+
+
+def test_log_menunggu_kamera_berkala(cam, monkeypatch, caplog):
+    import logging
+    from backend import camera_manager
+    monkeypatch.setattr(camera_manager, "list_device_names", lambda: ["Integrated Camera"])
+    cam.camera_name = "HD Pro Webcam C920"
+    with caplog.at_level(logging.WARNING):
+        for second in range(25):
+            cam._log_waiting(1000.0 + second)
+    lines = [r.message for r in caplog.records if "Masih menunggu" in r.message]
+    assert len(lines) == 3, "tiap CAMERA_WAITING_LOG_SECONDS, bukan tiap detik"
+    assert "HD Pro Webcam C920" in lines[-1] and "Integrated Camera" in lines[-1] and "20 dtk" in lines[-1]
