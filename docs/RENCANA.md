@@ -106,6 +106,71 @@ saat inspeksi berjalan tidak boleh memotong pemeriksaan (tes konkurensi).
 **Keputusan (d), 06-10**: model belum tervalidasi **boleh dipilih dengan konfirmasi** (`confirm_unvalidated`) + peringatan
 kuning/oranye + tercatat di jejak; model `unsafe` (pernah meloloskan APD kurang) **selalu ditolak**.
 
+### Rancangan T51 — akun pengguna & halaman setup (usulan 07-10, menunggu persetujuan)
+
+**Latar (keputusan pengguna 07-10):** kata sandi = `ADMIN_TOKEN` di `.env` membingungkan (harus membuka berkas server).
+Ganti dengan **akun** (nama pengguna + kata sandi). Untuk demo **satu peran**: admin sekaligus operator. Boleh beberapa
+akun (jejak mencatat *siapa*), semuanya `admin`. `ADMIN_TOKEN` & `ALLOW_INSECURE_DEMO` **dihapus seluruhnya**. Akun
+pertama dibuat lewat **halaman setup yang hanya bisa diisi dari mesin gerbang (localhost)**.
+
+**Risiko: Tinggi** — mengatur akses ke foto wajah, video, audit, dan pengaturan yang menentukan keputusan APD.
+
+**Rambu**
+- (a) Kata sandi tidak pernah disimpan/dicatat/dikirim balik: hash `hashlib.scrypt` (bawaan Python, tanpa dependensi
+  baru) + garam acak per akun; perbandingan waktu-konstan; nama pengguna yang tidak ada tetap dihitung hash tiruan
+  (waktu jawaban tidak membocorkan nama mana yang ada).
+- (b) Tidak ada mode terbuka: sebelum akun pertama dibuat, semua `/api/*` & `/ws` tertutup kecuali `GET /api/session`
+  dan `POST /api/setup`. Setup hanya dari `127.0.0.1`/`::1` dan hanya bila belum ada akun (dicek atomik di DB, jadi dua
+  permintaan bersamaan tidak membuat dua admin pertama).
+- (c) Batas tebak: 5 gagal → jeda 60 dtk **per alamat dan per nama pengguna** (`LOGIN_MAX_FAILURES`,
+  `LOGIN_LOCKOUT_SECONDS` yang sudah ada).
+- (d) Hapus akun / reset kata sandi / ganti kata sandi → semua sesi akun itu dicabut (ganti sendiri: sesi lain dicabut,
+  sesi yang dipakai tetap). Akun terakhir dan akun sendiri tidak bisa dihapus.
+- (e) Jejak `DATA_DIR/reports/account_events.jsonl` (fsync): setup, login berhasil/gagal, keluar, buat, hapus, reset,
+  ganti kata sandi — waktu, nama pengguna, pelaku, alamat; **tanpa** kata sandi/hash. Jejak T28 `vlm_changes.jsonl`
+  mencatat nama pengguna pelaku (bukan hanya alamat).
+- (f) Siap peran di masa depan: kolom `role` ada sejak awal (selalu `admin` sekarang); semua endpoint lewat satu pintu
+  `require_role(...)`. Peran operator kelak = mengubah daftar hak, bukan alur login.
+
+**Backend (Claude)**
+1. `backend/accounts.py` (baru): `DATA_DIR/accounts.db` (SQLite WAL + synchronous FULL, **terpisah dari `audit.db`**
+   supaya retensi/ekspor audit tidak menyentuh akun). Tabel `users(username PK, password_hash, role, created_at,
+   password_changed_at, last_login_at)`. Nama pengguna 3–32 karakter `a-z 0-9 . _ -` (huruf kecil, tidak peka huruf
+   besar); kata sandi minimal `ACCOUNT_PASSWORD_MIN_LENGTH` (usul **12**), maksimal 128, tidak sama dengan nama pengguna.
+2. `backend/auth.py`: sesi menyimpan `(username, role)`; cabut per akun; limiter per nama pengguna; `X-Admin-Token`
+   & `password_matches` dihapus. `app.py`: pemeriksaan "jaringan terbuka tanpa token" (T20b) dihapus — tidak ada lagi
+   mode terbuka. Peringatan saat start bila `.env` masih berisi `ADMIN_TOKEN` (tidak dipakai lagi).
+3. Perintah di mesin gerbang (untuk lupa kata sandi admin terakhir): `python -m backend.accounts list`,
+   `reset-password <nama>` (kata sandi diketik tersembunyi, `getpass`), `create <nama>`.
+4. Tes: setup hanya localhost & sekali (termasuk dua permintaan bersamaan), login/limiter per nama, cabut sesi, akun
+   terakhir, tidak ada kata sandi/hash di respons & log & jejak, semua rute `/api` wajib sesi (penjaga OpenAPI T30
+   dipertahankan), `/ws` 4401, perintah reset.
+
+**Kontrak API** (galat berbentuk `{"detail": {"code", "message"}}` seperti T28; 429 tetap `{"detail", "retry_after_s"}`)
+- `GET /api/session` (bebas) → `{"authenticated": bool, "setup_required": bool, "setup_allowed": bool,
+  "user": {"username", "role"} | null, "expires_in_s": number | null}`. `setup_allowed` = permintaan dari localhost.
+  Bidang `auth_required` lama dihapus (login selalu wajib).
+- `POST /api/setup` (bebas) `{"username", "password"}` → **201** `{"user", "expires_in_s"}` + cookie (langsung masuk);
+  **403** `setup_local_only`; **409** `setup_done`; **400** `invalid_username` / `weak_password`.
+- `POST /api/login` `{"username", "password"}` → 200 `{"user", "expires_in_s"}` + cookie; **401** `login_failed`
+  (pesan sama untuk nama salah & kata sandi salah); 429.
+- `POST /api/logout` → 204 (tetap).
+- `POST /api/account/password` `{"current_password", "new_password"}` → 204; **400** `wrong_password` / `weak_password`.
+- `GET /api/accounts` → `[{"username", "role", "created_at", "last_login_at"}]`.
+- `POST /api/accounts` `{"username", "password"}` → **201** akun; **409** `username_taken`; 400 seperti setup.
+- `POST /api/accounts/{username}/password` `{"new_password"}` → 204 (reset oleh admin); **404** `not_found`.
+- `DELETE /api/accounts/{username}` → 204; **409** `last_account` / `self_delete`; 404.
+- Kode `/ws` 4401 dan cookie sesi tidak berubah.
+
+**UI (Gemini, setelah kontrak disetujui)**: halaman **Setup** (bila `setup_required`; bila `!setup_allowed` tampilkan
+"Buka http://localhost:8000 di mesin gerbang"), **Login** dengan nama pengguna, nama pengguna + Keluar + "Ganti kata
+sandi" di bilah atas, kartu **Akun** di Pengaturan (daftar, tambah, reset, hapus dengan konfirmasi). **Perbaikan bug
+07-10:** katalog APD dimuat ulang setiap kali login berhasil (sekarang hanya sekali saat halaman dibuka → 401 sebelum
+login → "APD wajib" kosong setelah login), dengan vitest.
+
+**Ditunda ke rencana jangka panjang**: peran operator terpisah; akun terpusat untuk banyak gerbang (lihat "Akun
+terpusat" di bawah).
+
 ### Kontrak API T45 — gangguan kamera (06-10)
 
 - Telemetri `camera.status` bertambah nilai **`"BLOCKED"`**: kamera tersambung tetapi gambar terlalu gelap, terlalu terang, atau
@@ -134,7 +199,7 @@ Tanggal = waktu lokal server (`YYYY-MM-DD`). Minggu = Senin–Minggu.
 - Grafik UI: batang bertumpuk lolos (hijau) / APD kurang (merah) per bucket + batang mendatar `missing_items` dengan angka
   di ujung batang. Kartu, grafik, tabel, dan CSV memakai rentang yang sama; ◀ ▶ pindah periode.
 
-### Kontrak API T30 — login admin (disetujui 05-10)
+### Kontrak API T30 — login admin (disetujui 05-10; **digantikan T51** setelah T51 disetujui & digabung)
 
 Berlaku bila `ADMIN_TOKEN` terisi. Tanpa `ADMIN_TOKEN` (hanya `HOST=127.0.0.1` / `ALLOW_INSECURE_DEMO`) semua terbuka seperti sebelumnya.
 
@@ -175,6 +240,7 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 
 | # | Risiko | Task | Alasan risiko / isi |
 | :-- | :-- | :-- | :-- |
+| 0 | **Tinggi** | **T51 — akun pengguna & halaman setup** (usulan 07-10) | `ADMIN_TOKEN` sebagai kata sandi membingungkan; ganti dengan akun nama pengguna + kata sandi (hash), setup admin pertama hanya dari mesin gerbang, semua akun `admin` untuk demo. Termasuk bug 07-10: "APD wajib" kosong setelah login (katalog dimuat sebelum login). Rancangan & kontrak di atas, **menunggu persetujuan** |
 | 1 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Perubahan besar T36a–d, T37, T38, T39a + UI T33 belum diuji di gerbang nyata (keputusan, suara, sesi, zona, pemulihan GPU). **Siap dijalankan** |
 | 2 | **Tinggi** | **T46 — potret setelah pekerja siap** (temuan uji nyata 28-09) | 12 dari 20 sesi dipotret **0,08 dtk** setelah sesi dimulai: syarat `STABLE_FRAMES_REQUIRED=3` dihitung dalam frame (≈0,1 dtk di 30 FPS), jadi foto diambil saat pekerja masih melangkah → keputusan dari foto belum layak, foto bukti audit tidak valid, pekerja patuh bisa salah ditolak. Skor gerak antar-frame 30 ms tampak 0 walau orang berjalan. Isi: syarat **waktu** — utuh + diam (kaki & kotak badan nyaris tak bergeser) ~1 dtk; frame terbaik dari seluruh jendela; cek menghadap kamera (kedua bahu terlihat); ambang di `config.py`; tes orang berjalan tidak dipotret |
 | 3 | **Tinggi** | **T47 — IoT lampu demo (ESP32, merah/kuning/hijau)** (analisa 05-10) | Spesifikasi lama salah & berbahaya: server crash saat hijau → hijau bertahan ≤15 dtk (tanpa heartbeat); self-test menyalakan HIJAU tiap boot, dan membuka port serial me-reset ESP32 (DTR/RTS) → hijau berkedip tiap server start; pull-down 10k pada relay Active-LOW menyalakan relay saat boot; relay 5V dari GPIO 3,3V bisa tak padam; tanpa sambung ulang & tanpa status IoT di UI; belum ada kuning; mode HTTP tanpa autentikasi (GET, CSRF, mDNS palsu) dan firmware-nya tidak ada. Isi: ESP32 **USB serial saja**, heartbeat ~1 dtk + balasan `OK`, firmware kuning berkedip bila heartbeat hilang ~3 dtk, self-test kuning, buka port tanpa reset, sambung ulang otomatis, status IoT di telemetri (kontrak dulu), uji lampu ditolak saat sesi berjalan, buffer perintah dibatasi, spesifikasi ditulis ulang. **Memblokir T45** (gangguan kamera = kuning) |
@@ -214,6 +280,7 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
   berhenti karena jaringan ke pusat). Persiapan murah: akses DB tetap terpusat di satu modul repository
   (`report_manager.py`). Risiko dinilai saat rencananya matang (§2.2a). Pertanyaan terbuka: jumlah gerbang target,
   laporan jarak jauh, pengelola server di lokasi.
+- **Akun terpusat & peran operator (rencana panjang, keputusan pengguna 07-10):** saat dipasang di banyak gerbang, akun per gerbang merepotkan (karyawan keluar = hapus di setiap gerbang). Arah: akun di server pusat (sejalan dengan basis data terpusat) atau login kantor (SSO/LDAP) bila perusahaan punya; gerbang memeriksa ke pusat dan tetap punya **akun lokal darurat** saat jaringan putus. Peran operator vs admin diaktifkan saat itu (T51 sudah menyiapkan kolom `role` & `require_role`). Risiko dinilai saat rencananya matang.
 - **IoT & palang boom** (tahap setelah fitur utama berjalan): ESP, relay, LED merah/hijau/kuning, sirine bila
   perlu; sensor setelah palang memastikan pekerja lewat sebelum palang menutup. Tahap 1: **berurutan penuh**
   (periksa → lampu + suara + palang buka → sensor lewat → palang tutup → pekerja berikutnya). Tahap 2:
