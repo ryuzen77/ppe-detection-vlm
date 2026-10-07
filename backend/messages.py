@@ -72,7 +72,6 @@ HUD_LIGHT = "LIGHT: {state}"
 # --- Balasan API ---
 API_INVALID_ADMIN_TOKEN = "Token admin tidak valid"
 API_STATE_RESET = "State reset"
-API_KEY_EMPTY = "API key cannot be empty"
 API_SCAN_STARTED = ("Pemindaian berjalan. Kamera aktif diukur ulang, "
                     "video sementara berpindah ke layar tunggu.")
 API_CAMERA_RELEASED = "Melepas kamera, silakan pilih sumber baru."
@@ -175,6 +174,21 @@ VLM_MODEL_UNSAFE = ("Model VLM {who} pernah MELOLOSKAN pekerja ber-APD kurang ({
                     "Jangan dipakai di gerbang.")
 VLM_THINKING_INVALID = "VLM_THINKING={value} tidak dikenal (pilihan: {choices}); dianggap off."
 VLM_THINKING_UNSUPPORTED = "VLM_THINKING={value} diabaikan: penyedia {provider} tidak bisa mengatur mode berpikir."
+
+# --- Ganti penyedia VLM dari dashboard (T28) ---
+VLM_SELECT_UNKNOWN_PROVIDER = "Penyedia VLM '{provider}' tidak dikenal."
+VLM_SELECT_MISSING_MODEL = "Nama model untuk penyedia {provider} belum diisi."
+VLM_SELECT_MISSING_KEY = "API key {provider} belum ada: isi {key_env} di backend/.env lalu nyalakan ulang server."
+VLM_SELECT_MISSING_BASE_URL = "Alamat server {provider} belum ada: isi VLM_BASE_URL di backend/.env."
+VLM_SELECT_UNSAFE = ("Model {provider}/{model} pernah MELOLOSKAN pekerja ber-APD kurang "
+                     "({missed} dari {photos} foto) dan tidak boleh dipakai di gerbang.")
+VLM_SELECT_NEEDS_CONFIRMATION = ("Model {provider}/{model} belum tervalidasi untuk prompt {prompt} "
+                                 "(status: {status}). Konfirmasi dulu bila tetap ingin dipakai.")
+VLM_SELECT_LANE_BUSY = "Ada pekerja di jalur inspeksi; penyedia VLM diganti setelah jalur kosong."
+VLM_SELECT_ENGINE_FAILED = "VLM {role} {provider}/{model} gagal disiapkan ({error}); penyedia lama tetap dipakai."
+VLM_SELECT_STORED_IGNORED = "Pilihan VLM tersimpan dari dashboard diabaikan ({reason}); memakai .env."
+VLM_SELECT_APPLIED = "VLM {role} diganti dari dashboard: {before} -> {after} (status validasi {status}, dari {client})."
+VLM_SELECT_LOG_FAILED = "Gagal menulis jejak pergantian VLM ke {path}: {error}"
 
 # --- Penjaga model lokal (T38) ---
 LOCAL_MODEL_PARTIAL_GPU = "VLM {who} hanya {pct}% di GPU (sisanya CPU, inspeksi sangat lambat); memuat ulang model."

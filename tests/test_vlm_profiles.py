@@ -30,7 +30,10 @@ def test_resmi_hanya_gemini_dan_ollama():
 
 
 def test_satu_sumber_untuk_adaptor_dan_config():
-    assert set(OPENAI_COMPATIBLE) | {"gemini"} == set(profiles.PROFILES)
+    # Setiap profil punya adaptor: OpenAI-compatible, Gemini, atau Anthropic (T28)
+    anthropic = {n for n, p in profiles.PROFILES.items() if p.api == profiles.API_ANTHROPIC}
+    assert anthropic == {"anthropic"}
+    assert set(OPENAI_COMPATIBLE) | {"gemini"} | anthropic == set(profiles.PROFILES)
     assert PRESETS["ollama"] == profiles.PROFILES["ollama"].base_url
     assert set(config.LOCAL_VLM_PROVIDERS) == {"ollama", "vllm"}
     assert profiles.default_model("ollama") == "qwen2.5vl:7b"

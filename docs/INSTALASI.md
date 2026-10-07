@@ -81,6 +81,13 @@ berkas contoh itu. Yang wajib diperhatikan:
 - **VLM utama**: `VLM_PROVIDER`, `VLM_MODEL`, dan API key penyedia.
 - **VLM cadangan**: `VLM_BACKUP_*`. Contohnya Ollama lokal `qwen2.5vl:7b`, yang
   dipasang dengan `ollama pull qwen2.5vl:7b`.
+- **API key per penyedia** (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`,
+  `ANTHROPIC_API_KEY`, ...): penyedia yang key-nya terisi bisa dipilih admin di
+  **Pengaturan → VLM** tanpa restart. Pilihan dashboard menang atas `.env` sampai
+  ditekan "kembali ke .env". Penggantian hanya terjadi saat jalur inspeksi kosong;
+  model yang pernah meloloskan APD kurang selalu ditolak, model yang belum
+  tervalidasi perlu konfirmasi. Setiap pergantian tercatat di
+  `DATA_DIR/reports/vlm_changes.jsonl`. Key tidak pernah diisi lewat dashboard.
 - **Keamanan**: `ADMIN_TOKEN` wajib bila `HOST` bukan localhost. Tanpa token,
   server menolak menyala, kecuali `ALLOW_INSECURE_DEMO=true`.
   Bila `ADMIN_TOKEN` terisi, dashboard meminta **login** dengan nilai itu sebagai kata

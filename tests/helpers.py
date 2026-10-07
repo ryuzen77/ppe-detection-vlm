@@ -1,5 +1,12 @@
-"""Gambar uji sintetis bersama."""
+"""Gambar uji sintetis & konstanta uji bersama. Sengaja tanpa impor `backend`
+(conftest memakainya sebelum config dibaca)."""
 import numpy as np
+
+# Variabel .env berisi API key per penyedia (profil `key_env`, T28). Dikosongkan di
+# conftest & proses uji supaya key asli di backend/.env tidak terbaca tes.
+# Kecocokannya dengan katalog profil dijaga test_vlm_selection.
+PROVIDER_KEY_ENVS = ("GEMINI_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY",
+                     "DASHSCOPE_API_KEY", "MOONSHOT_API_KEY", "ANTHROPIC_API_KEY")
 
 
 def person_crop(vest: bool = True, helmet: bool = True, long_pants: bool = True,

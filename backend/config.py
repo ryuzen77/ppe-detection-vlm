@@ -28,6 +28,16 @@ def _env(name: str, default: str = "") -> str:
 LOCAL_VLM_PROVIDERS = tuple(name for name, p in vlm_profiles.PROFILES.items() if p.is_local)
 
 
+def provider_api_key(provider: str) -> str:
+    """API key penyedia dari variabel .env miliknya sendiri (mis. OPENAI_API_KEY), T28.
+
+    Dibaca saat dipanggil, bukan sekali saat impor, supaya key yang baru ditulis di
+    lingkungan proses (tes) ikut terbaca. Penyedia lokal / tanpa `key_env` = kosong.
+    """
+    profile = vlm_profiles.get_profile(provider)
+    return _env(profile.key_env, "") if profile is not None and profile.key_env else ""
+
+
 def _legacy_thinking(gemini_level: str) -> str:
     """GEMINI_THINKING_LEVEL lama -> VLM_THINKING umum ("minimal" = berpikir dimatikan)."""
     level = gemini_level.strip().lower()
@@ -225,9 +235,10 @@ class Config:
     # gemini, openai, openrouter, qwen, deepseek, ollama, vllm, openai-compatible.
     # Nama lama GEMINI_API_KEY / GEMINI_MODEL tetap dibaca agar .env lama tidak rusak.
     VLM_PROVIDER: str = _env("VLM_PROVIDER", "gemini").lower()
-    # GEMINI_API_KEY lama hanya berlaku untuk Gemini: tanpa syarat ini, beralih
-    # ke penyedia lain tanpa VLM_API_KEY akan mengirim kunci Gemini ke pihak lain.
-    VLM_API_KEY: str = _env("VLM_API_KEY", _env("GEMINI_API_KEY", "") if VLM_PROVIDER == "gemini" else "")
+    # VLM_API_KEY (bila diisi) menang; bila kosong, key milik penyedia itu sendiri
+    # (GEMINI_API_KEY, OPENAI_API_KEY, ..., lihat profil `key_env`, T28). Key satu
+    # penyedia tidak pernah dikirim ke penyedia lain.
+    VLM_API_KEY: str = _env("VLM_API_KEY", provider_api_key(VLM_PROVIDER))
     VLM_MODEL: str = _env(
         "VLM_MODEL",
         _env("GEMINI_MODEL", vlm_profiles.default_model("gemini")) if VLM_PROVIDER == "gemini"
@@ -246,6 +257,11 @@ class Config:
     # Suhu sampling VLM. Rendah = jawaban konsisten untuk foto yang sama
     # (penilaian APD bukan tugas kreatif). Berlaku untuk semua penyedia.
     VLM_TEMPERATURE: float = float(_env("VLM_TEMPERATURE", "0.1"))
+    # Batas token jawaban Claude (wajib di Messages API). Model Claude terbaru
+    # berpikir dulu dan pikirannya ikut dihitung, jadi dibuat longgar dari ukuran JSON APD.
+    VLM_ANTHROPIC_MAX_TOKENS: int = int(_env("VLM_ANTHROPIC_MAX_TOKENS", "4096"))
+    # Sisi gambar sintetis untuk tombol "Uji" penyedia di Pengaturan (T28)
+    VLM_TEST_IMAGE_PX: int = 256
 
     # --- VLM cadangan (T27) ---
     # Dipakai OTOMATIS saat VLM utama gagal, di inspeksi yang sama. Bawaannya VLM
@@ -254,7 +270,7 @@ class Config:
     VLM_BACKUP_PROVIDER: str = _env("VLM_BACKUP_PROVIDER", "none" if VLM_IS_LOCAL else "ollama").lower()
     VLM_BACKUP_MODEL: str = _env("VLM_BACKUP_MODEL", vlm_profiles.default_model(VLM_BACKUP_PROVIDER))
     VLM_BACKUP_BASE_URL: str = _env("VLM_BACKUP_BASE_URL", "")
-    VLM_BACKUP_API_KEY: str = _env("VLM_BACKUP_API_KEY", "")
+    VLM_BACKUP_API_KEY: str = _env("VLM_BACKUP_API_KEY", provider_api_key(VLM_BACKUP_PROVIDER))
 
     # Batas waktu satu panggilan, menurut letak modelnya. Cloud dibuat pendek
     # (2x p95 Gemini ~2 dtk) supaya saat penyedia bermasalah pekerja cepat
@@ -348,6 +364,8 @@ class Config:
     DB_PATH: Path = REPORTS_DIR / "audit.db"
     CAMERA_STATE_PATH: Path = DATA_DIR / "camera_state.json"
     RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
+    # Jejak pergantian penyedia/model VLM dari dashboard (T28), satu baris JSON per pergantian
+    VLM_CHANGES_PATH: Path = REPORTS_DIR / "vlm_changes.jsonl"
     # Catatan hidup server: kapan terakhir hidup & apakah berhenti rapi (T37)
     UPTIME_STATE_PATH: Path = DATA_DIR / "uptime.json"
     UPTIME_HEARTBEAT_SECONDS: float = 30.0

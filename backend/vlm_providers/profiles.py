@@ -18,6 +18,7 @@ EXPERIMENTAL = "experimental"  # adaptor tersedia, belum pernah diuji di sini
 
 API_GEMINI = "gemini"
 API_OPENAI_COMPATIBLE = "openai_compatible"
+API_ANTHROPIC = "anthropic"
 
 # Tingkat "berpikir" umum (VLM_THINKING); profil menerjemahkannya ke parameter penyedia
 THINKING_LEVELS = ("off", "low", "medium", "high")
@@ -34,6 +35,11 @@ class ProviderProfile:
     # Tingkat umum -> nilai parameter penyedia; None = penyedia tidak bisa diatur
     thinking: Optional[dict] = None
     data_location: str = ""
+    # Nama variabel .env yang menyimpan API key penyedia ini (T28). Key hanya ada
+    # di .env; dashboard memilih penyedia, tidak pernah menerima key.
+    key_env: str = ""
+    # Nama tampilan di Pengaturan admin (bukan UI operator)
+    label: str = ""
 
 
 PROFILES = {p.name: p for p in (
@@ -42,26 +48,41 @@ PROFILES = {p.name: p for p in (
     ProviderProfile("gemini", API_GEMINI, is_local=False, support=OFFICIAL,
                     default_model="gemini-3.5-flash-lite",
                     thinking={"off": "minimal", "low": "low", "medium": "medium", "high": "high"},
-                    data_location="Google Cloud (global)"),
+                    data_location="Google Cloud (global)", key_env="GEMINI_API_KEY", label="Google Gemini"),
     # T26: satu-satunya model lokal yang tidak meloloskan APD kurang
     ProviderProfile("ollama", API_OPENAI_COMPATIBLE, is_local=True, support=OFFICIAL,
                     base_url="http://localhost:11434/v1", default_model="qwen2.5vl:7b",
-                    data_location="mesin ini"),
+                    data_location="mesin ini", label="Ollama (lokal)"),
     # vLLM tidak punya port bawaan yang aman: 8000 dipakai server ini sendiri
     ProviderProfile("vllm", API_OPENAI_COMPATIBLE, is_local=True, support=EXPERIMENTAL,
-                    data_location="mesin ini"),
+                    data_location="mesin ini", label="vLLM (lokal)"),
     ProviderProfile("openai", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL,
-                    base_url="https://api.openai.com/v1", data_location="OpenAI (AS)"),
+                    base_url="https://api.openai.com/v1", data_location="OpenAI (AS)",
+                    key_env="OPENAI_API_KEY", label="OpenAI"),
     ProviderProfile("openrouter", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL,
-                    base_url="https://openrouter.ai/api/v1", data_location="OpenRouter + penyedia model"),
+                    base_url="https://openrouter.ai/api/v1", data_location="OpenRouter + penyedia model",
+                    key_env="OPENROUTER_API_KEY", label="OpenRouter"),
     # Region internasional; akun Tiongkok daratan memakai dashscope.aliyuncs.com
     ProviderProfile("qwen", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL,
                     base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-                    data_location="Alibaba Cloud"),
+                    data_location="Alibaba Cloud", key_env="DASHSCOPE_API_KEY", label="Qwen (Alibaba DashScope)"),
     # Hanya model yang menerima gambar (mis. deepseek-flash)
     ProviderProfile("deepseek", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL,
-                    base_url="https://api.deepseek.com", data_location="DeepSeek (Tiongkok)"),
-    ProviderProfile("openai-compatible", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL),
+                    base_url="https://api.deepseek.com", data_location="DeepSeek (Tiongkok)",
+                    key_env="DEEPSEEK_API_KEY", label="DeepSeek"),
+    # T28: region internasional; akun Tiongkok daratan memakai api.moonshot.cn. Gambar
+    # dikirim sebagai data URI base64 (URL gambar jarak jauh tidak diterima). Model
+    # bawaan sengaja kosong: diisi admin saat uji, tidak ditebak.
+    ProviderProfile("kimi", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL,
+                    base_url="https://api.moonshot.ai/v1", data_location="Moonshot AI",
+                    key_env="MOONSHOT_API_KEY", label="Kimi (Moonshot)"),
+    # T28: Claude lewat Messages API (adaptor sendiri). Model bawaan kosong: dipilih admin.
+    ProviderProfile("anthropic", API_ANTHROPIC, is_local=False, support=EXPERIMENTAL,
+                    base_url="https://api.anthropic.com", data_location="Anthropic (AS)",
+                    key_env="ANTHROPIC_API_KEY", label="Claude (Anthropic)"),
+    # Alamat wajib dari VLM_BASE_URL; key hanya lewat VLM_API_KEY / VLM_BACKUP_API_KEY
+    ProviderProfile("openai-compatible", API_OPENAI_COMPATIBLE, is_local=False, support=EXPERIMENTAL,
+                    label="Server OpenAI-compatible"),
 )}
 
 

@@ -11,6 +11,8 @@ import tempfile
 
 import pytest
 
+from helpers import PROVIDER_KEY_ENVS
+
 _TEST_ROOT = tempfile.mkdtemp(prefix="safeguard_test_")
 
 # Audit, foto, dan pengaturan uji ditulis ke folder sementara, bukan data/
@@ -25,6 +27,8 @@ for _nama in ("VLM_API_KEY", "VLM_MODEL", "VLM_BASE_URL", "GEMINI_API_KEY", "GEM
               "VLM_MIN_INTERVAL_SECONDS", "VLM_CLOUD_TIMEOUT_SECONDS", "VLM_LOCAL_TIMEOUT_SECONDS",
               "VLM_BACKUP_MODEL", "VLM_BACKUP_BASE_URL", "VLM_BACKUP_API_KEY",
               "VLM_PRIMARY_FAILURES_BEFORE_DOWN", "VLM_PRIMARY_RETRY_AFTER_SECONDS", "VLM_SYSTEM_RETRY_SECONDS"):
+    os.environ[_nama] = ""
+for _nama in PROVIDER_KEY_ENVS:
     os.environ[_nama] = ""
 # Tidak membuka port serial / HTTP ke lampu gerbang sungguhan
 os.environ["IOT_ENABLED"] = "false"
