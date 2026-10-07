@@ -292,6 +292,56 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - **Listrik padam:** UPS untuk PC, kamera, jaringan + shutdown rapi otomatis; BIOS "power on after AC loss";
   SOP pemeriksaan manual oleh petugas.
 
+#### Calon T52 — notifikasi insiden lewat WhatsApp (rancangan 08-10, **belum diputuskan dipakai**)
+
+Status: rancangan untuk ditimbang pengguna; **tidak dikerjakan sebelum pengguna memutuskan**. Risiko usulan:
+**Sedang** — tidak mengubah keputusan APD, tetapi menyangkut data pribadi (nomor telepon) dan keandalan peringatan;
+naik ke Tinggi bila kelak menjadi satu-satunya jalur peringatan gerbang produksi.
+
+**Tujuan.** Orang perusahaan (bukan programmer) tahu bila gerbang bermasalah, sesuai keparahannya, dengan bahasa awam
+dan tindakan yang diminta (mis. "lakukan pemeriksaan APD manual"). Bukan WA blast massal: penerima sedikit & tetap.
+
+**Penerima menurut keparahan** (jabatan & nomor diisi admin di Pengaturan; angka ambang di `config.py`/Pengaturan):
+
+| Keparahan | Contoh | Diberi tahu | Isi pesan |
+| :-- | :-- | :-- | :-- |
+| Rendah | Kamera putus sebentar lalu pulih; penolakan APD beruntun di atas ambang | Operator / mandor gerbang | Apa yang terjadi + langkah cek sederhana |
+| Sedang | Gerbang terganggu > N menit; VLM utama & cadangan gagal (pekerja menunggu) | + Supervisor HSE | + "Lakukan pemeriksaan APD manual" |
+| Tinggi | Listrik/server mati; gerbang mati > N jam | + Manajer HSE / site | Dampak ke operasional + keputusan yang dibutuhkan |
+| (teknis) | Rincian galat | Tim IT, jalur terpisah | Log teknis |
+
+- Insiden yang **berlangsung lama naik tingkat** (mis. 15 menit = Rendah, 2 jam = Tinggi); setiap penerima yang
+  sudah diberi tahu mendapat pesan **"Pulih"** saat masalah selesai.
+- Satu pekerja ditolak **bukan insiden** (kerja normal gerbang).
+
+**Jalur kirim.**
+1. **Insiden yang server masih hidup** (kamera, VLM, IoT, penolakan beruntun): server gerbang mengirim sendiri lewat
+   penyedia WA.
+2. **Listrik/server/internet gerbang mati — opsi A (disetujui sebagai arah, 08-10): pemantau dari luar.** Gerbang
+   mengirim sinyal "hidup" (heartbeat, HTTP keluar) tiap ±1 menit ke layanan pemantau di internet (mis.
+   Healthchecks.io atau server kecil sendiri). Bila sinyal berhenti > N menit, **layanan pemantau** yang mengirim WA.
+   Server gerbang tidak dibuka ke internet (hanya koneksi keluar, seperti VLM cloud). Saat pulih, gerbang kembali
+   mengirim heartbeat dan menyusulkan pesan "Pulih" + lama mati. UPS (bila ada) hanya tambahan: cukup untuk pesan
+   "listrik padam, berjalan dengan baterai", tidak untuk padam berjam-jam.
+
+**Penyedia WA.** Fonnte (gateway lokal, sambung nomor lewat QR; token di `.env`) untuk demo. Catatan: Fonnte **bukan
+API resmi Meta** — nomor bisa diblokir WhatsApp; pakai **nomor khusus gerbang**, volume kecil. Modul dibuat **netral
+penyedia** (seperti VLM) supaya bisa pindah ke **WhatsApp Cloud API resmi** (template disetujui Meta, berbayar) lewat
+konfigurasi untuk produksi.
+
+**Rambu.**
+- Pesan **teks saja**: tanpa foto/wajah/nama pekerja; rincian lewat tautan dashboard yang wajib login (T51).
+- Nomor penerima = data pribadi: disimpan di basis data (bukan `.env`), disamarkan di log, hanya admin yang mengubah.
+- Anti-spam: satu insiden = satu rangkaian pesan; batas pesan per jam; insiden yang sama digabung.
+- Pengiriman di **jalur terpisah** dari inspeksi: WA lambat/gagal tidak menahan gerbang; kegagalan kirim dicatat &
+  tampil di dashboard.
+- Konfirmasi "Saya tangani" (bila dipakai) lewat **dashboard** (tercatat atas nama akun), bukan balasan WA — membaca
+  balasan WA butuh webhook masuk = membuka server gerbang ke internet.
+
+**Belum diputuskan (pertanyaan untuk pengguna):** dipakai atau tidak; jabatan penerima tiap tingkat (perorangan atau
+grup WA); ambang waktu Rendah/Sedang/Tinggi; daftar insiden final; layanan pemantau (pihak ketiga atau server sendiri);
+perlu tidaknya konfirmasi "Saya tangani". Kontrak API & area berkas ditulis setelah diputuskan.
+
 ## Selesai (ringkas)
 
 | Task | Hasil |
