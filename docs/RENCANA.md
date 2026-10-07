@@ -116,6 +116,9 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
   tidak disentuh. Penyedia ditolak lebih dulu dengan kode 400 yang sama seperti apply (kecuali konfirmasi).
 - `has_key` = penyedia siap dipilih tanpa menyunting `.env`: key ada (atau lokal) **dan** alamat diketahui
   (vLLM/openai-compatible butuh `VLM_BASE_URL`). UI cukup menyembunyikan/menonaktifkan yang `false`.
+- `missing` (tambahan 08-10, tiap penyedia) = isian `.env` yang masih kurang: `"key"` | `"base_url"` | `null`
+  (siap). Key dicek lebih dulu. UI memakai ini untuk teks petunjuk ("isi key" vs "isi alamat"), mis. vLLM lokal
+  tidak pernah butuh key.
 - `apply` & `DELETE` mengembalikan bentuk `current`. Bila penyedia lokal (Ollama) harus dimuat, `apply` bisa
   berlangsung hingga ±2 menit (pemanasan) — UI menampilkan status "menyiapkan…".
 - `GET /api/config/vlm` lama tetap ada (dipakai kartu status); `POST /api/config/vlm-key` & `/api/config/gemini-key`
@@ -181,7 +184,9 @@ pertama dibuat lewat **halaman setup yang hanya bisa diisi dari mesin gerbang (l
   (pesan sama untuk nama salah & kata sandi salah); 429.
 - `POST /api/logout` → 204 (tetap).
 - `POST /api/account/password` `{"current_password", "new_password"}` → 204; **400** `wrong_password` / `weak_password`.
-- `GET /api/accounts` → `[{"username", "role", "created_at", "last_login_at"}]`.
+- `GET /api/accounts` → `[{"username", "role", "created_at", "last_login_at"}]`. Waktu = **waktu lokal mesin
+  gerbang tanpa zona** (`2026-10-08T00:20:02`, `last_login_at` null bila belum pernah), sama seperti audit. UI
+  menampilkannya apa adanya; jangan menambah `Z` (itu membaca waktu lokal sebagai UTC → meleset 7 jam).
 - `POST /api/accounts` `{"username", "password"}` → **201** akun; **409** `username_taken`; 400 seperti setup.
 - `POST /api/accounts/{username}/password` `{"new_password"}` → 204 (reset oleh admin); **404** `not_found`.
 - `DELETE /api/accounts/{username}` → 204; **409** `last_account` / `self_delete`; 404.

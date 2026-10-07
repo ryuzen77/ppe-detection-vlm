@@ -117,6 +117,11 @@ def test_katalog_tanpa_key_dan_menandai_penyedia_siap(env):
     assert ready["gemini"] and ready["openai"] and ready["ollama"]
     assert not ready["deepseek"] and not ready["anthropic"], "key belum ada di .env"
     assert not ready["vllm"], "vLLM tanpa alamat tidak bisa dipakai"
+    # UI menulis "isi key" vs "isi alamat" dari sini; vLLM lokal tidak pernah butuh key
+    missing = {p["name"]: p["missing"] for p in catalog}
+    assert missing["gemini"] is None and missing["ollama"] is None
+    assert missing["deepseek"] == "key" and missing["vllm"] == "base_url"
+    assert missing["openai-compatible"] == "key", "key dicek lebih dulu daripada alamat"
     unsafe = next(p for p in catalog if p["name"] == UNSAFE.provider)
     entry = next(m for m in unsafe["models"] if m["model"] == UNSAFE.model)
     assert entry["validated"] == profiles.UNSAFE and entry["missed"] == UNSAFE.missed

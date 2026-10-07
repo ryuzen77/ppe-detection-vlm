@@ -93,14 +93,24 @@ def base_url_for(provider: str) -> str:
     return ""
 
 
+MISSING_KEY = "key"
+MISSING_BASE_URL = "base_url"
+
+
+def missing_setting(profile: profiles.ProviderProfile) -> Optional[str]:
+    """Isian .env yang masih kurang (key lebih dulu), None bila siap. UI perlu
+    membedakannya: vLLM lokal tidak butuh key, hanya alamat."""
+    if not profile.is_local and not api_key_for(profile.name):
+        return MISSING_KEY
+    if profile.api != profiles.API_GEMINI and not (profile.base_url or base_url_for(profile.name)):
+        return MISSING_BASE_URL
+    return None
+
+
 def is_ready(provider: str) -> bool:
     """Penyedia bisa dipakai tanpa menyentuh .env: key ada (atau lokal) & alamat diketahui."""
     profile = profiles.get_profile(provider)
-    if profile is None:
-        return False
-    has_key = profile.is_local or bool(api_key_for(provider))
-    has_address = profile.api == profiles.API_GEMINI or bool(profile.base_url or base_url_for(provider))
-    return has_key and has_address
+    return profile is not None and missing_setting(profile) is None
 
 
 REDACTED = "***"
@@ -130,10 +140,11 @@ def check_choice(choice: Choice, confirm_unvalidated: bool):
         raise SelectionError("unknown_provider", messages.VLM_SELECT_UNKNOWN_PROVIDER.format(provider=choice.provider))
     if not choice.model:
         raise SelectionError("missing_model", messages.VLM_SELECT_MISSING_MODEL.format(provider=choice.provider))
-    if not profile.is_local and not api_key_for(choice.provider):
+    missing = missing_setting(profile)
+    if missing == MISSING_KEY:
         raise SelectionError("missing_key", messages.VLM_SELECT_MISSING_KEY.format(
             provider=choice.provider, key_env=profile.key_env or "VLM_API_KEY"))
-    if not is_ready(choice.provider):
+    if missing == MISSING_BASE_URL:
         raise SelectionError("missing_base_url", messages.VLM_SELECT_MISSING_BASE_URL.format(provider=choice.provider))
     _check_validation(choice, confirm_unvalidated)
 
@@ -226,6 +237,7 @@ def _provider_entry(profile: profiles.ProviderProfile, models_in_use: list[str])
     names = list(dict.fromkeys(filter(None, [*known, profile.default_model, *models_in_use])))
     return {"name": profile.name, "label": profile.label or profile.name, "support": profile.support,
             "is_local": profile.is_local, "has_key": is_ready(profile.name),
+            "missing": missing_setting(profile),
             "data_location": profile.data_location, "default_model": profile.default_model,
             "models": [_model_entry(Choice(profile.name, m)) for m in names]}
 
