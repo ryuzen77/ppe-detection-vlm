@@ -65,6 +65,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | T28 — penyedia VLM dari dashboard (bagian backend) | Claude | `claude/t28-vlm-switch` | dikerjakan | `backend/vlm_analyzer.py`, `backend/vlm_selection.py` (baru), `backend/vlm_providers/` (`profiles.py`: `key_env` + profil `anthropic`/`kimi`; `anthropic.py` baru; `__init__.py`), `backend/api/routes_vlm.py`, `backend/config.py`/`messages.py`/`.env.example` (tambah: key per penyedia), `docs/INSTALASI.md` (bagian VLM), `tests/` (baru) | Diklaim 07-10. Ikut rancangan & kontrak di bawah (disetujui 06-10). Risiko **Sedang**. Bercabang dari `master`; T48 (juga `profiles.py`) digabung lebih dulu, T28 di-rebase. UI (T28-UI, Gemini) setelah tinjauan T48, ikut kontrak |
 | T28-UI — kartu VLM di Pengaturan admin | Gemini | `gemini/t28-vlm-ui` (bercabang dari `claude/t28-vlm-switch`) | antre | `web/src/components/settings/VlmProviders.svelte` (baru), `web/src/lib/vlmSelection.ts` (+ tes, baru), `web/src/pages/Pengaturan.svelte` (sisipkan kartu saja), `web/src/lib/api/client.ts` (tambah metode T28, hapus `setVlmKey`), `web/src/lib/api/types.ts` / `messages.ts` / `settings.ts` (tambah) | Ikut kontrak T28 + rincian 07-10. Mulai setelah tinjauan T48 & T28 dilaporkan. Klaim dicatat integrator 07-10 |
 | T51 — akun pengguna & halaman setup (backend) | Claude | `claude/t51-accounts` (bercabang dari `claude/t28-vlm-switch`) | dikerjakan | `backend/accounts.py` (baru), `backend/auth.py`, `backend/api/deps.py`, `backend/api/routes_auth.py`, `backend/api/routes_accounts.py` (baru), `backend/app.py` (hapus cek T20b), `backend/config.py`/`messages.py`/`.env.example`, `docs/INSTALASI.md`, `tests/` | Disetujui 07-10, mulai setelah T28 digabung. UI (T51-UI, Gemini) menyusul setelah backend |
+| T53 — manajemen log (application/security/audit) & penjaga disk | Claude | `claude/t53-logging` (bercabang dari `claude/t51-accounts`) | dikerjakan | `backend/logging_setup.py`, `backend/security_log.py` (baru), `backend/disk_guard.py` (baru), `backend/supervisor.py` (logging saja), `backend/runtime.py`, `backend/accounts.py` & `backend/vlm_selection.py` (jejak → security log), `backend/api/routes_auth.py` & `deps.py` (kejadian keamanan baru), `backend/api/routes_system.py` (health, tambah `disk`), `backend/config.py`/`messages.py`/`.env.example` (tambah), `docs/INSTALASI.md`/`ARSITEKTUR.md`, `tests/` | Disetujui 08-10 ("gas"). Risiko **Sedang** (mendekati Tinggi: disk penuh = audit gagal tersimpan). Bercabang dari T51 karena jejak akun pindah ke security log; urutan gabung T28 → T51 → T53. Tidak menyentuh `web/` (field `disk` di health untuk UI kelak) |
 
 ### Rancangan T28 — ganti penyedia VLM dari dashboard (disetujui 06-10; dikerjakan setelah T30)
 
@@ -172,6 +173,32 @@ login → "APD wajib" kosong setelah login), dengan vitest.
 
 **Ditunda ke rencana jangka panjang**: peran operator terpisah; akun terpusat untuk banyak gerbang (lihat "Akun
 terpusat" di bawah).
+
+### Rancangan T53 — manajemen log & penjaga disk (disetujui 08-10)
+
+Tiga jenis log, dipisah karena masa simpan & pembacanya berbeda:
+
+| Jenis | Isi | Tempat | Masa simpan |
+| :-- | :-- | :-- | :-- |
+| Application | jalannya sistem (kamera, VLM, sesi, galat) | `logs/safeguard.log` (+ `supervisor.log`) | ukuran (`LOG_MAX_BYTES` × `LOG_BACKUP_COUNT`) **dan** umur `LOG_RETENTION_DAYS` |
+| Security | login/logout, gagal login, penguncian 429, setup ditolak, akses ditolak (403), akun dibuat/dihapus/reset/ganti sandi, ganti VLM | `logs/security.jsonl` (satu baris JSON per kejadian) | ukuran **dan** umur `SECURITY_LOG_RETENTION_DAYS` |
+| Audit | keputusan gerbang per pekerja | SQLite + foto (tetap, retensi T20) | `RETENTION_*` (tidak berubah) |
+
+Pengaman agar log tidak membuat server hang:
+- **Asinkron**: semua penulisan log lewat antrean (`QueueHandler` + `QueueListener`); jalur inspeksi tidak pernah
+  menunggu disk. Antrean dibatasi `LOG_QUEUE_SIZE`; penuh = catatan dibuang & dihitung, jumlahnya dilaporkan berkala.
+- **Pesan berulang** (sama persis) dicatat sekali per `LOG_REPEAT_WINDOW_SECONDS`, lalu "terulang N kali". Security log
+  tidak diringkas (setiap kejadian tercatat).
+- **Log akses HTTP** rutin di level `LOG_ACCESS_LEVEL` (bawaan WARNING); galat server tetap tercatat.
+- **Semua berkas log berbatas** (termasuk `supervisor.log`); salinan lama dihapus menurut umur di siklus retensi.
+- **Penjaga disk** (`DISK_CHECK_SECONDS`): sisa ruang `DATA_DIR` < `DISK_WARN_FREE_GB` → log berkas hanya WARNING ke
+  atas + peringatan; < `DISK_CRITICAL_FREE_GB` → log berkas aplikasi berhenti (security log tetap). `/api/health`
+  bertambah `"disk": {"state": "ok"|"low"|"critical", "free_gb": float}` (tambahan, UI kelak).
+- Isi log: tanpa kata sandi, API key, token, foto; alamat IP & nama pengguna = data pribadi → hanya di security log /
+  application log dengan masa simpan di atas.
+
+Belum termasuk (diputuskan nanti): unduh log dari dashboard; format JSON + `gate_id` untuk server pusat; tindakan
+gerbang saat disk kritis selain log (mis. lampu kuning).
 
 ### Kontrak API T45 — gangguan kamera (06-10)
 
@@ -292,55 +319,6 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - **Listrik padam:** UPS untuk PC, kamera, jaringan + shutdown rapi otomatis; BIOS "power on after AC loss";
   SOP pemeriksaan manual oleh petugas.
 
-#### Calon T52 — notifikasi insiden lewat WhatsApp (rancangan 08-10, **belum diputuskan dipakai**)
-
-Status: rancangan untuk ditimbang pengguna; **tidak dikerjakan sebelum pengguna memutuskan**. Risiko usulan:
-**Sedang** — tidak mengubah keputusan APD, tetapi menyangkut data pribadi (nomor telepon) dan keandalan peringatan;
-naik ke Tinggi bila kelak menjadi satu-satunya jalur peringatan gerbang produksi.
-
-**Tujuan.** Orang perusahaan (bukan programmer) tahu bila gerbang bermasalah, sesuai keparahannya, dengan bahasa awam
-dan tindakan yang diminta (mis. "lakukan pemeriksaan APD manual"). Bukan WA blast massal: penerima sedikit & tetap.
-
-**Penerima menurut keparahan** (jabatan & nomor diisi admin di Pengaturan; angka ambang di `config.py`/Pengaturan):
-
-| Keparahan | Contoh | Diberi tahu | Isi pesan |
-| :-- | :-- | :-- | :-- |
-| Rendah | Kamera putus sebentar lalu pulih; penolakan APD beruntun di atas ambang | Operator / mandor gerbang | Apa yang terjadi + langkah cek sederhana |
-| Sedang | Gerbang terganggu > N menit; VLM utama & cadangan gagal (pekerja menunggu) | + Supervisor HSE | + "Lakukan pemeriksaan APD manual" |
-| Tinggi | Listrik/server mati; gerbang mati > N jam | + Manajer HSE / site | Dampak ke operasional + keputusan yang dibutuhkan |
-| (teknis) | Rincian galat | Tim IT, jalur terpisah | Log teknis |
-
-- Insiden yang **berlangsung lama naik tingkat** (mis. 15 menit = Rendah, 2 jam = Tinggi); setiap penerima yang
-  sudah diberi tahu mendapat pesan **"Pulih"** saat masalah selesai.
-- Satu pekerja ditolak **bukan insiden** (kerja normal gerbang).
-
-**Jalur kirim.**
-1. **Insiden yang server masih hidup** (kamera, VLM, IoT, penolakan beruntun): server gerbang mengirim sendiri lewat
-   penyedia WA.
-2. **Listrik/server/internet gerbang mati — opsi A (disetujui sebagai arah, 08-10): pemantau dari luar.** Gerbang
-   mengirim sinyal "hidup" (heartbeat, HTTP keluar) tiap ±1 menit ke layanan pemantau di internet (mis.
-   Healthchecks.io atau server kecil sendiri). Bila sinyal berhenti > N menit, **layanan pemantau** yang mengirim WA.
-   Server gerbang tidak dibuka ke internet (hanya koneksi keluar, seperti VLM cloud). Saat pulih, gerbang kembali
-   mengirim heartbeat dan menyusulkan pesan "Pulih" + lama mati. UPS (bila ada) hanya tambahan: cukup untuk pesan
-   "listrik padam, berjalan dengan baterai", tidak untuk padam berjam-jam.
-
-**Penyedia WA.** Fonnte (gateway lokal, sambung nomor lewat QR; token di `.env`) untuk demo. Catatan: Fonnte **bukan
-API resmi Meta** — nomor bisa diblokir WhatsApp; pakai **nomor khusus gerbang**, volume kecil. Modul dibuat **netral
-penyedia** (seperti VLM) supaya bisa pindah ke **WhatsApp Cloud API resmi** (template disetujui Meta, berbayar) lewat
-konfigurasi untuk produksi.
-
-**Rambu.**
-- Pesan **teks saja**: tanpa foto/wajah/nama pekerja; rincian lewat tautan dashboard yang wajib login (T51).
-- Nomor penerima = data pribadi: disimpan di basis data (bukan `.env`), disamarkan di log, hanya admin yang mengubah.
-- Anti-spam: satu insiden = satu rangkaian pesan; batas pesan per jam; insiden yang sama digabung.
-- Pengiriman di **jalur terpisah** dari inspeksi: WA lambat/gagal tidak menahan gerbang; kegagalan kirim dicatat &
-  tampil di dashboard.
-- Konfirmasi "Saya tangani" (bila dipakai) lewat **dashboard** (tercatat atas nama akun), bukan balasan WA — membaca
-  balasan WA butuh webhook masuk = membuka server gerbang ke internet.
-
-**Belum diputuskan (pertanyaan untuk pengguna):** dipakai atau tidak; jabatan penerima tiap tingkat (perorangan atau
-grup WA); ambang waktu Rendah/Sedang/Tinggi; daftar insiden final; layanan pemantau (pihak ketiga atau server sendiri);
-perlu tidaknya konfirmasi "Saya tangani". Kontrak API & area berkas ditulis setelah diputuskan.
 
 ## Selesai (ringkas)
 
@@ -378,6 +356,10 @@ perlu tidaknya konfirmasi "Saya tangani". Kontrak API & area berkas ditulis sete
 - Keduanya gagal → tidak ada keputusan: suara "mohon tunggu", lampu padam, diperiksa ulang otomatis, gangguan cukup dicatat di log.
 - Heuristik OpenCV dibuang. vLLM ditunda (tidak cocok GPU 8 GB bersama YOLO; ditinjau ulang di GPU lebih besar).
 - Proyek untuk demo: lisensi Ultralytics AGPL belum jadi masalah.
+
+**Operasi (08-10)**
+- Notifikasi insiden lewat WhatsApp (Fonnte, calon T52) **dibatalkan**; rancangannya dihapus dari rencana.
+- Log dikelola per jenis — application, security, audit — dan tidak boleh membuat server hang (T53).
 
 **UI (T33)**
 - Stack: Svelte 5 + TypeScript + Vite, scoped CSS + token (tanpa Tailwind), ikon Lucide, font lokal. `web/dist` dicommit.
