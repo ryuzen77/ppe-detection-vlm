@@ -37,7 +37,6 @@ def clock(monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "sessions", auth.SessionStore(clock=c))
     monkeypatch.setattr(auth, "login_limiter", auth.LoginLimiter(clock=c))
     monkeypatch.setattr(accounts, "store", accounts.AccountStore(tmp_path / "accounts.db"))
-    monkeypatch.setattr(cfg, "ACCOUNT_EVENTS_PATH", tmp_path / "account_events.jsonl")
     # Hash cepat untuk tes; parameter produksi diuji di test_accounts.py
     monkeypatch.setattr(cfg, "PASSWORD_SCRYPT_N", 2 ** 4)
     return c
@@ -64,11 +63,6 @@ def login(client, username=ADMIN, password=PASSWORD):
     return client.post("/api/login", json={"username": username, "password": password})
 
 
-def events():
-    path = cfg.ACCOUNT_EVENTS_PATH
-    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
-
-
 # --- Setup admin pertama ---------------------------------------------------------------
 
 def test_tanpa_akun_semua_tertutup_kecuali_setup(local, finite_stream):
@@ -78,12 +72,13 @@ def test_tanpa_akun_semua_tertutup_kecuali_setup(local, finite_stream):
     assert local.get("/api/health").status_code == 401, "tidak ada lagi mode terbuka tanpa login"
 
 
-def test_setup_hanya_dari_mesin_gerbang(clock):
+def test_setup_hanya_dari_mesin_gerbang(clock, security_events):
     remote = client_from("192.168.1.20")
     assert remote.get("/api/session").json()["setup_allowed"] is False
     r = remote.post("/api/setup", json={"username": ADMIN, "password": PASSWORD})
     assert r.status_code == 403 and r.json()["detail"]["code"] == "setup_local_only"
     assert accounts.store.count() == 0
+    assert [(e["event"], e["client"], e["ok"]) for e in security_events] == [("setup_denied", "192.168.1.20", False)]
 
 
 def test_setup_membuat_admin_dan_langsung_masuk(local, monkeypatch):
@@ -182,11 +177,11 @@ def test_login_salah_pesan_sama_untuk_nama_dan_sandi(secured):
     assert wrong_password.json()["detail"]["message"] == messages.API_LOGIN_FAILED
 
 
-def test_respons_dan_jejak_tanpa_kata_sandi(secured):
+def test_respons_dan_jejak_tanpa_kata_sandi(secured, security_events):
     login(secured)
     login(secured, password="sandi-salah-sekali")
-    assert all(PASSWORD not in json.dumps(e) and "sandi-salah" not in json.dumps(e) for e in events())
-    assert [(e["event"], e["ok"]) for e in events()] == [("login", True), ("login", False)]
+    assert all(PASSWORD not in json.dumps(e) and "sandi-salah" not in json.dumps(e) for e in security_events)
+    assert [(e["event"], e["ok"]) for e in security_events] == [("login", True), ("login", False)]
     assert PASSWORD not in json.dumps(secured.get("/api/accounts").json())
 
 
@@ -207,10 +202,14 @@ def test_cookie_karangan_ditolak(secured):
     assert secured.get("/api/health").status_code == 401
 
 
-def test_tebakan_ditahan_per_alamat(secured, clock):
+def test_tebakan_ditahan_per_alamat(secured, clock, security_events):
     for _ in range(cfg.LOGIN_MAX_FAILURES):
         login(secured, password="tebakan-salah-xx")
     r = login(secured)
+    for _ in range(3):
+        login(secured)   # tebakan selama terkunci tidak menambah catatan penguncian
+    lockouts = [e for e in security_events if e["event"] == "lockout_started"]
+    assert len(lockouts) == 1 and lockouts[0]["username"] == ADMIN and lockouts[0]["client"] == "192.168.1.20"
     assert r.status_code == 429 and r.json()["retry_after_s"] > 0
     clock.now += cfg.LOGIN_LOCKOUT_SECONDS + 1
     assert login(secured).status_code == 200
@@ -267,17 +266,17 @@ def test_akun_sendiri_dan_terakhir_tidak_bisa_dihapus(secured):
     assert e.value.code == "last_account"
 
 
-def test_hapus_akun_mencabut_sesinya(secured):
+def test_hapus_akun_mencabut_sesinya(secured, security_events):
     me = _admin(secured)
     me.post("/api/accounts", json={"username": "petugas", "password": "sandi-petugas-01"})
     petugas = client_from("192.168.1.50")
     login(petugas, "petugas", "sandi-petugas-01")
     me.delete("/api/accounts/petugas")
     assert petugas.get("/api/health").status_code == 401
-    assert [e["event"] for e in events()][-1] == "delete" and events()[-1]["actor"] == ADMIN
+    assert security_events[-1]["event"] == "delete" and security_events[-1]["actor"] == ADMIN
 
 
-def test_peran_lain_ditolak_di_perintah_admin(secured):
+def test_peran_lain_ditolak_di_perintah_admin(secured, security_events):
     """Siap peran operator kelak: akun non-admin bisa membaca tetapi tidak mengubah sistem."""
     accounts.store.create("pengamat", "sandi-pengamat-1", role="operator")
     viewer = client_from("192.168.1.60")
@@ -285,3 +284,5 @@ def test_peran_lain_ditolak_di_perintah_admin(secured):
     assert viewer.get("/api/health").status_code == 200
     assert viewer.get("/api/accounts").status_code == 403
     assert viewer.post("/api/reset").status_code == 403
+    denied = [(e["username"], e["path"]) for e in security_events if e["event"] == "forbidden"]
+    assert denied == [("pengamat", "/api/accounts"), ("pengamat", "/api/reset")]

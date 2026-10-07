@@ -95,6 +95,9 @@ backend/              Paket Python (jalankan: python -m backend)
   notifier.py         Lampu gerbang (IoT)
   camera_manager.py   Daftar & pengukuran kamera
   uptime.py           Catatan waktu hidup (deteksi mati listrik)
+  logging_setup.py    Application log & security log: antrean, ringkas pesan berulang, rotasi (T53)
+  security_log.py     Satu baris JSON per kejadian keamanan (login, akun, akses ditolak, ganti VLM)
+  disk_guard.py       Sisa disk DATA_DIR: kurangi/hentikan log berkas sebelum audit gagal tersimpan
   video/              Pembacaan kamera & HUD
   api/                Endpoint REST & WebSocket
 web/                  UI Svelte (src/, dist/ di-commit)

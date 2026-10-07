@@ -3,7 +3,7 @@
 Rambu rancangan yang disetujui 06-10:
 (a) key hanya dari .env, tidak pernah dikirim ke penyedia lain / ke browser;
 (b) engine ditukar hanya saat jalur kosong, inspeksi yang berjalan tidak dipotong;
-(c) setiap pergantian tercatat di vlm_changes.jsonl;
+(c) setiap pergantian tercatat di security log (T53);
 (d) model `unsafe` selalu ditolak, model belum tervalidasi hanya dengan konfirmasi;
 (e) pilihan dashboard disimpan & menang atas .env, bisa dikembalikan ke .env.
 """
@@ -65,7 +65,7 @@ def env(monkeypatch, tmp_path):
                         ("VLM_BACKUP_PROVIDER", "ollama"), ("VLM_BACKUP_MODEL", "qwen2.5vl:7b"),
                         ("VLM_BACKUP_API_KEY", ""), ("VLM_BACKUP_BASE_URL", ""),
                         ("VLM_CLOUD_TIMEOUT_SECONDS", 2.0), ("VLM_LOCAL_TIMEOUT_SECONDS", 2.0),
-                        ("VLM_MIN_INTERVAL_SECONDS", 0.0), ("VLM_CHANGES_PATH", tmp_path / "vlm_changes.jsonl")):
+                        ("VLM_MIN_INTERVAL_SECONDS", 0.0)):
         monkeypatch.setattr(cfg, attr, value)
     monkeypatch.setattr(runtime_settings, "SETTINGS_PATH", tmp_path / "runtime_settings.json")
     return tmp_path
@@ -253,10 +253,10 @@ def test_inspeksi_berjalan_selesai_dengan_engine_lama(analyzer, fakes):
 
 # --- (c) jejak -----------------------------------------------------------------------
 
-def test_setiap_pergantian_tercatat(analyzer, env):
+def test_setiap_pergantian_tercatat(analyzer, security_events):
     analyzer.apply_selection(Selection(Choice("openai", "model-baru"), None, "dashboard"), lambda: True,
                              client="10.0.0.5", user="admin-uji")
-    lines = [json.loads(x) for x in (env / "vlm_changes.jsonl").read_text(encoding="utf-8").splitlines()]
+    lines = [e for e in security_events if e["event"] == "vlm_change"]
     assert [(x["role"], x["to"]) for x in lines] == [
         (ROLE_PRIMARY, {"provider": "openai", "model": "model-baru"}), (ROLE_BACKUP, None)]
     assert lines[0]["from"] == {"provider": "gemini", "model": "gemini-3.5-flash-lite"}

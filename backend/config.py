@@ -372,19 +372,35 @@ class Config:
     RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
     # Akun pengguna (T51), terpisah dari audit.db supaya retensi/ekspor audit tidak menyentuhnya
     ACCOUNTS_DB_PATH: Path = DATA_DIR / "accounts.db"
-    ACCOUNT_EVENTS_PATH: Path = REPORTS_DIR / "account_events.jsonl"
-    # Jejak pergantian penyedia/model VLM dari dashboard (T28), satu baris JSON per pergantian
-    VLM_CHANGES_PATH: Path = REPORTS_DIR / "vlm_changes.jsonl"
     # Catatan hidup server: kapan terakhir hidup & apakah berhenti rapi (T37)
     UPTIME_STATE_PATH: Path = DATA_DIR / "uptime.json"
     UPTIME_HEARTBEAT_SECONDS: float = 30.0
 
-    # Logging: konsol + berkas berotasi (5 MB x 5 berkas) di DATA_DIR/logs
+    # Logging (T53): application log (konsol + berkas) & security log (JSONL) di
+    # DATA_DIR/logs. Audit inspeksi tetap di SQLite (retensi T20), bukan di sini.
     LOG_LEVEL: str = _env("LOG_LEVEL", "INFO").upper()
     LOG_TO_FILE: bool = _env("LOG_TO_FILE", "true").lower() == "true"
     LOG_DIR: Path = DATA_DIR / "logs"
-    LOG_MAX_BYTES: int = 5 * 1024 * 1024
-    LOG_BACKUP_COUNT: int = 5
+    LOG_FILE: str = "safeguard.log"
+    SECURITY_LOG_FILE: str = "security.jsonl"
+    # Tiap berkas dibatasi ukuran (berkas aktif + salinan) DAN umur salinan, supaya
+    # disk tidak pernah penuh oleh log dan data pribadi (IP, nama akun) tidak disimpan selamanya.
+    LOG_MAX_BYTES: int = int(_env("LOG_MAX_BYTES", str(5 * 1024 * 1024)))
+    LOG_BACKUP_COUNT: int = int(_env("LOG_BACKUP_COUNT", "5"))
+    LOG_RETENTION_DAYS: int = int(_env("LOG_RETENTION_DAYS", "30"))
+    SECURITY_LOG_RETENTION_DAYS: int = int(_env("SECURITY_LOG_RETENTION_DAYS", "90"))
+    # Penulisan log lewat antrean: jalur inspeksi tidak menunggu disk. Antrean penuh
+    # = catatan dibuang & dihitung (lebih baik kehilangan log daripada gerbang macet).
+    LOG_QUEUE_SIZE: int = 10_000
+    # Pesan yang sama persis dicatat sekali per jendela ini, lalu "terulang N kali"
+    LOG_REPEAT_WINDOW_SECONDS: float = float(_env("LOG_REPEAT_WINDOW_SECONDS", "60"))
+    LOG_REPEAT_MAX_KEYS: int = 1_000
+    # Log akses HTTP rutin (40% isi log, kebanyakan polling); galat server tetap tercatat
+    LOG_ACCESS_LEVEL: str = _env("LOG_ACCESS_LEVEL", "WARNING").upper()
+    # Penjaga disk (T53): sisa ruang DATA_DIR di bawah batas → log berkas dikurangi/dihentikan
+    DISK_WARN_FREE_GB: float = float(_env("DISK_WARN_FREE_GB", "5"))
+    DISK_CRITICAL_FREE_GB: float = float(_env("DISK_CRITICAL_FREE_GB", "1"))
+    DISK_CHECK_SECONDS: float = float(_env("DISK_CHECK_SECONDS", "60"))
 
     # Laporan & arsip foto
     SNAPSHOT_JPEG_QUALITY: int = 80           # Mutu foto bukti (~30-50 KB per foto)

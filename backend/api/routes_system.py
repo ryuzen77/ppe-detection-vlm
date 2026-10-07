@@ -7,6 +7,7 @@ from ..state_manager import state_mgr
 from ..vlm_analyzer import vlm_analyzer
 from ..notifier import notifier
 from .. import startup_checks
+from ..disk_guard import disk_guard
 from ..audio_engine import audio_player
 from ..video.capture import video_service
 from .deps import require_admin
@@ -31,6 +32,8 @@ async def health_check():
         "is_synthetic_camera": video_service.use_synthetic or video_service.camera_status == "LOST",
         # Peringatan pemeriksaan saat server menyala (T29)
         "startup_warnings": list(startup_checks.warnings),
+        # Sisa disk data (T53): ok / low / critical
+        "disk": disk_guard.status(),
     }
 
 @router.post("/api/reset", dependencies=[Depends(require_admin)])

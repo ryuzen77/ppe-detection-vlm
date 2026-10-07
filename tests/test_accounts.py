@@ -11,7 +11,6 @@ PASSWORD = "kata-sandi-uji-panjang"
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    monkeypatch.setattr(cfg, "ACCOUNT_EVENTS_PATH", tmp_path / "account_events.jsonl")
     s = accounts.AccountStore(tmp_path / "accounts.db")
     monkeypatch.setattr(accounts, "store", s)
     return s

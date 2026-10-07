@@ -5,6 +5,8 @@ diimpor: `config` membaca variabel lingkungan dan menyiapkan DATA_DIR saat
 diimpor. `load_dotenv` tidak menimpa variabel yang sudah ada, jadi nilai di
 sini menang atas `backend/.env`.
 """
+import json
+import logging
 import os
 import shutil
 import tempfile
@@ -83,6 +85,28 @@ def logged_in_admin(request):
     app.dependency_overrides[require_session] = fake_session
     yield
     app.dependency_overrides.pop(require_session, None)
+
+
+class _SecurityCapture(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.events: list[dict] = []
+
+    def emit(self, record):
+        self.events.append(json.loads(record.getMessage()))
+
+
+@pytest.fixture
+def security_events():
+    """Kejadian security log (T53) sebagai daftar dict, tanpa berkas atau antrean."""
+    from backend.logging_setup import SECURITY_LOGGER
+    logger = logging.getLogger(SECURITY_LOGGER)
+    capture, previous = _SecurityCapture(), logger.level
+    logger.setLevel(logging.INFO)
+    logger.addHandler(capture)
+    yield capture.events
+    logger.removeHandler(capture)
+    logger.setLevel(previous)
 
 
 def pytest_configure(config):

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import cfg
-from .logging_setup import setup_logging
+from .logging_setup import ACCESS_LOGGER, setup_logging
 from .shutdown import install_shutdown_hook
 from . import runtime
 from .api import (
@@ -149,6 +149,20 @@ web_dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
 if web_dist_dir.exists():
     app.mount("/", RevalidatingStaticFiles(directory=str(web_dist_dir), html=True), name="web")
 
+def server_config():
+    """Konfigurasi uvicorn. log_config=None: uvicorn tidak memasang handler sendiri,
+    sehingga lognya mengalir ke root logger dan ikut tercatat di DATA_DIR/logs.
+
+    uvicorn.Config menyetel level `uvicorn.access` ke `log_level` saat dibuat
+    (configure_logging), menimpa setup_logging; level log akses (T53) dipasang ulang di sini."""
+    import uvicorn
+    config = uvicorn.Config(app, host=cfg.HOST, port=cfg.PORT, reload=False,
+                            log_level=cfg.LOG_LEVEL.lower(), log_config=None,
+                            timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS)
+    logging.getLogger(ACCESS_LOGGER).setLevel(cfg.LOG_ACCESS_LEVEL)
+    return config
+
+
 def run():
     """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
     # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
@@ -189,12 +203,7 @@ def run():
     # sinyal lalu menyetel penanda pada salinan yang salah, sehingga endpoint
     # streaming tidak pernah berhenti dan server menggantung di "Waiting for
     # connections to close".
-    # log_config=None: uvicorn tidak memasang handler sendiri, sehingga lognya
-    # mengalir ke root logger dan ikut tercatat di DATA_DIR/logs (lihat logging_setup).
-    config = uvicorn.Config(app, host=cfg.HOST, port=cfg.PORT, reload=False,
-                            log_level=cfg.LOG_LEVEL.lower(), log_config=None,
-                            timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS)
-    server = GracefulServer(config)
+    server = GracefulServer(server_config())
     try:
         server.run()
     except (KeyboardInterrupt, SystemExit):

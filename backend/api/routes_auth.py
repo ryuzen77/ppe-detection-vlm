@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .. import accounts, auth, messages, startup_checks
+from .. import accounts, auth, messages, security_log, startup_checks
 from ..config import cfg
 from .deps import client_address
 
@@ -52,6 +52,7 @@ def session_status(request: Request):
 def setup(body: Credentials, request: Request, response: Response):
     """Akun admin pertama: hanya dari mesin gerbang dan hanya selama belum ada akun."""
     if not _is_local(request):
+        security_log.record(security_log.SETUP_DENIED, client=client_address(request), ok=False)
         raise account_error(403, accounts.AccountError(
             "setup_local_only", messages.ACCOUNT_SETUP_LOCAL_ONLY.format(port=cfg.PORT)))
     try:
@@ -75,6 +76,12 @@ def login(body: Credentials, request: Request, response: Response):
     accounts.record_event("login", username=username, client=client, ok=account is not None)
     if account is None:
         auth.login_limiter.record_failure(*keys)
+        locked_for = auth.login_limiter.retry_after(*keys)
+        if locked_for > 0:
+            # Sekali per penguncian (bukan per percobaan selama terkunci): tebakan
+            # beruntun tidak membanjiri security log
+            security_log.record(security_log.LOCKOUT_STARTED, username=username, client=client,
+                                seconds=round(locked_for), ok=False)
         raise account_error(401, accounts.AccountError("login_failed", messages.API_LOGIN_FAILED))
     auth.login_limiter.record_success(*keys)
     return _start_session(response, account)

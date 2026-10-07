@@ -108,7 +108,6 @@ ACCOUNT_SELF_DELETE = "Akun yang sedang dipakai tidak bisa dihapus sendiri."
 ACCOUNT_SETUP_LOCAL_ONLY = ("Akun admin pertama hanya bisa dibuat dari mesin gerbang: buka "
                             "http://localhost:{port} di komputer gerbang.")
 ACCOUNT_SETUP_DONE = "Akun admin sudah ada; silakan login."
-ACCOUNT_EVENT_LOG_FAILED = "Gagal menulis jejak akun ke {path}: {error}"
 ACCOUNT_CLI_CREATED = "Akun '{username}' dibuat."
 ACCOUNT_CLI_RESET = "Kata sandi '{username}' diganti. Sesi lamanya berakhir saat server dinyalakan ulang."
 ACCOUNT_CLI_MISMATCH = "Kedua kata sandi tidak sama."
@@ -210,7 +209,6 @@ VLM_SELECT_LANE_BUSY = "Ada pekerja di jalur inspeksi; penyedia VLM diganti sete
 VLM_SELECT_ENGINE_FAILED = "VLM {role} {provider}/{model} gagal disiapkan ({error}); penyedia lama tetap dipakai."
 VLM_SELECT_STORED_IGNORED = "Pilihan VLM tersimpan dari dashboard diabaikan ({reason}); memakai .env."
 VLM_SELECT_APPLIED = "VLM {role} diganti dari dashboard: {before} -> {after} (status validasi {status}, dari {client})."
-VLM_SELECT_LOG_FAILED = "Gagal menulis jejak pergantian VLM ke {path}: {error}"
 
 # --- Penjaga model lokal (T38) ---
 LOCAL_MODEL_PARTIAL_GPU = "VLM {who} hanya {pct}% di GPU (sisanya CPU, inspeksi sangat lambat); memuat ulang model."
@@ -261,3 +259,15 @@ CSV_ITEM_NOT_ASSESSED = "TIDAK DINILAI"
 
 
 PAYLOAD_TOO_LARGE = "Payload Too Large"
+
+# --- Manajemen log & penjaga disk (T53) ---
+LOG_REPEATED = "{message} (terulang {count}x dalam {seconds:.0f} dtk terakhir)"
+LOG_DROPPED = "{count} catatan log dibuang karena antrean log penuh (disk lambat atau banjir log)."
+LOG_FILE_DISABLED = "Log berkas {path} nonaktif, hanya konsol: {error}"
+DISK_LOW = ("Sisa disk data tinggal {free_gb:.1f} GB (batas peringatan {limit_gb:.1f} GB): log berkas hanya "
+            "WARNING ke atas. Kosongkan disk atau kurangi masa simpan foto (RETENTION_*).")
+DISK_CRITICAL = ("Sisa disk data KRITIS {free_gb:.1f} GB (batas {limit_gb:.1f} GB): log berkas aplikasi dihentikan "
+                 "supaya audit & foto bukti masih bisa disimpan. Security log tetap ditulis.")
+DISK_OK = "Sisa disk data kembali cukup ({free_gb:.1f} GB): log berkas normal lagi."
+DISK_CHECK_FAILED = "Gagal memeriksa sisa disk {path}: {error}"
+LOG_PRUNED = "{count} salinan log lama (melewati masa simpan) dihapus dari {path}."

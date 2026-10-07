@@ -86,8 +86,8 @@ berkas contoh itu. Yang wajib diperhatikan:
   **Pengaturan → VLM** tanpa restart. Pilihan dashboard menang atas `.env` sampai
   ditekan "kembali ke .env". Penggantian hanya terjadi saat jalur inspeksi kosong;
   model yang pernah meloloskan APD kurang selalu ditolak, model yang belum
-  tervalidasi perlu konfirmasi. Setiap pergantian tercatat di
-  `DATA_DIR/reports/vlm_changes.jsonl`. Key tidak pernah diisi lewat dashboard.
+  tervalidasi perlu konfirmasi. Setiap pergantian tercatat di security log
+  (`DATA_DIR/logs/security.jsonl`). Key tidak pernah diisi lewat dashboard.
 - **Akun (T51)**: dashboard selalu meminta **login** dengan nama pengguna + kata sandi;
   foto bukti, video, CSV, telemetri, dan pengaturan tertutup tanpa login (sesi
   `SESSION_HOURS`). Saat belum ada akun, buka `http://localhost:8000` **di mesin
@@ -98,6 +98,17 @@ berkas contoh itu. Yang wajib diperhatikan:
   `ADMIN_TOKEN` & `ALLOW_INSECURE_DEMO` lama tidak dipakai lagi; hapus dari `.env`.
 - **Data**: `DATA_DIR`. Bawaannya `data/` di akar repo. Untuk produksi, pakai
   jalur absolut di luar repo supaya deploy ulang tidak menyentuh data.
+- **Log (T53)**, di `DATA_DIR/logs/`:
+  - `safeguard.log` — **application log** (kamera, VLM, sesi, galat). Untuk tim teknis.
+  - `security.jsonl` — **security log**, satu baris JSON per kejadian: login berhasil/gagal,
+    penguncian karena salah sandi, setup/akses ditolak, akun dibuat/dihapus/reset/ganti sandi,
+    ganti VLM (siapa, kapan, dari alamat mana). Tanpa kata sandi atau key.
+  - `supervisor.log` — nyala/mati server oleh penjaga proses.
+  - **Audit** keputusan per pekerja tetap di `reports/audit.db` + foto (retensi `RETENTION_*`).
+
+  Semua berkas log dibatasi ukuran dan umur (`LOG_*` di `.env.example`), penulisan log tidak
+  pernah menahan gerbang, dan saat sisa disk menipis log dikurangi lebih dulu supaya audit tetap
+  tersimpan. Sisa disk terlihat di `GET /api/health` → `disk`.
 
 ## 3. Menjalankan server
 
