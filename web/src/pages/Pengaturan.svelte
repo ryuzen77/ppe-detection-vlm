@@ -1,6 +1,7 @@
 <script lang="ts">
     import CameraPicker from '../components/monitoring/CameraPicker.svelte'
   import ZoneSettings from '../components/settings/ZoneSettings.svelte'
+  import Accounts from '../components/settings/Accounts.svelte'
   import VlmProviders from '../components/settings/VlmProviders.svelte'
   import { api } from '../lib/api/client'
   import type { LightTestAction, VlmInfo } from '../lib/api/types'
@@ -96,6 +97,8 @@
         {/if}
       </div>
     </section>
+
+    <Accounts />
 
     <VlmProviders />
 

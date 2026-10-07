@@ -1,11 +1,11 @@
 <script lang="ts">
-  // Bilah atas: navigasi + status yang selalu terlihat di semua halaman
-  // (keputusan gerbang, kamera, VLM, koneksi, jam) — keputusan UX T33.
   import Camera from '@lucide/svelte/icons/camera'
   import Cpu from '@lucide/svelte/icons/cpu'
-    import Lightbulb from '@lucide/svelte/icons/lightbulb'
+  import Lightbulb from '@lucide/svelte/icons/lightbulb'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
+  import LogOut from '@lucide/svelte/icons/log-out'
+  import User from '@lucide/svelte/icons/user'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
   import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
@@ -13,8 +13,7 @@
   import { CLOCK } from '../lib/settings'
   import { cameraChip, vlmChip, iotChip } from '../lib/status'
   import { session } from '../lib/stores/session.svelte'
-import { LOGIN } from '../lib/messages'
-import LogOut from '@lucide/svelte/icons/log-out'
+  import { LOGIN } from '../lib/messages'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
   let now = $state(new Date())
@@ -61,7 +60,11 @@ import LogOut from '@lucide/svelte/icons/log-out'
       <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
       <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
     {/if}
-        {#if session.authRequired && session.authenticated}
+    {#if session.authenticated}
+      <span class="chip tone-ok" title="Akun">
+        <User size={14} aria-hidden="true" /> 
+        <span class="label">{session.user?.username || 'admin'}</span>
+      </span>
       <button class="key" onclick={() => session.logout()} title={LOGIN.logoutBtn} aria-label={LOGIN.logoutBtn}>
         <LogOut size={16} aria-hidden="true" />
       </button>
@@ -91,7 +94,6 @@ import LogOut from '@lucide/svelte/icons/log-out'
     flex-direction: column;
     line-height: 1.1;
   }
-  /* Ditulis renggang: D E P R O */
   .brand-name {
     font-weight: 700;
     font-size: var(--text-md);
@@ -127,7 +129,6 @@ import LogOut from '@lucide/svelte/icons/log-out'
   nav {
     flex-shrink: 0;
   }
-  /* Status boleh menyempit: chip dipotong (…) lebih dulu daripada navigasi */
   .status {
     margin-left: auto;
     min-width: 0;
@@ -188,7 +189,6 @@ import LogOut from '@lucide/svelte/icons/log-out'
   .gate.tone-danger .dot {
     background: var(--danger);
   }
-  /* Tombol token admin: netral (bukan warna status); belum diisi = lebih redup */
   .key {
     display: inline-grid;
     place-items: center;
@@ -215,9 +215,6 @@ import LogOut from '@lucide/svelte/icons/log-out'
     padding-left: var(--space-2);
   }
 
-  /* Jendela sempit (media query tidak bisa memakai var(--...)): tagline &
-     jam disembunyikan, lalu chip kamera/VLM tinggal ikon — teks lengkapnya
-     tetap di tooltip dan dibacakan pembaca layar. */
   @media (max-width: 1100px) {
     .topbar {
       gap: var(--space-4);
@@ -236,14 +233,11 @@ import LogOut from '@lucide/svelte/icons/log-out'
       overflow: hidden;
       clip-path: inset(50%);
     }
-    /* Chip ikon tidak ikut menyempit; yang dipotong teks chip gerbang */
     .chip {
       padding: 4px 6px;
       flex-shrink: 0;
     }
   }
-  /* Layar ponsel: status pindah ke baris kedua. Aman karena Monitoring
-     (satu-satunya pemakai --topbar-h) sudah bertinggi otomatis di < 1100px. */
   @media (max-width: 560px) {
     .topbar {
       height: auto;

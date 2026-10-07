@@ -4,12 +4,12 @@
   import { ApiError } from '../lib/api/client'
   import { tickCountdown } from '../lib/sessionLogic'
   
+  let username = $state('')
   let password = $state('')
   let loading = $state(false)
   let errorMsg = $state('')
   let waitSecs = $state<number | null>(null)
 
-  // Polling untuk hitung mundur saat 429
   let timer: ReturnType<typeof setInterval> | null = null
   $effect(() => {
     if (waitSecs !== null && waitSecs > 0) {
@@ -36,16 +36,18 @@
 
   async function handleLogin(e: Event) {
     e.preventDefault()
-    if (!password || waitSecs !== null) return
+    if (!username || !password || waitSecs !== null) return
     loading = true
     errorMsg = ''
     try {
-      await session.login(password)
+      await session.login({ username, password })
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.status === 429 && typeof e.body === 'object' && e.body !== null && 'retry_after_s' in e.body) {
-          waitSecs = Number(e.body.retry_after_s)
+          waitSecs = Number((e.body as any).retry_after_s)
           errorMsg = LOGIN.waitInfo.replace('{s}', String(waitSecs))
+        } else if (e.body && typeof e.body === 'object' && 'detail' in e.body) {
+          errorMsg = (e.body as any).detail.message || String((e.body as any).detail)
         } else {
           errorMsg = e.message
         }
@@ -73,11 +75,16 @@
     {/if}
     
     <div class="input-group">
+      <label for="username">Nama Pengguna</label>
+      <input type="text" id="username" bind:value={username} disabled={loading || waitSecs !== null} use:focus />
+    </div>
+
+    <div class="input-group">
       <label for="password">{LOGIN.password}</label>
-      <input type="password" id="password" bind:value={password} disabled={loading || waitSecs !== null} use:focus />
+      <input type="password" id="password" bind:value={password} disabled={loading || waitSecs !== null} />
     </div>
     
-    <button type="submit" class="btn btn-primary" disabled={!password || loading || waitSecs !== null}>
+    <button type="submit" class="btn btn-primary" disabled={!username || !password || loading || waitSecs !== null}>
       {LOGIN.loginBtn}
     </button>
   </form>

@@ -319,11 +319,55 @@ export interface CameraCatalog {
 
 // --- Lain-lain -------------------------------------------------------------------------------
 
+export interface User {
+  username: string
+  role: string
+}
+
 export interface SessionStatus {
   authenticated: boolean
-  auth_required: boolean
+  setup_required: boolean
+  setup_allowed: boolean
+  user: User | null
   expires_in_s: number | null
 }
+
+export interface AccountInfo {
+  username: string
+  role: string
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface AuthResponse {
+  user: User
+  expires_in_s: number
+}
+
+export interface SetupRequest {
+  username: string
+  password: string
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface PasswordChangeRequest {
+  current_password: string
+  new_password: string
+}
+
+export interface CreateAccountRequest {
+  username: string
+  password: string
+}
+
+export interface ResetPasswordRequest {
+  new_password: string
+}
+
 
 export interface Health {
   status: string

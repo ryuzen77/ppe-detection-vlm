@@ -20,6 +20,13 @@ import type {
   VlmTestResponse,
   VlmSelection,
   SessionStatus,
+  SetupRequest,
+  LoginRequest,
+  PasswordChangeRequest,
+  CreateAccountRequest,
+  ResetPasswordRequest,
+  AuthResponse,
+  AccountInfo,
 } from './types'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
@@ -90,10 +97,17 @@ export class ApiClient {
   }
 
 
-  // --- Auth (T30)
+  // --- Auth & Accounts (T51)
   session = () => this.request<SessionStatus>('GET', '/api/session')
-  login = (password: string) => this.request<{ expires_in_s: number }>('POST', '/api/login', { password })
+  setup = (req: SetupRequest) => this.request<AuthResponse>('POST', '/api/setup', req)
+  login = (req: LoginRequest) => this.request<AuthResponse>('POST', '/api/login', req)
   logout = () => this.request<void>('POST', '/api/logout')
+  changePassword = (req: PasswordChangeRequest) => this.request<void>('POST', '/api/account/password', req)
+  
+  accounts = () => this.request<AccountInfo[]>('GET', '/api/accounts')
+  createAccount = (req: CreateAccountRequest) => this.request<AccountInfo>('POST', '/api/accounts', req)
+  resetAccountPassword = (username: string, req: ResetPasswordRequest) => this.request<void>('POST', `/api/accounts/${encodeURIComponent(username)}/password`, req)
+  deleteAccount = (username: string) => this.request<void>('DELETE', `/api/accounts/${encodeURIComponent(username)}`)
 
   // --- Sistem
   health = () => this.request<Health>('GET', '/api/health')

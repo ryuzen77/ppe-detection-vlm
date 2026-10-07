@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
-    import Toasts from './components/Toasts.svelte'
+  import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
   import { api } from './lib/api/client'
   import { detectEvents, initialWatch } from './lib/notify'
   import { router } from './lib/router.svelte'
   import { session } from './lib/stores/session.svelte'
-  import { shouldShowLogin, telemetryAction } from './lib/sessionLogic'
-import Login from './pages/Login.svelte'
+  import { getViewState, telemetryAction, shouldLoadData } from './lib/sessionLogic'
+  import Login from './pages/Login.svelte'
+  import Setup from './pages/Setup.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
   import { toasts } from './lib/stores/toasts.svelte'
@@ -15,14 +16,26 @@ import Login from './pages/Login.svelte'
   import Monitoring from './pages/Monitoring.svelte'
   import Pengaturan from './pages/Pengaturan.svelte'
 
+  let view = $derived(getViewState(session))
+  let prevState = $state({ authenticated: false, setupRequired: false, loaded: false })
+
   onMount(() => {
     router.start()
     session.load()
-    catalog.load()
-    // Perintah mana pun yang ditolak karena token → buka isian token
     api.onUnauthorized = () => { session.clear() }
   })
   onDestroy(() => telemetry.stop())
+
+  $effect(() => {
+    if (shouldLoadData(prevState, session)) {
+      catalog.load()
+    }
+    prevState = { 
+      authenticated: session.authenticated, 
+      setupRequired: session.setupRequired, 
+      loaded: session.loaded 
+    }
+  })
 
   $effect(() => {
     const action = telemetryAction(session)
@@ -33,8 +46,6 @@ import Login from './pages/Login.svelte'
     }
   })
 
-  // Notifikasi kejadian penting hanya saat operator TIDAK melihat Monitoring;
-  // di Monitoring panel keputusan sudah menampilkannya.
   let watch = initialWatch()
   $effect(() => {
     const data = telemetry.data
@@ -50,7 +61,11 @@ import Login from './pages/Login.svelte'
 
 <TopBar />
 <main>
-  {#if shouldShowLogin(session)}
+  {#if view === 'loading'}
+    <div>Memuat sesi...</div>
+  {:else if view === 'setup'}
+    <Setup />
+  {:else if view === 'login'}
     <Login />
   {:else if router.current === 'monitoring'}
     <Monitoring />
@@ -61,4 +76,3 @@ import Login from './pages/Login.svelte'
   {/if}
 </main>
 <Toasts />
-
