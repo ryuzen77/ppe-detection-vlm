@@ -1,6 +1,7 @@
 <script lang="ts">
     import CameraPicker from '../components/monitoring/CameraPicker.svelte'
   import ZoneSettings from '../components/settings/ZoneSettings.svelte'
+  import VlmProviders from '../components/settings/VlmProviders.svelte'
   import { api } from '../lib/api/client'
   import type { LightTestAction, VlmInfo } from '../lib/api/types'
   import { SETTINGS_TAB } from '../lib/messages'
@@ -15,15 +16,10 @@
   import Camera from '@lucide/svelte/icons/camera'
 
   let pickerOpen = $state(false)
-  let vlmInfo = $state<VlmInfo | null>(null)
   
   let ppeError = $state('')
   let lightStatus = $state('')
   let pingStatus = $state('')
-
-  $effect(() => {
-    api.vlmInfo().then(info => vlmInfo = info).catch(() => {})
-  })
 
   const gateIot = $derived(iotChip(telemetry.data))
 
@@ -101,17 +97,7 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2>{SETTINGS_TAB.vlm}</h2>
-      {#if vlmInfo}
-        <div class="vlm-info">
-          <p><strong>{SETTINGS_TAB.mainModel}:</strong> {vlmInfo.provider}/{vlmInfo.model}</p>
-          {#if vlmInfo.backup}
-            <p><strong>{SETTINGS_TAB.backupModel}:</strong> {vlmInfo.backup.provider}/{vlmInfo.backup.model}</p>
-          {/if}
-        </div>
-      {/if}
-    </section>
+    <VlmProviders />
 
     <section class="card">
       <h2>{SETTINGS_TAB.lightTest}</h2>
@@ -175,9 +161,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-  }
-  .vlm-info p {
-    margin: var(--space-1) 0;
   }
   .diagnostic-status {
     margin-top: var(--space-2);

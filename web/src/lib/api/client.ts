@@ -14,6 +14,11 @@ import type {
   ReportsPage, ReportSummary, ReportPeriod,
   ReportStatusFilter,
   VlmInfo,
+  VlmProvidersResponse,
+  VlmApplyRequest,
+  VlmTestRequest,
+  VlmTestResponse,
+  VlmSelection,
   SessionStatus,
 } from './types'
 
@@ -58,7 +63,7 @@ export class ApiClient {
     return `${this.baseUrl}${path}`
   }
 
-  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     const response = await this.fetchImpl(this.url(path), {
@@ -108,8 +113,10 @@ export class ApiClient {
 
   // --- VLM
   vlmInfo = () => this.request<VlmInfo>('GET', '/api/config/vlm')
-  setVlmKey = (apiKey: string) =>
-    this.request<VlmInfo & { status: string; message?: string }>('POST', '/api/config/vlm-key', { api_key: apiKey })
+  getVlmProviders = () => this.request<VlmProvidersResponse>('GET', '/api/config/vlm/providers')
+  testVlmProvider = (req: VlmTestRequest) => this.request<VlmTestResponse>('POST', '/api/config/vlm/test', req)
+  applyVlmSelection = (req: VlmApplyRequest) => this.request<VlmSelection>('POST', '/api/config/vlm/apply', req)
+  resetVlmSelection = () => this.request<VlmSelection>('DELETE', '/api/config/vlm/selection')
   monitoring = () => this.request<MonitorStatus>('GET', '/api/monitoring/status')
   pingVlm = () => this.request<PingResult>('POST', '/api/monitoring/ping')
 

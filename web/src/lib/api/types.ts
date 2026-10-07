@@ -353,3 +353,64 @@ export interface PingResult {
 }
 
 export type LightTestAction = 'green' | 'red' | 'yellow' | 'off'
+
+// --- Pilihan VLM (T28) -------------------------------------------------------------
+
+export interface VlmChoice {
+  provider: string
+  model: string
+}
+
+export interface VlmChoiceWithSource extends VlmChoice {
+  source: 'env' | 'dashboard'
+}
+
+export interface VlmSelection {
+  primary: VlmChoiceWithSource | null
+  backup: VlmChoiceWithSource | null
+}
+
+export type VlmValidationStatus = 'validated' | 'partial' | 'outdated' | 'unvalidated' | 'unsafe' | null
+
+export interface VlmModelEntry {
+  model: string
+  validated: VlmValidationStatus
+  photos: number | null
+  missed: number | null
+  false_rejects: number | null
+  median_seconds: number | null
+}
+
+export interface VlmProviderEntry {
+  name: string
+  label: string
+  support: 'official' | 'experimental'
+  is_local: boolean
+  has_key: boolean
+  data_location: string
+  default_model: string
+  models: VlmModelEntry[]
+}
+
+export interface VlmProvidersResponse {
+  current: VlmSelection
+  prompt_version: string
+  providers: VlmProviderEntry[]
+}
+
+export interface VlmApplyRequest {
+  primary: VlmChoice
+  backup: VlmChoice | null
+  confirm_unvalidated: boolean
+}
+
+export interface VlmTestRequest extends VlmChoice {
+  role: 'primary' | 'backup'
+}
+
+export interface VlmTestResponse {
+  ok: boolean
+  json_ok: boolean
+  latency_ms: number | null
+  error: string
+}
