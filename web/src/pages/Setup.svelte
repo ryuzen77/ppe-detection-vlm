@@ -2,6 +2,8 @@
   import { session } from '../lib/stores/session.svelte'
   import { AUTH } from '../lib/messages'
   import { MIN_PASSWORD_LENGTH } from '../lib/settings'
+  import { getSetupUrl } from '../lib/url'
+  import { extractApiError } from '../lib/api/error'
   import { ApiError } from '../lib/api/client'
   
   let username = $state('')
@@ -32,7 +34,7 @@
       await session.setup({ username, password })
     } catch (e) {
       if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'detail' in e.body) {
-        errorMsg = typeof e.body === 'object' && e.body !== null && 'detail' in e.body && typeof (e.body as any).detail === 'object' ? (e.body as any).detail.message : String((e.body as Record<string,any>)?.detail || e.message)
+        errorMsg = extractApiError(e)
       } else {
         errorMsg = e instanceof Error ? e.message : String(e)
       }

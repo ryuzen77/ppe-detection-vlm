@@ -6,6 +6,7 @@
   import { AUTH } from '../../lib/messages'
   import { MIN_PASSWORD_LENGTH } from '../../lib/settings'
   import { formatServerDate } from '../../lib/formatters'
+  import { extractApiError } from '../../lib/api/error'
   
   let accounts = $state<AccountInfo[]>([])
   let loading = $state(false)
@@ -148,19 +149,6 @@
     }
   }
 
-  function extractApiError(e: unknown): string {
-    if (typeof e === 'object' && e !== null && 'body' in e) {
-      const body = (e as any).body
-      if (typeof body === 'object' && body !== null && 'detail' in body) {
-        const detail = body.detail
-        if (typeof detail === 'object' && detail !== null && 'message' in detail) {
-          return String(detail.message)
-        }
-        return String(detail)
-      }
-    }
-    return e instanceof Error ? e.message : String(e)
-  }
 </script>
 
 <section class="card">
@@ -173,7 +161,7 @@
         <div class="error-box" role="alert">{errorMsg}</div>
       {/if}
       {#if loading}
-        <p>Memuat akun...</p>
+        <p>{AUTH.loadingAccounts}</p>
       {:else}
         <table class="accounts-table">
           <thead>

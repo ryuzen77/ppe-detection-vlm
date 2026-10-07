@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api, ApiError } from '../../lib/api/client'
+  import { api } from '../../lib/api/client'
   import type { VlmChoice, VlmProvidersResponse, VlmTestResponse, VlmModelEntry } from '../../lib/api/types'
-  import { SETTINGS_TAB } from '../../lib/messages'
+  import { SETTINGS_TAB, VLM_SETTINGS } from '../../lib/messages'
   import { validationBadge, handleSelectionError } from '../../lib/vlmSelection'
   import Server from '@lucide/svelte/icons/server'
+  import { extractApiError } from '../../lib/api/error'
 
   let data = $state<VlmProvidersResponse | null>(null)
   let loading = $state(true)
@@ -22,6 +23,7 @@
   let testResult = $state<{role: string, res: VlmTestResponse | null, err: string}>({ role: '', res: null, err: '' })
 
   let confirmation = $state<{code: string, message: string} | null>(null)
+  let resetConfirmation = $state(false)
 
   async function load() {
     try {
@@ -31,7 +33,7 @@
       backupProvider = data.current.backup?.provider || ''
       backupModel = data.current.backup?.model || ''
     } catch (e) {
-      errorMsg = e instanceof Error ? e.message : 'Gagal memuat'
+      errorMsg = extractApiError(e, VLM_SETTINGS.errLoad)
     } finally {
       loading = false
     }
@@ -46,7 +48,7 @@
   }
 
   async function handleApply(confirmUnvalidated = false) {
-    applyStatus = 'Menyiapkan...'
+    applyStatus = VLM_SETTINGS.applying
     applying = true
     confirmation = null
     errorMsg = ''
@@ -61,20 +63,22 @@
       })
       
       if (data) data.current = res
-      applyStatus = 'Berhasil diterapkan'
+      applyStatus = VLM_SETTINGS.applySuccess
       setTimeout(() => applyStatus = '', 3000)
     } catch (e) {
       applyStatus = ''
-      if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'detail' in (e.body as any)) {
-        const detail = (e.body as any).detail
+      if (typeof e === 'object' && e !== null && 'body' in e && typeof (e as {body: unknown}).body === 'object' && (e as {body: any}).body !== null && 'detail' in (e as {body: any}).body) {
+        const detail = (e as {body: {detail: {code: string, message: string}}}).body.detail
         const action = handleSelectionError(detail.code, detail.message)
         if (action.type === 'confirm') {
           confirmation = { code: action.code, message: action.message }
         } else if (action.type === 'error') {
           errorMsg = action.message
+        } else {
+           errorMsg = extractApiError(e, VLM_SETTINGS.errApply)
         }
       } else {
-        errorMsg = e instanceof Error ? e.message : 'Gagal'
+        errorMsg = extractApiError(e, VLM_SETTINGS.errApply)
       }
     } finally {
       applying = false
@@ -90,20 +94,16 @@
       const res = await api.testVlmProvider({ role, provider, model })
       testResult = { role, res, err: '' }
     } catch (e) {
-      let err = e instanceof Error ? e.message : 'Gagal uji'
-      if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'detail' in (e.body as any)) {
-         err = (e.body as any).detail.message || err
-      }
-      testResult = { role, res: null, err }
+      testResult = { role, res: null, err: extractApiError(e, VLM_SETTINGS.errTest) }
     } finally {
       testing = null
     }
   }
 
   async function handleReset() {
-    if (!confirm('Kembali ke konfigurasi .env?')) return
     applying = true
     errorMsg = ''
+    resetConfirmation = false
     try {
       const res = await api.resetVlmSelection()
       if (data) data.current = res
@@ -112,7 +112,7 @@
       backupProvider = res.backup?.provider || ''
       backupModel = res.backup?.model || ''
     } catch (e) {
-      errorMsg = e instanceof Error ? e.message : 'Gagal'
+      errorMsg = extractApiError(e, VLM_SETTINGS.errReset)
     } finally {
       applying = false
     }
@@ -120,13 +120,13 @@
 </script>
 
 {#if loading}
-  <p>Memuat...</p>
+  <p>{VLM_SETTINGS.loading}</p>
 {:else if data}
   <div class="header-info">
     <p class="source-info">
-      Sumber aktif: <strong>{data.current.primary?.source === 'dashboard' ? 'Dashboard' : '.env'}</strong>
+      {VLM_SETTINGS.activeSource}: <strong>{data.current.primary?.source === 'dashboard' ? VLM_SETTINGS.sourceDashboard : VLM_SETTINGS.sourceEnv}</strong>
       {#if data.current.primary?.source === 'dashboard'}
-        <button class="btn btn-secondary btn-sm" onclick={handleReset} disabled={applying}>Kembali ke .env</button>
+        <button class="btn btn-secondary btn-sm" onclick={() => resetConfirmation = true} disabled={applying}>{VLM_SETTINGS.resetToEnvBtn}</button>
       {/if}
     </p>
   </div>
@@ -138,12 +138,12 @@
   <div class="roles">
     <!-- Utama -->
     <div class="role-box">
-      <h3>VLM Utama</h3>
+      <h3>{VLM_SETTINGS.primaryTitle}</h3>
       <label>
-        <span>Penyedia</span>
+        <span>{VLM_SETTINGS.providerLabel}</span>
         <select bind:value={primaryProvider} disabled={applying}>
           {#each providers as p}
-            <option value={p.name} disabled={!p.has_key}>{p.label} {!p.has_key ? '(isi key di .env)' : ''}</option>
+            <option value={p.name} disabled={!p.has_key}>{p.label} {!p.has_key ? (p.name === 'local' ? VLM_SETTINGS.missingBaseUrl : VLM_SETTINGS.missingKey) : ''}</option>
           {/each}
         </select>
       </label>
@@ -151,7 +151,7 @@
       {#if primaryProvider}
         {@const pList = providers.find(p => p.name === primaryProvider)}
         <label>
-          <span>Model</span>
+          <span>{VLM_SETTINGS.modelLabel}</span>
           <input type="text" bind:value={primaryModel} list="models-primary" disabled={applying} />
           <datalist id="models-primary">
             {#each pList?.models || [] as m}
@@ -166,31 +166,31 @@
           <div class="meta">
             <span class="badge tone-{badge.tone}">{badge.text}</span>
             {#if pList?.data_location}
-              <span class="location" title="Lokasi Data"><Server size={14}/> {pList.data_location}</span>
+              <span class="location" title={VLM_SETTINGS.dataLocation}><Server size={14}/> {pList.data_location}</span>
             {/if}
           </div>
           {#if mData.photos}
             <div class="stats">
-              {mData.photos} foto, meleset {mData.missed}, salah tolak {mData.false_rejects}, ~{mData.median_seconds}s
+              {VLM_SETTINGS.stats(mData.photos, mData.missed, mData.false_rejects, mData.median_seconds)}
             </div>
           {/if}
         {/if}
         
         <button class="btn btn-secondary mt-2" onclick={() => handleTest('primary')} disabled={testing !== null || applying || !primaryModel}>
-          {testing === 'primary' ? 'Menguji...' : 'Uji Penyedia'}
+          {testing === 'primary' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
         </button>
       {/if}
     </div>
 
     <!-- Cadangan -->
     <div class="role-box">
-      <h3>VLM Cadangan</h3>
+      <h3>{VLM_SETTINGS.backupTitle}</h3>
       <label>
-        <span>Penyedia</span>
+        <span>{VLM_SETTINGS.providerLabel}</span>
         <select bind:value={backupProvider} disabled={applying}>
-          <option value="">(Tanpa cadangan)</option>
+          <option value="">{VLM_SETTINGS.noBackup}</option>
           {#each providers as p}
-            <option value={p.name} disabled={!p.has_key}>{p.label} {!p.has_key ? '(isi key di .env)' : ''}</option>
+            <option value={p.name} disabled={!p.has_key}>{p.label} {!p.has_key ? (p.name === 'local' ? VLM_SETTINGS.missingBaseUrl : VLM_SETTINGS.missingKey) : ''}</option>
           {/each}
         </select>
       </label>
@@ -198,7 +198,7 @@
       {#if backupProvider}
         {@const pList = providers.find(p => p.name === backupProvider)}
         <label>
-          <span>Model</span>
+          <span>{VLM_SETTINGS.modelLabel}</span>
           <input type="text" bind:value={backupModel} list="models-backup" disabled={applying} />
           <datalist id="models-backup">
             {#each pList?.models || [] as m}
@@ -213,12 +213,12 @@
           <div class="meta">
             <span class="badge tone-{badge.tone}">{badge.text}</span>
             {#if pList?.data_location}
-              <span class="location" title="Lokasi Data"><Server size={14}/> {pList.data_location}</span>
+              <span class="location" title={VLM_SETTINGS.dataLocation}><Server size={14}/> {pList.data_location}</span>
             {/if}
           </div>
         {/if}
         <button class="btn btn-secondary mt-2" onclick={() => handleTest('backup')} disabled={testing !== null || applying || !backupModel}>
-          {testing === 'backup' ? 'Menguji...' : 'Uji Penyedia'}
+          {testing === 'backup' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
         </button>
       {/if}
     </div>
@@ -226,14 +226,14 @@
   
   {#if testResult.role}
     <div class="test-result">
-      <strong>Hasil Uji {testResult.role === 'primary' ? 'Utama' : 'Cadangan'}:</strong>
+      <strong>{testResult.role === 'primary' ? VLM_SETTINGS.testResultPrimary : VLM_SETTINGS.testResultBackup}:</strong>
       {#if testResult.err}
         <span class="error">{testResult.err}</span>
       {:else if testResult.res}
         {#if testResult.res.error}
           <span class="error">{testResult.res.error}</span>
         {:else}
-          <span class="ok">Berhasil ({testResult.res.latency_ms}ms, valid JSON: {testResult.res.json_ok ? 'Ya' : 'Tidak'})</span>
+          <span class="ok">{VLM_SETTINGS.testSuccess(testResult.res.latency_ms, testResult.res.json_ok)}</span>
         {/if}
       {/if}
     </div>
@@ -241,16 +241,26 @@
 
   {#if confirmation}
     <div class="confirmation-box">
-      <p><strong>Peringatan:</strong> {confirmation.message}</p>
+      <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {confirmation.message}</p>
       <div class="actions">
-        <button class="btn btn-secondary" onclick={() => confirmation = null} disabled={applying}>Batal</button>
-        <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applying}>Saya Yakin, Lanjutkan</button>
+        <button class="btn btn-secondary" onclick={() => confirmation = null} disabled={applying}>{VLM_SETTINGS.cancelBtn}</button>
+        <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
+      </div>
+    </div>
+  {/if}
+  
+  {#if resetConfirmation}
+    <div class="confirmation-box">
+      <p><strong>{VLM_SETTINGS.resetConfirmTitle}</strong></p>
+      <div class="actions">
+        <button class="btn btn-secondary" onclick={() => resetConfirmation = false} disabled={applying}>{VLM_SETTINGS.cancelBtn}</button>
+        <button class="btn btn-primary" onclick={handleReset} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
       </div>
     </div>
   {/if}
 
   <div class="footer-actions">
-    <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}>Terapkan</button>
+    <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
     {#if applyStatus}
       <span class="status-msg">{applyStatus}</span>
     {/if}
@@ -335,7 +345,7 @@
     margin-top: var(--space-4);
     padding: var(--space-4);
     border: 1px solid var(--warn-line);
-    background: rgba(255, 170, 0, 0.1);
+    background: var(--surface-2);
     border-radius: var(--radius-md);
   }
   .confirmation-box p {

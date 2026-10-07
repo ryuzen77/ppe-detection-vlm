@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte'
+  import { APP } from './lib/messages'
   import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
   import { api } from './lib/api/client'
@@ -68,7 +69,7 @@
 <TopBar />
 <main>
   {#if view === 'loading'}
-    <div>Memuat sesi...</div>
+    <div>{APP.loadingSession}</div>
   {:else if view === 'setup'}
     <Setup />
   {:else if view === 'login'}

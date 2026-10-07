@@ -5,7 +5,7 @@
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
 import type { CameraState, VlmMode } from './api/types'
-import { LOCALE, REPORTS as REPORTS_SETTINGS } from './settings'
+import { LOCALE, REPORTS as REPORTS_SETTINGS, MIN_PASSWORD_LENGTH } from './settings'
 
 export const BRAND = {
   name: 'DEPRO',
@@ -363,6 +363,8 @@ export const LOGIN = {
 // --- Auth & Setup (T51) -------------------------------------------------------------------------
 
 export const AUTH = {
+  loadingAccounts: 'Memuat akun...',
+  loadingSession: 'Memuat sesi...',
   accounts: 'Akun Pengguna',
   listAccounts: 'Daftar Akun',
   username: 'Nama Pengguna',
@@ -372,18 +374,18 @@ export const AUTH = {
   actions: 'Aksi',
   addAccount: 'Tambah Akun',
   password: 'Kata Sandi',
-  passwordMin: 'Sandi (min. 12)',
+  passwordMin: `Sandi (min. ${MIN_PASSWORD_LENGTH})`,
   addBtn: 'Tambah',
   resetPassword: 'Reset Sandi',
   deleteBtn: 'Hapus',
   changeOwnPassword: 'Ganti Sandi Sendiri',
   currentPassword: 'Sandi saat ini',
-  newPassword: 'Sandi baru (min. 12)',
+  newPassword: `Sandi baru (min. ${MIN_PASSWORD_LENGTH})`,
   repeatNewPassword: 'Ulangi sandi baru',
   saveNewPassword: 'Simpan Sandi Baru',
   you: '(Anda)',
   
-  errorPasswordLength: 'Kata sandi minimal 12 karakter',
+  errorPasswordLength: `Kata sandi minimal ${MIN_PASSWORD_LENGTH} karakter`,
   errorPasswordMismatch: 'Konfirmasi kata sandi tidak cocok',
   successPasswordChange: 'Kata sandi berhasil diubah.',
   
@@ -400,3 +402,48 @@ export const AUTH = {
   setupUrlInfo: 'Buka {url} di mesin gerbang untuk melanjutkan.',
   setupBtn: 'Selesaikan Setup',
 } as const
+
+export const APP = {
+  loadingSession: 'Memuat sesi...',
+}
+
+export const VLM_SETTINGS = {
+  loading: 'Memuat...',
+  activeSource: 'Sumber aktif',
+  sourceDashboard: 'Dashboard',
+  sourceEnv: '.env',
+  resetToEnvBtn: 'Kembali ke .env',
+  resetConfirmTitle: 'Kembali ke konfigurasi .env?',
+  
+  primaryTitle: 'VLM Utama',
+  backupTitle: 'VLM Cadangan',
+  providerLabel: 'Penyedia',
+  modelLabel: 'Model',
+  noBackup: '(Tanpa cadangan)',
+  missingKey: '(isi key di .env)',
+  missingBaseUrl: '(isi VLM_BASE_URL di .env)',
+  
+  dataLocation: 'Lokasi Data',
+  stats: (photos: number | null, missed: number | null, falseRejects: number | null, medianSeconds: number | null) => 
+    `${photos ?? 0} foto, meleset ${missed ?? 0}, salah tolak ${falseRejects ?? 0}, ~${medianSeconds ?? 0}s`,
+  
+  testBtn: 'Uji Penyedia',
+  testingBtn: 'Menguji...',
+  testResultPrimary: 'Hasil Uji Utama',
+  testResultBackup: 'Hasil Uji Cadangan',
+  testSuccess: (latency: number | null, isJson: boolean) => 
+    `Berhasil (${latency}ms, valid JSON: ${isJson ? 'Ya' : 'Tidak'})`,
+    
+  applyBtn: 'Terapkan',
+  applying: 'Menyiapkan...',
+  applySuccess: 'Berhasil diterapkan',
+  
+  warningTitle: 'Peringatan',
+  cancelBtn: 'Batal',
+  confirmBtn: 'Saya Yakin, Lanjutkan',
+  
+  errLoad: 'Gagal memuat',
+  errApply: 'Gagal menerapkan',
+  errTest: 'Gagal uji',
+  errReset: 'Gagal mereset',
+}

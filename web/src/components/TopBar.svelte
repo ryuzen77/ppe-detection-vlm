@@ -8,7 +8,7 @@
   import User from '@lucide/svelte/icons/user'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
-  import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle } from '../lib/messages'
+  import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle, AUTH } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
   import { cameraChip, vlmChip, iotChip } from '../lib/status'
@@ -61,7 +61,7 @@
       <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
     {/if}
     {#if session.authenticated}
-      <span class="chip tone-ok" title="Akun">
+      <span class="chip tone-ok" title={AUTH.accounts}>
         <User size={14} aria-hidden="true" /> 
         <span class="label">{session.user?.username || 'admin'}</span>
       </span>

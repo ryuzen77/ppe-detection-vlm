@@ -3,6 +3,7 @@
   import { ApiError } from '../lib/api/client'
   import { tickCountdown } from '../lib/sessionLogic'
   import { LOGIN } from '../lib/messages'
+  import { extractApiError } from '../lib/api/error'
   
   let username = $state('')
   let password = $state('')
