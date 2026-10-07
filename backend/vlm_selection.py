@@ -192,15 +192,16 @@ def clear() -> bool:
 
 # --- Jejak pergantian ---
 
-def record_change(role: str, before: Optional[Choice], after: Optional[Choice], source: str, client: str):
+def record_change(role: str, before: Optional[Choice], after: Optional[Choice], source: str, client: str,
+                  user: str = ""):
     """Satu baris JSON per peran yang berubah, di-fsync seperti audit inspeksi."""
     status = validation_of(after)[0] if after else None
     logger.warning(messages.VLM_SELECT_APPLIED.format(
         role=role, before=before.label() if before else NO_BACKUP, after=after.label() if after else NO_BACKUP,
-        status=status or "-", client=client))
+        status=status or "-", client=f"{user}@{client}" if user else client))
     entry = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "role": role,
              "from": asdict(before) if before else None, "to": asdict(after) if after else None,
-             "validated": status, "source": source, "client": client}
+             "validated": status, "source": source, "user": user, "client": client}
     path = cfg.VLM_CHANGES_PATH
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

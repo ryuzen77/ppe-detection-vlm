@@ -250,12 +250,13 @@ def test_inspeksi_berjalan_selesai_dengan_engine_lama(analyzer, fakes):
 
 def test_setiap_pergantian_tercatat(analyzer, env):
     analyzer.apply_selection(Selection(Choice("openai", "model-baru"), None, "dashboard"), lambda: True,
-                             client="10.0.0.5")
+                             client="10.0.0.5", user="admin-uji")
     lines = [json.loads(x) for x in (env / "vlm_changes.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(x["role"], x["to"]) for x in lines] == [
         (ROLE_PRIMARY, {"provider": "openai", "model": "model-baru"}), (ROLE_BACKUP, None)]
     assert lines[0]["from"] == {"provider": "gemini", "model": "gemini-3.5-flash-lite"}
     assert lines[0]["validated"] == profiles.UNVALIDATED and lines[0]["client"] == "10.0.0.5"
+    assert lines[0]["user"] == "admin-uji", "T51: jejak mencatat siapa yang mengganti"
 
 
 # --- Uji penyedia ---------------------------------------------------------------------

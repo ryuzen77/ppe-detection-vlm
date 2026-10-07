@@ -28,6 +28,17 @@ else:
     POPEN_FLAGS = {}
 
 
+def _setup_cookie(base: str) -> str:
+    """T51: semua API wajib login. Server uji punya DATA_DIR kosong, jadi admin pertama
+    dibuat lewat setup (diizinkan dari localhost) dan cookie sesinya dipakai klien."""
+    import json
+    body = json.dumps({"username": "admin-uji", "password": "kata-sandi-uji-panjang"}).encode()
+    request = urllib.request.Request(base + "/api/setup", data=body, method="POST",
+                                     headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=10) as r:
+        return r.headers["Set-Cookie"].split(";", 1)[0]
+
+
 def _free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -49,7 +60,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     try:
         for _ in range(240):
             try:
-                urllib.request.urlopen(base + "/api/health", timeout=2)
+                urllib.request.urlopen(base + "/api/session", timeout=2)
                 break
             except Exception:
                 if proc.poll() is not None:
@@ -58,12 +69,14 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
         else:
             pytest.fail("Server tidak siap dalam 120 detik")
 
+        cookie = _setup_cookie(base)
         # Klien stream yang terus membaca (layar tunggu tetap dialirkan tanpa kamera)
         received = [0]
 
         def read_stream():
             try:
-                with urllib.request.urlopen(base + "/api/stream", timeout=30) as r:
+                stream = urllib.request.Request(base + "/api/stream", headers={"Cookie": cookie})
+                with urllib.request.urlopen(stream, timeout=30) as r:
                     while chunk := r.read(65536):
                         received[0] += len(chunk)
             except Exception:
@@ -77,7 +90,8 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
 
             async def run():
                 try:
-                    async with websockets.connect(f"ws://127.0.0.1:{port}/ws") as ws:
+                    async with websockets.connect(f"ws://127.0.0.1:{port}/ws",
+                                                  additional_headers={"Cookie": cookie}) as ws:
                         while True:
                             await ws.recv()
                 except Exception:
@@ -141,7 +155,7 @@ def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
     try:
         for _ in range(240):
             try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2)
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/session", timeout=2)
                 break
             except Exception:
                 if proc.poll() is not None:

@@ -13,7 +13,7 @@ from ..api_monitor import api_monitor
 from ..state_manager import state_mgr
 from ..vlm_analyzer import ROLE_BACKUP, ROLE_PRIMARY, EngineFailed, LaneBusy, vlm_analyzer
 from ..vlm_selection import Choice, Selection, SelectionError
-from .deps import require_admin
+from .deps import actor, client_address, require_admin
 
 router = APIRouter()
 
@@ -47,9 +47,9 @@ def _error(status: int, code: str, message: str) -> HTTPException:
 def _apply(selection: Selection, request: Request) -> dict:
     if not _lane_empty():
         raise _error(409, "lane_busy", messages.VLM_SELECT_LANE_BUSY)
-    client = request.client.host if request.client else ""
     try:
-        return vlm_analyzer.apply_selection(selection, _lane_empty, client=client)
+        return vlm_analyzer.apply_selection(selection, _lane_empty, client=client_address(request),
+                                            user=actor(request))
     except LaneBusy as e:
         raise _error(409, "lane_busy", str(e))
     except EngineFailed as e:

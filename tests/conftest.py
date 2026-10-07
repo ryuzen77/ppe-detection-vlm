@@ -10,6 +10,7 @@ import shutil
 import tempfile
 
 import pytest
+from fastapi import Request
 
 from helpers import PROVIDER_KEY_ENVS
 
@@ -57,3 +58,32 @@ def catalog_defaults(monkeypatch):
     """Item APD aktif kembali ke bawaan katalog, lalu dipulihkan setelah tes."""
     monkeypatch.setattr(ppe_rules, "_active_overrides", {})
     return ppe_rules
+
+
+@pytest.fixture(autouse=True)
+def logged_in_admin(request):
+    """Tes API biasa berjalan sebagai admin yang sudah login (T51: login selalu wajib).
+
+    Tes yang menguji login itu sendiri memakai penanda `real_auth` sehingga
+    `require_session` asli berlaku (lihat test_auth.py).
+    """
+    if request.node.get_closest_marker("real_auth"):
+        yield
+        return
+    from backend.accounts import ROLE_ADMIN
+    from backend.api.deps import require_session
+    from backend.app import app
+    from backend.auth import SessionUser
+
+    user = SessionUser("admin-uji", ROLE_ADMIN)
+
+    async def fake_session(request_: Request) -> SessionUser:
+        request_.state.user = user
+        return user
+    app.dependency_overrides[require_session] = fake_session
+    yield
+    app.dependency_overrides.pop(require_session, None)
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "real_auth: tes memakai pemeriksaan login sungguhan (tanpa admin tiruan)")

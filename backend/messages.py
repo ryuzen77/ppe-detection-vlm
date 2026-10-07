@@ -70,7 +70,6 @@ HUD_HEADER = "FPS: {fps:.1f} | {device}"
 HUD_LIGHT = "LIGHT: {state}"
 
 # --- Balasan API ---
-API_INVALID_ADMIN_TOKEN = "Token admin tidak valid"
 API_STATE_RESET = "State reset"
 API_SCAN_STARTED = ("Pemindaian berjalan. Kamera aktif diukur ulang, "
                     "video sementara berpindah ke layar tunggu.")
@@ -95,7 +94,30 @@ API_LIGHT_TEST_BUSY = "Ada pekerja di jalur pemeriksaan; uji lampu ditunda supay
 API_LIGHT_TEST_INVALID = "Aksi uji lampu harus salah satu dari: {actions}."
 # Login admin (T30)
 API_LOGIN_REQUIRED = "Silakan login terlebih dahulu."
-API_LOGIN_FAILED = "Kata sandi salah."
+API_LOGIN_FAILED = "Nama pengguna atau kata sandi salah."
+API_FORBIDDEN = "Akun ini tidak berhak melakukan tindakan tersebut."
+# Akun pengguna (T51)
+ACCOUNT_INVALID_USERNAME = ("Nama pengguna harus {min}-{max} karakter: huruf kecil, angka, titik, garis bawah, "
+                            "atau tanda hubung.")
+ACCOUNT_WEAK_PASSWORD = "Kata sandi minimal {min} karakter (maksimal {max}) dan tidak sama dengan nama pengguna."
+ACCOUNT_WRONG_PASSWORD = "Kata sandi saat ini salah."
+ACCOUNT_USERNAME_TAKEN = "Nama pengguna '{username}' sudah dipakai."
+ACCOUNT_NOT_FOUND = "Akun '{username}' tidak ditemukan."
+ACCOUNT_LAST = "Akun terakhir tidak bisa dihapus; gerbang harus selalu punya admin."
+ACCOUNT_SELF_DELETE = "Akun yang sedang dipakai tidak bisa dihapus sendiri."
+ACCOUNT_SETUP_LOCAL_ONLY = ("Akun admin pertama hanya bisa dibuat dari mesin gerbang: buka "
+                            "http://localhost:{port} di komputer gerbang.")
+ACCOUNT_SETUP_DONE = "Akun admin sudah ada; silakan login."
+ACCOUNT_EVENT_LOG_FAILED = "Gagal menulis jejak akun ke {path}: {error}"
+ACCOUNT_CLI_CREATED = "Akun '{username}' dibuat."
+ACCOUNT_CLI_RESET = "Kata sandi '{username}' diganti. Sesi lamanya berakhir saat server dinyalakan ulang."
+ACCOUNT_CLI_MISMATCH = "Kedua kata sandi tidak sama."
+ACCOUNT_CLI_PROMPT = "Kata sandi baru untuk '{username}': "
+ACCOUNT_CLI_PROMPT_AGAIN = "Ulangi kata sandi: "
+ACCOUNT_CLI_EMPTY = "Belum ada akun. Buka http://localhost:{port} di mesin gerbang untuk membuat admin pertama."
+STARTUP_ADMIN_TOKEN_UNUSED = ("ADMIN_TOKEN di backend/.env tidak dipakai lagi (T51): login memakai akun. "
+                              "Hapus baris itu dari .env.")
+STARTUP_NO_ACCOUNT = "Belum ada akun. Buat admin pertama dari mesin gerbang: http://localhost:{port}"
 API_LOGIN_LOCKED = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 
 # --- Prompt VLM ---
@@ -237,9 +259,5 @@ CSV_ITEM_OK = "OK"
 CSV_ITEM_OK_COLOR = "OK ({color})"
 CSV_ITEM_NOT_ASSESSED = "TIDAK DINILAI"
 
-STARTUP_INSECURE_LAN = "Server berjalan di jaringan terbuka (HOST={host}) tanpa ADMIN_TOKEN. Untuk mencegah pihak lain mengubah pengaturan gerbang, buat ADMIN_TOKEN di .env. Jika Anda yakin ini hanya demo aman, set ALLOW_INSECURE_DEMO=true di .env."
 
 PAYLOAD_TOO_LARGE = "Payload Too Large"
-INSECURE_DEMO_WARNING = "Menjalankan mode demo tidak aman di LAN karena ALLOW_INSECURE_DEMO aktif."
-ADMIN_TOKEN_TOO_SHORT = ("ADMIN_TOKEN (kata sandi login) hanya {length} karakter; minimal {minimum} supaya tidak bisa "
-                         "ditebak. Ganti di backend/.env dengan kalimat sandi panjang.")

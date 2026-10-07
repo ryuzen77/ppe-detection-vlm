@@ -344,7 +344,7 @@ class VLMAnalyzer:
         return {"primary": sel(self.primary), "backup": sel(self.backup)}
 
     def apply_selection(self, selection: Selection, lane_empty: Callable[[], bool],
-                        client: str = "") -> dict:
+                        client: str = "", user: str = "") -> dict:
         """Menukar engine utama & cadangan tanpa restart.
 
         Engine baru dirakit & dipanaskan DULU (di luar gembok inspeksi); gagal =
@@ -364,7 +364,7 @@ class VLMAnalyzer:
             for role, before, after in ((ROLE_PRIMARY, old[0], fresh[0]), (ROLE_BACKUP, old[1], fresh[1])):
                 before_choice, after_choice = before.choice() if before else None, after.choice() if after else None
                 if before_choice != after_choice:
-                    vlm_selection.record_change(role, before_choice, after_choice, selection.source, client)
+                    vlm_selection.record_change(role, before_choice, after_choice, selection.source, client, user)
             return self.current_selection()
 
     def _prepare(self, role: str, choice: Choice) -> VLMEngine:

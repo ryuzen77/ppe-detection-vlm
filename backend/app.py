@@ -18,6 +18,7 @@ from .logging_setup import setup_logging
 from .shutdown import install_shutdown_hook
 from . import runtime
 from .api import (
+    routes_accounts,
     routes_auth,
     routes_cameras,
     routes_ppe,
@@ -32,34 +33,12 @@ from .api.deps import require_session
 
 logger = logging.getLogger(__name__)
 
-def insecure_network_reason(host: str, token: str, allow_demo: bool) -> str | None:
-    from .config import cfg
-    from .messages import ADMIN_TOKEN_TOO_SHORT, STARTUP_INSECURE_LAN, INSECURE_DEMO_WARNING
-    on_network = host not in cfg.LOCALHOST_IPS
-    if on_network and not token:
-        if not allow_demo:
-            return STARTUP_INSECURE_LAN.format(host=host)
-        else:
-            logger.warning(INSECURE_DEMO_WARNING)
-    if token and len(token) < cfg.ADMIN_TOKEN_MIN_LENGTH:
-        # Kata sandi pendek bisa ditebak walau ada penahan per-IP (tinjauan T30: IP bisa
-        # dirotasi). Di jaringan = ditolak; di localhost = peringatan saja. Nilainya tidak dicetak.
-        short = ADMIN_TOKEN_TOO_SHORT.format(length=len(token), minimum=cfg.ADMIN_TOKEN_MIN_LENGTH)
-        if on_network and not allow_demo:
-            return short
-        logger.warning(short)
-    return None
-
 class PayloadTooLargeError(Exception):
     pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    reason = insecure_network_reason(cfg.HOST, cfg.ADMIN_TOKEN, cfg.ALLOW_INSECURE_DEMO)
-    if reason:
-        raise RuntimeError(reason)
-            
     # Model, kamera, audio, IoT, dan basis data dibuka di sini, bukan saat impor
     runtime.start()
     base = f"http://localhost:{cfg.PORT}"
@@ -137,11 +116,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Semua API wajib login bila ADMIN_TOKEN terisi (T30); hanya rute login yang bebas.
+# Semua API wajib login (T30; sejak T51 selalu, tanpa mode terbuka); hanya rute
+# sesi/setup/login yang bebas.
 # WebSocket memeriksa sesinya sendiri (dependensi HTTP tidak berlaku untuk /ws).
 app.include_router(routes_auth.router)
 for _module in (routes_system, routes_vlm, routes_cameras, routes_ppe,
-                routes_reports, routes_stream, routes_zone):
+                routes_reports, routes_stream, routes_zone, routes_accounts):
     app.include_router(_module.router, dependencies=[Depends(require_session)])
 app.include_router(websocket.router)
 
@@ -171,12 +151,6 @@ if web_dist_dir.exists():
 
 def run():
     """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
-    reason = insecure_network_reason(cfg.HOST, cfg.ADMIN_TOKEN, cfg.ALLOW_INSECURE_DEMO)
-    if reason:
-        import sys
-        print(reason, file=sys.stderr)
-        sys.exit(1)
-
     # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
     # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
     # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.

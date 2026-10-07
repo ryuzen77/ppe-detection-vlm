@@ -1,79 +1,94 @@
-"""Login admin untuk dashboard (T30).
+"""Sesi login dashboard (T30, akun sejak T51).
 
-Foto bukti (wajah), video langsung, CSV audit, dan telemetri dulu terbuka bagi
-siapa pun di jaringan; token admin hanya menjaga tombol yang mengubah sistem.
-Sekarang semua `/api/*` dan `/ws` mewajibkan sesi bila `ADMIN_TOKEN` terisi.
+Foto bukti (wajah), video langsung, CSV audit, dan telemetri hanya untuk pengguna
+yang login. Sejak T51 login selalu wajib (tidak ada lagi mode terbuka tanpa
+`ADMIN_TOKEN`) dan sesi milik satu akun (`accounts.py`).
 
 Sesi berupa cookie acak `HttpOnly; SameSite=Strict`, bukan header, karena
 `<img src>` video dan foto bukti tidak bisa mengirim header. Sesi disimpan di
 memori: server dinyalakan ulang = login ulang (cukup untuk demo, tanpa berkas
 rahasia tambahan di disk).
 """
-import hmac
 import secrets
 import threading
 import time
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 from .config import cfg
 
 SESSION_COOKIE = "depro_session"
-ADMIN_HEADER = "x-admin-token"   # alat & skrip lama tetap boleh memakai header
 
 
-def auth_required() -> bool:
-    """Tanpa ADMIN_TOKEN server hanya boleh berjalan di localhost (lihat app.py)."""
-    return bool(cfg.ADMIN_TOKEN)
+@dataclass(frozen=True)
+class SessionUser:
+    username: str
+    role: str
 
 
-def password_matches(candidate: Optional[str]) -> bool:
-    # compare_digest: waktu perbandingan tidak membocorkan berapa karakter yang benar
-    return bool(candidate) and hmac.compare_digest(candidate.encode(), cfg.ADMIN_TOKEN.encode())
+@dataclass
+class _Session:
+    user: SessionUser
+    expires: float
 
 
 class SessionStore:
     def __init__(self, clock: Callable[[], float] = time.monotonic):
         self._clock = clock
-        self._sessions: dict[str, float] = {}   # token -> kedaluwarsa
+        self._sessions: dict[str, _Session] = {}
         self._lock = threading.Lock()
 
     @staticmethod
     def lifetime_seconds() -> float:
         return cfg.SESSION_HOURS * 3600
 
-    def create(self) -> str:
+    def create(self, user: SessionUser) -> str:
         token = secrets.token_urlsafe(32)
         with self._lock:
             self._purge()
-            self._sessions[token] = self._clock() + self.lifetime_seconds()
+            self._sessions[token] = _Session(user, self._clock() + self.lifetime_seconds())
         return token
 
-    def remaining(self, token: Optional[str]) -> Optional[float]:
-        """Sisa detik sesi, atau None bila tidak ada / kedaluwarsa."""
+    def lookup(self, token: Optional[str]) -> Optional[tuple[SessionUser, float]]:
+        """(pengguna, sisa detik), atau None bila tidak ada / kedaluwarsa."""
         if not token:
             return None
         with self._lock:
-            expires = self._sessions.get(token)
-            if expires is None:
+            session = self._sessions.get(token)
+            if session is None:
                 return None
-            left = expires - self._clock()
+            left = session.expires - self._clock()
             if left <= 0:
                 del self._sessions[token]
                 return None
-            return left
+            return session.user, left
+
+    def user(self, token: Optional[str]) -> Optional[SessionUser]:
+        found = self.lookup(token)
+        return found[0] if found else None
 
     def revoke(self, token: Optional[str]):
         with self._lock:
             self._sessions.pop(token or "", None)
 
+    def revoke_user(self, username: str, keep: Optional[str] = None):
+        """Akun dihapus / kata sandi diganti: semua sesinya berakhir (kecuali `keep`)."""
+        with self._lock:
+            for token in [t for t, s in self._sessions.items() if s.user.username == username and t != keep]:
+                del self._sessions[token]
+
     def _purge(self):
         now = self._clock()
-        for token in [t for t, exp in self._sessions.items() if exp <= now]:
+        for token in [t for t, s in self._sessions.items() if s.expires <= now]:
             del self._sessions[token]
 
 
 class LoginLimiter:
-    """Menahan tebak kata sandi: LOGIN_MAX_FAILURES gagal → jeda LOGIN_LOCKOUT_SECONDS per alamat."""
+    """Menahan tebak kata sandi: LOGIN_MAX_FAILURES gagal → jeda LOGIN_LOCKOUT_SECONDS per kunci.
+
+    Kuncinya alamat klien DAN nama pengguna (T51): merotasi alamat tidak membuka
+    tebakan tanpa batas untuk satu akun.
+    """
 
     def __init__(self, clock: Callable[[], float] = time.monotonic):
         self._clock = clock
@@ -81,30 +96,30 @@ class LoginLimiter:
         self._locked_until: dict[str, float] = {}
         self._lock = threading.Lock()
 
-    def retry_after(self, client: str) -> float:
+    def retry_after(self, *keys: str) -> float:
         with self._lock:
-            return max(0.0, self._locked_until.get(client, 0.0) - self._clock())
+            now = self._clock()
+            return max([0.0] + [self._locked_until.get(k, 0.0) - now for k in keys])
 
-    def record_failure(self, client: str):
+    def record_failure(self, *keys: str):
         with self._lock:
-            count = self._failures.get(client, 0) + 1
-            if count >= cfg.LOGIN_MAX_FAILURES:
-                self._locked_until[client] = self._clock() + cfg.LOGIN_LOCKOUT_SECONDS
-                count = 0
-            self._failures[client] = count
+            for key in keys:
+                count = self._failures.get(key, 0) + 1
+                if count >= cfg.LOGIN_MAX_FAILURES:
+                    self._locked_until[key] = self._clock() + cfg.LOGIN_LOCKOUT_SECONDS
+                    count = 0
+                self._failures[key] = count
 
-    def record_success(self, client: str):
+    def record_success(self, *keys: str):
         with self._lock:
-            self._failures.pop(client, None)
-            self._locked_until.pop(client, None)
+            for key in keys:
+                self._failures.pop(key, None)
+                self._locked_until.pop(key, None)
+
+
+def limiter_keys(client: str, username: str) -> tuple[str, str]:
+    return f"ip:{client}", f"user:{username}"
 
 
 sessions = SessionStore()
 login_limiter = LoginLimiter()
-
-
-def is_authorized(cookie_token: Optional[str], header_token: Optional[str]) -> bool:
-    """Sesi sah atau header token admin; selalu True bila login tidak diwajibkan."""
-    if not auth_required():
-        return True
-    return sessions.remaining(cookie_token) is not None or password_matches(header_token)

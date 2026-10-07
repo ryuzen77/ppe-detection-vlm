@@ -72,17 +72,23 @@ class Config:
         if origin.strip()
     ]
 
-    # Guard opsional untuk endpoint yang mengubah state. Kosong = guard non-aktif,
-    # supaya demo lokal tidak terhambat. Isi kalau server dipakai di jaringan bersama.
-    ADMIN_TOKEN: str = _env("ADMIN_TOKEN", "")
-    ALLOW_INSECURE_DEMO: bool = _env("ALLOW_INSECURE_DEMO", "false").lower() == "true"
-    # Login admin (T30): kata sandi = ADMIN_TOKEN; sesi 1 shift; tebak sandi ditahan.
-    # Panjang minimal kata sandi (keputusan pengguna 06-10): kurang = server menolak menyala
-    # di jaringan, peringatan di localhost.
-    ADMIN_TOKEN_MIN_LENGTH: int = 16
+    # Akun pengguna (T51) menggantikan ADMIN_TOKEN: login selalu wajib, akun pertama
+    # dibuat dari mesin gerbang. ADMIN_TOKEN lama hanya dideteksi untuk peringatan
+    # "tidak dipakai lagi"; nilainya tidak disimpan.
+    LEGACY_ADMIN_TOKEN_SET: bool = bool(_env("ADMIN_TOKEN", ""))
     SESSION_HOURS: float = float(_env("SESSION_HOURS", "8"))
     LOGIN_MAX_FAILURES: int = 5
     LOGIN_LOCKOUT_SECONDS: float = 60.0
+    # Kata sandi diingat manusia (keputusan pengguna 07-10: minimal 12)
+    ACCOUNT_PASSWORD_MIN_LENGTH: int = 12
+    ACCOUNT_PASSWORD_MAX_LENGTH: int = 128
+    ACCOUNT_USERNAME_MIN_LENGTH: int = 3
+    ACCOUNT_USERNAME_MAX_LENGTH: int = 32
+    # scrypt (bawaan Python): ~16 MB & puluhan ms per hash; parameter ikut tersimpan di
+    # hash, jadi bisa dinaikkan kelak tanpa merusak akun lama.
+    PASSWORD_SCRYPT_N: int = 2 ** 14
+    PASSWORD_SCRYPT_R: int = 8
+    PASSWORD_SCRYPT_P: int = 1
 
     # Camera Settings (Webcam / USB Camera default: 0)
     CAMERA_INDEX: int = int(_env("CAMERA_INDEX", "0"))
@@ -364,6 +370,9 @@ class Config:
     DB_PATH: Path = REPORTS_DIR / "audit.db"
     CAMERA_STATE_PATH: Path = DATA_DIR / "camera_state.json"
     RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
+    # Akun pengguna (T51), terpisah dari audit.db supaya retensi/ekspor audit tidak menyentuhnya
+    ACCOUNTS_DB_PATH: Path = DATA_DIR / "accounts.db"
+    ACCOUNT_EVENTS_PATH: Path = REPORTS_DIR / "account_events.jsonl"
     # Jejak pergantian penyedia/model VLM dari dashboard (T28), satu baris JSON per pergantian
     VLM_CHANGES_PATH: Path = REPORTS_DIR / "vlm_changes.jsonl"
     # Catatan hidup server: kapan terakhir hidup & apakah berhenti rapi (T37)

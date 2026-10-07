@@ -73,8 +73,8 @@ Prompt juga meminta VLM menolak foto di layar atau cetakan (`orang_nyata`).
   - zona titik berdiri;
   - item APD wajib;
   - uji lampu;
-  - API key & uji latensi VLM;
-  - token admin.
+  - penyedia & model VLM (T28; API key hanya di `.env`) dan uji latensi;
+  - akun pengguna (T51).
 
 ## Struktur folder
 
@@ -116,9 +116,10 @@ docs/                 RENCANA, INSTALASI, ARSITEKTUR
   model bila perlu.
 - **Anti-spoofing bergantung pada VLM.** Ketangguhannya mengikuti model yang
   sedang memutuskan dan belum dievaluasi terpisah.
-- **Data baca belum terlindungi token.** Foto bukti, video, dan CSV masih bisa
-  dibuka siapa pun di jaringan (antrean T30). Endpoint yang mengubah state sudah
-  dilindungi `ADMIN_TOKEN`.
+- **Semua data & perintah wajib login akun** (T30, T51): foto bukti, video, CSV,
+  telemetri, dan pengaturan. Admin pertama hanya bisa dibuat dari mesin gerbang.
+  Demo: semua akun berperan admin; peran operator & akun terpusat untuk banyak
+  gerbang ada di rencana jangka panjang.
 - **Foto bukti berisi wajah.** Perlakukan `DATA_DIR` sebagai data pribadi dan
   batasi aksesnya.
 - **Satu orang per inspeksi.** Dua orang berdampingan di zona belum ditangani;

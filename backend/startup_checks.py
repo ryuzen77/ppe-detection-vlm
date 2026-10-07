@@ -6,7 +6,8 @@ dan `/api/health`:
 - YOLO jatuh ke CPU (CUDA tidak tersedia) -> frame sangat lambat;
 - versi Ollama berbeda dari versi tempat model lokal divalidasi (06-10: Ollama
   sempat memperbarui diri sendiri; validasi & kecepatan tidak lagi terjamin);
-- kamera yang harus dibuka otomatis belum terlihat sistem.
+- kamera yang harus dibuka otomatis belum terlihat sistem;
+- belum ada akun (admin pertama dibuat dari mesin gerbang) atau ADMIN_TOKEN lama masih di .env (T51).
 
 Tidak ada yang menghentikan server: gerbang tetap berjalan, peringatan saja.
 """
@@ -39,6 +40,21 @@ def check_camera(target: str, visible: list[str]) -> Optional[str]:
     return messages.STARTUP_CAMERA_MISSING.format(name=target, seen=", ".join(visible) or "-")
 
 
+def check_legacy_admin_token(is_set: bool) -> Optional[str]:
+    """T51: ADMIN_TOKEN tidak dipakai lagi; sisanya di .env menyesatkan pengelola."""
+    return messages.STARTUP_ADMIN_TOKEN_UNUSED if is_set else None
+
+
+def check_accounts(count: int) -> Optional[str]:
+    return messages.STARTUP_NO_ACCOUNT.format(port=cfg.PORT) if count == 0 else None
+
+
+def account_created():
+    """Setup admin pertama berhasil: peringatan "belum ada akun" tidak berlaku lagi."""
+    stale = check_accounts(0)
+    warnings[:] = [w for w in warnings if w != stale]
+
+
 def ollama_version(base_url: str, get: Callable = None) -> Optional[str]:
     """Versi server Ollama lewat /api/version; None bila tidak terjangkau."""
     import httpx
@@ -53,7 +69,9 @@ def ollama_version(base_url: str, get: Callable = None) -> Optional[str]:
 def run(cuda_available: bool, ollama_base_url: Optional[str], camera_target: str,
         visible_cameras: Callable[[], list[str]]) -> list[str]:
     """Menjalankan semua pemeriksaan; hasilnya disimpan di `warnings` & dicatat di log."""
-    results = [check_cuda(cuda_available)]
+    from .accounts import store
+    results = [check_cuda(cuda_available), check_legacy_admin_token(cfg.LEGACY_ADMIN_TOKEN_SET),
+               check_accounts(store.count())]
     if ollama_base_url:
         results.append(check_ollama_version(ollama_version(ollama_base_url)))
     if camera_target:

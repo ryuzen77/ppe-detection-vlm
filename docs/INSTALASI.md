@@ -88,10 +88,14 @@ berkas contoh itu. Yang wajib diperhatikan:
   model yang pernah meloloskan APD kurang selalu ditolak, model yang belum
   tervalidasi perlu konfirmasi. Setiap pergantian tercatat di
   `DATA_DIR/reports/vlm_changes.jsonl`. Key tidak pernah diisi lewat dashboard.
-- **Keamanan**: `ADMIN_TOKEN` wajib bila `HOST` bukan localhost. Tanpa token,
-  server menolak menyala, kecuali `ALLOW_INSECURE_DEMO=true`.
-  Bila `ADMIN_TOKEN` terisi, dashboard meminta **login** dengan nilai itu sebagai kata
-  sandi; foto bukti, video, CSV, dan telemetri tertutup tanpa login (sesi `SESSION_HOURS`).
+- **Akun (T51)**: dashboard selalu meminta **login** dengan nama pengguna + kata sandi;
+  foto bukti, video, CSV, telemetri, dan pengaturan tertutup tanpa login (sesi
+  `SESSION_HOURS`). Saat belum ada akun, buka `http://localhost:8000` **di mesin
+  gerbang** untuk membuat admin pertama (dari komputer lain ditolak). Akun lain
+  ditambah di Pengaturan → Akun. Kata sandi minimal 12 karakter, disimpan ter-hash
+  di `DATA_DIR/accounts.db`. Lupa kata sandi admin terakhir, dari akar repo di mesin gerbang:
+  `python -m backend.accounts reset-password <nama>` (juga `list`, `create <nama>`).
+  `ADMIN_TOKEN` & `ALLOW_INSECURE_DEMO` lama tidak dipakai lagi; hapus dari `.env`.
 - **Data**: `DATA_DIR`. Bawaannya `data/` di akar repo. Untuk produksi, pakai
   jalur absolut di luar repo supaya deploy ulang tidak menyentuh data.
 
@@ -139,7 +143,8 @@ kamera; video belum tersambung sebelum kamera dipilih. Tampilan lama masih ada
 Kamera di lokasi demo belum tentu sama dengan kamera pengembangan, jadi **`CAMERA_NAME` dikosongkan**: gerbang
 mengikuti kamera yang dipilih operator di lokasi (cukup sekali; sesudahnya dibuka otomatis lewat namanya).
 
-1. `backend/.env`: `CAMERA_AUTOSTART=true`, `CAMERA_NAME=` (kosong), `ADMIN_TOKEN` terisi, `IOT_*` sesuai perangkat.
+1. `backend/.env`: `CAMERA_AUTOSTART=true`, `CAMERA_NAME=` (kosong), `IOT_*` sesuai perangkat. Akun admin sudah
+   dibuat dari `http://localhost:8000` di mesin gerbang (sekali; tersimpan di `DATA_DIR/accounts.db`).
 2. Mesin: mode GPU dGPU + rencana daya Performance, Ollama **0.34.4** dengan update otomatis mati
    (lihat "Mesin gerbang: GPU & VLM lokal"); pintasan Startup terpasang (`install_autostart.ps1`).
 3. Di lokasi: colok kamera eksternal → buka dashboard → **Pilih Kamera** (Pengaturan) → pilih kamera eksternal.
