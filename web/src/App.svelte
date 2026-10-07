@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, untrack } from 'svelte'
   import Toasts from './components/Toasts.svelte'
   import TopBar from './components/TopBar.svelte'
   import { api } from './lib/api/client'
@@ -17,7 +17,7 @@
   import Pengaturan from './pages/Pengaturan.svelte'
 
   let view = $derived(getViewState(session))
-  let prevState = $state({ authenticated: false, setupRequired: false, loaded: false })
+  let prevState = { authenticated: false, setupRequired: false, loaded: false }
 
   onMount(() => {
     router.start()
@@ -27,14 +27,17 @@
   onDestroy(() => telemetry.stop())
 
   $effect(() => {
-    if (shouldLoadData(prevState, session)) {
-      catalog.load()
-    }
-    prevState = { 
+    const current = { 
       authenticated: session.authenticated, 
       setupRequired: session.setupRequired, 
       loaded: session.loaded 
     }
+    untrack(() => {
+      if (shouldLoadData(prevState, current)) {
+        catalog.load()
+      }
+      prevState = current
+    })
   })
 
   $effect(() => {
@@ -46,6 +49,9 @@
     }
   })
 
+  
+  // Notifikasi kejadian penting hanya saat operator TIDAK melihat Monitoring;
+  // di Monitoring panel keputusan sudah menampilkannya.
   let watch = initialWatch()
   $effect(() => {
     const data = telemetry.data

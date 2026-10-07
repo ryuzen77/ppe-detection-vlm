@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { LOGIN } from '../lib/messages'
-  import { session } from '../lib/stores/session.svelte'
+    import { session } from '../lib/stores/session.svelte'
   import { ApiError } from '../lib/api/client'
   import { tickCountdown } from '../lib/sessionLogic'
+  import { LOGIN } from '../lib/messages'
   
   let username = $state('')
   let password = $state('')

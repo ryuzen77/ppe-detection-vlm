@@ -1,5 +1,7 @@
 <script lang="ts">
   import { session } from '../lib/stores/session.svelte'
+  import { AUTH } from '../lib/messages'
+  import { MIN_PASSWORD_LENGTH } from '../lib/settings'
   import { ApiError } from '../lib/api/client'
   
   let username = $state('')
@@ -16,8 +18,8 @@
     e.preventDefault()
     errorMsg = ''
     
-    if (password.length < 12) {
-      errorMsg = 'Kata sandi minimal 12 karakter'
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      errorMsg = AUTH.errorPasswordLength
       return
     }
     if (password !== confirmPassword) {
@@ -30,7 +32,7 @@
       await session.setup({ username, password })
     } catch (e) {
       if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'detail' in e.body) {
-        errorMsg = (e.body as any).detail.message || String((e.body as any).detail)
+        errorMsg = typeof e.body === 'object' && e.body !== null && 'detail' in e.body && typeof (e.body as any).detail === 'object' ? (e.body as any).detail.message : String((e.body as Record<string,any>)?.detail || e.message)
       } else {
         errorMsg = e instanceof Error ? e.message : String(e)
       }

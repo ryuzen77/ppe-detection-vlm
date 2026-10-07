@@ -98,3 +98,5 @@ export const CHART = {
   minWidth: 600,
   maxMissingItems: 5,
 } as const
+
+export const MIN_PASSWORD_LENGTH = 12;

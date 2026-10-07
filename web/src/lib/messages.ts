@@ -203,25 +203,6 @@ export const withError = (base: string, e: unknown): string =>
 /** Tooltip chip status: teks chip + keterangan (tetap terbaca saat chip tinggal ikon) */
 export const chipTitle = (text: string, hint: string): string => (hint ? `${text} · ${hint}` : text)
 
-// --- Token admin (sementara sampai login T30) ----------------------------------------------------
-
-export const ADMIN_TOKEN = {
-  title: 'Token admin',
-  intro:
-    'Perintah yang mengubah gerbang (ganti kamera, APD wajib, lampu, VLM) butuh token admin dari pengelola server. Token hanya disimpan di browser ini.',
-  rejected: 'Server menolak perintah tadi: token admin belum diisi atau salah. Isi token, lalu ulangi perintahnya.',
-  label: 'Token admin',
-  placeholder: 'Tempel token dari pengelola server',
-  show: 'Tampilkan token',
-  hide: 'Sembunyikan token',
-  save: 'Simpan',
-  clear: 'Hapus token',
-  close: 'Tutup',
-  cleared: 'Token dihapus dari browser ini.',
-  checkedLater: 'Token diperiksa server saat perintah berikutnya dikirim.',
-  buttonSet: 'Token admin: tersimpan',
-  buttonUnset: 'Token admin: belum diisi',
-} as const
 
 // --- Notifikasi ----------------------------------------------------------------------------------
 
@@ -378,3 +359,44 @@ export const LOGIN = {
   errorTitle: 'Galat Login',
   waitInfo: 'Coba lagi dalam {s} detik',
 }
+
+// --- Auth & Setup (T51) -------------------------------------------------------------------------
+
+export const AUTH = {
+  accounts: 'Akun Pengguna',
+  listAccounts: 'Daftar Akun',
+  username: 'Nama Pengguna',
+  role: 'Peran',
+  lastLogin: 'Login Terakhir',
+  createdAt: 'Dibuat',
+  actions: 'Aksi',
+  addAccount: 'Tambah Akun',
+  password: 'Kata Sandi',
+  passwordMin: 'Sandi (min. 12)',
+  addBtn: 'Tambah',
+  resetPassword: 'Reset Sandi',
+  deleteBtn: 'Hapus',
+  changeOwnPassword: 'Ganti Sandi Sendiri',
+  currentPassword: 'Sandi saat ini',
+  newPassword: 'Sandi baru (min. 12)',
+  repeatNewPassword: 'Ulangi sandi baru',
+  saveNewPassword: 'Simpan Sandi Baru',
+  you: '(Anda)',
+  
+  errorPasswordLength: 'Kata sandi minimal 12 karakter',
+  errorPasswordMismatch: 'Konfirmasi kata sandi tidak cocok',
+  successPasswordChange: 'Kata sandi berhasil diubah.',
+  
+  deleteConfirmTitle: 'Hapus Akun',
+  deleteConfirmPrompt: 'Hapus akun {user}?',
+  cancelBtn: 'Batal',
+  resetConfirmTitle: 'Reset Sandi',
+  resetSuccess: 'Sandi untuk {user} berhasil direset.',
+  resetFailed: 'Gagal mereset sandi: {err}',
+  
+  setupTitle: 'Setup Sistem',
+  setupInfo: 'Sistem membutuhkan akun admin pertama.',
+  setupNotAllowed: 'Demi keamanan, setup admin pertama hanya dapat dilakukan langsung dari mesin gerbang.',
+  setupUrlInfo: 'Buka {url} di mesin gerbang untuk melanjutkan.',
+  setupBtn: 'Selesaikan Setup',
+} as const
