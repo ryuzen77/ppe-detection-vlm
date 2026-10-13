@@ -367,6 +367,12 @@ class Config:
     # yang lolos lalu keluar jalur sesaat (ID sama) tidak diperiksa ulang. Keputusan
     # ditolak tidak diingat, jadi pekerja yang memperbaiki APD selalu diperiksa ulang (T36c).
     DECIDED_TRACK_MEMORY_SECONDS: float = float(_env("DECIDED_TRACK_MEMORY_SECONDS", "10"))
+    # Keputusan terikat pada track pekerja yang diputuskan (T59). ID baru hanya dianggap
+    # orang yang sama bila belum pernah terlihat bersamaan dengan subjek, muncul paling lama
+    # sekian detik setelah ID lama hilang, dan kotaknya hampir sama (IoU). Poster atau orang
+    # antre sudah terlihat bersamaan dengan subjek, jadi tidak pernah mewarisi keputusan.
+    SUBJECT_REID_MAX_GAP_SECONDS: float = 0.5
+    SUBJECT_REID_MIN_IOU: float = 0.6
     # Maximum history records kept in memory
     MAX_HISTORY_RECORDS: int = int(_env("MAX_HISTORY_RECORDS", "30"))
 
