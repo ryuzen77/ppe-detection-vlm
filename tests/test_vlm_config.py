@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from helpers import PROVIDER_KEY_ENVS
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _PROBE = r"""
@@ -32,7 +34,7 @@ print(json.dumps({
 _KOSONG = {k: "" for k in ("VLM_PROVIDER", "VLM_API_KEY", "VLM_MODEL", "VLM_BASE_URL", "GEMINI_API_KEY",
                           "GEMINI_MODEL", "VLM_MIN_INTERVAL_SECONDS", "VLM_CLOUD_TIMEOUT_SECONDS",
                           "VLM_LOCAL_TIMEOUT_SECONDS", "VLM_BACKUP_PROVIDER", "VLM_BACKUP_MODEL",
-                          "VLM_BACKUP_BASE_URL", "VLM_BACKUP_API_KEY")}
+                          "VLM_BACKUP_BASE_URL", "VLM_BACKUP_API_KEY", *PROVIDER_KEY_ENVS)}
 
 
 def _probe(tmp_path, **env):
@@ -120,18 +122,20 @@ def klien(monkeypatch):
 
 
 @pytest.mark.parametrize("url", ["/api/config/vlm-key", "/api/config/gemini-key"])
-def test_isi_api_key_dari_dashboard_mengaktifkan_vlm(klien, url):
-    client, vlm = klien
-    from backend.vlm_analyzer import VLMEngine
-    vlm.primary, vlm.backup = VLMEngine("utama", "gemini", "gemini-3.5-flash-lite"), None
-    assert vlm.primary.build() is False, "Tanpa API key utama belum aktif"
-    r = client.post(url, json={"api_key": "kunci-dari-dashboard"}).json()
-    assert r["status"] == "success" and r["is_live"] is True and r["provider"] == "gemini"
-    assert "kunci-dari-dashboard" not in json.dumps(r), "Kunci tidak boleh dikembalikan ke browser"
-    info = client.get("/api/config/vlm").json()
-    assert info["has_key"] is True and info["is_live"] is True
-
-
-def test_api_key_kosong_ditolak(klien):
+def test_endpoint_ganti_api_key_sudah_dihapus(klien, url):
+    """T28 (keputusan e): API key hanya di backend/.env, dashboard tidak bisa mengirimnya."""
     client, _ = klien
-    assert client.post("/api/config/vlm-key", json={"api_key": "  "}).json()["status"] == "error"
+    assert client.post(url, json={"api_key": "kunci-dari-dashboard"}).status_code in (404, 405)
+
+
+def test_key_per_penyedia_dari_env_sendiri(tmp_path):
+    r = _probe(tmp_path, VLM_PROVIDER="openai", VLM_MODEL="m", OPENAI_API_KEY="kunci-openai",
+               GEMINI_API_KEY="kunci-gemini")
+    assert r["live"] is True and r["info"]["has_key"] is True, "OPENAI_API_KEY dipakai untuk penyedia openai"
+    assert "kunci" not in json.dumps(r["info"])
+
+
+def test_key_cadangan_dari_env_penyedianya(tmp_path):
+    r = _probe(tmp_path, VLM_PROVIDER="ollama", VLM_BACKUP_PROVIDER="deepseek", VLM_BACKUP_MODEL="m",
+               DEEPSEEK_API_KEY="kunci-deepseek")
+    assert r["backup"]["has_key"] is True and r["backup"]["is_live"] is True

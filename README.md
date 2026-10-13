@@ -37,10 +37,8 @@ python -m backend                         # atau .\start_system.bat
 Sebelum menjalankan, isi di `backend/.env`:
 
 - **API key VLM utama**, dan bila perlu VLM cadangan (`VLM_BACKUP_*`, mis. Ollama lokal).
-- **`ADMIN_TOKEN`**, atau `HOST=127.0.0.1` untuk uji di satu komputer. Dengan
-  `HOST=0.0.0.0` tanpa token, server sengaja menolak menyala.
-
-Buka <http://localhost:8000>, lalu pilih kamera. Hentikan server dengan `Ctrl+C`.
+Buka <http://localhost:8000> **di mesin gerbang**: saat pertama kali, dashboard meminta
+membuat akun admin (dari komputer lain ditolak). Setelah login, pilih kamera. Hentikan server dengan `Ctrl+C`.
 
 Panduan lengkap untuk Linux, VLM lokal, audio, ESP32, dan pembaruan dependensi
 ada di **[docs/INSTALASI.md](docs/INSTALASI.md)**.

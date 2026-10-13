@@ -9,14 +9,21 @@ OPENAI_COMPATIBLE = tuple(name for name, p in profiles.PROFILES.items() if p.api
 def create_provider(name: str, api_key: str, model: str, base_url: str = "", **options) -> VLMProvider:
     """Membuat adaptor sesuai nama penyedia. Tidak ada panggilan jaringan.
 
-    `base_url` hanya dipakai penyedia OpenAI-compatible; kosong = alamat bawaan
-    penyedia itu. `options` diteruskan ke adaptor (mis. `thinking_level` untuk
+    `base_url` dipakai penyedia OpenAI-compatible & Anthropic; kosong = alamat
+    bawaan penyedia itu. `options` diteruskan ke adaptor (mis. `thinking_level` untuk
     Gemini, `json_mode` untuk OpenAI-compatible).
     """
     key = (name or "").strip().lower()
     if key == "gemini":
         from .gemini import GeminiProvider
         return GeminiProvider(api_key=api_key, model=model, **options)
+    profile = profiles.PROFILES.get(key)
+    if profile is not None and profile.api == profiles.API_ANTHROPIC:
+        from .anthropic import AnthropicProvider
+        options.pop("temperature", None)    # lihat AnthropicProvider: tidak dikirim
+        options.pop("json_mode", None)      # Messages API tidak punya response_format
+        return AnthropicProvider(api_key=api_key, model=model,
+                                 base_url=base_url or profile.base_url, **options)
     if key in OPENAI_COMPATIBLE:
         from .openai_compatible import OpenAICompatibleProvider
         return OpenAICompatibleProvider(

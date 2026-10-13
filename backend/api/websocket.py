@@ -43,7 +43,7 @@ ws_manager = ConnectionManager()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    if not auth.is_authorized(websocket.cookies.get(auth.SESSION_COOKIE), websocket.headers.get(auth.ADMIN_HEADER)):
+    if auth.sessions.user(websocket.cookies.get(auth.SESSION_COOKIE)) is None:
         # Diterima dulu lalu ditutup dengan kode khusus, supaya UI bisa membedakan
         # "harus login" dari server mati (handshake yang ditolak tidak membawa kode).
         await websocket.accept()

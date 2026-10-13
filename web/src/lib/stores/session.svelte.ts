@@ -1,19 +1,23 @@
 import { api } from '../api/client'
+import type { User, SetupRequest, LoginRequest } from '../api/types'
 
 class SessionStore {
   authenticated = $state(false)
-  authRequired = $state(false)
+  setupRequired = $state(false)
+  setupAllowed = $state(false)
+  user = $state<User | null>(null)
   loaded = $state(false)
   expiresInS = $state<number | null>(null)
   
-  // Waktu polling
   private timer: ReturnType<typeof setInterval> | null = null
 
   async load() {
     try {
       const res = await api.session()
       this.authenticated = res.authenticated
-      this.authRequired = res.auth_required
+      this.setupRequired = res.setup_required
+      this.setupAllowed = res.setup_allowed
+      this.user = res.user
       this.expiresInS = res.expires_in_s
       this.startCountdown()
     } catch {
@@ -38,22 +42,31 @@ class SessionStore {
     this.timer = null
   }
 
-  async login(password: string) {
-    const res = await api.login(password)
+  async login(req: LoginRequest) {
+    const res = await api.login(req)
     this.authenticated = true
+    this.user = res.user
+    this.expiresInS = res.expires_in_s
+    this.startCountdown()
+  }
+
+  async setup(req: SetupRequest) {
+    const res = await api.setup(req)
+    this.authenticated = true
+    this.setupRequired = false
+    this.user = res.user
     this.expiresInS = res.expires_in_s
     this.startCountdown()
   }
 
   async logout() {
     await api.logout()
-    this.authenticated = false
-    this.expiresInS = null
-    this.stopCountdown()
+    this.clear()
   }
 
   clear() {
     this.authenticated = false
+    this.user = null
     this.expiresInS = null
     this.stopCountdown()
   }

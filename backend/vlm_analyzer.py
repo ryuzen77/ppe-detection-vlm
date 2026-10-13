@@ -3,7 +3,8 @@ import time
 import cv2
 import numpy as np
 import threading
-from typing import Optional, List
+from dataclasses import asdict
+from typing import Callable, Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,8 +13,10 @@ from .local_model_guard import LocalModelGuard
 from .api_monitor import api_monitor
 from . import messages
 from . import ppe_rules
+from . import vlm_selection
 from .vlm_providers import profiles as vlm_profiles
 from .vlm_providers import create_provider
+from .vlm_selection import Choice, Selection
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +143,14 @@ def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
     return warnings
 
 
+class LaneBusy(Exception):
+    """Pekerja di jalur (atau inspeksi tak kunjung selesai): penyedia tidak diganti."""
+
+
+class EngineFailed(Exception):
+    """Engine baru gagal dirakit/dipanaskan: engine lama tetap dipakai."""
+
+
 class VLMEngine:
     """Satu VLM (utama atau cadangan): adaptor penyedia + batas waktu + jeda kuota.
 
@@ -159,6 +170,7 @@ class VLMEngine:
         self.min_interval = 0.0 if self.is_local else cfg.VLM_MIN_INTERVAL_SECONDS
         self.provider = None
         self.error = ""
+        self.warm_error = ""
         self.last_call_time = 0.0
         self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT,
                                            thread_name_prefix=f"VLM_{role}")
@@ -185,15 +197,8 @@ class VLMEngine:
             self.error = f"model untuk penyedia '{self.provider_name}' belum diisi"
         else:
             try:
-                # Klien HTTP dibatalkan sedikit sesudah batas waktu aplikasi
-                http_timeout = self.timeout + 1.0
-                common = {"http_timeout": http_timeout, "temperature": cfg.VLM_TEMPERATURE}
-                options = ({**common, "thinking_level": thinking_option(self.provider_name, cfg.VLM_THINKING) or ""}
-                           if self.provider_name == "gemini" else
-                           {**common, "base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE,
-                            "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS})
                 self.provider = create_provider(self.provider_name, api_key=self.api_key,
-                                                model=self.model_name, **options)
+                                                model=self.model_name, **self._adapter_options())
                 self.error = ""
             except Exception as e:
                 self.error = str(e)
@@ -206,13 +211,40 @@ class VLMEngine:
                 logger.warning(warning)
         return self.provider is not None
 
+    def _adapter_options(self) -> dict:
+        # Klien HTTP dibatalkan sedikit sesudah batas waktu aplikasi
+        common = {"http_timeout": self.timeout + 1.0, "temperature": cfg.VLM_TEMPERATURE}
+        if self.provider_name == "gemini":
+            return {**common, "thinking_level": thinking_option(self.provider_name, cfg.VLM_THINKING) or ""}
+        options = {**common, "base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE,
+                   "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS}
+        profile = vlm_profiles.get_profile(self.provider_name)
+        if profile is not None and profile.api == vlm_profiles.API_ANTHROPIC:
+            options["max_tokens"] = cfg.VLM_ANTHROPIC_MAX_TOKENS
+        return options
+
+    def matches(self, choice: Choice) -> bool:
+        """Engine ini sudah melayani pilihan itu dengan key & alamat yang sama (boleh dipakai ulang)."""
+        return (self.provider is not None and (self.provider_name, self.model_name) == (choice.provider, choice.model)
+                and self.api_key == vlm_selection.api_key_for(choice.provider)
+                and self.base_url == vlm_selection.base_url_for(choice.provider))
+
+    def choice(self) -> Choice:
+        return Choice(self.provider_name, self.model_name)
+
+    def close(self):
+        """Melepas thread engine yang sudah diganti; panggilan yang berjalan tidak dipotong."""
+        self.executor.shutdown(wait=False)
+
     def warm_up(self) -> Optional[float]:
+        self.warm_error = ""
         if self.provider is None:
             return None
         start = time.time()
         try:
             self.executor.submit(self.provider.warm_up).result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
         except Exception as e:
+            self.warm_error = vlm_selection.redact(str(e), self.api_key)[:cfg.ERROR_MESSAGE_MAX_CHARS] or type(e).__name__
             # Tidak fatal: server tetap menyala; VLM ini dicoba lagi pada pekerja
             # pertama dan, bila gagal, inspeksi dialihkan ke VLM lain (T27).
             logger.warning(f"Pemanasan VLM {self.role} {self.provider_name} gagal ({str(e)[:160]}). "
@@ -276,19 +308,133 @@ class VLMAnalyzer:
         self.primary_last_attempt = 0.0
         # Menjaga model lokal tetap penuh di GPU setelah crash Ollama (T38)
         self.local_guard = LocalModelGuard(self.api_lock, self._local_engine)
+        # Satu pergantian penyedia pada satu waktu (T28)
+        self.apply_lock = threading.Lock()
+        self.selection_source = vlm_selection.SOURCE_ENV
 
     def start(self):
-        """Merakit VLM utama & cadangan sesuai konfigurasi. Dipanggil saat startup."""
-        self.primary = VLMEngine(ROLE_PRIMARY, cfg.VLM_PROVIDER, cfg.VLM_MODEL, cfg.VLM_API_KEY, cfg.VLM_BASE_URL)
-        self.primary.build()
-        self.backup = None
-        if cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_PROVIDER != "none":
-            self.backup = VLMEngine(ROLE_BACKUP, cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL,
-                                    cfg.VLM_BACKUP_API_KEY, cfg.VLM_BACKUP_BASE_URL)
-            self.backup.build()
+        """Merakit VLM utama & cadangan: pilihan dashboard bila ada, selain itu .env (T28)."""
+        selection = vlm_selection.effective_selection()
+        self.primary = self._new_engine(ROLE_PRIMARY, selection.primary)
+        self.backup = self._new_engine(ROLE_BACKUP, selection.backup) if selection.backup else None
+        self.selection_source = selection.source
+        self._reset_breaker()
+        self._publish_status()
+
+    @staticmethod
+    def _new_engine(role: str, choice: Choice) -> VLMEngine:
+        engine = VLMEngine(role, choice.provider, choice.model,
+                           vlm_selection.api_key_for(choice.provider), vlm_selection.base_url_for(choice.provider))
+        engine.build()
+        return engine
+
+    def _reset_breaker(self):
         self.primary_failures = 0
         self.primary_down_since = None
+        self.primary_last_attempt = 0.0
+
+    # --- Ganti penyedia dari dashboard (T28)
+    def active_choices(self) -> list[Choice]:
+        return [e.choice() for e in (self.primary, self.backup) if e is not None]
+
+    def current_selection(self) -> dict:
+        """Bentuk `current` kontrak T28. Tanpa API key."""
+        def sel(engine):
+            return None if engine is None else {**asdict(engine.choice()), "source": self.selection_source}
+        return {"primary": sel(self.primary), "backup": sel(self.backup)}
+
+    def apply_selection(self, selection: Selection, lane_empty: Callable[[], bool],
+                        client: str = "", user: str = "") -> dict:
+        """Menukar engine utama & cadangan tanpa restart.
+
+        Engine baru dirakit & dipanaskan DULU (di luar gembok inspeksi); gagal =
+        engine lama tetap dipakai (`EngineFailed`). Pertukaran terjadi di bawah
+        gembok inspeksi, jadi inspeksi yang sedang berjalan selesai dengan engine
+        lama, dan hanya bila jalur kosong (`LaneBusy`).
+        """
+        with self.apply_lock:
+            fresh = self._prepare(ROLE_PRIMARY, selection.primary), (
+                self._prepare(ROLE_BACKUP, selection.backup) if selection.backup else None)
+            try:
+                old = self._swap(fresh, selection.source, lane_empty)
+            except Exception:
+                self._discard(fresh, keep=(self.primary, self.backup))
+                raise
+            self._discard(old, keep=fresh)
+            for role, before, after in ((ROLE_PRIMARY, old[0], fresh[0]), (ROLE_BACKUP, old[1], fresh[1])):
+                before_choice, after_choice = before.choice() if before else None, after.choice() if after else None
+                if before_choice != after_choice:
+                    vlm_selection.record_change(role, before_choice, after_choice, selection.source, client, user)
+            return self.current_selection()
+
+    def _prepare(self, role: str, choice: Choice) -> VLMEngine:
+        """Engine siap pakai: yang sedang berjalan bila sama persis, selain itu rakit + panaskan."""
+        for engine in (self.primary, self.backup):
+            if engine is not None and engine.role == role and engine.matches(choice):
+                return engine
+        engine = self._new_engine(role, choice)
+        if engine.provider is None or engine.warm_up() is None:
+            engine.close()
+            raise EngineFailed(messages.VLM_SELECT_ENGINE_FAILED.format(
+                role=role, provider=choice.provider, model=choice.model,
+                error=engine.error or engine.warm_error))
+        return engine
+
+    def _swap(self, fresh: tuple, source: str, lane_empty: Callable[[], bool]) -> tuple:
+        lock_wait = sum(e.timeout + e.min_interval for e in self._engines()) + 1.0
+        if not self.api_lock.acquire(timeout=lock_wait):
+            raise LaneBusy(messages.VLM_SELECT_LANE_BUSY)
+        try:
+            if not lane_empty():
+                raise LaneBusy(messages.VLM_SELECT_LANE_BUSY)
+            old = (self.primary, self.backup)
+            self.primary, self.backup = fresh
+            self.selection_source = source
+            self._reset_breaker()
+        finally:
+            self.api_lock.release()
         self._publish_status()
+        return old
+
+    @staticmethod
+    def _discard(engines: tuple, keep: tuple):
+        for engine in engines:
+            if engine is not None and all(engine is not k for k in keep):
+                engine.close()
+
+    def test_choice(self, role: str, choice: Choice) -> dict:
+        """Tombol "Uji": 1 ping + 1 gambar sintetis lewat engine sementara (memakai kuota penyedia).
+
+        `ok` = penyedia menjawab; `json_ok` = jawaban gambar berupa JSON yang bisa diurai.
+        Engine gerbang yang sedang berjalan tidak disentuh.
+        """
+        engine = self._new_engine(role, choice)
+        try:
+            if engine.provider is None:
+                return {"ok": False, "latency_ms": None, "json_ok": False, "error": engine.error}
+            start = time.time()
+            ping_error = self._attempt(engine, lambda: engine.executor.submit(engine.provider.ping)
+                                       .result(timeout=engine.timeout))
+            latency = round((time.time() - start) * 1000, 1)
+            if ping_error:
+                return {"ok": False, "latency_ms": latency, "json_ok": False, "error": ping_error}
+            json_error = self._attempt(engine, lambda: engine.call(
+                self._test_image(), system_prompt=build_system_prompt(), user_prompt=USER_PROMPT))
+            return {"ok": True, "latency_ms": latency, "json_ok": not json_error, "error": json_error}
+        finally:
+            engine.close()
+
+    def _attempt(self, engine: VLMEngine, call: Callable[[], object]) -> str:
+        """Kosong bila berhasil, selain itu alasan singkat untuk Pengaturan admin."""
+        try:
+            call()
+            return ""
+        except Exception as e:
+            return vlm_selection.redact(self._describe(e, engine), engine.api_key)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+
+    def _test_image(self) -> bytes:
+        side = cfg.VLM_TEST_IMAGE_PX
+        return self._optimize_image_for_vlm(np.full((side, side // 2, 3), 128, dtype=np.uint8))
 
     # --- Kompatibilitas: atribut penyedia utama dibaca tes, alat evaluasi, dan dashboard
     @property
@@ -337,18 +483,6 @@ class VLMAnalyzer:
         if self.backup is not None:
             self.backup.warm_up()
         return result
-
-    def update_api_key(self, new_key: str):
-        """Mengganti API key VLM utama (dari dashboard)."""
-        cfg.VLM_API_KEY = new_key.strip()
-        if self.primary is None:
-            self.start()
-            return
-        self.primary.api_key = cfg.VLM_API_KEY
-        self.primary.build()
-        self.primary_failures = 0
-        self.primary_down_since = None
-        self._publish_status()
 
     def provider_info(self) -> dict:
         """VLM utama (bidang tingkat atas, bentuk lama) + cadangan. Tanpa API key."""

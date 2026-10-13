@@ -1,18 +1,24 @@
 export interface AuthState {
   authenticated: boolean
-  authRequired: boolean
+  setupRequired: boolean
   loaded?: boolean
 }
 
-/** Menentukan apakah halaman Login harus ditampilkan. */
-export function shouldShowLogin(state: AuthState): boolean {
-  return state.authRequired && !state.authenticated
+export type ViewState = 'loading' | 'setup' | 'login' | 'dashboard'
+
+export function getViewState(state: AuthState): ViewState {
+  if (!state.loaded) return 'loading'
+  if (state.authenticated) return 'dashboard'
+  if (state.setupRequired) return 'setup'
+  return 'login'
 }
 
-/** 
- * Menghitung hitung mundur berikutnya setelah interval tick (misal 1 detik).
- * Mengembalikan null jika hitung mundur selesai atau tidak aktif.
- */
+export function shouldLoadData(prevState: AuthState, nextState: AuthState): boolean {
+  if (!prevState.authenticated && nextState.authenticated) return true
+  if (!prevState.loaded && nextState.loaded && nextState.authenticated) return true
+  return false
+}
+
 export function tickCountdown(currentWait: number | null, elapsedSecs = 1): number | null {
   if (currentWait === null || currentWait <= 0) return null
   const next = currentWait - elapsedSecs
@@ -21,6 +27,6 @@ export function tickCountdown(currentWait: number | null, elapsedSecs = 1): numb
 
 export function telemetryAction(state: AuthState): 'start' | 'stop' | 'wait' {
   if (state.loaded === false) return 'wait'
-  if (!state.authRequired || state.authenticated) return 'start'
+  if (state.authenticated) return 'start'
   return 'stop'
 }

@@ -14,7 +14,19 @@ import type {
   ReportsPage, ReportSummary, ReportPeriod,
   ReportStatusFilter,
   VlmInfo,
+  VlmProvidersResponse,
+  VlmApplyRequest,
+  VlmTestRequest,
+  VlmTestResponse,
+  VlmSelection,
   SessionStatus,
+  SetupRequest,
+  LoginRequest,
+  PasswordChangeRequest,
+  CreateAccountRequest,
+  ResetPasswordRequest,
+  AuthResponse,
+  AccountInfo,
 } from './types'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
@@ -58,7 +70,7 @@ export class ApiClient {
     return `${this.baseUrl}${path}`
   }
 
-  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     const response = await this.fetchImpl(this.url(path), {
@@ -85,10 +97,17 @@ export class ApiClient {
   }
 
 
-  // --- Auth (T30)
+  // --- Auth & Accounts (T51)
   session = () => this.request<SessionStatus>('GET', '/api/session')
-  login = (password: string) => this.request<{ expires_in_s: number }>('POST', '/api/login', { password })
+  setup = (req: SetupRequest) => this.request<AuthResponse>('POST', '/api/setup', req)
+  login = (req: LoginRequest) => this.request<AuthResponse>('POST', '/api/login', req)
   logout = () => this.request<void>('POST', '/api/logout')
+  changePassword = (req: PasswordChangeRequest) => this.request<void>('POST', '/api/account/password', req)
+  
+  accounts = () => this.request<AccountInfo[]>('GET', '/api/accounts')
+  createAccount = (req: CreateAccountRequest) => this.request<AccountInfo>('POST', '/api/accounts', req)
+  resetAccountPassword = (username: string, req: ResetPasswordRequest) => this.request<void>('POST', `/api/accounts/${encodeURIComponent(username)}/password`, req)
+  deleteAccount = (username: string) => this.request<void>('DELETE', `/api/accounts/${encodeURIComponent(username)}`)
 
   // --- Sistem
   health = () => this.request<Health>('GET', '/api/health')
@@ -108,8 +127,10 @@ export class ApiClient {
 
   // --- VLM
   vlmInfo = () => this.request<VlmInfo>('GET', '/api/config/vlm')
-  setVlmKey = (apiKey: string) =>
-    this.request<VlmInfo & { status: string; message?: string }>('POST', '/api/config/vlm-key', { api_key: apiKey })
+  getVlmProviders = () => this.request<VlmProvidersResponse>('GET', '/api/config/vlm/providers')
+  testVlmProvider = (req: VlmTestRequest) => this.request<VlmTestResponse>('POST', '/api/config/vlm/test', req)
+  applyVlmSelection = (req: VlmApplyRequest) => this.request<VlmSelection>('POST', '/api/config/vlm/apply', req)
+  resetVlmSelection = () => this.request<VlmSelection>('DELETE', '/api/config/vlm/selection')
   monitoring = () => this.request<MonitorStatus>('GET', '/api/monitoring/status')
   pingVlm = () => this.request<PingResult>('POST', '/api/monitoring/ping')
 

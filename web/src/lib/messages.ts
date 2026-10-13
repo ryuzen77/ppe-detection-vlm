@@ -5,7 +5,7 @@
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
 import type { CameraState, VlmMode } from './api/types'
-import { LOCALE, REPORTS as REPORTS_SETTINGS } from './settings'
+import { LOCALE, REPORTS as REPORTS_SETTINGS, MIN_PASSWORD_LENGTH } from './settings'
 
 export const BRAND = {
   name: 'DEPRO',
@@ -203,25 +203,6 @@ export const withError = (base: string, e: unknown): string =>
 /** Tooltip chip status: teks chip + keterangan (tetap terbaca saat chip tinggal ikon) */
 export const chipTitle = (text: string, hint: string): string => (hint ? `${text} · ${hint}` : text)
 
-// --- Token admin (sementara sampai login T30) ----------------------------------------------------
-
-export const ADMIN_TOKEN = {
-  title: 'Token admin',
-  intro:
-    'Perintah yang mengubah gerbang (ganti kamera, APD wajib, lampu, VLM) butuh token admin dari pengelola server. Token hanya disimpan di browser ini.',
-  rejected: 'Server menolak perintah tadi: token admin belum diisi atau salah. Isi token, lalu ulangi perintahnya.',
-  label: 'Token admin',
-  placeholder: 'Tempel token dari pengelola server',
-  show: 'Tampilkan token',
-  hide: 'Sembunyikan token',
-  save: 'Simpan',
-  clear: 'Hapus token',
-  close: 'Tutup',
-  cleared: 'Token dihapus dari browser ini.',
-  checkedLater: 'Token diperiksa server saat perintah berikutnya dikirim.',
-  buttonSet: 'Token admin: tersimpan',
-  buttonUnset: 'Token admin: belum diisi',
-} as const
 
 // --- Notifikasi ----------------------------------------------------------------------------------
 
@@ -372,9 +353,98 @@ export const PAGES = {
 
 export const LOGIN = {
   title: 'Login Admin',
+  username: 'Nama Pengguna',
   password: 'Kata Sandi',
   loginBtn: 'Masuk',
   logoutBtn: 'Keluar',
   errorTitle: 'Galat Login',
   waitInfo: 'Coba lagi dalam {s} detik',
+}
+
+// --- Auth & Setup (T51) -------------------------------------------------------------------------
+
+export const AUTH = {
+  loadingAccounts: 'Memuat akun...',
+  loadingSession: 'Memuat sesi...',
+  accounts: 'Akun Pengguna',
+  listAccounts: 'Daftar Akun',
+  username: 'Nama Pengguna',
+  role: 'Peran',
+  lastLogin: 'Login Terakhir',
+  createdAt: 'Dibuat',
+  actions: 'Aksi',
+  addAccount: 'Tambah Akun',
+  password: 'Kata Sandi',
+  passwordMin: `Sandi (min. ${MIN_PASSWORD_LENGTH})`,
+  addBtn: 'Tambah',
+  resetPassword: 'Reset Sandi',
+  deleteBtn: 'Hapus',
+  changeOwnPassword: 'Ganti Sandi Sendiri',
+  currentPassword: 'Sandi saat ini',
+  newPassword: `Sandi baru (min. ${MIN_PASSWORD_LENGTH})`,
+  repeatNewPassword: 'Ulangi sandi baru',
+  saveNewPassword: 'Simpan Sandi Baru',
+  you: '(Anda)',
+  
+  errorPasswordLength: `Kata sandi minimal ${MIN_PASSWORD_LENGTH} karakter`,
+  errorPasswordMismatch: 'Konfirmasi kata sandi tidak cocok',
+  successPasswordChange: 'Kata sandi berhasil diubah.',
+  
+  deleteConfirmTitle: 'Hapus Akun',
+  deleteConfirmPrompt: 'Hapus akun {user}?',
+  cancelBtn: 'Batal',
+  resetConfirmTitle: 'Reset Sandi',
+  resetSuccess: 'Sandi untuk {user} berhasil direset.',
+  resetFailed: 'Gagal mereset sandi: {err}',
+  
+  setupTitle: 'Setup Akun Admin',
+  setupInfo: 'Sistem membutuhkan akun admin pertama.',
+  setupNotAllowed: 'Demi keamanan, setup admin pertama hanya dapat dilakukan langsung dari mesin gerbang.',
+  setupUrlInfo: 'Buka {url} di mesin gerbang untuk melakukan setup pertama kali.',
+  setupBtn: 'Buat Akun',
+} as const
+
+export const APP = {
+  loadingSession: 'Memuat sesi...',
+}
+
+export const VLM_SETTINGS = {
+  loading: 'Memuat...',
+  activeSource: 'Sumber aktif',
+  sourceDashboard: 'Dashboard',
+  sourceEnv: '.env',
+  resetToEnvBtn: 'Kembali ke .env',
+  resetConfirmTitle: 'Kembali ke konfigurasi .env?',
+  
+  primaryTitle: 'VLM Utama',
+  backupTitle: 'VLM Cadangan',
+  providerLabel: 'Penyedia',
+  modelLabel: 'Model',
+  noBackup: '(Tanpa cadangan)',
+  missingKey: '(isi key di .env)',
+  missingBaseUrl: '(isi VLM_BASE_URL di .env)',
+  
+  dataLocation: 'Lokasi Data',
+  stats: (photos: number | null, missed: number | null, falseRejects: number | null, medianSeconds: number | null) => 
+    `${photos ?? 0} foto, meleset ${missed ?? 0}, salah tolak ${falseRejects ?? 0}, ~${medianSeconds ?? 0}s`,
+  
+  testBtn: 'Uji Penyedia',
+  testingBtn: 'Menguji...',
+  testResultPrimary: 'Hasil Uji Utama',
+  testResultBackup: 'Hasil Uji Cadangan',
+  testSuccess: (latency: number | null, isJson: boolean) => 
+    `Berhasil (${latency}ms, valid JSON: ${isJson ? 'Ya' : 'Tidak'})`,
+    
+  applyBtn: 'Terapkan',
+  applying: 'Menyiapkan...',
+  applySuccess: 'Berhasil diterapkan',
+  
+  warningTitle: 'Peringatan',
+  cancelBtn: 'Batal',
+  confirmBtn: 'Saya Yakin, Lanjutkan',
+  
+  errLoad: 'Gagal memuat',
+  errApply: 'Gagal menerapkan',
+  errTest: 'Gagal uji',
+  errReset: 'Gagal mereset',
 }

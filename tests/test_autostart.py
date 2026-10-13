@@ -109,7 +109,13 @@ def test_tanpa_nama_menunggu_operator(cam, monkeypatch):
 
 # --- Pemeriksaan saat start ------------------------------------------------------------------
 
-def test_pemeriksaan_start(monkeypatch):
+@pytest.fixture
+def ada_akun(monkeypatch):
+    from backend.accounts import store
+    monkeypatch.setattr(store, "count", lambda: 1)
+
+
+def test_pemeriksaan_start(monkeypatch, ada_akun):
     monkeypatch.setattr(startup_checks, "ollama_version", lambda url: "0.35.1")
     out = startup_checks.run(False, "http://localhost:11434/v1", "HD Pro Webcam C920", lambda: ["Integrated Camera"])
     assert out == [messages.STARTUP_NO_CUDA,
@@ -117,7 +123,7 @@ def test_pemeriksaan_start(monkeypatch):
                    messages.STARTUP_CAMERA_MISSING.format(name="HD Pro Webcam C920", seen="Integrated Camera")]
 
 
-def test_pemeriksaan_start_semua_baik(monkeypatch):
+def test_pemeriksaan_start_semua_baik(monkeypatch, ada_akun):
     monkeypatch.setattr(startup_checks, "ollama_version", lambda url: cfg.OLLAMA_VALIDATED_VERSION)
     assert startup_checks.run(True, "http://localhost:11434/v1", "Cam", lambda: ["Cam"]) == []
     assert startup_checks.check_ollama_version(None) == messages.STARTUP_OLLAMA_UNREACHABLE
@@ -126,3 +132,11 @@ def test_pemeriksaan_start_semua_baik(monkeypatch):
 def test_health_menyertakan_peringatan_start(monkeypatch):
     monkeypatch.setattr(startup_checks, "warnings", ["contoh peringatan"])
     assert TestClient(app).get("/api/health").json()["startup_warnings"] == ["contoh peringatan"]
+
+
+def test_peringatan_akun_dan_token_lama(monkeypatch):
+    """T51: belum ada akun → arahkan ke setup di mesin gerbang; ADMIN_TOKEN lama → hapus dari .env."""
+    assert startup_checks.check_accounts(0) == messages.STARTUP_NO_ACCOUNT.format(port=cfg.PORT)
+    assert startup_checks.check_accounts(2) is None
+    assert startup_checks.check_legacy_admin_token(True) == messages.STARTUP_ADMIN_TOKEN_UNUSED
+    assert startup_checks.check_legacy_admin_token(False) is None

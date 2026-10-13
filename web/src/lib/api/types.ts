@@ -319,11 +319,65 @@ export interface CameraCatalog {
 
 // --- Lain-lain -------------------------------------------------------------------------------
 
+export interface User {
+  username: string
+  role: string
+}
+
 export interface SessionStatus {
   authenticated: boolean
-  auth_required: boolean
+  setup_required: boolean
+  setup_allowed: boolean
+  user: User | null
   expires_in_s: number | null
 }
+
+export interface AccountInfo {
+  username: string
+  role: string
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface AuthResponse {
+  user: User
+  expires_in_s: number
+}
+
+export interface SetupRequest {
+  username: string
+  password: string
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface ApiErrorDetail {
+  code?: string
+  message?: string
+}
+
+export interface LoginErrorBody {
+  detail?: string | ApiErrorDetail
+  retry_after_s?: number
+}
+
+export interface PasswordChangeRequest {
+  current_password: string
+  new_password: string
+}
+
+export interface CreateAccountRequest {
+  username: string
+  password: string
+}
+
+export interface ResetPasswordRequest {
+  new_password: string
+}
+
 
 export interface Health {
   status: string
@@ -353,3 +407,67 @@ export interface PingResult {
 }
 
 export type LightTestAction = 'green' | 'red' | 'yellow' | 'off'
+
+// --- Pilihan VLM (T28) -------------------------------------------------------------
+
+export interface VlmChoice {
+  provider: string
+  model: string
+}
+
+export interface VlmChoiceWithSource extends VlmChoice {
+  source: 'env' | 'dashboard'
+}
+
+export interface VlmSelection {
+  primary: VlmChoiceWithSource | null
+  backup: VlmChoiceWithSource | null
+}
+
+export type VlmValidationStatus = 'validated' | 'partial' | 'outdated' | 'unvalidated' | 'unsafe' | null
+
+export interface VlmModelEntry {
+  model: string
+  validated: VlmValidationStatus
+  photos: number | null
+  missed: number | null
+  false_rejects: number | null
+  median_seconds: number | null
+}
+
+export type VlmMissingSetting = 'key' | 'base_url' | null
+
+export interface VlmProviderEntry {
+  name: string
+  label: string
+  support: 'official' | 'experimental'
+  is_local: boolean
+  has_key: boolean
+  missing: VlmMissingSetting
+  data_location: string
+  default_model: string
+  models: VlmModelEntry[]
+}
+
+export interface VlmProvidersResponse {
+  current: VlmSelection
+  prompt_version: string
+  providers: VlmProviderEntry[]
+}
+
+export interface VlmApplyRequest {
+  primary: VlmChoice
+  backup: VlmChoice | null
+  confirm_unvalidated: boolean
+}
+
+export interface VlmTestRequest extends VlmChoice {
+  role: 'primary' | 'backup'
+}
+
+export interface VlmTestResponse {
+  ok: boolean
+  json_ok: boolean
+  latency_ms: number | null
+  error: string
+}
