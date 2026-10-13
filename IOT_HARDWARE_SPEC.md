@@ -142,7 +142,12 @@ oleh `iot/wokwi_simulation/wokwi.toml`. Jalankan simulator, lalu isi
 - Palang/boom, sensor lewat, dan perilaku saat listrik padam ada di
   `docs/RENCANA.md`, bagian rencana IoT tahap 2.
 
-## 9. Alternatif uji coba: relay USB HID 2 kanal (T54)
+## 9. Khusus demo: relay USB HID 2 kanal (T54)
+
+> **Hanya untuk demo** (keputusan pengguna 13-10). Rancangan utama tetap **ESP32**
+> (bagian 1–8: tiga lampu, heartbeat, kuning berkedip saat sistem mati); kode,
+> firmware, dan `IOT_TYPE=serial` (bawaan) tidak diubah. Relay dipilih hanya lewat
+> `IOT_TYPE=usb_relay`.
 
 Tanpa ESP32: **relay USB dcttech "USBRelay2"** (VID `16C0`, PID `05DF`, tanpa
 driver, tidak muncul sebagai port COM) + **adaptor 12V 1A** + **dua lampu LED 12V**.
