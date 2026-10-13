@@ -354,6 +354,16 @@ export interface LoginRequest {
   password: string
 }
 
+export interface ApiErrorDetail {
+  code?: string
+  message?: string
+}
+
+export interface LoginErrorBody {
+  detail?: string | ApiErrorDetail
+  retry_after_s?: number
+}
+
 export interface PasswordChangeRequest {
   current_password: string
   new_password: string
@@ -425,12 +435,15 @@ export interface VlmModelEntry {
   median_seconds: number | null
 }
 
+export type VlmMissingSetting = 'key' | 'base_url' | null
+
 export interface VlmProviderEntry {
   name: string
   label: string
   support: 'official' | 'experimental'
   is_local: boolean
   has_key: boolean
+  missing: VlmMissingSetting
   data_location: string
   default_model: string
   models: VlmModelEntry[]

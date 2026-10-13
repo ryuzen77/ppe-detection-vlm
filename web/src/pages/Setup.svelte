@@ -25,7 +25,7 @@
       return
     }
     if (password !== confirmPassword) {
-      errorMsg = 'Kata sandi tidak cocok'
+      errorMsg = AUTH.errorPasswordMismatch
       return
     }
 
@@ -46,11 +46,11 @@
 
 <div class="login-container">
   <div class="login-card">
-    <h2>Setup Akun Admin</h2>
+    <h2>{AUTH.setupTitle}</h2>
     
     {#if !session.setupAllowed}
       <div class="info-box" role="alert">
-        Buka http://localhost:8000 di mesin gerbang untuk melakukan setup pertama kali.
+        {AUTH.setupUrlInfo.replace('{url}', getSetupUrl(typeof window !== 'undefined' ? window.location.port : '8000'))}
       </div>
     {:else}
       {#if errorMsg}
@@ -61,22 +61,22 @@
       
       <form onsubmit={handleSetup} class="form-content">
         <div class="input-group">
-          <label for="username">Nama Pengguna</label>
+          <label for="username">{AUTH.username}</label>
           <input type="text" id="username" bind:value={username} disabled={loading} use:focus />
         </div>
 
         <div class="input-group">
-          <label for="password">Kata Sandi (min. 12 karakter)</label>
+          <label for="password">{AUTH.passwordMin}</label>
           <input type="password" id="password" bind:value={password} disabled={loading} />
         </div>
 
         <div class="input-group">
-          <label for="confirm">Ulangi Kata Sandi</label>
+          <label for="confirm">{AUTH.repeatNewPassword}</label>
           <input type="password" id="confirm" bind:value={confirmPassword} disabled={loading} />
         </div>
         
         <button type="submit" class="btn btn-primary" disabled={!username || !password || !confirmPassword || loading}>
-          Buat Akun
+          {AUTH.setupBtn}
         </button>
       </form>
     {/if}

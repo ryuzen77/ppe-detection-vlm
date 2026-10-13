@@ -353,6 +353,7 @@ export const PAGES = {
 
 export const LOGIN = {
   title: 'Login Admin',
+  username: 'Nama Pengguna',
   password: 'Kata Sandi',
   loginBtn: 'Masuk',
   logoutBtn: 'Keluar',
@@ -396,11 +397,11 @@ export const AUTH = {
   resetSuccess: 'Sandi untuk {user} berhasil direset.',
   resetFailed: 'Gagal mereset sandi: {err}',
   
-  setupTitle: 'Setup Sistem',
+  setupTitle: 'Setup Akun Admin',
   setupInfo: 'Sistem membutuhkan akun admin pertama.',
   setupNotAllowed: 'Demi keamanan, setup admin pertama hanya dapat dilakukan langsung dari mesin gerbang.',
-  setupUrlInfo: 'Buka {url} di mesin gerbang untuk melanjutkan.',
-  setupBtn: 'Selesaikan Setup',
+  setupUrlInfo: 'Buka {url} di mesin gerbang untuk melakukan setup pertama kali.',
+  setupBtn: 'Buat Akun',
 } as const
 
 export const APP = {

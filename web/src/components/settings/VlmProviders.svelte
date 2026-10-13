@@ -143,7 +143,7 @@
         <span>{VLM_SETTINGS.providerLabel}</span>
         <select bind:value={primaryProvider} disabled={applying}>
           {#each providers as p}
-            <option value={p.name} disabled={!p.has_key}>{p.label} {!p.has_key ? (p.name === 'local' ? VLM_SETTINGS.missingBaseUrl : VLM_SETTINGS.missingKey) : ''}</option>
+            <option value={p.name} disabled={p.missing !== null}>{p.label}{p.missing === 'base_url' ? ` ${VLM_SETTINGS.missingBaseUrl}` : p.missing === 'key' ? ` ${VLM_SETTINGS.missingKey}` : ''}</option>
           {/each}
         </select>
       </label>
@@ -190,7 +190,7 @@
         <select bind:value={backupProvider} disabled={applying}>
           <option value="">{VLM_SETTINGS.noBackup}</option>
           {#each providers as p}
-            <option value={p.name} disabled={!p.has_key}>{p.label} {!p.has_key ? (p.name === 'local' ? VLM_SETTINGS.missingBaseUrl : VLM_SETTINGS.missingKey) : ''}</option>
+            <option value={p.name} disabled={p.missing !== null}>{p.label}{p.missing === 'base_url' ? ` ${VLM_SETTINGS.missingBaseUrl}` : p.missing === 'key' ? ` ${VLM_SETTINGS.missingKey}` : ''}</option>
           {/each}
         </select>
       </label>
