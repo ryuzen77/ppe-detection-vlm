@@ -14,7 +14,7 @@ import sys
 import time
 from typing import Callable, Optional, Sequence
 
-from . import messages
+from . import logging_setup, messages
 from .config import cfg
 
 logger = logging.getLogger("backend.supervisor")
@@ -66,11 +66,16 @@ def supervise(command: Sequence[str], run: Callable[[Sequence[str]], int] = subp
 
 
 def _setup_logging():
-    log_dir = cfg.DATA_DIR / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s [%(name)s] %(message)s",
-                        handlers=[logging.StreamHandler(), logging.FileHandler(log_dir / cfg.SUPERVISOR_LOG_FILE,
-                                                                                encoding="utf-8")])
+    """Berkas sendiri, berotasi seperti log server (T53: dulu FileHandler tanpa batas).
+    Penjaga hanya mencatat nyala/mati server, jadi cukup sinkron tanpa antrean."""
+    formatter = logging.Formatter(logging_setup.APP_FORMAT)
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    file_handler = logging_setup.rotating_file(cfg.LOG_DIR / cfg.SUPERVISOR_LOG_FILE, formatter, cfg)
+    if file_handler is not None:
+        handlers.append(file_handler)
+    for handler in handlers:
+        handler.setFormatter(formatter)
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
 
 
 if __name__ == "__main__":

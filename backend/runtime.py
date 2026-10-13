@@ -8,13 +8,15 @@ keras lengkap.
 import logging
 import threading
 
+from . import messages
 from .config import cfg
 from .uptime import uptime_monitor
 from .zone import zone_store
-from .logging_setup import setup_logging
+from .logging_setup import prune_rotated_logs, setup_logging
+from .disk_guard import disk_guard
 from .storage import prepare_data_dir
 from . import ppe_rules
-from .report_manager import report_mgr
+from .report_manager import SECONDS_PER_DAY, report_mgr
 from .audio_engine import audio_player
 from .notifier import notifier
 from .detector import detector
@@ -28,9 +30,21 @@ SECONDS_PER_HOUR = 60 * 60
 _cleanup_thread = None
 _cleanup_stop = threading.Event()
 
+def _prune_logs():
+    """Salinan log lama dihapus menurut umur (T53), di siklus yang sama dengan retensi audit."""
+    removed = prune_rotated_logs(cfg.LOG_DIR, {
+        cfg.LOG_FILE: cfg.LOG_RETENTION_DAYS * SECONDS_PER_DAY,
+        cfg.SUPERVISOR_LOG_FILE: cfg.LOG_RETENTION_DAYS * SECONDS_PER_DAY,
+        cfg.SECURITY_LOG_FILE: cfg.SECURITY_LOG_RETENTION_DAYS * SECONDS_PER_DAY,
+    })
+    if removed:
+        logger.info(messages.LOG_PRUNED.format(count=removed, path=cfg.LOG_DIR))
+
+
 def _retention_loop():
     while not _cleanup_stop.is_set():
         report_mgr.cleanup_old_data()
+        _prune_logs()
         if cfg.RETENTION_INTERVAL_HOURS <= 0:
             break
         _cleanup_stop.wait(cfg.RETENTION_INTERVAL_HOURS * SECONDS_PER_HOUR)
@@ -53,6 +67,8 @@ def start():
     setup_logging(cfg)
     # 2. DATA_DIR siap dan data lama dipindah sebelum ada yang membaca berkasnya
     prepare_data_dir(cfg)
+    # Sisa disk diawasi sejak awal: log & audit sama-sama butuh ruang (T53)
+    disk_guard.start()
     # Catat lama gerbang tidak aktif & apakah berhenti rapi sebelumnya (T37)
     uptime_monitor.start()
     # 3. Item APD aktif dimuat sebelum prompt VLM dirakit dari katalog
@@ -81,6 +97,7 @@ def start():
 
 def stop():
     _cleanup_stop.set()
+    disk_guard.stop()
     uptime_monitor.stop()
     vlm_analyzer.local_guard.stop()
     video_service.stop()

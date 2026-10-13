@@ -18,9 +18,7 @@ import functools
 import getpass
 import hashlib
 import hmac
-import json
 import logging
-import os
 import re
 import secrets
 import sqlite3
@@ -30,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from . import messages
+from . import messages, security_log
 from .config import cfg
 
 logger = logging.getLogger(__name__)
@@ -230,17 +228,8 @@ store = AccountStore()
 # --- Jejak ---
 
 def record_event(event: str, username: str = "", actor: str = "", client: str = "", ok: bool = True):
-    """Satu baris JSON per kejadian akun, di-fsync. Tanpa kata sandi maupun hash."""
-    entry = {"time": _now(), "event": event, "username": username, "actor": actor, "client": client, "ok": ok}
-    path = cfg.ACCOUNT_EVENTS_PATH
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
-    except OSError as e:
-        logger.error(messages.ACCOUNT_EVENT_LOG_FAILED.format(path=path, error=e))
+    """Kejadian akun ke security log (T53). Tanpa kata sandi maupun hash."""
+    security_log.record(event, username=username, actor=actor, client=client, ok=ok)
 
 
 # --- Perintah di mesin gerbang ---
@@ -282,4 +271,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    from . import logging_setup
+    logging_setup.setup_security_log(cfg)   # kejadian dari terminal ikut tercatat
+    try:
+        raise SystemExit(main())
+    finally:
+        logging_setup.stop_logging()

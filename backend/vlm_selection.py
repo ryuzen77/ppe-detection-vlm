@@ -9,17 +9,14 @@ Rambu (rancangan T28 yang disetujui 06-10):
 - key satu penyedia tidak pernah dikirim ke penyedia lain;
 - model yang pernah meloloskan APD kurang (`unsafe`) selalu ditolak;
 - model yang belum tervalidasi untuk prompt sekarang hanya dengan konfirmasi;
-- setiap pergantian dicatat di log dan `vlm_changes.jsonl`.
+- setiap pergantian dicatat di log dan security log (T53).
 """
-import json
 import logging
-import os
 import re
-import time
 from dataclasses import asdict, dataclass
 from typing import Optional
 
-from . import messages, runtime_settings
+from . import messages, runtime_settings, security_log
 from .config import cfg, provider_api_key
 from .vlm_providers import profiles
 
@@ -210,18 +207,9 @@ def record_change(role: str, before: Optional[Choice], after: Optional[Choice], 
     logger.warning(messages.VLM_SELECT_APPLIED.format(
         role=role, before=before.label() if before else NO_BACKUP, after=after.label() if after else NO_BACKUP,
         status=status or "-", client=f"{user}@{client}" if user else client))
-    entry = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "role": role,
-             "from": asdict(before) if before else None, "to": asdict(after) if after else None,
-             "validated": status, "source": source, "user": user, "client": client}
-    path = cfg.VLM_CHANGES_PATH
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
-    except OSError as e:
-        logger.error(messages.VLM_SELECT_LOG_FAILED.format(path=path, error=e))
+    security_log.record(security_log.VLM_CHANGE, role=role,
+                        **{"from": asdict(before) if before else None, "to": asdict(after) if after else None},
+                        validated=status, source=source, user=user, client=client)
 
 
 # --- Katalog untuk Pengaturan admin ---
