@@ -4,6 +4,7 @@
   // Item baru cukup memakai nama yang sudah ada di sini; nama tak dikenal →
   // perisai umum. Lucide tidak punya celana & rompi, jadi keduanya digambar
   // sendiri dengan gaya yang sama (kanvas 24×24, garis membulat).
+  import Cigarette from '@lucide/svelte/icons/cigarette'
   import Hand from '@lucide/svelte/icons/hand'
   import HardHat from '@lucide/svelte/icons/hard-hat'
   import RectangleGoggles from '@lucide/svelte/icons/rectangle-goggles'
@@ -17,6 +18,7 @@
     'sport-shoe': SportShoe,
     'rectangle-goggles': RectangleGoggles,
     hand: Hand,
+    cigarette: Cigarette,
   } as const
 
   /** Ikon gambar sendiri: daftar path SVG per nama */

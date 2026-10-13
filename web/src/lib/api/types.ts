@@ -34,6 +34,8 @@ export interface PpeItem {
   reports_color: boolean
   /** Item sedang diwajibkan (diperiksa) */
   required: boolean
+  /** Larangan (mis. rokok: detected = true berarti melanggar) */
+  prohibited: boolean
   qualifier: PpeQualifier | null
 }
 
