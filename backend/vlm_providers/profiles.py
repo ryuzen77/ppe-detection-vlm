@@ -102,6 +102,13 @@ class ModelValidation:
 
 
 VALIDATIONS = (
+    # T58 (prompt T48 + larangan rokok + konfirmasi kedua), 84 foto: 0 lolos; salah tolak apd_10;
+    # galat apd_19 & no_23 (sama dgn sebelumnya); rokok palsu no_34 (tangan bernoda semen)
+    # dibatalkan konfirmasi. Setelah galat no_23 Ollama memuat ulang model 26% di CPU (T38):
+    # foto 43-48 benar tetapi ~27 dtk; sisa 36 foto diulang dengan model dimuat bersih.
+    ModelValidation("ollama", "qwen2.5vl:7b", "T58", "2026-10-14", photos=84, missed=0, false_rejects=1,
+                    median_seconds=3.7, complete=True,
+                    note="RTX 4060 Laptop, beban YOLO; log bench_t58c (foto 1-48) + data/eval 20261014-000630"),
     # T48 (prompt helm/sepatu dilonggarkan): 10 foto, sama dengan sebelum pelonggaran
     # (apd_10 & apd_4 tetap salah tolak). Hasil 84 foto prompt T36a: 0/58 lolos, 2/26 salah tolak.
     ModelValidation("ollama", "qwen2.5vl:7b", "T48", "2026-10-05", photos=10, missed=0, false_rejects=2,

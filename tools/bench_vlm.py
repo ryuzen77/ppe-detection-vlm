@@ -41,7 +41,12 @@ import numpy as np  # noqa: E402
 from backend import messages, ppe_rules  # noqa: E402
 from backend.config import cfg  # noqa: E402
 from backend.detector import detector  # noqa: E402
-from backend.vlm_analyzer import VLMAnalyzer, build_system_prompt  # noqa: E402
+from backend.vlm_analyzer import (  # noqa: E402
+    VLMAnalyzer,
+    build_system_prompt,
+    confirmation_prompts,
+    parse_confirmation,
+)
 
 CLASSES = eval_vlm.CLASSES
 TIMEOUT_S = 90.0
@@ -195,6 +200,28 @@ def output_format(variant: str, items):
     return bit_schema(variant, items) if variant in BIT_VARIANTS else "json"
 
 
+def smoking_flag(parsed):
+    """Rokok terlihat menurut jawaban: kunci atas (prompt eksperimen) atau item larangan produksi (T58)."""
+    if not isinstance(parsed, dict):
+        return None
+    if SMOKING_KEY in parsed:
+        return parsed[SMOKING_KEY]
+    item = parsed.get("items", {}).get(SMOKING_KEY)
+    return item.get("detected") if isinstance(item, dict) else None
+
+
+def confirm_production_smoking(client, model: str, image_b64: str, parsed: dict, row: dict):
+    """Konfirmasi kedua seperti produksi (T58): rokok hanya berlaku bila kedua jawaban sepakat."""
+    system, user = confirmation_prompts(ppe_rules.get_item(SMOKING_KEY))
+    try:
+        reply = call(client, model, system, user, image_b64)["message"]["content"]
+        confirmed, seen = parse_confirmation(json.loads(reply))
+    except Exception as e:
+        confirmed, seen = False, f"galat: {str(e)[:60]}"
+    row.update(rokok_konfirmasi=confirmed, rokok_benda=seen)
+    parsed["items"][SMOKING_KEY]["detected"] = confirmed
+
+
 def to_production_payload(data, variant: str, items=None) -> dict:
     """Jawaban ringkas → bentuk yang dipahami `_parse_vlm_payload` produksi."""
     if variant == "P0":
@@ -275,6 +302,7 @@ def summarize(rows):
             "lolos_padahal_kurang": sum(r.get("pred_complete") is True for r in inc),
             "lengkap_ditolak": sum(r.get("pred_complete") is False for r in rs if r["label_complete"]),
             "rokok_true": sum(r.get("rokok") is True for r in ok),
+            "rokok_awal_true": sum(r.get("rokok_awal") is True for r in ok),
             "tubuh_utuh_dikirim": sum(r.get("full_body") is True for r in rs),
             "tubuh_utuh_akurasi": round(sum(r["pred_complete"] == r["label_complete"] for r in ok if r.get("full_body"))
                                         / max(1, sum(r.get("full_body") is True for r in rs)), 3),
@@ -368,9 +396,12 @@ def main():
                 if args.dump:
                     print(f"--- {row['variant']} {row['file']}", raw, sep="\n", flush=True)
                 parsed = json.loads(raw)
+                row["rokok_awal"] = smoking_flag(parsed)
+                if prompt == "P0" and row["rokok_awal"] is True:
+                    confirm_production_smoking(client, args.model, img, parsed, row)
                 res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt, items), items)
                 row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items),
-                           rokok=parsed.get(SMOKING_KEY) if isinstance(parsed, dict) else None, output_chars=len(raw))
+                           rokok=smoking_flag(parsed), output_chars=len(raw))
             except Exception as e:
                 row.update(status="galat", error=str(e)[:160])
             row.update(

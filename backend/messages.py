@@ -124,7 +124,7 @@ API_LOGIN_LOCKED = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 # Jawaban ringkas (hanya nilai per item) — lihat ppe_rules.build_json_shape.
 # Versi prompt VLM. NAIKKAN setiap kali isi prompt atau aturan item berubah:
 # validasi model di vlm_providers/profiles.py berlaku untuk versi tertentu (T39b).
-PROMPT_VERSION = "T48"
+PROMPT_VERSION = "T58"
 
 VLM_SYSTEM_PROMPT = (
     "Anda inspektur K3. Nilai APD orang di gambar. "
@@ -136,6 +136,11 @@ VLM_SYSTEM_PROMPT = (
 VLM_USER_PROMPT = "Nilai gambar ini. JSON saja."
 # Panggilan termurah untuk uji latensi & pemanasan
 VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
+# Konfirmasi kedua larangan (T58): dikirim HANYA bila jawaban pertama menyatakan larangan
+# terlihat. Pertanyaan per item ada di katalog (`PPEItem.confirm_prompt`). Bench 13-10:
+# qwen2.5vl:7b menilai tangan bernoda semen sebagai "rokok menyala"; ditanya khusus -> "tangan kosong".
+VLM_CONFIRM_SYSTEM_PROMPT = "Anda pemeriksa larangan K3. Jawab HANYA JSON, tanpa teks lain."
+VLM_CONFIRM_SHAPE = 'Bentuk JSON: {"detected": true/false, "seen": "<benda yang terlihat di tangan dan mulut>"}'
 
 # --- Suara gerbang (dibangkitkan jadi MP3 oleh generate_audio.py) ---
 # Sengaja singkat (T36b): suara hasil ikut menentukan kapan pekerja melangkah,

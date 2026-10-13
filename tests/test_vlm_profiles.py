@@ -5,7 +5,8 @@ import logging
 import pytest
 
 from backend import config, messages, ppe_rules
-from backend.vlm_analyzer import VLMEngine, build_system_prompt, profile_warnings, thinking_option
+from backend.vlm_analyzer import (VLMEngine, build_system_prompt, confirmation_prompts, profile_warnings,
+                                  thinking_option)
 from backend.vlm_providers import OPENAI_COMPATIBLE, profiles
 from backend.vlm_providers.openai_compatible import PRESETS
 
@@ -13,11 +14,13 @@ from backend.vlm_providers.openai_compatible import PRESETS
 # messages.PROMPT_VERSION, tambahkan sidik jari baru di sini, lalu uji ulang model
 # dengan foto berlabel dan perbarui profiles.VALIDATIONS. Tanpa itu, validasi lama
 # diam-diam dianggap berlaku untuk prompt yang belum pernah diuji.
-PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e"}
+PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e", "T58": "1b4f2a739acb7d79"}
 
 
 def test_prompt_berubah_wajib_menaikkan_versi(catalog_defaults):
-    fingerprint = hashlib.sha256(build_system_prompt(ppe_rules.get_items()).encode()).hexdigest()[:16]
+    # Pertanyaan konfirmasi larangan (T58) ikut menentukan keputusan, jadi ikut sidik jari
+    confirm = "".join("".join(confirmation_prompts(i)) for i in ppe_rules.get_items() if i.prohibited)
+    fingerprint = hashlib.sha256((build_system_prompt(ppe_rules.get_items()) + confirm).encode()).hexdigest()[:16]
     assert PROMPT_FINGERPRINTS.get(messages.PROMPT_VERSION) == fingerprint, (
         f"Prompt berubah ({fingerprint}) tanpa menaikkan PROMPT_VERSION={messages.PROMPT_VERSION}")
 
@@ -44,9 +47,10 @@ def test_satu_sumber_untuk_adaptor_dan_config():
 
 def test_status_model_saat_ini():
     v = messages.PROMPT_VERSION
-    assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.PARTIAL
-    assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.PARTIAL
-    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", v).prompt_version == v
+    assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.VALIDATED
+    # Gemini terakhir diuji dengan prompt T48; uji ulang T58 memakai kuota cloud (menunggu izin pengguna)
+    assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.OUTDATED
+    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", v).prompt_version == "T48"
     assert profiles.validation_status("openrouter", "model-baru", v) == profiles.UNVALIDATED
     assert profiles.validation_status("ollama", "qwen2.5vl:3b", v) == profiles.UNSAFE
 
@@ -68,13 +72,13 @@ def test_peringatan_penyedia_eksperimental_dan_model_belum_tervalidasi():
     warnings = profile_warnings("openrouter", "qwen/qwen2.5-vl-72b-instruct", "utama openrouter/x")
     assert warnings == [messages.VLM_PROVIDER_EXPERIMENTAL.format(who="utama openrouter/x"),
                         messages.VLM_MODEL_UNVALIDATED.format(who="utama openrouter/x")]
-    assert profile_warnings("ollama", "qwen2.5vl:7b", "cadangan") == [
-        messages.VLM_MODEL_PARTIAL.format(who="cadangan", note=profiles.find_validation("ollama", "qwen2.5vl:7b", messages.PROMPT_VERSION).note)]
+    # Tervalidasi penuh untuk prompt berlaku (T58, 84 foto): tanpa peringatan
+    assert profile_warnings("ollama", "qwen2.5vl:7b", "cadangan") == []
 
 
 def test_info_menyertakan_dukungan_dan_validasi():
     info = VLMEngine("cadangan", "ollama", "qwen2.5vl:7b").info()
-    assert info["support"] == profiles.OFFICIAL and info["validated"] == profiles.PARTIAL
+    assert info["support"] == profiles.OFFICIAL and info["validated"] == profiles.VALIDATED
     assert VLMEngine("utama", "tidak-dikenal", "m").info()["support"] is None
 
 
