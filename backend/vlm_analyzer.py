@@ -112,6 +112,18 @@ def build_system_prompt(items=None) -> str:
     )
 
 
+def confirmation_prompts(item) -> tuple[str, str]:
+    """(prompt sistem, prompt pengguna) konfirmasi kedua satu larangan (T58)."""
+    return messages.VLM_CONFIRM_SYSTEM_PROMPT, f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
+
+
+def parse_confirmation(data) -> tuple[bool, str]:
+    """(larangan benar terlihat, benda yang disebut model). Selain `true` tegas = tidak terlihat."""
+    if not isinstance(data, dict):
+        return False, ""
+    return data.get("detected") is True, str(data.get("seen") or "")
+
+
 def thinking_option(provider_name: str, level: str) -> Optional[str]:
     """Nilai mode berpikir untuk adaptor; peringatan bila tidak dikenal/tidak didukung (T39b)."""
     if level not in vlm_profiles.THINKING_LEVELS:
@@ -549,7 +561,7 @@ class VLMAnalyzer:
         call_start = time.time()
         try:
             data = engine.call(image_jpeg, system_prompt=build_system_prompt(aktif), user_prompt=USER_PROMPT)
-            result = self._parse_vlm_payload(data, aktif)
+            result = self._confirm_prohibitions(engine, image_jpeg, self._parse_vlm_payload(data, aktif), aktif)
         except TimeoutError:
             api_monitor.record_failure(engine.role, f"timeout > {engine.timeout:g} dtk", is_timeout=True)
             raise
@@ -559,6 +571,46 @@ class VLMAnalyzer:
         api_monitor.record_success(engine.role, round((time.time() - call_start) * 1000, 1))
         result.inference_source = engine.label
         result.decided_by = engine.role
+        return result
+
+    def _confirm_prohibitions(self, engine: VLMEngine, image_jpeg: bytes, result: InspectionResult,
+                              aktif) -> InspectionResult:
+        """Larangan yang terlihat ditanyakan ulang dengan pertanyaan khusus (T58).
+
+        Pekerja ditolak karena larangan hanya bila kedua jawaban sepakat. Bench 13-10:
+        jawaban pertama menyebut tangan bernoda semen "rokok menyala"; pertanyaan khusus
+        menjawab "tangan kosong". Pemeriksaan tanpa larangan terlihat tidak bertambah panggilan.
+        """
+        flagged = [item for item in aktif if item.prohibited and result.item(item.key).detected]
+        if not flagged:
+            return result
+        for item in flagged:
+            confirmed, seen = self._ask_confirmation(engine, image_jpeg, item)
+            result.items[item.key] = ItemResult(detected=confirmed, description=seen)
+        return self._reevaluate(result, aktif)
+
+    @staticmethod
+    def _ask_confirmation(engine: VLMEngine, image_jpeg: bytes, item) -> tuple[bool, str]:
+        """Gagal/habis waktu = tidak terlihat (keputusan pengguna 13-10: VLM ragu = tidak ada)."""
+        try:
+            confirmed, seen = parse_confirmation(engine.call(image_jpeg, *confirmation_prompts(item)))
+        except Exception as e:
+            logger.warning(f"Konfirmasi larangan '{item.key}' oleh VLM {engine.who} gagal "
+                           f"({str(e)[:80] or type(e).__name__}); dianggap tidak terlihat.")
+            return False, ""
+        if confirmed:
+            logger.info(f"Larangan '{item.key}' dikonfirmasi VLM {engine.who}: {seen}")
+        else:
+            logger.warning(f"Larangan '{item.key}' dibatalkan konfirmasi VLM {engine.who}: terlihat '{seen}'.")
+        return confirmed, seen
+
+    @staticmethod
+    def _reevaluate(result: InspectionResult, aktif) -> InspectionResult:
+        """Hitung ulang kelengkapan setelah item berubah; penolakan anti-spoofing dipertahankan."""
+        is_complete, missing = ppe_rules.evaluate({k: v.model_dump() for k, v in result.items.items()}, aktif)
+        if ppe_rules.SPOOF_MISSING_LABEL in result.missing_items:
+            missing, is_complete = [ppe_rules.SPOOF_MISSING_LABEL] + missing, False
+        result.is_complete, result.missing_items = is_complete, missing
         return result
 
     @staticmethod
@@ -573,7 +625,9 @@ class VLMAnalyzer:
         if not self._engines():
             return self._no_decision(start_t, messages.VLM_NOT_CONFIGURED)
 
-        lock_wait = sum(e.timeout + e.min_interval for e in self._engines()) + 1.0
+        # Terburuk: utama habis waktu, lalu cadangan menjawab + satu konfirmasi larangan (T58)
+        slots = [e.timeout + e.min_interval for e in self._engines()]
+        lock_wait = sum(slots) + max(slots) + 1.0
         if not self.api_lock.acquire(timeout=lock_wait):
             return self._no_decision(start_t, "antrean VLM penuh")
 

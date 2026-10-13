@@ -61,6 +61,8 @@ class PPEItem:
     # Larangan (T58): `detected` = benda terlarang terlihat = melanggar. Bentuk jawaban
     # VLM tetap sama dengan item APD, hanya arti lulusnya yang dibalik.
     prohibited: bool = False
+    # Pertanyaan konfirmasi kedua untuk larangan (T58); lihat VLMAnalyzer._confirm_prohibitions
+    confirm_prompt: str = ""
 
     def to_public_dict(self) -> dict:
         """Bentuk item untuk frontend lewat `GET /api/ppe-rules`.
@@ -274,6 +276,11 @@ PPE_ITEMS: list[PPEItem] = [
             "   - Pulpen, spidol, sedotan, tusuk gigi, ponsel, kunci, atau benda kecil yang tidak\n"
             "     jelas BUKAN rokok.\n"
             "   - Bila ragu, atau tangan dan mulut tidak terlihat jelas -> detected = false."
+        ),
+        confirm_prompt=(
+            "Lihat kedua tangan dan mulut orang ini. Apakah ada BENDA rokok batangan, bungkus rokok, "
+            "atau rokok elektrik/vape yang jelas terlihat? Tangan kosong, jari, atau tangan kotor "
+            "bernoda semen/debu/cat BUKAN rokok."
         ),
     ),
 ]

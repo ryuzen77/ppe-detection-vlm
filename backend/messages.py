@@ -136,6 +136,11 @@ VLM_SYSTEM_PROMPT = (
 VLM_USER_PROMPT = "Nilai gambar ini. JSON saja."
 # Panggilan termurah untuk uji latensi & pemanasan
 VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
+# Konfirmasi kedua larangan (T58): dikirim HANYA bila jawaban pertama menyatakan larangan
+# terlihat. Pertanyaan per item ada di katalog (`PPEItem.confirm_prompt`). Bench 13-10:
+# qwen2.5vl:7b menilai tangan bernoda semen sebagai "rokok menyala"; ditanya khusus -> "tangan kosong".
+VLM_CONFIRM_SYSTEM_PROMPT = "Anda pemeriksa larangan K3. Jawab HANYA JSON, tanpa teks lain."
+VLM_CONFIRM_SHAPE = 'Bentuk JSON: {"detected": true/false, "seen": "<benda yang terlihat di tangan dan mulut>"}'
 
 # --- Suara gerbang (dibangkitkan jadi MP3 oleh generate_audio.py) ---
 # Sengaja singkat (T36b): suara hasil ikut menentukan kapan pekerja melangkah,

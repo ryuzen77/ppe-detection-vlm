@@ -5,7 +5,8 @@ import logging
 import pytest
 
 from backend import config, messages, ppe_rules
-from backend.vlm_analyzer import VLMEngine, build_system_prompt, profile_warnings, thinking_option
+from backend.vlm_analyzer import (VLMEngine, build_system_prompt, confirmation_prompts, profile_warnings,
+                                  thinking_option)
 from backend.vlm_providers import OPENAI_COMPATIBLE, profiles
 from backend.vlm_providers.openai_compatible import PRESETS
 
@@ -17,7 +18,9 @@ PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e", "T
 
 
 def test_prompt_berubah_wajib_menaikkan_versi(catalog_defaults):
-    fingerprint = hashlib.sha256(build_system_prompt(ppe_rules.get_items()).encode()).hexdigest()[:16]
+    # Pertanyaan konfirmasi larangan (T58) ikut menentukan keputusan, jadi ikut sidik jari
+    confirm = "".join("".join(confirmation_prompts(i)) for i in ppe_rules.get_items() if i.prohibited)
+    fingerprint = hashlib.sha256((build_system_prompt(ppe_rules.get_items()) + confirm).encode()).hexdigest()[:16]
     assert PROMPT_FINGERPRINTS.get(messages.PROMPT_VERSION) == fingerprint, (
         f"Prompt berubah ({fingerprint}) tanpa menaikkan PROMPT_VERSION={messages.PROMPT_VERSION}")
 

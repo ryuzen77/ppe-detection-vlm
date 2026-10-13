@@ -350,3 +350,86 @@ def test_engine_meneruskan_suhu_dari_config(monkeypatch):
     assert utama.provider.temperature == 0.3 and cadangan.provider.temperature == 0.3
     for e in (utama, cadangan):
         e.executor.shutdown(wait=False)
+
+
+# --- Konfirmasi kedua larangan (T58) -------------------------------------------------------
+
+class SequenceProvider(FakeProvider):
+    """Jawaban berurutan per panggilan; Exception di daftar dilempar sebagai galat."""
+
+    def __init__(self, *replies):
+        super().__init__()
+        self.replies = list(replies)
+
+    def generate(self, image_jpeg, system_prompt, user_prompt):
+        self.calls.append((image_jpeg, system_prompt, user_prompt))
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+
+def _lengkap_dengan_rokok():
+    data = json.loads(_lengkap())
+    data["items"]["rokok"] = {"detected": True}
+    return json.dumps(data)
+
+
+def _konfirmasi(detected, seen="rokok batangan di tangan kanan"):
+    return json.dumps({"detected": detected, "seen": seen})
+
+
+def test_rokok_dikonfirmasi_pekerja_ditolak(analyzer):
+    utama = SequenceProvider(_lengkap_dengan_rokok(), _konfirmasi(True))
+    hasil = analyzer.pasang(utama=utama).analyze_person(person_crop())
+    assert not hasil.is_complete
+    assert hasil.missing_items == [ppe_rules.get_item("rokok").missing_label]
+    _, system_prompt, user_prompt = utama.calls[1]
+    assert system_prompt == messages.VLM_CONFIRM_SYSTEM_PROMPT
+    assert ppe_rules.get_item("rokok").confirm_prompt in user_prompt
+
+
+def test_rokok_tidak_dikonfirmasi_pekerja_lolos(analyzer, caplog):
+    """Bench 13-10 (no_34): tangan bernoda semen dikira rokok, pertanyaan khusus membatalkannya."""
+    utama = SequenceProvider(_lengkap_dengan_rokok(), _konfirmasi(False, "tangan kosong"))
+    hasil = analyzer.pasang(utama=utama).analyze_person(person_crop())
+    assert hasil.is_complete and hasil.missing_items == []
+    assert hasil.item("rokok").detected is False
+    assert "tangan kosong" in caplog.text, "pembatalan dicatat di log untuk evaluasi"
+
+
+@pytest.mark.parametrize("gagal", [RuntimeError("503 UNAVAILABLE"), "bukan json", json.dumps({"seen": "?"})])
+def test_konfirmasi_gagal_atau_ragu_dianggap_tidak_terlihat(analyzer, gagal):
+    utama = SequenceProvider(_lengkap_dengan_rokok(), gagal)
+    hasil = analyzer.pasang(utama=utama, cadangan=FakeProvider(reply=_lengkap())).analyze_person(person_crop())
+    assert hasil.is_complete and hasil.decided_by == "utama"
+    assert analyzer.backup.provider.calls == [], "konfirmasi gagal bukan kegagalan VLM utama"
+
+
+def test_tanpa_rokok_tidak_ada_panggilan_konfirmasi(analyzer):
+    utama = FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=utama).analyze_person(person_crop())
+    assert len(utama.calls) == 1
+
+
+def test_larangan_dimatikan_tidak_dikonfirmasi(analyzer, catalog_defaults):
+    catalog_defaults.set_active({"rokok": False})
+    utama = FakeProvider(reply=_lengkap_dengan_rokok())
+    assert analyzer.pasang(utama=utama).analyze_person(person_crop()).is_complete
+    assert len(utama.calls) == 1
+
+
+def test_konfirmasi_tidak_menghapus_kekurangan_apd_lain(analyzer):
+    data = json.loads(_lengkap_dengan_rokok())
+    data["items"]["helm"] = {"detected": False}
+    utama = SequenceProvider(json.dumps(data), _konfirmasi(False, "tangan kosong"))
+    hasil = analyzer.pasang(utama=utama).analyze_person(person_crop())
+    assert hasil.missing_items == [ppe_rules.get_item("helm").missing_label]
+
+
+def test_konfirmasi_mempertahankan_penolakan_anti_spoofing(analyzer):
+    data = json.loads(_lengkap_dengan_rokok())
+    data["orang_nyata"] = False
+    utama = SequenceProvider(json.dumps(data), _konfirmasi(False))
+    hasil = analyzer.pasang(utama=utama).analyze_person(person_crop())
+    assert not hasil.is_complete and hasil.missing_items == [ppe_rules.SPOOF_MISSING_LABEL]
