@@ -58,6 +58,9 @@ class PPEItem:
     reports_color: bool = False # Warna item relevan untuk penilaian dan ditampilkan ke operator
     required_default: bool = True  # Aktif secara bawaan; operator dapat mengubahnya
     qualifier: Optional[Qualifier] = None
+    # Larangan (T58): `detected` = benda terlarang terlihat = melanggar. Bentuk jawaban
+    # VLM tetap sama dengan item APD, hanya arti lulusnya yang dibalik.
+    prohibited: bool = False
 
     def to_public_dict(self) -> dict:
         """Bentuk item untuk frontend lewat `GET /api/ppe-rules`.
@@ -74,6 +77,7 @@ class PPEItem:
             "fail_label": self.fail_label,
             "reports_color": self.reports_color,
             "required": self.required_default,
+            "prohibited": self.prohibited,
             "qualifier": (
                 {"key": self.qualifier.key, "fail_label": self.qualifier.fail_label}
                 if self.qualifier is not None else None
@@ -84,8 +88,12 @@ class PPEItem:
         """Apakah hasil pemeriksaan satu item memenuhi syarat.
 
         `result` adalah dict berisi minimal `detected`, ditambah field qualifier
-        bila item ini punya syarat tambahan.
+        bila item ini punya syarat tambahan. Larangan lulus bila TIDAK terdeteksi;
+        jawaban yang hilang dianggap tidak terlihat (keputusan pengguna 13-10:
+        VLM ragu = tidak ada, supaya pekerja patuh tidak salah ditolak).
         """
+        if self.prohibited:
+            return not result.get("detected", False)
         if not result.get("detected", False):
             return False
         if self.qualifier is not None:
@@ -245,6 +253,29 @@ PPE_ITEMS: list[PPEItem] = [
             "tangan tidak terlihat sama sekali, anggap TIDAK terdeteksi."
         ),
     ),
+    # Larangan, bukan APD (T58, keputusan pengguna 13-10): terlihat = merah, ditolak.
+    PPEItem(
+        key="rokok",
+        label="Larangan Rokok",
+        short_label="Rokok",
+        icon="🚭",
+        icon_name="cigarette",
+        missing_label="Membawa Rokok / Vape",
+        audio_missing="dilarang_rokok",
+        audio_missing_text="Dilarang membawa rokok. Akses ditolak.",
+        ok_label="Tidak Ada",
+        fail_label="Terlihat",
+        prohibited=True,
+        prompt_rule=(
+            "LARANGAN ROKOK (BUKAN APD, ini larangan: detected = true berarti MELANGGAR):\n"
+            "   - detected = true HANYA bila JELAS terlihat salah satu: sedang merokok; memegang\n"
+            "     rokok batangan (menyala atau belum, termasuk terselip di jari/telinga); bungkus\n"
+            "     rokok di tangan atau terlihat di saku; rokok elektrik / vape / pod di mulut atau tangan.\n"
+            "   - Pulpen, spidol, sedotan, tusuk gigi, ponsel, kunci, atau benda kecil yang tidak\n"
+            "     jelas BUKAN rokok.\n"
+            "   - Bila ragu, atau tangan dan mulut tidak terlihat jelas -> detected = false."
+        ),
+    ),
 ]
 
 
@@ -330,6 +361,15 @@ _SETTINGS_KEY = "ppe_active"
 _settings_lock = threading.Lock()
 
 
+def _has_active_ppe(overrides: dict) -> bool:
+    """Minimal satu item APD (bukan larangan) aktif.
+
+    Larangan saja tidak cukup: gerbang akan meluluskan siapa pun yang tidak
+    membawa rokok, tanpa APD apa pun.
+    """
+    return any(overrides.get(item.key, item.required_default) for item in PPE_ITEMS if not item.prohibited)
+
+
 def _load_active_overrides() -> dict:
     """Pilihan tersimpan, hanya untuk kunci yang masih ada di katalog."""
     stored = runtime_settings.load().get(_SETTINGS_KEY, {})
@@ -339,9 +379,7 @@ def _load_active_overrides() -> dict:
     overrides = {k: bool(v) for k, v in stored.items() if k in known}
     # Berkas yang mematikan semua item akan membuka gerbang untuk siapa pun;
     # lebih aman kembali ke bawaan katalog.
-    if overrides and not any(
-        overrides.get(item.key, item.required_default) for item in PPE_ITEMS
-    ):
+    if overrides and not _has_active_ppe(overrides):
         logger.warning("Pengaturan tersimpan mematikan semua item APD; memakai bawaan katalog.")
         return {}
     return overrides
@@ -374,7 +412,7 @@ def set_active(changes: dict) -> list[PPEItem]:
 
     with _settings_lock:
         merged = {**_active_overrides, **{k: bool(v) for k, v in changes.items()}}
-        if not any(merged.get(item.key, item.required_default) for item in PPE_ITEMS):
+        if not _has_active_ppe(merged):
             raise ValueError("Minimal satu item APD harus tetap aktif.")
         _active_overrides = merged
         runtime_settings.update(_SETTINGS_KEY, merged)

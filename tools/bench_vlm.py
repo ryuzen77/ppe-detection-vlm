@@ -195,6 +195,16 @@ def output_format(variant: str, items):
     return bit_schema(variant, items) if variant in BIT_VARIANTS else "json"
 
 
+def smoking_flag(parsed):
+    """Rokok terlihat menurut jawaban: kunci atas (prompt eksperimen) atau item larangan produksi (T58)."""
+    if not isinstance(parsed, dict):
+        return None
+    if SMOKING_KEY in parsed:
+        return parsed[SMOKING_KEY]
+    item = parsed.get("items", {}).get(SMOKING_KEY)
+    return item.get("detected") if isinstance(item, dict) else None
+
+
 def to_production_payload(data, variant: str, items=None) -> dict:
     """Jawaban ringkas → bentuk yang dipahami `_parse_vlm_payload` produksi."""
     if variant == "P0":
@@ -370,7 +380,7 @@ def main():
                 parsed = json.loads(raw)
                 res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt, items), items)
                 row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items),
-                           rokok=parsed.get(SMOKING_KEY) if isinstance(parsed, dict) else None, output_chars=len(raw))
+                           rokok=smoking_flag(parsed), output_chars=len(raw))
             except Exception as e:
                 row.update(status="galat", error=str(e)[:160])
             row.update(

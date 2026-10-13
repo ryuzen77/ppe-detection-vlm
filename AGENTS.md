@@ -203,7 +203,9 @@ risiko (§2.2a), bukan dirombak sekaligus di luar task.
 - **Semua keputusan APD oleh VLM.** Utama = VLM cloud (penyedia bebas, bawaan
   Gemini), cadangan = VLM lokal (Ollama `qwen2.5vl:7b`), peralihan otomatis.
   Heuristik OpenCV sudah dibuang — jangan dihidupkan lagi.
-- **Lampu/warna merah hanya untuk APD kurang.** Arahan posisi & peringatan =
+- **Lampu/warna merah hanya untuk APD kurang atau larangan dilanggar** (larangan
+  = item katalog `prohibited`, mis. rokok/vape terlihat — keputusan pengguna 13-10,
+  T58; VLM ragu = dianggap tidak ada). Arahan posisi & peringatan =
   kuning; bila VLM utama & cadangan gagal pekerja *diminta menunggu*, bukan
   ditolak.
 - Keputusan terkunci per sesi sampai jalur inspeksi kosong.

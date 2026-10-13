@@ -13,7 +13,7 @@ from backend.vlm_providers.openai_compatible import PRESETS
 # messages.PROMPT_VERSION, tambahkan sidik jari baru di sini, lalu uji ulang model
 # dengan foto berlabel dan perbarui profiles.VALIDATIONS. Tanpa itu, validasi lama
 # diam-diam dianggap berlaku untuk prompt yang belum pernah diuji.
-PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e"}
+PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e", "T58": "BELUM"}
 
 
 def test_prompt_berubah_wajib_menaikkan_versi(catalog_defaults):

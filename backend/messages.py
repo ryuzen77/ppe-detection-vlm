@@ -124,7 +124,7 @@ API_LOGIN_LOCKED = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 # Jawaban ringkas (hanya nilai per item) — lihat ppe_rules.build_json_shape.
 # Versi prompt VLM. NAIKKAN setiap kali isi prompt atau aturan item berubah:
 # validasi model di vlm_providers/profiles.py berlaku untuk versi tertentu (T39b).
-PROMPT_VERSION = "T48"
+PROMPT_VERSION = "T58"
 
 VLM_SYSTEM_PROMPT = (
     "Anda inspektur K3. Nilai APD orang di gambar. "

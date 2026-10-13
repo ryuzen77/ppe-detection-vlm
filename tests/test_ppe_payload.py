@@ -176,3 +176,56 @@ def test_detected_null_dianggap_tidak_terdeteksi(catalog_defaults):
     data = _balasan_ringkas()
     data["items"]["helm"] = {"detected": None}
     assert missing_label("helm") in VLMAnalyzer._parse_vlm_payload(data).missing_items
+
+
+# --- Larangan rokok (T58) ---------------------------------------------------------------
+
+def test_rokok_terlihat_menolak_walau_apd_lengkap(catalog_defaults):
+    data = _balasan_lengkap()
+    data["items"]["rokok"] = {"detected": True}
+    result = VLMAnalyzer._parse_vlm_payload(data)
+    assert not result.is_complete
+    assert result.missing_items == [missing_label("rokok")]
+
+
+@pytest.mark.parametrize("jawaban", [{"detected": False}, {"detected": None}, None])
+def test_rokok_tidak_terlihat_atau_ragu_tidak_menolak(catalog_defaults, jawaban):
+    """Keputusan pengguna 13-10: VLM ragu / tidak menjawab = dianggap tidak ada."""
+    data = _balasan_lengkap()
+    if jawaban is not None:
+        data["items"]["rokok"] = jawaban
+    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+
+
+def test_larangan_rokok_aktif_secara_bawaan_dan_bisa_dimatikan(catalog_defaults):
+    assert ppe_rules.get_item("rokok") in ppe_rules.get_active_items()
+    catalog_defaults.set_active({"rokok": False})
+    data = _balasan_lengkap()
+    data["items"]["rokok"] = {"detected": True}
+    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+
+
+def test_hanya_larangan_yang_aktif_ditolak(catalog_defaults):
+    """Tanpa satu pun APD aktif, siapa pun yang tidak merokok akan lolos."""
+    apd_mati = {item.key: False for item in ppe_rules.get_items() if not item.prohibited}
+    with pytest.raises(ValueError):
+        catalog_defaults.set_active({**apd_mati, "rokok": True})
+
+
+def test_pengaturan_tersimpan_yang_hanya_menyisakan_larangan_diabaikan(catalog_defaults, monkeypatch):
+    from backend import runtime_settings
+    tersimpan = {item.key: item.prohibited for item in ppe_rules.get_items()}
+    monkeypatch.setattr(runtime_settings, "load", lambda: {"ppe_active": tersimpan})
+    catalog_defaults.load_settings()
+    assert ppe_rules.get_item("helm") in ppe_rules.get_active_items(), "kembali ke bawaan katalog"
+
+
+def test_katalog_publik_menandai_larangan(catalog_defaults):
+    publik = {d["key"]: d["prohibited"] for d in (i.to_public_dict() for i in ppe_rules.get_items())}
+    assert publik["rokok"] is True
+    assert not any(v for k, v in publik.items() if k != "rokok")
+
+
+def test_prompt_menyebut_larangan_dan_bentuk_jawabannya(catalog_defaults):
+    assert "LARANGAN ROKOK" in ppe_rules.build_prompt_rules()
+    assert '"rokok": {"detected": true/false}' in ppe_rules.build_json_shape()
