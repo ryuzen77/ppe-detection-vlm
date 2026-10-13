@@ -183,6 +183,51 @@ def find_camera() -> int:
     return 0
 
 
+def open_camera(index: int):
+    cap = cv2.VideoCapture(index, CAPTURE_BACKEND)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.CAMERA_DEFAULT_REQ_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.CAMERA_DEFAULT_REQ_HEIGHT)
+    return cap
+
+
+def with_reference(part: list[dict]) -> np.ndarray:
+    """Acuan jalur kosong = median cuplikan "kosong"; beda tiap cuplikan kosong diisi ulang."""
+    reference = np.median(np.stack([r["_gray"] for r in part]), axis=0).astype(np.float32)
+    for r in part:
+        r["diff_ref"] = float(np.abs(r["_gray"].astype(np.float32) - reference).mean())
+    return reference
+
+
+def measure_conditions(cap, model, wanted) -> list[dict]:
+    rows, reference = [], None
+    for key, instruction in CONDITIONS:
+        if wanted and key not in wanted:
+            continue
+        say(f"Persiapan. {instruction}")
+        time.sleep(PREPARE_SECONDS)
+        say("Mulai")
+        part = record(cap, model, key, reference)
+        if key == "kosong":
+            reference = with_reference(part)
+        rows += part
+        say("Selesai")
+    return rows
+
+
+def save_results(rows: list[dict]):
+    out = cfg.DATA_DIR / "eval" / f"{time.strftime('%Y%m%d-%H%M%S')}_camera_probe"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fields = ["condition", "mean", "std", "sharp", "edges", "diff_ref", "persons", "blocked"]
+    with open(f"{out}.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    summary = json.dumps(summarize(rows), indent=2, ensure_ascii=False)
+    Path(f"{out}.json").write_text(summary, encoding="utf-8")
+    print(summary)
+    print(f"hasil: {out}.csv/.json")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--index", type=int, required=False)
@@ -195,48 +240,19 @@ def main() -> int:
     if args.index is None:
         ap.error("--index wajib (cari dulu dengan --find)")
     prepare_voice(SYSTEM_TEXTS + [f"Persiapan. {text}" for _, text in CONDITIONS])
-
     from ultralytics import YOLO
 
-    model = YOLO(cfg.YOLO_MODEL_PATH)
-    cap = cv2.VideoCapture(args.index, CAPTURE_BACKEND)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.CAMERA_DEFAULT_REQ_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.CAMERA_DEFAULT_REQ_HEIGHT)
+    model, cap = YOLO(cfg.YOLO_MODEL_PATH), open_camera(args.index)
     if not cap.isOpened():
         print("Kamera tidak bisa dibuka.")
         return 1
     wanted = {"kosong", *filter(None, args.only.split(","))} if args.only else None
-    rows, reference = [], None
     try:
-        for key, instruction in CONDITIONS:
-            if wanted and key not in wanted:
-                continue
-            say(f"Persiapan. {instruction}")
-            time.sleep(PREPARE_SECONDS)
-            say("Mulai")
-            part = record(cap, model, key, reference)
-            if key == "kosong":
-                reference = np.median(np.stack([r["_gray"] for r in part]), axis=0).astype(np.float32)
-                for r in part:
-                    r["diff_ref"] = float(np.abs(r["_gray"].astype(np.float32) - reference).mean())
-            rows += part
-            say("Selesai")
+        rows = measure_conditions(cap, model, wanted)
     finally:
         cap.release()
     say("Pengukuran selesai. Terima kasih.")
-
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = cfg.DATA_DIR / "eval" / f"{stamp}_camera_probe"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["condition", "mean", "std", "sharp", "edges", "diff_ref", "persons", "blocked"]
-    with open(f"{out}.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-    summary = summarize(rows)
-    Path(f"{out}.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(json.dumps(summary, indent=2, ensure_ascii=False))
-    print(f"hasil: {out}.csv/.json")
+    save_results(rows)
     return 0
 
 
