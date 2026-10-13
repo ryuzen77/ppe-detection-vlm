@@ -4,9 +4,10 @@ Pencabutan kamera sudah terdeteksi oleh `video/capture.py` (perangkat hilang,
 gagal baca, laju ambruk). Dua kasus berikut lolos dari semua pemeriksaan itu
 karena frame tetap mengalir dengan laju normal:
 
-- **Tertutup**: tangan/benda di depan lensa, lensa kotor, atau ruangan gelap.
-  Gambar menjadi sangat gelap, sangat terang, atau nyaris seragam; gerbang lalu
-  diam tanpa penjelasan karena tidak ada orang yang terdeteksi.
+- **Tertutup**: tangan/benda di depan lensa, lensa kotor/berembun, atau ruangan
+  gelap. Gambar menjadi sangat gelap, sangat terang, nyaris seragam, atau buram
+  tanpa detail (T57); gerbang lalu diam tanpa penjelasan karena tidak ada orang
+  yang terdeteksi.
 - **Membeku**: driver terus mengirim frame yang sama persis. Bila membeku saat
   lampu hijau, sesi tidak pernah dianggap kosong dan hijau bisa tertahan untuk
   pekerja berikutnya.
@@ -26,13 +27,43 @@ FAULT_BLOCKED = "blocked"
 FAULT_FROZEN = "frozen"
 
 
-def is_blocked(frame: np.ndarray) -> bool:
-    """Terlalu gelap, terlalu terang, atau nyaris seragam (tanpa detail)."""
-    small = cv2.resize(frame, (cfg.CAMERA_HEALTH_SAMPLE_WIDTH, cfg.CAMERA_HEALTH_SAMPLE_HEIGHT),
+def detail_gray(frame: np.ndarray) -> np.ndarray:
+    """Gambar abu-abu ukuran tetap untuk mengukur detail: ketajaman tidak bergantung resolusi kamera."""
+    small = cv2.resize(frame, (cfg.CAMERA_DETAIL_WIDTH, cfg.CAMERA_DETAIL_HEIGHT), interpolation=cv2.INTER_AREA)
+    return cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.ndim == 3 else small
+
+
+def image_detail(gray: np.ndarray) -> tuple[float, float]:
+    """(ketajaman = variansi Laplacian, porsi piksel tepi Canny) dari `detail_gray`."""
+    sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    edges = cv2.Canny(gray, cfg.CAMERA_CANNY_LOW, cfg.CAMERA_CANNY_HIGH)
+    return sharpness, float(np.count_nonzero(edges)) / edges.size
+
+
+def is_dark_or_uniform(gray: np.ndarray) -> bool:
+    """Terlalu gelap, terlalu terang, atau nyaris seragam (ambang T45, gambar 64x36)."""
+    small = cv2.resize(gray, (cfg.CAMERA_HEALTH_SAMPLE_WIDTH, cfg.CAMERA_HEALTH_SAMPLE_HEIGHT),
                        interpolation=cv2.INTER_AREA)
-    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.ndim == 3 else small
-    mean, std = float(gray.mean()), float(gray.std())
+    mean, std = float(small.mean()), float(small.std())
     return mean < cfg.CAMERA_DARK_MEAN or mean > cfg.CAMERA_BRIGHT_MEAN or std < cfg.CAMERA_UNIFORM_STD
+
+
+def is_blurred(gray: np.ndarray) -> bool:
+    """Tanpa detail: benda menempel di lensa, lensa berembun/diplastik (T57).
+
+    Uji C920 13-10: pemandangan jelas (jalur kosong, orang, orang 0,5 m) ketajaman
+    >= 368 & tepi >= 0,08; tertutup tangan/kardus/kain/plastik ketajaman <= 17 &
+    tepi ~0. Buram terang lolos dari ambang gelap/seragam, karena itu perlu ini.
+    Dua syarat sekaligus supaya dinding polos yang masih bertepi tidak dianggap buram.
+    """
+    sharpness, edges = image_detail(gray)
+    return sharpness < cfg.CAMERA_MIN_SHARPNESS and edges < cfg.CAMERA_MIN_EDGE_RATIO
+
+
+def is_blocked(frame: np.ndarray) -> bool:
+    """Kamera tidak bisa melihat jalur: gelap/terang/seragam (T45) atau buram/terhalang (T57)."""
+    gray = detail_gray(frame)
+    return is_dark_or_uniform(gray) or is_blurred(gray)
 
 
 def sample(frame: np.ndarray) -> np.ndarray:

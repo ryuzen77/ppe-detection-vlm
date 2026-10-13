@@ -22,7 +22,7 @@ LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan oto
 CAMERA_FAULT_SOUND = {"lost": "kamera_terputus", "frozen": "kamera_terputus", "blocked": "kamera_terhalang"}
 LIGHT_CAMERA_FAULT = {
     "lost": "KAMERA TERPUTUS - Gerbang berhenti memeriksa, mohon tunggu petugas",
-    "blocked": "KAMERA TERTUTUP / TERLALU GELAP - Gerbang berhenti memeriksa, mohon tunggu petugas",
+    "blocked": "KAMERA TERHALANG / BURAM / TERLALU GELAP - Gerbang berhenti memeriksa, mohon tunggu petugas",
     "frozen": "GAMBAR KAMERA MEMBEKU - Menyambung ulang, mohon tunggu",
 }
 LIGHT_TEST_GREEN = "Uji Coba Manual - Lampu Hijau"
@@ -153,7 +153,7 @@ VOICE_TEXTS = {
     "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
     # Gangguan kamera (T45/T45b): terputus dan terhalang dibedakan, diputar sekali per kejadian
     "kamera_terputus": "Kamera gerbang terputus. Mohon tunggu petugas.",
-    "kamera_terhalang": "Kamera gerbang terhalang. Mohon singkirkan penghalang di depan kamera.",
+    "kamera_terhalang": "Kamera gerbang terhalang atau buram. Mohon singkirkan penghalang dan bersihkan lensa kamera.",
 }
 
 # --- Berjalan sendiri (T29) ---

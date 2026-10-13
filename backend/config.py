@@ -149,6 +149,15 @@ class Config:
     CAMERA_DARK_MEAN: float = float(_env("CAMERA_DARK_MEAN", "25"))
     CAMERA_BRIGHT_MEAN: float = float(_env("CAMERA_BRIGHT_MEAN", "235"))
     CAMERA_UNIFORM_STD: float = float(_env("CAMERA_UNIFORM_STD", "6"))
+    # Buram/terhalang (T57): ketajaman (variansi Laplacian) & porsi tepi Canny pada
+    # gambar abu-abu 320x180. Uji C920 13-10: jelas >= 368 / >= 0,08; tertutup <= 17 / ~0.
+    # Ukur ulang di lokasi gerbang dengan tools/camera_probe.py bila ruangan jauh berbeda.
+    CAMERA_DETAIL_WIDTH: int = 320
+    CAMERA_DETAIL_HEIGHT: int = 180
+    CAMERA_CANNY_LOW: int = 50
+    CAMERA_CANNY_HIGH: int = 150
+    CAMERA_MIN_SHARPNESS: float = float(_env("CAMERA_MIN_SHARPNESS", "80"))
+    CAMERA_MIN_EDGE_RATIO: float = float(_env("CAMERA_MIN_EDGE_RATIO", "0.01"))
     # 1,5 dtk: uji fisik 06-10 — 3 dtk terasa terlalu lama bagi pengguna
     CAMERA_BLOCKED_SECONDS: float = float(_env("CAMERA_BLOCKED_SECONDS", "1.5"))
     # Membeku = cuplikan berjarak (tanpa dirata-rata, derau sensor terlihat) identik

@@ -1,4 +1,5 @@
 """Ketangguhan kamera (T45): tertutup, membeku, terputus — gerbang berhenti memeriksa, lampu kuning."""
+import cv2
 import numpy as np
 import pytest
 
@@ -16,12 +17,22 @@ from helpers import person_crop
 RNG = np.random.default_rng(45)
 
 
+# Pemandangan bertekstur tetap (lantai, rak, dinding berpola): pemandangan nyata
+# punya banyak tepi (uji C920 13-10: porsi tepi ~0,09), bidang rata tidak.
+TEXTURE = cv2.resize(RNG.integers(40, 200, (27, 48), dtype=np.uint8), (864, 480),
+                     interpolation=cv2.INTER_NEAREST)
+
+
 def scene():
     """Pemandangan diam dengan derau sensor: tiap panggilan sedikit berbeda, seperti kamera hidup."""
-    base = np.full((480, 864, 3), 120, np.uint8)
-    base[100:400, 300:560] = 60                      # ada objek -> tidak seragam
+    base = np.repeat(TEXTURE[:, :, None], 3, axis=2)
     noise = RNG.integers(-3, 4, base.shape, dtype=np.int16)
     return np.clip(base.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+
+
+def blurred(frame, kernel=61):
+    """Lensa berembun/diplastik: pemandangan masih terang & bervariasi, tetapi tanpa detail."""
+    return cv2.GaussianBlur(frame, (kernel, kernel), 0)
 
 
 def dark():
@@ -48,6 +59,39 @@ def test_terlalu_gelap_atau_terang_dianggap_tertutup(value):
 
 def test_gambar_seragam_dianggap_tertutup():
     assert ch.is_blocked(np.full((480, 864, 3), 128, np.uint8))     # tangan menempel di lensa
+
+
+def test_lensa_buram_dianggap_tertutup_walau_terang():
+    """T57: buram terang lolos dari ambang gelap/seragam T45, ditangkap lewat ketajaman."""
+    frame = blurred(scene())
+    gray = ch.detail_gray(frame)
+    assert not ch.is_dark_or_uniform(gray), "prasyarat: kasus ini memang lolos dari aturan T45"
+    assert ch.is_blocked(frame)
+
+
+def test_pemandangan_jelas_punya_detail_di_atas_ambang():
+    sharpness, edges = ch.image_detail(ch.detail_gray(scene()))
+    assert sharpness >= cfg.CAMERA_MIN_SHARPNESS and edges >= cfg.CAMERA_MIN_EDGE_RATIO
+
+
+def test_setengah_lensa_tertutup_tidak_dianggap_tertutup():
+    """Uji C920 13-10: setengah tertutup masih ketajaman ~224 — orang tetap terlihat, jangan alarm."""
+    frame = scene()
+    frame[:, : frame.shape[1] // 2] = blurred(frame)[:, : frame.shape[1] // 2]
+    assert not ch.is_blocked(frame)
+
+
+def test_dinding_polos_bertepi_tidak_dianggap_buram(monkeypatch):
+    """Dua syarat sekaligus: ketajaman rendah saja tidak cukup bila tepi masih ada."""
+    monkeypatch.setattr(ch, "image_detail", lambda gray: (cfg.CAMERA_MIN_SHARPNESS - 1, cfg.CAMERA_MIN_EDGE_RATIO))
+    assert not ch.is_blurred(ch.detail_gray(scene()))
+
+
+def test_buram_harus_bertahan_sebelum_gangguan():
+    h = ch.CameraHealth()
+    n = int(cfg.CAMERA_BLOCKED_SECONDS * 10)
+    assert feed(h, [blurred(scene()) for _ in range(n)]) is None
+    assert h.update(blurred(scene()), cfg.CAMERA_BLOCKED_SECONDS + 0.1) == ch.FAULT_BLOCKED
 
 
 def test_tertutup_harus_bertahan_sebelum_gangguan():
