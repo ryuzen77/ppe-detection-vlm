@@ -198,7 +198,18 @@ IOT_OPEN_FAILED = "Port lampu gerbang {port} tidak bisa dibuka: {error}. Dicoba 
 IOT_LINK_LOST = "Sambungan lampu gerbang terputus: {error}. Dicoba lagi otomatis."
 IOT_NO_ACK = "Papan lampu gerbang belum membalas."
 IOT_TYPE_UNSUPPORTED = ("IOT_TYPE={iot_type} tidak didukung; lampu fisik dimatikan. "
-                        "Pakai IOT_TYPE=serial (ESP32 lewat USB).")
+                        "Pakai IOT_TYPE=serial (ESP32 lewat USB) atau usb_relay (relay USB HID).")
+# Relay USB HID (T54)
+IOT_RELAY_CONNECTED = "Relay lampu gerbang tersambung ({product}, serial {serial})."
+IOT_RELAY_NOT_FOUND = "Relay lampu gerbang ({target}) tidak ditemukan. Dicoba lagi otomatis."
+IOT_RELAY_ANY_BOARD = "papan USBRelay pertama"
+IOT_RELAY_REASON_STOP = "server berhenti"
+IOT_RELAY_REASON_EXIT = "server keluar dengan kode {code}"
+IOT_RELAY_MISMATCH = "Relay lampu gerbang tidak mengikuti perintah (diminta {wanted:#04b}, terbaca {actual:#04b})."
+IOT_RELAY_ALL_OFF = "Lampu relay dimatikan ({reason})."
+IOT_RELAY_ALL_OFF_FAILED = "Gagal mematikan lampu relay ({reason}): {error}"
+IOT_RELAY_CHANNEL_INVALID = ("Kanal relay lampu tidak sah (hijau {green}, merah {red}, papan {count} kanal); "
+                             "lampu fisik dimatikan.")
 
 # --- Ekspor CSV audit ---
 CSV_HEADER_LEADING = ["No", "Tanggal", "Waktu", "ID Pekerja", "Status Kelulusan"]

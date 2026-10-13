@@ -384,8 +384,14 @@ class Config:
 
     # IoT / Hardware Output (Ready for Stage 2)
     IOT_ENABLED: bool = _env("IOT_ENABLED", "false").lower() == "true"
-    # Hanya "serial" (ESP32 lewat USB). HTTP/Wi-Fi tanpa tanda tangan dibuang di T47.
+    # "serial" (ESP32 lewat USB, T47) atau "usb_relay" (relay USB HID dcttech, T54).
+    # HTTP/Wi-Fi tanpa tanda tangan dibuang di T47.
     IOT_TYPE: str = _env("IOT_TYPE", "serial")
+    # Relay USB (T54): kanal (1-based) tiap lampu; serial kosong = papan USBRelay pertama.
+    # Hanya dua lampu: kuning tidak ada, keadaan peringatan = semua lampu mati.
+    IOT_RELAY_GREEN_CHANNEL: int = int(_env("IOT_RELAY_GREEN_CHANNEL", "1"))
+    IOT_RELAY_RED_CHANNEL: int = int(_env("IOT_RELAY_RED_CHANNEL", "2"))
+    IOT_RELAY_SERIAL: str = _env("IOT_RELAY_SERIAL", "")
     IOT_SERIAL_PORT: str = _env("IOT_SERIAL_PORT", "COM3")
     IOT_SERIAL_BAUD: int = 9600
     IOT_SERIAL_TIMEOUT_SECONDS: float = 1.0

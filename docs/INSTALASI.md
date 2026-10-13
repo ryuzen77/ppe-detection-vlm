@@ -174,3 +174,9 @@ npm run build           # lalu commit web/dist (CI menolak dist yang tidak sesua
 4. Di dashboard, buka **Pengaturan → Uji lampu** untuk menguji relay/LED.
 
 Wiring dan spesifikasinya ada di [IOT_HARDWARE_SPEC.md](../IOT_HARDWARE_SPEC.md).
+
+**Tanpa ESP32 — relay USB 2 kanal (T54):** colok relay USB "USBRelay2", lampu hijau di
+relay 1 dan merah di relay 2 (kontak **NO**), lalu di `.env`: `IOT_ENABLED=true`,
+`IOT_TYPE=usb_relay`. Tidak perlu driver atau nomor COM. Jalankan lewat
+`start_system.bat` supaya lampu dimatikan otomatis bila server crash. Rincian di
+IOT_HARDWARE_SPEC.md bagian 9.

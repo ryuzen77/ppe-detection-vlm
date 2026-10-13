@@ -141,3 +141,38 @@ oleh `iot/wokwi_simulation/wokwi.toml`. Jalankan simulator, lalu isi
 - Kabel 12V ke lampu boleh panjang (≤20 m). Taruh ESP32 dekat PC.
 - Palang/boom, sensor lewat, dan perilaku saat listrik padam ada di
   `docs/RENCANA.md`, bagian rencana IoT tahap 2.
+
+## 9. Alternatif uji coba: relay USB HID 2 kanal (T54)
+
+Tanpa ESP32: **relay USB dcttech "USBRelay2"** (VID `16C0`, PID `05DF`, tanpa
+driver, tidak muncul sebagai port COM) + **adaptor 12V 1A** + **dua lampu LED 12V**.
+Pengendalinya `backend/usb_relay.py`, lewat pustaka `hidapi`.
+
+| Lampu | Kanal | Menyala saat |
+| :-- | :-- | :-- |
+| Hijau | relay 1 (`IOT_RELAY_GREEN_CHANNEL`) | **Hanya** APD lengkap |
+| Merah | relay 2 (`IOT_RELAY_RED_CHANNEL`) | **Hanya** APD kurang |
+| — | — | Selain itu (siaga, arahan posisi, menunggu VLM, gangguan kamera/sistem) **keduanya mati** — tidak ada kuning |
+
+**Pengkabelan:** `+12V` adaptor → **COM** relay; **NO** relay → `+` lampu; `−` lampu →
+`−12V` adaptor. Wajib **NO (Normally Open)**: lampu mati saat relay tidak aktif atau
+papan tanpa daya. Kabel ke NC membuat lampu menyala justru saat sistem mati.
+
+**`backend/.env`:** `IOT_ENABLED=true`, `IOT_TYPE=usb_relay` (kanal & serial: lihat `.env.example`).
+
+**Protokol** (dari `usb_relay_lib.c` vendor & `usbrelay`): perintah = HID *feature report*
+9 byte `[0x00, 0xFF nyala / 0xFD mati, nomor relay, 0…]`; status = feature report ID 0,
+9 byte: byte 1–5 serial, byte 8 bitmask relay menyala (bit 0 = relay 1). `write()` biasa
+diterima Windows tetapi **diabaikan papan** (uji 13-10).
+
+**Relay mengunci keadaannya** (tanpa heartbeat seperti firmware ESP32). Pengaman:
+- status dibaca balik tiap `IOT_HEARTBEAT_SECONDS` dan dikoreksi; tidak cocok / dicabut →
+  status lampu "terputus" di dashboard, sambung ulang otomatis;
+- server berhenti rapi → semua relay mati;
+- server crash → penjaga proses (`python -m backend.supervisor`, dipakai `start_system.bat`)
+  mematikan semua relay sebelum menyalakan ulang server;
+- kabel USB dicabut / laptop mati → papan tanpa daya → relay lepas.
+
+**Sisa risiko:** server **macet tanpa crash** (proses hidup, tidak menjawab) membuat
+lampu tertahan pada keadaan terakhir, termasuk hijau. Untuk itu dibutuhkan papan
+dengan heartbeat (ESP32, bagian 1–7). Diterima untuk uji coba demo (keputusan 13-10).

@@ -9,8 +9,9 @@ Lampu fisik dikendalikan satu thread `GateLightLink` yang memegang port serial:
 - balasan `OK:` dari papan menandai sambungan sehat; port yang galat ditutup
   dan dibuka ulang otomatis (kabel dicabut lalu dicolok lagi).
 
-Hanya USB serial yang didukung. Perintah lewat HTTP/Wi-Fi tanpa tanda tangan
-bisa dipalsukan siapa pun di jaringan yang sama (analisa T47), jadi dibuang.
+Alternatifnya (T54) relay USB HID 2 kanal (`usb_relay.py`): hijau & merah saja.
+Perintah lewat HTTP/Wi-Fi tanpa tanda tangan bisa dipalsukan siapa pun di jaringan
+yang sama (analisa T47), jadi dibuang.
 """
 import logging
 import threading
@@ -169,6 +170,18 @@ class GateLightLink:
             self._conn = None
 
 
+def _usb_relay_link():
+    """Relay USB 2 kanal (T54): hanya hijau & merah; kuning/siaga = semua mati."""
+    from .usb_relay import UsbRelayLink, channel_mask
+    green, red = cfg.IOT_RELAY_GREEN_CHANNEL, cfg.IOT_RELAY_RED_CHANNEL
+    return UsbRelayLink({LightState.GREEN: channel_mask(green), LightState.RED: channel_mask(red)}, (green, red))
+
+
+# IOT_TYPE -> pembuat link lampu fisik. Membuat link tidak menyentuh perangkat;
+# port/papan baru dibuka oleh thread link setelah start().
+LINK_FACTORIES = {"serial": GateLightLink, "usb_relay": _usb_relay_link}
+
+
 class NotifierManager:
     """Keadaan lampu untuk dashboard, diteruskan ke lampu fisik bila IoT aktif."""
 
@@ -176,16 +189,17 @@ class NotifierManager:
         self.current_state = LightState.OFF
         self.last_change_time = time.time()
         self.message = messages.LIGHT_BOOT
-        self.link: Optional[GateLightLink] = GateLightLink() if cfg.IOT_ENABLED else None
+        factory = LINK_FACTORIES.get(cfg.IOT_TYPE) if cfg.IOT_ENABLED else None
+        self.link = factory() if factory is not None else None
 
     def start(self):
-        if self.link is None:
-            return
-        if cfg.IOT_TYPE != "serial":
-            logger.error(messages.IOT_TYPE_UNSUPPORTED.format(iot_type=cfg.IOT_TYPE))
+        if cfg.IOT_TYPE not in LINK_FACTORIES:
+            if cfg.IOT_ENABLED or self.link is not None:
+                logger.error(messages.IOT_TYPE_UNSUPPORTED.format(iot_type=cfg.IOT_TYPE))
             self.link = None
             return
-        self.link.start()
+        if self.link is not None:
+            self.link.start()
 
     def stop(self):
         if self.link is not None:

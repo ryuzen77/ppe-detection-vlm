@@ -26,9 +26,17 @@ def restart_delay(consecutive_crashes: int) -> float:
     return min(delay, cfg.SUPERVISOR_MAX_DELAY_SECONDS)
 
 
+def lights_off_after_exit(code: int):
+    """Relay USB (T54) mengunci keadaannya: bila server crash saat hijau, hijau tetap
+    menyala. Penjaga ini proses terpisah, jadi masih hidup untuk mematikannya."""
+    if cfg.IOT_ENABLED and cfg.IOT_TYPE == "usb_relay":
+        from . import usb_relay
+        usb_relay.all_off(messages.IOT_RELAY_REASON_EXIT.format(code=code))
+
+
 def supervise(command: Sequence[str], run: Callable[[Sequence[str]], int] = subprocess.call,
               sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-              max_runs: Optional[int] = None) -> int:
+              max_runs: Optional[int] = None, on_exit: Callable[[int], None] = lights_off_after_exit) -> int:
     """Menjalankan `command` berulang sampai keluar rapi. Mengembalikan kode keluar terakhir."""
     crashes = 0      # crash beruntun: server mati sebelum stabil SUPERVISOR_STABLE_SECONDS
     runs = 0
@@ -40,6 +48,7 @@ def supervise(command: Sequence[str], run: Callable[[Sequence[str]], int] = subp
         except KeyboardInterrupt:
             logger.info(messages.SUPERVISOR_STOPPED)
             return 0
+        on_exit(code)      # sebelum jeda & nyala ulang: lampu tidak tertinggal menyala
         if code == 0:
             logger.info(messages.SUPERVISOR_CLEAN_EXIT)
             return 0

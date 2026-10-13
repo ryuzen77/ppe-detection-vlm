@@ -66,6 +66,8 @@ h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
+hidapi==0.15.0
+    # via -r requirements.txt
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1

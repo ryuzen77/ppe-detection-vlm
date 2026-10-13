@@ -20,6 +20,9 @@ httpx>=0.27
 python-dotenv>=1.0.0
 gTTS>=2.4.0
 pyserial>=3.5
+# Lampu gerbang lewat relay USB HID (dcttech USBRelay2, T54); wheel berisi pustaka
+# hidapi untuk Windows/macOS/Linux, jadi tanpa driver tambahan
+hidapi>=0.14
 # Nama perangkat DirectShow untuk daftar kamera (khusus Windows; Linux membaca sysfs)
 pygrabber>=0.2 ; sys_platform == 'win32'
 pillow>=10.0.0
