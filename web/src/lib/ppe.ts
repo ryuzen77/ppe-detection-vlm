@@ -18,6 +18,12 @@ export interface ItemAssessment {
 
 export function assessItem(item: PpeItem, result: ItemResult | undefined | null): ItemAssessment {
   if (!result) return { status: 'pending', text: CHECKLIST.pending }
+  if (item.prohibited) {
+    if (result.detected) {
+      return { status: 'missing', text: item.fail_label }
+    }
+    return { status: 'ok', text: item.ok_label }
+  }
   const qualifier = item.qualifier
   const qualifierOk = qualifier ? Boolean(result[qualifier.key]) : true
   if (result.detected && qualifierOk) {

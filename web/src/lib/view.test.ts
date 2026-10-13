@@ -98,7 +98,7 @@ describe('gateView', () => {
 describe('assessItem', () => {
   const rompi: PpeItem = {
     key: 'rompi', label: 'Rompi', short_label: 'Rompi', icon: '', icon_name: 'safety-vest', ok_label: 'Terpasang', fail_label: 'Tidak ada',
-    reports_color: true, required: true, qualifier: { key: 'is_valid_color', fail_label: 'Bukan hi-vis' },
+    reports_color: true, required: true, prohibited: false, qualifier: { key: 'is_valid_color', fail_label: 'Bukan hi-vis' },
   }
   it('belum dinilai = pending (kuning)', () => {
     expect(assessItem(rompi, undefined)).toEqual({ status: 'pending', text: 'Belum dinilai' })
@@ -111,6 +111,39 @@ describe('assessItem', () => {
   })
   it('tidak terdeteksi', () => {
     expect(assessItem(rompi, { detected: false, color: '', description: '' }).status).toBe('missing')
+  })
+
+  const larangan: PpeItem = {
+    key: 'rokok', label: 'Larangan Rokok', short_label: 'Rokok', icon: '🚭', icon_name: 'cigarette',
+    ok_label: 'Tidak Ada', fail_label: 'Terlihat', reports_color: false, required: true,
+    prohibited: true, qualifier: null,
+  }
+
+  it('larangan: belum dinilai = pending', () => {
+    expect(assessItem(larangan, null)).toEqual({ status: 'pending', text: 'Belum dinilai' })
+    expect(assessItem(larangan, undefined)).toEqual({ status: 'pending', text: 'Belum dinilai' })
+  })
+
+  it('larangan: terdeteksi (melanggar) = missing ("Terlihat")', () => {
+    expect(assessItem(larangan, { detected: true, color: '', description: '' })).toEqual({
+      status: 'missing',
+      text: 'Terlihat',
+    })
+  })
+
+  it('larangan: tidak terdeteksi atau null/ragu = ok ("Tidak Ada")', () => {
+    expect(assessItem(larangan, { detected: false, color: '', description: '' })).toEqual({
+      status: 'ok',
+      text: 'Tidak Ada',
+    })
+    expect(assessItem(larangan, { detected: null as any, color: '', description: '' })).toEqual({
+      status: 'ok',
+      text: 'Tidak Ada',
+    })
+    expect(assessItem(larangan, {} as any)).toEqual({
+      status: 'ok',
+      text: 'Tidak Ada',
+    })
   })
 })
 
