@@ -231,6 +231,12 @@ VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason
 LOG_SESSION_READY = ("Sesi #{session}: pekerja siap setelah diam {held:.1f} dtk "
                      "(jendela diam diulang {restarts}x, {frames} frame).")
 
+# --- Akhir sesi (T59) ---
+# Teks lama "jalur kosong" dipertahankan: dicari saat analisa log uji nyata
+LOG_SESSION_LANE_EMPTY = "Sesi #{session_id} selesai: jalur kosong. Gerbang standby."
+LOG_SESSION_SUBJECT_LEFT = ("Sesi #{session_id} selesai: pekerja yang diputuskan meninggalkan jalur "
+                            "(orang/benda lain di koridor tidak mewarisi keputusan). Gerbang standby.")
+
 # --- Lampu gerbang fisik (T47) ---
 IOT_CONNECTED = "Lampu gerbang tersambung di {port}."
 IOT_OPEN_FAILED = "Port lampu gerbang {port} tidak bisa dibuka: {error}. Dicoba lagi otomatis."

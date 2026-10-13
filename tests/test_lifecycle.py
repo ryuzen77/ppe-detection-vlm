@@ -456,3 +456,79 @@ def test_kaki_subjek_tertutup_sesaat_sesi_tetap_berjalan(gerbang, zona, monkeypa
     gerbang.update_frame_detections([tertutup])
     assert _active() is not None and _active()["session_id"] == sesi, "sesi tidak terputus"
     assert vlm.calls == panggilan
+
+
+# --- T59: poster/orang lain di koridor tidak boleh mewarisi keputusan ---------------------
+
+POSTER_ID, NEXT_ID = 7, 99
+
+
+def _poster():
+    """Poster K3 bergambar orang (uji 14-10): terdeteksi stabil, tidak pernah tubuh utuh."""
+    return DetectionResult(track_id=POSTER_ID, bbox=[600, 300, 700, 480], is_inside_corridor=True,
+                           is_full_body=False, reason=messages.POSE_FEET_CLIPPED_EDGE,
+                           crop_img=person_crop(), conf=0.88)
+
+
+def _decide(gerbang, track_id):
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 1):
+        gerbang.update_frame_detections([_det(full_body=True, track_id=track_id), _poster()])
+    assert _wait_for(lambda: _active() and _active()["state"] == TrackState.ANALYZED)
+
+
+def test_keputusan_tidak_pindah_ke_pekerja_berikutnya_lewat_poster(gerbang, vlm):
+    _decide(gerbang, TRACK_ID)
+    assert notifier.current_state == "GREEN" and vlm.calls == 1
+
+    # Pekerja A pergi; poster tetap di koridor lebih lama dari jeda reset
+    end = time.time() + cfg.STANDBY_RESET_DELAY_SECONDS + 0.3
+    while time.time() < end:
+        gerbang.update_frame_detections([_poster()])
+        time.sleep(0.05)
+
+    # Pekerja B tanpa helm datang: harus diperiksa ulang, bukan mewarisi hijau A
+    vlm.reply = _balasan(helm=True)
+    _decide(gerbang, NEXT_ID)
+    assert vlm.calls == 2, "pekerja berikutnya tidak diperiksa: keputusan A terbawa lewat poster"
+    assert notifier.current_state == "RED"
+
+
+def test_poster_sejak_awal_tidak_menahan_sesi(gerbang, vlm):
+    """Gerbang menyala dengan poster di koridor: sesi poster tidak boleh menghalangi pekerja."""
+    for _ in range(5):
+        gerbang.update_frame_detections([_poster()])
+    assert _active()["track_id"] == POSTER_ID and vlm.calls == 0, "poster tidak pernah dianalisa"
+    _decide(gerbang, TRACK_ID)
+    assert vlm.calls == 1 and _active()["track_id"] == TRACK_ID
+
+
+def test_orang_antre_di_koridor_tidak_mewarisi_keputusan(gerbang, vlm):
+    """Pekerja B sudah terlihat (antre) saat A diputuskan, lalu maju setelah A pergi."""
+    antre = lambda: _det(full_body=False, track_id=NEXT_ID, bbox=[480, 200, 560, 470])  # noqa: E731
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 1):
+        gerbang.update_frame_detections([_det(full_body=True), antre()])
+    assert _wait_for(lambda: _active()["state"] == TrackState.ANALYZED) and notifier.current_state == "GREEN"
+    end = time.time() + cfg.STANDBY_RESET_DELAY_SECONDS + 0.3
+    while time.time() < end:                         # A pergi, B masih di koridor
+        gerbang.update_frame_detections([antre()])
+        time.sleep(0.05)
+    vlm.reply = _balasan(helm=True)
+    for _ in range(cfg.STABLE_FRAMES_REQUIRED + 1):
+        gerbang.update_frame_detections([_det(full_body=True, track_id=NEXT_ID)])
+    assert _wait_for(lambda: vlm.calls == 2), "B harus diperiksa sendiri"
+    assert _wait_for(lambda: notifier.current_state == "RED")
+
+
+def test_id_baru_yang_sudah_terlihat_bersama_subjek_bukan_orang_yang_sama(gerbang, vlm):
+    """Kotak sama persis tidak cukup: track yang pernah terlihat bersamaan subjek tidak mewarisi."""
+    _decide(gerbang, TRACK_ID)
+    gerbang.update_frame_detections([_det(full_body=True), _det(full_body=True, track_id=NEXT_ID)])
+    gerbang.update_frame_detections([_det(full_body=True, track_id=NEXT_ID)])
+    assert _active()["track_id"] == TRACK_ID, "keputusan tidak pindah ke track lain"
+
+
+def test_bbox_iou():
+    from backend.state_manager import bbox_iou
+    assert bbox_iou([0, 0, 10, 10], [0, 0, 10, 10]) == 1.0
+    assert bbox_iou([0, 0, 10, 10], [20, 20, 30, 30]) == 0.0
+    assert abs(bbox_iou([0, 0, 10, 10], [5, 0, 15, 10]) - 1 / 3) < 1e-9

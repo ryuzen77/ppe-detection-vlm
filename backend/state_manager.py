@@ -31,6 +31,15 @@ class TrackState:
     WAITING_SYSTEM = "WAITING_SYSTEM"
 
 
+def bbox_iou(a, b) -> float:
+    """Irisan per gabungan dua kotak [x1, y1, x2, y2]."""
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
 class GateSession:
     """Satu giliran pemeriksaan di gerbang, dari pekerja masuk jalur sampai jalur kosong.
 
@@ -47,6 +56,13 @@ class GateSession:
     Keputusan DITOLAK sengaja tidak diingat: pekerja yang mundur selangkah,
     memperbaiki APD, lalu maju lagi biasanya masih ber-ID sama dan harus
     diperiksa ulang, bukan ditolak lagi (temuan tinjauan Gemini, T36c).
+
+    T59: "jalur kosong" saja tidak cukup untuk mengakhiri sesi — poster K3 bergambar
+    orang (atau orang antre) di koridor membuat jalur tidak pernah kosong, dan sesi
+    dulu berpindah ke mereka membawa keputusan. Kini setelah keputusan, sesi hanya
+    mengikuti subjek yang diputuskan; ID baru dianggap orang yang sama hanya bila
+    belum pernah terlihat bersamaan dengan subjek, muncul segera, dan kotaknya hampir
+    sama. Selain itu sesi ditutup setelah subjek hilang STANDBY_RESET_DELAY_SECONDS.
     """
 
     _counter = 0
@@ -72,6 +88,9 @@ class GateSession:
         self.candidates: List[frame_quality.FrameCandidate] = []
         # Kotak tubuh frame sebelum kandidat pertama, untuk menilai gerakan
         self.prev_bbox: Optional[list] = None
+        # T59: kotak terakhir subjek & track lain yang pernah terlihat bersamaannya
+        self.subject_bbox: Optional[list] = None
+        self.seen_with_subject: set[int] = set()
         # Jendela "diam & menghadap kamera" sebelum dipotret (T46)
         self.readiness = ReadinessTracker()
 
@@ -147,12 +166,19 @@ class StateManager:
         audio_player.play(sound, urgent=True)
 
     @staticmethod
-    def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int]) -> DetectionResult:
-        """Subjek sesi: ID yang sama bila masih terlihat, bila tidak yang paling dekat (bbox tertinggi)."""
-        for det in candidates:
-            if det.track_id == current_id:
-                return det
-        return max(candidates, key=lambda d: d.bbox[3] - d.bbox[1])
+    def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int],
+                      locked: bool = False) -> DetectionResult:
+        """Subjek sesi: ID yang sama bila masih terlihat, bila tidak yang paling dekat (bbox tertinggi).
+
+        T59: sebelum keputusan, orang bertubuh utuh didahulukan. Poster K3 bergambar orang
+        terdeteksi terus tetapi tidak pernah utuh; tanpa ini sesi terus mengikuti poster dan
+        pekerja yang datang tidak pernah diperiksa. Setelah keputusan (`locked`) subjek tetap.
+        """
+        current = next((d for d in candidates if d.track_id == current_id), None)
+        full = [d for d in candidates if d.is_full_body]
+        if current is not None and (locked or current.is_full_body or not full):
+            return current
+        return max(full or candidates, key=lambda d: d.bbox[3] - d.bbox[1])
 
     def _remember_decision(self, track_id: int, result: InspectionResult, now: float):
         # Hanya lolos: yang ditolak harus bisa diperiksa ulang setelah memperbaiki APD
@@ -190,6 +216,8 @@ class StateManager:
                 self._close_session_if_lane_empty(now)
                 return
             session = self._session_for(in_lane, now)
+            if self._decided_subject_absent(session, in_lane, now):
+                return
             det = self._follow_subject(session, in_lane, now)
             if not self._may_inspect(session, det, now):
                 return
@@ -214,7 +242,46 @@ class StateManager:
     def _close_session_if_lane_empty(self, now: float):
         if self.session is None or (now - self.session.last_seen) <= cfg.STANDBY_RESET_DELAY_SECONDS:
             return
-        logger.info(f"Sesi #{self.session.session_id} selesai: jalur kosong. Gerbang standby.")
+        self._end_session(now, messages.LOG_SESSION_LANE_EMPTY)
+
+    def _decided_subject_absent(self, session: GateSession, in_lane: list[DetectionResult], now: float) -> bool:
+        """Keputusan terikat pada track pekerja yang diputuskan (T59).
+
+        Uji 14-10: poster K3 bergambar orang terdeteksi stabil di koridor, jadi jalur
+        tidak pernah kosong; sesi lalu mengikuti poster dan pekerja berikutnya mewarisi
+        keputusan tanpa diperiksa. Setelah ada keputusan (atau analisa berjalan), sesi
+        tidak lagi berpindah ke orang lain: bila track subjek hilang lebih lama dari
+        STANDBY_RESET_DELAY_SECONDS, sesi ditutup. True = frame ini tidak diproses lanjut.
+        """
+        if session.state not in (TrackState.ANALYZING, TrackState.ANALYZED):
+            return False
+        if any(d.track_id == session.track_id for d in in_lane):
+            session.seen_with_subject.update(d.track_id for d in in_lane if d.track_id != session.track_id)
+            return False
+        same = self._same_person_new_id(session, in_lane, now)
+        if same is not None:
+            logger.info(f"Sesi #{session.session_id}: Track #{session.track_id} berganti ID menjadi "
+                        f"#{same.track_id} (orang yang sama); keputusan tetap.")
+            session.track_id = same.track_id
+            return False
+        if now - session.last_seen > cfg.STANDBY_RESET_DELAY_SECONDS:
+            self._end_session(now, messages.LOG_SESSION_SUBJECT_LEFT)
+        return True
+
+    @staticmethod
+    def _same_person_new_id(session: GateSession, in_lane: list[DetectionResult],
+                            now: float) -> Optional[DetectionResult]:
+        """ID baru pelacak untuk subjek yang sama (ByteTrack bisa mengganti ID orang yang diam)."""
+        if session.subject_bbox is None or now - session.last_seen > cfg.SUBJECT_REID_MAX_GAP_SECONDS:
+            return None
+        fresh = [d for d in in_lane if d.track_id not in session.seen_with_subject]
+        best = max(fresh, key=lambda d: bbox_iou(d.bbox, session.subject_bbox), default=None)
+        if best is None or bbox_iou(best.bbox, session.subject_bbox) < cfg.SUBJECT_REID_MIN_IOU:
+            return None
+        return best
+
+    def _end_session(self, now: float, reason: str):
+        logger.info(reason.format(session_id=self.session.session_id))
         if self.session.vlm_result is not None:
             # ID terakhir subjek (bisa berbeda dari ID saat dianalisa)
             self._remember_decision(self.session.track_id, self.session.vlm_result, now)
@@ -240,12 +307,14 @@ class StateManager:
         return session
 
     def _follow_subject(self, session: GateSession, in_lane: list[DetectionResult], now: float) -> DetectionResult:
-        det = self._pick_subject(in_lane, session.track_id)
+        det = self._pick_subject(in_lane, session.track_id,
+                                 locked=session.state in (TrackState.ANALYZING, TrackState.ANALYZED))
         session.track_id = det.track_id
         session.last_seen = now
         session.is_full_body_now = det.is_full_body
         session.current_reason = det.reason
         session.clip_type = getattr(det, "clip_type", "OPTIMAL")
+        session.subject_bbox = list(det.bbox)
         return det
 
     def _may_inspect(self, session: GateSession, det: DetectionResult, now: float) -> bool:
