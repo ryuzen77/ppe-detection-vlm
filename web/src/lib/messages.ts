@@ -356,8 +356,9 @@ export const SETTINGS_TAB = {
   mainModel: 'Model Utama',
   backupModel: 'Model Cadangan',
   lightTest: 'Lampu & Tes',
-  testLightBtn: 'Tes Lampu',
-  testYellowBtn: 'Kuning',
+  testLightBtn: 'Tes Hijau',
+  testRedBtn: 'Tes Merah',
+  testYellowBtn: 'Tes Kuning',
   latencyTestBtn: 'Uji Latensi VLM',
 } as const
 

@@ -2,7 +2,7 @@
     import CameraPicker from '../components/monitoring/CameraPicker.svelte'
   import ZoneSettings from '../components/settings/ZoneSettings.svelte'
   import { api } from '../lib/api/client'
-  import type { VlmInfo } from '../lib/api/types'
+  import type { LightTestAction, VlmInfo } from '../lib/api/types'
   import { SETTINGS_TAB } from '../lib/messages'
   import { LIGHT_TEST } from '../lib/settings'
   import { telemetry } from '../lib/stores/telemetry.svelte'
@@ -33,7 +33,7 @@
     SETTINGS_TAB.serverDisconnectedSince
   ))
 
-  async function testLight(color: 'green' | 'yellow' = 'green') {
+  async function testLight(color: Exclude<LightTestAction, 'off'>) {
     lightStatus = SETTINGS_TAB.running
     try {
       await api.testLight(color)
@@ -117,6 +117,7 @@
       <h2>{SETTINGS_TAB.lightTest}</h2>
       <p class="status-msg" style="margin-bottom: var(--space-2); margin-top: 0">Status: {gateIot.text} {#if gateIot.hint}({gateIot.hint}){/if}</p>
       <button class="btn btn-primary" onclick={() => testLight('green')}>{SETTINGS_TAB.testLightBtn}</button>
+      <button class="btn btn-primary" onclick={() => testLight('red')}>{SETTINGS_TAB.testRedBtn}</button>
       <button class="btn btn-primary" onclick={() => testLight('yellow')}>{SETTINGS_TAB.testYellowBtn}</button>
       {#if lightStatus}<p class="status-msg">{lightStatus}</p>{/if}
     </section>
