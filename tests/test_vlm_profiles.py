@@ -13,7 +13,7 @@ from backend.vlm_providers.openai_compatible import PRESETS
 # messages.PROMPT_VERSION, tambahkan sidik jari baru di sini, lalu uji ulang model
 # dengan foto berlabel dan perbarui profiles.VALIDATIONS. Tanpa itu, validasi lama
 # diam-diam dianggap berlaku untuk prompt yang belum pernah diuji.
-PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2"}
+PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e"}
 
 
 def test_prompt_berubah_wajib_menaikkan_versi(catalog_defaults):
@@ -41,14 +41,17 @@ def test_satu_sumber_untuk_adaptor_dan_config():
 
 def test_status_model_saat_ini():
     v = messages.PROMPT_VERSION
-    assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.VALIDATED
+    assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.PARTIAL
     assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.PARTIAL
+    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", v).prompt_version == v
     assert profiles.validation_status("openrouter", "model-baru", v) == profiles.UNVALIDATED
     assert profiles.validation_status("ollama", "qwen2.5vl:3b", v) == profiles.UNSAFE
 
 
 def test_validasi_prompt_lama_kedaluwarsa():
     assert profiles.validation_status("ollama", "qwen2.5vl:7b", "T99") == profiles.OUTDATED
+    # tanpa catatan untuk versi itu, yang dipakai catatan terbaru
+    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", "T99").prompt_version == "T48"
 
 
 def test_model_yang_pernah_meloloskan_apd_kurang_ditandai_tidak_aman():
@@ -62,12 +65,13 @@ def test_peringatan_penyedia_eksperimental_dan_model_belum_tervalidasi():
     warnings = profile_warnings("openrouter", "qwen/qwen2.5-vl-72b-instruct", "utama openrouter/x")
     assert warnings == [messages.VLM_PROVIDER_EXPERIMENTAL.format(who="utama openrouter/x"),
                         messages.VLM_MODEL_UNVALIDATED.format(who="utama openrouter/x")]
-    assert profile_warnings("ollama", "qwen2.5vl:7b", "cadangan") == []
+    assert profile_warnings("ollama", "qwen2.5vl:7b", "cadangan") == [
+        messages.VLM_MODEL_PARTIAL.format(who="cadangan", note=profiles.find_validation("ollama", "qwen2.5vl:7b", messages.PROMPT_VERSION).note)]
 
 
 def test_info_menyertakan_dukungan_dan_validasi():
     info = VLMEngine("cadangan", "ollama", "qwen2.5vl:7b").info()
-    assert info["support"] == profiles.OFFICIAL and info["validated"] == profiles.VALIDATED
+    assert info["support"] == profiles.OFFICIAL and info["validated"] == profiles.PARTIAL
     assert VLMEngine("utama", "tidak-dikenal", "m").info()["support"] is None
 
 

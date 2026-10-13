@@ -127,7 +127,7 @@ def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
     if profile is not None and profile.support == vlm_profiles.EXPERIMENTAL:
         warnings.append(messages.VLM_PROVIDER_EXPERIMENTAL.format(who=who))
     status = vlm_profiles.validation_status(provider_name, model, messages.PROMPT_VERSION)
-    record = vlm_profiles.find_validation(provider_name, model)
+    record = vlm_profiles.find_validation(provider_name, model, messages.PROMPT_VERSION)
     if status == vlm_profiles.UNVALIDATED:
         warnings.append(messages.VLM_MODEL_UNVALIDATED.format(who=who))
     elif status == vlm_profiles.UNSAFE:
