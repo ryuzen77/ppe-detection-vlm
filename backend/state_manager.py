@@ -504,44 +504,14 @@ class StateManager:
     def get_telemetry(self) -> dict:
         """Constructs comprehensive real-time payload for WebSocket clients."""
         with self.lock:
-            dets_data = []
             active_zone = zone_store.get()
-            for d in self.latest_detections:
-                dets_data.append({
-                    "track_id": d.track_id,
-                    "bbox": d.bbox,
-                    "is_full_body": d.is_full_body,
-                    "is_inside_corridor": getattr(d, 'is_inside_corridor', True),
-                    "reason": d.reason,
-                    "clip_type": getattr(d, 'clip_type', 'OPTIMAL'),
-                    "conf": round(d.conf, 2),
-                    "keypoints": d.keypoints,
-                    "foot_y": getattr(d, "zone_y", None),
-                    "in_zone": zones.in_zone(getattr(d, "zone_y", None), active_zone),
-                })
-
-            active_track_data = None
-            s = self.session
-            if s is not None:
-                active_track_data = {
-                    "track_id": s.track_id,
-                    "session_id": s.session_id,
-                    "state": s.state,
-                    "is_full_body": s.is_full_body_now,
-                    "reason": s.current_reason,
-                    "clip_type": s.clip_type,
-                    "stable_frames": s.stable_frames,
-                    "retry_in_s": max(0.0, round(s.retry_at - time.time(), 1))
-                    if s.state == TrackState.WAITING_SYSTEM else None,
-                    "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None
-                }
-
+            dets_data = [self._detection_payload(d, active_zone) for d in self.latest_detections]
             return {
                 "timestamp": time.time(),
                 "frame_width": cfg.FRAME_WIDTH,
                 "frame_height": cfg.FRAME_HEIGHT,
                 "has_person": len(dets_data) > 0,
-                "active_track": active_track_data,
+                "active_track": self._session_payload(self.session),
                 "detections": dets_data,
                 "corridor": {
                     "enabled": cfg.ENABLE_CORRIDOR_FILTER,
@@ -563,6 +533,38 @@ class StateManager:
                 "vlm": vlm_analyzer.provider_info(),
                 "api_monitor": api_monitor.get_status(),
             }
+
+    @staticmethod
+    def _detection_payload(d: DetectionResult, active_zone) -> dict:
+        return {
+            "track_id": d.track_id,
+            "bbox": d.bbox,
+            "is_full_body": d.is_full_body,
+            "is_inside_corridor": getattr(d, 'is_inside_corridor', True),
+            "reason": d.reason,
+            "clip_type": getattr(d, 'clip_type', 'OPTIMAL'),
+            "conf": round(d.conf, 2),
+            "keypoints": d.keypoints,
+            "foot_y": getattr(d, "zone_y", None),
+            "in_zone": zones.in_zone(getattr(d, "zone_y", None), active_zone),
+        }
+
+    @staticmethod
+    def _session_payload(s: Optional[GateSession]) -> Optional[dict]:
+        if s is None:
+            return None
+        return {
+            "track_id": s.track_id,
+            "session_id": s.session_id,
+            "state": s.state,
+            "is_full_body": s.is_full_body_now,
+            "reason": s.current_reason,
+            "clip_type": s.clip_type,
+            "stable_frames": s.stable_frames,
+            "retry_in_s": max(0.0, round(s.retry_at - time.time(), 1))
+            if s.state == TrackState.WAITING_SYSTEM else None,
+            "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None
+        }
 
 
 state_mgr = StateManager()
