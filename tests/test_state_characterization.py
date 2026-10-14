@@ -26,7 +26,8 @@ SCENARIOS, FRAMES, FPS = 18, 1200, 15
 VLM_DELAY_FRAMES = 4
 SLOW_VLM_DELAY_FRAMES = 3 * FPS   # > jeda jalur kosong: hasil tiba setelah sesi berakhir (T42e)
 CFG_OVERRIDES = {"STANDBY_RESET_DELAY_SECONDS": 1.5, "READY_HOLD_SECONDS": 1.0, "STABLE_FRAMES_REQUIRED": 3,
-                 "VLM_SYSTEM_RETRY_SECONDS": 2.0, "DECIDED_TRACK_MEMORY_SECONDS": 10.0}
+                 "VLM_SYSTEM_RETRY_SECONDS": 2.0, "DECIDED_TRACK_MEMORY_SECONDS": 10.0,
+                 "TELEMETRY_HISTORY_RECORDS": 2}   # < riwayat per skenario: pemotongan ikut teruji (T42g)
 
 
 class _World:
