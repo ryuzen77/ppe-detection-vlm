@@ -50,7 +50,7 @@
     
     {#if !session.setupAllowed}
       <div class="info-box" role="alert">
-        {AUTH.setupUrlInfo.replace('{url}', getSetupUrl(typeof window !== 'undefined' ? window.location.port : '8000'))}
+        {AUTH.setupUrlInfo.replace('{url}', getSetupUrl(window.location.port))}
       </div>
     {:else}
       {#if errorMsg}

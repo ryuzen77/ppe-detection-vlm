@@ -11,6 +11,15 @@ export const URLS = {
   /** Tampilan lama (cadangan) selama redesign belum lengkap */
 } as const
 
+/**
+ * Saat UI dibuka lewat Vite dev server, tautan setup harus menunjuk backend
+ * (proxy Vite hanya meneruskan /api, bukan halaman setup).
+ */
+export const DEV_SERVER = {
+  vitePort: '5173',
+  backendUrl: 'http://localhost:8000',
+} as const
+
 export const TELEMETRY = {
   /** Jeda sambung ulang WebSocket: mulai, lalu dikali factor hingga max */
   reconnectInitialMs: 1500,
