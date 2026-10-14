@@ -381,6 +381,16 @@ export interface ResetPasswordRequest {
 }
 
 
+export type LocalVlmState = 'ok' | 'slow' | 'partial_gpu' | 'unknown'
+
+export interface LocalVlmHealth {
+  state: LocalVlmState
+  gpu_ratio: number | null
+  slow_streak: number
+  last_latency_s: number | null
+  other_gpu_apps: string[]
+}
+
 export interface Health {
   status: string
   fps: number
@@ -392,6 +402,7 @@ export interface Health {
   camera_status: CameraState
   resolution: string
   is_synthetic_camera: boolean
+  local_vlm?: LocalVlmHealth
 }
 
 export interface PingEngineResult {

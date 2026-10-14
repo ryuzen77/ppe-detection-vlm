@@ -449,3 +449,31 @@ export const VLM_SETTINGS = {
   errTest: 'Gagal uji',
   errReset: 'Gagal mereset',
 }
+
+export const LOCAL_VLM = {
+  cardTitle: 'Kesehatan VLM Cadangan',
+  statusLabel: 'Status',
+  gpuRatioLabel: 'Porsi GPU',
+  latencyLabel: 'Latensi Terakhir',
+  slowStreakLabel: 'Lambat Berturut-turut',
+  otherAppsLabel: 'Aplikasi Lain di GPU',
+  noApps: 'Tidak ada',
+  emptyValue: '—',
+  closeAppsHint: 'Tutup aplikasi ini agar VLM cadangan tidak macet.',
+  states: {
+    ok: 'Normal',
+    slow: 'Lambat',
+    partial_gpu: 'Sebagian di CPU',
+    unknown: 'Belum diketahui',
+  },
+  chips: {
+    slow: {
+      text: 'VLM cadangan lambat',
+      hint: 'Panggilan VLM cadangan lambat atau habis waktu berturut-turut',
+    },
+    partial_gpu: {
+      text: 'VLM cadangan di CPU',
+      hint: 'Sebagian model VLM cadangan dimuat di CPU',
+    },
+  },
+} as const
