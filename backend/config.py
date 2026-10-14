@@ -134,6 +134,7 @@ class Config:
     CAMERA_LOST_THRESHOLD: int = 30
     # Penanda 1 - laju frame ambruk. Kamera USB penguji jatuh dari 25 ke 1,1 FPS
     # saat dicabut sementara pembacaan tetap "berhasil".
+    CAMERA_PROBE_READS: int = 5  # Pembacaan saat membuka kamera; frame terakhir dipakai untuk dimensi (T42d: dulu angka di capture)
     CAMERA_RATE_WINDOW_SECONDS: float = 1.0  # Jendela ukur laju baca kamera (T42c: dulu angka di capture)
     CAMERA_STALL_SECONDS: float = 3.0      # Lama laju harus tetap ambruk sebelum divonis
     CAMERA_STALL_FPS_RATIO: float = 0.25   # Ambang relatif terhadap laju normal kamera itu

@@ -27,7 +27,6 @@ COLOR_SOURCE = "web/src/styles/tokens.css"
 LONG_FUNCTIONS_DEBT = {
     "tools/bench_vlm.py::main",
     "tools/eval_vlm.py::main",
-    "backend/video/capture.py::_init_camera",
     "backend/report_manager.py::cleanup_old_data",
     "backend/video/hud.py::draw_hud",
     "backend/state_manager.py::_run_vlm_analysis",

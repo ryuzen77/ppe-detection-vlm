@@ -295,7 +295,28 @@ class VideoCaptureService:
         """
         if index is None:
             index = self.camera_index
+        self._begin_opening(index)
+        if mode is None:
+            mode = self._scanned_mode(index)
 
+        self.cap = camera_manager.open_capture(index)
+        if not self.cap.isOpened():
+            return self._fall_back_to_synthetic(messages.CAMERA_OPEN_FAILED.format(index=index),
+                                                f"Kamera {index} tidak tersedia. Memakai generator sintetis.")
+        self._limit_driver_buffer()
+        target_w, target_h = self._requested_size(mode)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_w)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_h)
+        self.cap.set(cv2.CAP_PROP_FPS, cfg.FPS)
+
+        probe = self._probe_frame()
+        if probe is None:
+            return self._fall_back_to_synthetic(messages.CAMERA_NO_FRAMES.format(index=index),
+                                                f"Kamera {index} tidak mengirim frame. Memakai generator sintetis.")
+        self._activate(index, probe, mode, target_w, target_h)
+        return True
+
+    def _begin_opening(self, index: int):
         self._release_camera()
         self.camera_index = index
         self.camera_name = self._resolve_device_name(index)
@@ -303,67 +324,68 @@ class VideoCaptureService:
         self.camera_error = ""
         logger.info(f"Membuka kamera index {index} ({self.camera_name})...")
 
-        # Mode ditentukan sebelum kamera dibuka: pengukuran membuka dan menutup
-        # perangkat sendiri, jadi tidak boleh ada handle lain yang menahannya.
-        # Kamera dibuka seketika. Pengukuran yang akurat butuh belasan detik
-        # (beberapa kamera USB baru stabil ~3,5 detik setelah dibuka), jadi itu
-        # dikerjakan oleh "Pindai kamera"/optimasi, bukan di jalur pembukaan.
-        if mode is None:
-            known = camera_mgr.get_device(index)
-            if known and known.get("selected_mode"):
-                mode = known["selected_mode"]
-                logger.info(f"Memakai mode hasil pemindaian untuk index {index}.")
+    def _scanned_mode(self, index: int) -> dict | None:
+        """Mode hasil pemindaian kamera ini, bila ada.
 
-        self.cap = camera_manager.open_capture(index)
+        Mode ditentukan sebelum kamera dibuka: pengukuran membuka dan menutup
+        perangkat sendiri, jadi tidak boleh ada handle lain yang menahannya.
+        Kamera dibuka seketika. Pengukuran yang akurat butuh belasan detik
+        (beberapa kamera USB baru stabil ~3,5 detik setelah dibuka), jadi itu
+        dikerjakan oleh "Pindai kamera"/optimasi, bukan di jalur pembukaan.
+        """
+        known = camera_mgr.get_device(index)
+        if known and known.get("selected_mode"):
+            logger.info(f"Memakai mode hasil pemindaian untuk index {index}.")
+            return known["selected_mode"]
+        return None
 
-        if not self.cap.isOpened():
-            self._release_camera()
-            self.use_synthetic = True
-            self.camera_status = "SYNTHETIC"
-            self.camera_error = messages.CAMERA_OPEN_FAILED.format(index=index)
-            self.active_mode = None
-            logger.warning(f"Kamera {index} tidak tersedia. Memakai generator sintetis.")
-            return False
-
-        # Minta driver menyimpan 1 frame saja; tidak semua backend menghormatinya,
-        # karena itu thread pembaca tetap membuang frame lama secara aktif.
+    def _limit_driver_buffer(self):
+        """Minta driver menyimpan 1 frame saja; tidak semua backend menghormatinya,
+        karena itu thread pembaca tetap membuang frame lama secara aktif."""
         try:
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         except Exception:
             pass
 
-        # Yang diterapkan adalah PERMINTAAN yang menghasilkan pengukuran terbaik,
-        # bukan resolusi hasilnya: driver memilih media type berdasarkan angka yang
-        # diminta, sehingga meminta hasil akhirnya bisa mendapat laju frame lebih
-        # rendah untuk resolusi yang persis sama. `req_*` kosong berarti berkas
-        # state lama, jadi hasil aktual dipakai sebagai cadangan.
+    @staticmethod
+    def _requested_size(mode: dict | None) -> tuple[int, int]:
+        """Ukuran yang DIMINTA ke driver.
+
+        Yang diterapkan adalah permintaan yang menghasilkan pengukuran terbaik,
+        bukan resolusi hasilnya: driver memilih media type berdasarkan angka yang
+        diminta, sehingga meminta hasil akhirnya bisa mendapat laju frame lebih
+        rendah untuk resolusi yang persis sama. `req_*` kosong berarti berkas
+        state lama, jadi hasil aktual dipakai sebagai cadangan.
+        """
         if mode:
-            target_w = mode.get("req_width") or mode["width"]
-            target_h = mode.get("req_height") or mode["height"]
-        elif cfg.CAMERA_AUTO_MODE:
-            target_w = cfg.CAMERA_DEFAULT_REQ_WIDTH
-            target_h = cfg.CAMERA_DEFAULT_REQ_HEIGHT
-        else:
-            target_w, target_h = cfg.FRAME_WIDTH, cfg.FRAME_HEIGHT
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_w)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_h)
-        self.cap.set(cv2.CAP_PROP_FPS, cfg.FPS)
+            return mode.get("req_width") or mode["width"], mode.get("req_height") or mode["height"]
+        if cfg.CAMERA_AUTO_MODE:
+            return cfg.CAMERA_DEFAULT_REQ_WIDTH, cfg.CAMERA_DEFAULT_REQ_HEIGHT
+        return cfg.FRAME_WIDTH, cfg.FRAME_HEIGHT
 
-        # Dimensi dibaca dari frame nyata, bukan dari yang diminta: driver sering
-        # memberi resolusi terdekat yang didukung, dan overlay canvas di dashboard
-        # bergantung pada angka yang benar agar tetap sejajar.
+    def _probe_frame(self) -> np.ndarray | None:
+        """Frame nyata setelah beberapa pembacaan pemanasan; None bila kamera tidak mengirim frame."""
         ok, probe = False, None
-        for _ in range(5):
+        for _ in range(cfg.CAMERA_PROBE_READS):
             ok, probe = self.cap.read()
-        if not ok or probe is None:
-            self._release_camera()
-            self.use_synthetic = True
-            self.camera_status = "SYNTHETIC"
-            self.camera_error = messages.CAMERA_NO_FRAMES.format(index=index)
-            self.active_mode = None
-            logger.warning(f"Kamera {index} tidak mengirim frame. Memakai generator sintetis.")
-            return False
+        return probe if ok and probe is not None else None
 
+    def _fall_back_to_synthetic(self, error: str, log_message: str) -> bool:
+        self._release_camera()
+        self.use_synthetic = True
+        self.camera_status = "SYNTHETIC"
+        self.camera_error = error
+        self.active_mode = None
+        logger.warning(log_message)
+        return False
+
+    def _activate(self, index: int, probe: np.ndarray, mode: dict | None, target_w: int, target_h: int):
+        """Kamera siap dipakai; pilihan disimpan untuk penyalaan berikutnya.
+
+        Dimensi dibaca dari frame nyata, bukan dari yang diminta: driver sering
+        memberi resolusi terdekat yang didukung, dan overlay canvas di dashboard
+        bergantung pada angka yang benar agar tetap sejajar.
+        """
         self.frame_height, self.frame_width = probe.shape[:2]
         self.active_mode = {
             "width": self.frame_width,
@@ -376,11 +398,8 @@ class VideoCaptureService:
         self.use_synthetic = False
         self.camera_status = "OK"
         self.fps = 0.0
-        logger.info(f"Kamera terbuka: {self.camera_name} "
-                    f"{self.frame_width}x{self.frame_height}")
-
+        logger.info(f"Kamera terbuka: {self.camera_name} {self.frame_width}x{self.frame_height}")
         camera_manager.save_selection(index, self.active_mode, self.camera_name)
-        return True
 
 
     def _generate_synthetic_frame(self, message: str = messages.FRAME_NO_CAMERA) -> np.ndarray:
