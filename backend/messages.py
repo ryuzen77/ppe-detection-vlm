@@ -221,6 +221,11 @@ LOCAL_MODEL_RELOADED = "VLM {who} dimuat ulang: {pct}% di GPU."
 LOCAL_MODEL_RELOAD_FAILED = ("VLM {who} tetap {pct}% di GPU setelah dimuat ulang; periksa VRAM/driver "
                              "atau nyalakan ulang Ollama.")
 LOCAL_MODEL_CHECK_FAILED = "Pemeriksaan porsi GPU VLM lokal gagal: {error}"
+# --- Kesehatan VLM lokal (T56) ---
+LOCAL_MODEL_SLOW = ("VLM {who} lambat/habis waktu {n}x berturut-turut (terakhir {latency}); memuat ulang model. "
+                    "Aplikasi lain di GPU: {apps}. Tutup aplikasi itu atau atur ke 'Power saving' (GPU Intel).")
+LOCAL_LATENCY_TIMEOUT = "habis waktu"
+LOCAL_MODEL_WARMUP_IMAGE = "Pemanasan gambar VLM {who} selesai dalam {seconds:.1f} dtk."
 
 # --- VLM tidak tersedia (utama & cadangan gagal) ---
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"

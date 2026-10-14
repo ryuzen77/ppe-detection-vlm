@@ -112,6 +112,13 @@ def build_system_prompt(items=None) -> str:
     )
 
 
+def warmup_image_jpeg() -> bytes:
+    """Gambar sintetis seukuran potongan pekerja: memanaskan penyandi gambar tanpa foto orang (T56)."""
+    h, w = cfg.VLM_WARMUP_IMAGE_HEIGHT, cfg.VLM_WARMUP_IMAGE_WIDTH
+    img = np.tile(np.linspace(40, 200, h).astype(np.uint8)[:, None, None], (1, w, 3))
+    return cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])[1].tobytes()
+
+
 def confirmation_prompts(item) -> tuple[str, str]:
     """(prompt sistem, prompt pengguna) konfirmasi kedua satu larangan (T58)."""
     return messages.VLM_CONFIRM_SYSTEM_PROMPT, f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
@@ -255,6 +262,8 @@ class VLMEngine:
         start = time.time()
         try:
             self.executor.submit(self.provider.warm_up).result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
+            if self.is_local:
+                self._warm_with_image()
         except Exception as e:
             self.warm_error = vlm_selection.redact(str(e), self.api_key)[:cfg.ERROR_MESSAGE_MAX_CHARS] or type(e).__name__
             # Tidak fatal: server tetap menyala; VLM ini dicoba lagi pada pekerja
@@ -265,6 +274,19 @@ class VLMEngine:
         duration = time.time() - start
         logger.info(f"Pemanasan VLM {self.role} {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
         return duration
+
+    def _warm_with_image(self):
+        """Satu panggilan seperti inspeksi (prompt produksi + gambar), hanya untuk VLM lokal:
+        ping teks meninggalkan penyandi gambar & prompt sistem "dingin" sehingga pekerja
+        pertama habis waktu (uji 14-10: 13 dtk > batas 12). Cloud tidak, karena memakan kuota."""
+        start = time.time()
+        future = self.executor.submit(self.provider.analyze, warmup_image_jpeg(),
+                                      system_prompt=build_system_prompt(), user_prompt=USER_PROMPT)
+        try:
+            future.result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
+        except ValueError:
+            pass        # jawaban untuk gambar sintetis tidak dipakai; yang penting GPU sudah bekerja
+        logger.info(messages.LOCAL_MODEL_WARMUP_IMAGE.format(who=self.who, seconds=time.time() - start))
 
     def call(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> dict:
         """Satu panggilan dengan batas waktu keras. Galat & timeout dilempar ke pemanggil."""
@@ -560,7 +582,7 @@ class VLMAnalyzer:
     def _try(self, engine: VLMEngine, image_jpeg: bytes, aktif) -> InspectionResult:
         call_start = time.time()
         try:
-            data = engine.call(image_jpeg, system_prompt=build_system_prompt(aktif), user_prompt=USER_PROMPT)
+            data = self._timed_call(engine, image_jpeg, aktif)
             result = self._confirm_prohibitions(engine, image_jpeg, self._parse_vlm_payload(data, aktif), aktif)
         except TimeoutError:
             api_monitor.record_failure(engine.role, f"timeout > {engine.timeout:g} dtk", is_timeout=True)
@@ -572,6 +594,20 @@ class VLMAnalyzer:
         result.inference_source = engine.label
         result.decided_by = engine.role
         return result
+
+    def _timed_call(self, engine: VLMEngine, image_jpeg: bytes, aktif) -> dict:
+        """Panggilan inspeksi; untuk VLM lokal waktunya dicatat ke penjaga T56 (hanya panggilan
+        ini, bukan konfirmasi larangan — konfirmasi rokok di lokal akan tampak "lambat")."""
+        start = time.time()
+        try:
+            data = engine.call(image_jpeg, system_prompt=build_system_prompt(aktif), user_prompt=USER_PROMPT)
+        except Exception:
+            if engine.is_local:
+                self.local_guard.record_call(None, time.time())
+            raise
+        if engine.is_local:
+            self.local_guard.record_call(time.time() - start, time.time())
+        return data
 
     def _confirm_prohibitions(self, engine: VLMEngine, image_jpeg: bytes, result: InspectionResult,
                               aktif) -> InspectionResult:
