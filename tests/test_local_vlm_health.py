@@ -12,7 +12,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import gpu_processes, local_model_guard as guard_mod, messages
+from backend import config as config_mod, gpu_processes, local_model_guard as guard_mod, messages
 from backend.config import cfg
 from backend.local_model_guard import LocalModelGuard
 from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt
@@ -35,6 +35,40 @@ bukan baris
 
 def test_daftar_aplikasi_lain_tanpa_proses_gerbang_dan_shell():
     assert gpu_processes.parse_gpu_apps(NVSMI, own_pids={555}) == ["Code.exe", "Discord.exe"]
+
+
+# Keluaran nyata mode dGPU 15-10 (diringkas): shell Windows & pembantu driver ikut tercantum (T56b)
+NVSMI_DGPU = r"""13340, C:\Program Files\NVIDIA Corporation\NVIDIA App\CEF\NVIDIA Overlay.exe
+14984, D:\WINDOWS\SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\SearchHost.exe
+19032, D:\Windows\System32\NahimicSvc64.exe
+28484, D:\Windows\ImmersiveControlPanel\SystemSettings.exe
+30584, D:\Windows\System32\ShellHost.exe
+17244, C:\Program Files (x86)\Microsoft\EdgeWebView\Application\155.0\msedgewebview2.exe
+24396, C:\Program Files\WindowsApps\AppUp.IntelGraphicsExperience_1.100_x64\IGCC.exe
+24968, C:\Program Files\WindowsApps\A-Volute.Nahimic_1.10_x64\Nahimic3.exe
+23904, C:\Program Files\Google\Chrome\Application\chrome.exe
+13436, C:\Program Files\WindowsApps\5319275A.WhatsAppDesktop_2.26_x64\WhatsApp.Root.exe
+40000, D:\Windowsku\game.exe
+"""
+
+
+def test_proses_bawaan_windows_dan_pembantu_driver_disaring(monkeypatch):
+    monkeypatch.setattr(cfg, "LOCAL_GPU_SYSTEM_DIRS", ("d:/windows/",))
+    assert gpu_processes.parse_gpu_apps(NVSMI_DGPU, own_pids=set()) == ["chrome.exe", "game.exe", "WhatsApp.Root.exe"]
+
+
+def test_tanpa_folder_sistem_hanya_daftar_nama_yang_disaring(monkeypatch):
+    # Linux: SystemRoot tidak ada → tidak ada folder yang disaring
+    monkeypatch.setattr(cfg, "LOCAL_GPU_SYSTEM_DIRS", ())
+    assert "SearchHost.exe" in gpu_processes.parse_gpu_apps(NVSMI_DGPU, own_pids=set())
+
+
+def test_folder_sistem_dari_lingkungan(monkeypatch):
+    monkeypatch.setenv("SystemRoot", "E:\\WinNT\\")
+    assert config_mod._system_dirs() == ("e:/winnt/",)
+    monkeypatch.delenv("SystemRoot")
+    monkeypatch.delenv("windir", raising=False)
+    assert config_mod._system_dirs() == ()
 
 
 def test_tanpa_nvidia_smi_daftar_kosong(monkeypatch):

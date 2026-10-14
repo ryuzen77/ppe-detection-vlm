@@ -44,6 +44,16 @@ def _legacy_thinking(gemini_level: str) -> str:
     return "off" if level == "minimal" else level
 
 
+def _system_dirs() -> tuple:
+    """Folder sistem OS (Windows: %SystemRoot%) sebagai awalan path kecil bergaris miring '/'.
+
+    Diambil dari lingkungan, bukan ditulis tetap, karena Windows tidak selalu di C:.
+    Di Linux variabel ini tidak ada → kosong, tidak ada yang disaring.
+    """
+    root = os.getenv("SystemRoot") or os.getenv("windir") or ""
+    return (root.replace("\\", "/").rstrip("/").lower() + "/",) if root.strip() else ()
+
+
 def _resolve_data_dir(value: str) -> Path:
     """Jalur relatif dihitung dari akar repo, bukan dari direktori kerja terminal."""
     path = Path(value).expanduser() if value else REPO_ROOT / "data"
@@ -326,6 +336,12 @@ class Config:
     NVIDIA_SMI_TIMEOUT_SECONDS: float = 5.0
     LOCAL_GPU_OWN_NAMES: tuple = ("ollama", "llama-server")
     LOCAL_GPU_IGNORED_APPS: tuple = ("explorer.exe", "dwm.exe", "csrss.exe")
+    # T56b: di mode dGPU (uji 15-10) ±25 proses shell & pembantu driver ikut tercantum.
+    # Semua yang berada di folder sistem OS diabaikan; pembantu driver/runtime di luar
+    # folder itu (overlay NVIDIA, panel Intel, audio Nahimic, WebView2 milik aplikasi
+    # lain yang sudah tercantum) disebut namanya. Aplikasi pengguna tetap tampil.
+    LOCAL_GPU_SYSTEM_DIRS: tuple = _system_dirs()
+    LOCAL_GPU_IGNORED_HELPERS: tuple = ("nvidia overlay.exe", "igcc.exe", "nahimic3.exe", "msedgewebview2.exe")
     # Pemanasan VLM lokal memakai satu panggilan bergambar seukuran potongan pekerja (T56):
     # ping teks saja meninggalkan penyandi gambar "dingin", inspeksi pertama 7,7 dtk dengan
     # YOLO (uji 14-10) dan 13 dtk di gerbang (habis waktu).

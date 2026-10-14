@@ -23,16 +23,21 @@ def parse_gpu_apps(text: str, own_pids: set[int]) -> list[str]:
         except ValueError:
             continue
         name = path.strip().replace("\\", "/").rsplit("/", 1)[-1]
-        lowered = name.lower()
-        if (
-            not name
-            or pid in own_pids
-            or lowered in cfg.LOCAL_GPU_IGNORED_APPS
-            or lowered.startswith(cfg.LOCAL_GPU_OWN_NAMES)
-        ):
-            continue
-        names.add(name)
+        if name and pid not in own_pids and not _is_ignored(path):
+            names.add(name)
     return sorted(names, key=str.lower)
+
+
+def _is_ignored(path: str) -> bool:
+    """Proses gerbang sendiri, shell OS, atau pembantu driver: bukan untuk ditutup operator."""
+    full = path.strip().replace("\\", "/").lower()
+    name = full.rsplit("/", 1)[-1]
+    return (
+        name in cfg.LOCAL_GPU_IGNORED_APPS
+        or name in cfg.LOCAL_GPU_IGNORED_HELPERS
+        or name.startswith(cfg.LOCAL_GPU_OWN_NAMES)
+        or full.startswith(cfg.LOCAL_GPU_SYSTEM_DIRS)
+    )
 
 
 def other_gpu_apps() -> list[str]:
