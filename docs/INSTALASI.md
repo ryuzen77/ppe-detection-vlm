@@ -67,6 +67,7 @@ RTX 4060 8 GB:
 | Mode GPU (Legion) | Clock saat inferensi | Baca prompt | Per inspeksi | Terukur |
 | :-- | :-- | --: | --: | :-- |
 | dGPU + overclock | ±2.600 MHz | 1,4–1,5 dtk | ±3,5 dtk | 06-10 |
+| **dGPU, overclock mati** (pilihan gerbang/demo) | ±2.565 MHz | 1,2–1,5 dtk | 3,4–3,9 dtk | 14-10 |
 | Hybrid, overclock mati | — | 2,0–2,1 dtk | 4,0–4,5 dtk | 14-10 |
 | Hybrid + "Prefer maximum performance" & GPU NVIDIA dipilih per aplikasi | sebagian besar 780–960 MHz | 3,1–3,2 dtk | 5,3–5,9 dtk | 14-10 |
 
@@ -76,13 +77,16 @@ peran laptop:**
 
 - **Saat menjadi gerbang / demo: mode dGPU** (Lenovo Vantage / Legion Space → GPU working mode
   dGPU, berlaku setelah restart), rencana daya **Performance**, laptop dicolok. Overclock tidak
-  wajib. Kombinasi dGPU tanpa overclock belum diukur, jadi jalankan cek cepat di bawah.
+  perlu.
 - **Saat kerja harian (IDE, browser, rapat): mode Hybrid**, overclock mati. Aplikasi biasa
   memakai GPU Intel sehingga VRAM NVIDIA tidak penuh.
 - **Di mode dGPU semua aplikasi memakai GPU NVIDIA.** VRAM 8 GB hampir habis oleh
   `qwen2.5vl:7b` (±5,5 GB) + YOLO + Windows. Bila browser, Discord, IDE, dan sejenisnya ikut
   terbuka, Windows memindah sebagian memori ke RAM. Akibatnya VLM lokal macet diam-diam,
   padahal `ollama ps` tetap "100% GPU". Di laptop gerbang **jalankan gerbang saja**.
+  Terukur 14-10 setelah restart: aplikasi latar (tray, Edge, overlay NVIDIA) ±0,8 GB +
+  model ±6,6 GB + satu YOLO ≈ 7,7 dari 8,2 GB. Sisanya hanya ±0,5 GB, sehingga **satu YOLO
+  tambahan sudah cukup membuat Ollama macet** (terjadi pada bench lama yang memuat dua YOLO).
   Penjaga T56 memantau gejala ini: dua panggilan lambat/habis waktu berturut-turut memicu
   peringatan di log dan di `GET /api/health` → `local_vlm` (beserta nama aplikasi lain di
   GPU yang perlu ditutup), lalu model dimuat ulang.
