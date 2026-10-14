@@ -4,6 +4,7 @@
   import Lightbulb from '@lucide/svelte/icons/lightbulb'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
+  import LogIn from '@lucide/svelte/icons/log-in'
   import LogOut from '@lucide/svelte/icons/log-out'
   import User from '@lucide/svelte/icons/user'
   import { onDestroy } from 'svelte'
@@ -12,6 +13,7 @@
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
   import { cameraChip, vlmChip, iotChip } from '../lib/status'
+  import { connectionView } from '../lib/connection'
   import { session } from '../lib/stores/session.svelte'
   import { LOGIN } from '../lib/messages'
   import { telemetry } from '../lib/stores/telemetry.svelte'
@@ -25,6 +27,7 @@
   const camera = $derived(cameraChip(t))
   const vlm = $derived(vlmChip(t))
   const iot = $derived(iotChip(t))
+  const connection = $derived(connectionView(session.authenticated, telemetry.status))
 </script>
 
 <header class="topbar">
@@ -50,7 +53,9 @@
       </a>
     {/if}
 
-    {#if telemetry.status !== 'connected'}
+    {#if connection === 'signed_out'}
+      <span class="chip" title={CONNECTION.signedOut}><LogIn size={14} aria-hidden="true" /> <span class="label">{CONNECTION.signedOut}</span></span>
+    {:else if connection === 'disconnected'}
       <span class="chip tone-danger" title={CONNECTION.lost}><WifiOff size={14} aria-hidden="true" /> <span class="label">{CONNECTION.lost}</span></span>
     {:else}
       {#if t?.iot}

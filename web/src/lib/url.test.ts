@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { getSetupUrl } from './url'
+import { DEV_SERVER } from './settings'
 
 describe('getSetupUrl', () => {
-  it('returns 8000 if port is 5173', () => {
-    expect(getSetupUrl('5173')).toBe('http://localhost:8000')
-    expect(getSetupUrl(5173)).toBe('http://localhost:8000')
+  it('points to the backend when opened via the Vite dev server', () => {
+    expect(getSetupUrl(DEV_SERVER.vitePort)).toBe(DEV_SERVER.backendUrl)
+    expect(getSetupUrl(Number(DEV_SERVER.vitePort))).toBe(DEV_SERVER.backendUrl)
   })
   it('returns same port otherwise', () => {
     expect(getSetupUrl('8001')).toBe('http://localhost:8001')
