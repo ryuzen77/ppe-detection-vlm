@@ -20,6 +20,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 GOLDEN = Path(__file__).resolve().parent / "golden" / "state_manager.json"
+TELEMETRY_GOLDEN = Path(__file__).resolve().parent / "golden" / "state_telemetry.json"
+TELEMETRY_EVERY = 23   # payload dashboard direkam tiap sekian frame (T42g)
 SCENARIOS, FRAMES, FPS = 18, 1200, 15
 VLM_DELAY_FRAMES = 4
 SLOW_VLM_DELAY_FRAMES = 3 * FPS   # > jeda jalur kosong: hasil tiba setelah sesi berakhir (T42e)
@@ -53,6 +55,10 @@ class _World:
                 raise RuntimeError("galat VLM tiruan")
             return reply
         monkeypatch.setattr(sm_module.vlm_analyzer, "analyze_person", analyze)
+        # Info penyedia & kuota bergantung pada .env mesin: diganti nilai tetap (T42g)
+        monkeypatch.setattr(sm_module.vlm_analyzer, "is_live_api", lambda: True)
+        monkeypatch.setattr(sm_module.vlm_analyzer, "provider_info", lambda: {"primary": "tiruan"})
+        monkeypatch.setattr(sm_module.api_monitor, "get_status", lambda: {"rpm": 0})
 
     def _save(self, crop_img, **fields):
         self.audits.append(dict(fields, crop_shape=list(crop_img.shape)))
@@ -106,7 +112,21 @@ def _people(rng, frame_i, state):
     return out
 
 
-def run_scenarios(monkeypatch):
+def _telemetry(mgr, sm, seed, base, monkeypatch):
+    """Payload WebSocket (tanpa jam dinding & nomor sesi global); zona aktif di seed ganjil."""
+    from backend.zone import Zone
+    zone = Zone(enabled=True, y_min=500.0, y_max=620.0) if seed % 2 else sm.zone_store.get()
+    with monkeypatch.context() as m:
+        m.setattr(sm.zone_store, "get", lambda: zone)
+        payload = mgr.get_telemetry()
+    if payload["active_track"] is not None:
+        payload["active_track"]["session_id"] -= base
+    payload["light"].pop("timestamp")   # jam lampu dari jam dinding notifier
+    payload["history"] = [{k: v for k, v in h.items() if k != "timestamp"} for h in payload["history"]]
+    return payload
+
+
+def run_scenarios(monkeypatch, telemetry=None):
     import backend.state_manager as sm
     from backend.config import cfg
     from backend.notifier import notifier
@@ -137,6 +157,8 @@ def run_scenarios(monkeypatch):
                         notifier.current_state, list(world.sounds), world.vlm_calls, len(mgr.inspection_history),
                         world.audits[audits:], newest,
                         None if s is None or s.vlm_result is None else s.vlm_result.model_dump()])
+            if telemetry is not None and i % TELEMETRY_EVERY == 0:
+                telemetry.append(_telemetry(mgr, sm, seed, base, monkeypatch))
     return out
 
 
@@ -145,6 +167,25 @@ def test_state_machine_tidak_berubah(monkeypatch, catalog_defaults):
     actual = json.loads(json.dumps(run_scenarios(monkeypatch)))
     diffs = [i for i, (a, e) in enumerate(zip(actual, expected)) if a != e]
     assert len(actual) == len(expected) and not diffs, f"{len(diffs)} frame berubah, mis. {[actual[i] for i in diffs[:2]]}"
+
+
+def test_telemetri_tidak_berubah(monkeypatch, catalog_defaults):
+    expected = json.loads(TELEMETRY_GOLDEN.read_text(encoding="utf-8"))
+    actual = []
+    run_scenarios(monkeypatch, actual)
+    actual = json.loads(json.dumps(actual))
+    diffs = [i for i, (a, e) in enumerate(zip(actual, expected)) if a != e]
+    assert len(actual) == len(expected) and not diffs, f"{len(diffs)} payload berubah, mis. {[actual[i] for i in diffs[:1]]}"
+
+
+def test_acuan_telemetri_mencakup_semua_jalur():
+    payloads = json.loads(TELEMETRY_GOLDEN.read_text(encoding="utf-8"))
+    tracks = [p["active_track"] for p in payloads if p["active_track"]]
+    assert any(t["retry_in_s"] is not None for t in tracks), "WAITING_SYSTEM (hitung mundur)"
+    assert any(t["vlm_result"] for t in tracks) and any(p["active_track"] is None for p in payloads)
+    dets = [d for p in payloads for d in p["detections"]]
+    assert {True, False} <= {d["in_zone"] for d in dets} and len({len(p["detections"]) for p in payloads}) >= 3
+    assert any(p["history"] for p in payloads) and {p["light"]["light_state"] for p in payloads} >= {"GREEN", "RED"}
 
 
 def test_acuan_mencakup_semua_keadaan():
@@ -167,6 +208,8 @@ if __name__ == "__main__" and "--regenerate" in sys.argv:
     mp = pytest.MonkeyPatch()
     mp.setattr(ppe_rules, "_active_overrides", {})   # sama dengan fixture catalog_defaults
     GOLDEN.parent.mkdir(exist_ok=True)
-    GOLDEN.write_text(json.dumps(run_scenarios(mp)), encoding="utf-8")
+    telemetry = []
+    GOLDEN.write_text(json.dumps(run_scenarios(mp, telemetry)), encoding="utf-8")
+    TELEMETRY_GOLDEN.write_text(json.dumps(telemetry), encoding="utf-8")
     mp.undo()
     print(f"acuan ditulis: {GOLDEN}")
