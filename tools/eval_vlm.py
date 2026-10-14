@@ -12,8 +12,8 @@ Penyedia & model dipilih lewat variabel lingkungan yang sama dengan aplikasi
 config dan tidak pernah dicetak. Contoh, dari akar repo:
     VLM_PROVIDER=ollama VLM_MODEL=qwen2.5vl:7b python tools/eval_vlm.py picture_test
 
-Selama evaluasi, instans YOLO kedua berjalan ~25 FPS di latar belakang untuk
-meniru beban kamera, sehingga latensi & VRAM terukur dalam kondisi nyata.
+Selama evaluasi, detektor gerbang terus berinferensi ~25 FPS di latar belakang
+untuk meniru beban kamera, sehingga latensi & VRAM terukur dalam kondisi nyata.
 Tiap foto dikirim SEKALI tanpa percobaan ulang, dengan batas waktu longgar
 (EVAL_TIMEOUT_SECONDS) agar akurasi model lambat tetap terukur; porsi yang
 selesai di bawah batas waktu produksi (VLM_CLOUD/LOCAL_TIMEOUT_SECONDS) dilaporkan
