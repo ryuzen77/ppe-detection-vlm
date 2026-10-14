@@ -28,7 +28,6 @@ LONG_FUNCTIONS_DEBT = {
     "tools/bench_vlm.py::main",
     "tools/eval_vlm.py::main",
     "backend/video/hud.py::draw_hud",
-    "backend/state_manager.py::get_telemetry",
     "backend/report_manager.py::get_reports",
     "backend/app.py::run",
     "backend/vlm_analyzer.py::analyze_person",
