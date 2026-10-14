@@ -2,7 +2,7 @@
 import logging
 import threading
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 import cv2
 import numpy as np
@@ -17,6 +17,25 @@ from ..state_manager import state_mgr
 from . import hud
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ReaderState:
+    """Keadaan thread pembaca di antara putaran (hanya disentuh thread pembaca)."""
+    # Mode yang berlaku saat kamera hilang, supaya penyambungan ulang memulihkan
+    # mode hasil optimasi dan bukan jatuh ke permintaan bawaan.
+    lost_mode: dict | None = None
+    consecutive_failures: int = 0
+    last_reconnect_attempt: float = 0.0
+    # Pemantauan laju baca untuk mendeteksi kamera yang "hidup tapi ambruk"
+    window_start: float = 0.0
+    window_frames: int = 0
+    baseline_fps: float = 0.0
+    stall_since: float | None = None
+
+    def reset_rate(self, now: float):
+        self.window_start, self.window_frames, self.baseline_fps, self.stall_since = now, 0, 0.0, None
+
 
 class VideoCaptureService:
     """Manages camera video capture, inference, and MJPEG encoding."""
@@ -63,6 +82,8 @@ class VideoCaptureService:
         # Dimensi frame yang benar-benar dikirim kamera (bisa berbeda dari yang diminta)
         self.frame_width = cfg.FRAME_WIDTH
         self.frame_height = cfg.FRAME_HEIGHT
+        # Keadaan antar-putaran thread pembaca (diganti baru tiap _reader_loop mulai)
+        self._reader = _ReaderState()
 
     def start(self):
         self.is_running = True
@@ -375,198 +396,14 @@ class VideoCaptureService:
         Thread ini adalah satu-satunya pemilik `self.cap`, jadi pergantian kamera
         dan penyambungan ulang juga dikerjakan di sini.
         """
-        # Secara bawaan tidak ada kamera yang dibuka: operator memilih sumbernya
-        # dari dashboard lebih dulu, sehingga tidak ada perangkat yang terlanjur
-        # dipakai lalu diganti.
-        autostart_mode = None
-        if cfg.CAMERA_AUTOSTART:
-            autostart_mode = self._autostart_camera()
-        else:
-            self.camera_status = "IDLE"
-            logger.info("Menunggu operator memilih sumber kamera di dashboard.")
-
-        consecutive_failures = 0
-        last_reconnect_attempt = 0.0
-        # Mode yang berlaku saat kamera hilang, supaya penyambungan ulang memulihkan
-        # mode hasil optimasi dan bukan jatuh ke permintaan bawaan.
-        lost_mode = autostart_mode
-
-        # Pemantauan laju baca untuk mendeteksi kamera yang "hidup tapi ambruk"
-        window_start = time.time()
-        window_frames = 0
-        baseline_fps = 0.0
-        stall_since = None
-
-        def reset_rate_tracking():
-            nonlocal window_start, window_frames, baseline_fps, stall_since
-            window_start = time.time()
-            window_frames = 0
-            baseline_fps = 0.0
-            stall_since = None
-
+        self._reader = _ReaderState(lost_mode=self._start_reader(), window_start=time.time())
         try:
             while self.is_running:
-                # 1. Permintaan pindah kamera dari operator
-                if self._pending_index is not None:
-                    target, target_mode = self._pending_index, self._pending_mode
-                    self._pending_index, self._pending_mode = None, None
-                    self._init_camera(target, target_mode)
-                    consecutive_failures = 0
-                    self._device_missing = False
-                    reset_rate_tracking()
-                    # ID ByteTrack dari kamera lama tidak boleh bocor ke kamera baru
-                    state_mgr.reset_all()
+                if self._handle_requests():
                     continue
-
-                # 2. Optimasi: lepas kamera, ukur seluruh mode, buka lagi yang terbaik
-                if self._pending_optimize:
-                    self._pending_optimize = False
-                    index = self.camera_index
-                    self.camera_status = "OPTIMIZING"
-                    self._release_camera()
-                    with self.raw_lock:
-                        self.latest_raw = self._generate_synthetic_frame(
-                            messages.FRAME_OPTIMIZING
-                        )
-                        self.raw_seq += 1
-
-                    logger.info(f"Mengukur mode kamera index {index}...")
-                    modes = camera_manager.probe_modes(index)
-                    best = camera_manager.pick_best_mode(modes)
-                    camera_mgr.record_device_modes(index, self._resolve_device_name(index), modes, best)
-
-                    self._init_camera(index, asdict(best) if best else None)
-                    state_mgr.reset_all()
-                    consecutive_failures = 0
-                    self._device_missing = False
-                    reset_rate_tracking()
-                    continue
-
-                # 3. Perangkat hilang dari daftar OS -> vonis lepas
-                if self._device_missing and self.camera_status == "OK":
-                    logger.warning(messages.LOG_CAMERA_RECONNECT.format(reason=self._missing_reason))
-                    lost_mode = self.active_mode
-                    self._release_camera()
-                    self.camera_status = "LOST"
-                    self.camera_error = self._missing_reason
-                    self._missing_reason = messages.CAMERA_UNPLUGGED
-                    self._device_missing = False
-                    last_reconnect_attempt = time.time()
-                    continue
-
-                # 4. Permintaan melepas kamera (pilih ulang sumber)
-                if self._pending_idle:
-                    self._pending_idle = False
-                    self._release_camera()
-                    self.camera_index = None
-                    self.camera_name = ""
-                    self.active_mode = None
-                    self.use_synthetic = False
-                    self.camera_status = "IDLE"
-                    self.fps = 0.0
-                    state_mgr.reset_all()
-                    continue
-
-                # 5. Belum ada kamera dipilih
-                if self.camera_status == "IDLE":
-                    raw = self._generate_synthetic_frame(
-                        messages.FRAME_SELECT_SOURCE
-                    )
-                    time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
-
-                # 6. Kamera lepas -> coba sambung ulang secara berkala
-                elif self.camera_status == "LOST":
-                    now = time.time()
-                    if now - last_reconnect_attempt >= cfg.CAMERA_RECONNECT_INTERVAL_SECONDS:
-                        last_reconnect_attempt = now
-                        # Kamera yang dicolok kembali bisa mendapat indeks berbeda,
-                        # jadi dicari ulang lewat namanya sebelum dibuka.
-                        target_index = self._find_index_by_name(self.camera_name)
-                        if target_index is None:
-                            self._log_waiting(now)
-                            time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
-                            with self.raw_lock:
-                                self.latest_raw = self._generate_synthetic_frame(
-                                    messages.FRAME_WAITING_DEVICE
-                                )
-                                self.raw_seq += 1
-                            continue
-                        if self._init_camera(target_index, lost_mode):
-                            logger.info("Kamera tersambung kembali.")
-                            self._waiting_since = None
-                            consecutive_failures = 0
-                            lost_mode = None
-                            self._device_missing = False
-                            reset_rate_tracking()
-                            # Pelacakan dimulai bersih: ID ByteTrack dari sebelum
-                            # kamera lepas tidak boleh bersambung ke subjek baru.
-                            state_mgr.reset_all()
-                            continue
-                        # _init_camera menandai SYNTHETIC saat gagal; kembalikan ke
-                        # LOST agar percobaan menyambung ulang terus berjalan.
-                        self.camera_status = "LOST"
-                    raw = self._generate_synthetic_frame(
-                        messages.FRAME_RECONNECTING
-                    )
-                    time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
-
-                # 7. Tidak ada kamera fisik sama sekali
-                elif self.use_synthetic or self.cap is None or not self.cap.isOpened():
-                    raw = self._generate_synthetic_frame()
-                    time.sleep(cfg.SYNTHETIC_FRAME_INTERVAL_SECONDS)
-
-                # 8. Operasi normal
-                else:
-                    ret, raw = self.cap.read()
-                    if not ret or raw is None:
-                        consecutive_failures += 1
-                        if consecutive_failures >= cfg.CAMERA_LOST_THRESHOLD:
-                            logger.warning("Kamera berhenti mengirim frame. "
-                                           "Ditandai terputus, akan dicoba sambung ulang.")
-                            lost_mode = self.active_mode
-                            self._release_camera()
-                            self.camera_status = "LOST"
-                            self.camera_error = messages.CAMERA_DISCONNECTED
-                            last_reconnect_attempt = time.time()
-                        time.sleep(cfg.CAMERA_READ_RETRY_SECONDS)
-                        continue
-                    consecutive_failures = 0
-
-                    # Laju baca dipantau per jendela 1 detik. Kamera yang dicabut
-                    # bisa tetap "berhasil" dibaca tetapi laju-nya ambruk drastis
-                    # (kamera USB penguji: 25 -> 1,1 FPS) sambil mengembalikan
-                    # frame berisi sampah scanline, sehingga hitungan kegagalan
-                    # baca saja tidak pernah terpicu.
-                    window_frames += 1
-                    elapsed = time.time() - window_start
-                    if elapsed >= 1.0:
-                        read_fps = window_frames / elapsed
-                        window_start = time.time()
-                        window_frames = 0
-
-                        if read_fps > baseline_fps:
-                            baseline_fps = read_fps
-
-                        if baseline_fps >= cfg.CAMERA_STALL_MIN_BASELINE:
-                            if read_fps < baseline_fps * cfg.CAMERA_STALL_FPS_RATIO:
-                                stall_since = stall_since or time.time()
-                                if time.time() - stall_since >= cfg.CAMERA_STALL_SECONDS:
-                                    logger.warning(f"Laju kamera ambruk "
-                                                   f"({read_fps:.1f} dari {baseline_fps:.1f} FPS). "
-                                                   f"Dianggap terputus.")
-                                    lost_mode = self.active_mode
-                                    self._release_camera()
-                                    self.camera_status = "LOST"
-                                    self.camera_error = messages.CAMERA_STALLED
-                                    last_reconnect_attempt = time.time()
-                                    continue
-                            else:
-                                stall_since = None
-
-                self.frame_height, self.frame_width = raw.shape[:2]
-                with self.raw_lock:
-                    self.latest_raw = raw
-                    self.raw_seq += 1
+                raw = self._next_raw_frame()
+                if raw is not None:
+                    self._publish_raw(raw)
         except Exception as e:
             # Tanpa penjaga ini, galat apa pun mematikan thread pembaca diam-diam
             # dan aliran video berhenti tanpa pesan sama sekali.
@@ -575,6 +412,184 @@ class VideoCaptureService:
             self.camera_error = str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
         finally:
             self._release_camera()
+
+    def _start_reader(self) -> dict | None:
+        """Kamera awal; mengembalikan mode untuk sambung ulang bila kamera autostart belum terlihat.
+
+        Secara bawaan tidak ada kamera yang dibuka: operator memilih sumbernya dari
+        dashboard lebih dulu, sehingga tidak ada perangkat yang terlanjur dipakai lalu diganti.
+        """
+        if cfg.CAMERA_AUTOSTART:
+            return self._autostart_camera()
+        self.camera_status = "IDLE"
+        logger.info("Menunggu operator memilih sumber kamera di dashboard.")
+        return None
+
+    # --- Permintaan & vonis lepas (satu putaran = satu tindakan) ------------------------
+
+    def _handle_requests(self) -> bool:
+        """Menjalankan permintaan operator / vonis lepas; True bila putaran ini terpakai."""
+        if self._pending_index is not None:
+            target, target_mode = self._pending_index, self._pending_mode
+            self._pending_index, self._pending_mode = None, None
+            self._init_camera(target, target_mode)
+            self._restart_reading()
+        elif self._pending_optimize:
+            self._optimize_camera()
+        elif self._device_missing and self.camera_status == "OK":
+            # Perangkat hilang dari daftar OS (atau gambar membeku) -> vonis lepas
+            logger.warning(messages.LOG_CAMERA_RECONNECT.format(reason=self._missing_reason))
+            reason, self._missing_reason = self._missing_reason, messages.CAMERA_UNPLUGGED
+            self._mark_lost(reason)
+            self._device_missing = False
+        elif self._pending_idle:
+            self._go_idle()
+        else:
+            return False
+        return True
+
+    def _optimize_camera(self):
+        """Lepas kamera, ukur seluruh mode, buka lagi yang terbaik."""
+        self._pending_optimize = False
+        index = self.camera_index
+        self.camera_status = "OPTIMIZING"
+        self._release_camera()
+        self._set_status_frame(messages.FRAME_OPTIMIZING)
+        logger.info(f"Mengukur mode kamera index {index}...")
+        modes = camera_manager.probe_modes(index)
+        best = camera_manager.pick_best_mode(modes)
+        camera_mgr.record_device_modes(index, self._resolve_device_name(index), modes, best)
+        self._init_camera(index, asdict(best) if best else None)
+        self._restart_reading()
+
+    def _go_idle(self):
+        """Melepas kamera dan kembali ke layar pemilihan sumber."""
+        self._pending_idle = False
+        self._release_camera()
+        self.camera_index = None
+        self.camera_name = ""
+        self.active_mode = None
+        self.use_synthetic = False
+        self.camera_status = "IDLE"
+        self.fps = 0.0
+        state_mgr.reset_all()
+
+    def _restart_reading(self):
+        """Kamera (baru) dibuka: hitungan gagal & laju baca dari nol, pelacakan bersih.
+
+        ID ByteTrack dari kamera lama / dari sebelum kamera lepas tidak boleh
+        bersambung ke subjek baru.
+        """
+        self._reader.consecutive_failures = 0
+        self._device_missing = False
+        self._reader.reset_rate(time.time())
+        state_mgr.reset_all()
+
+    def _mark_lost(self, error: str):
+        """Vonis kamera lepas; mode saat itu disimpan supaya sambung ulang memulihkannya."""
+        self._reader.lost_mode = self.active_mode
+        self._release_camera()
+        self.camera_status = "LOST"
+        self.camera_error = error
+        self._reader.last_reconnect_attempt = time.time()
+
+    # --- Sumber frame --------------------------------------------------------------------
+
+    def _next_raw_frame(self) -> np.ndarray | None:
+        """Frame berikutnya untuk inferensi; None bila putaran ini tidak menghasilkannya."""
+        if self.camera_status == "IDLE":
+            raw = self._generate_synthetic_frame(messages.FRAME_SELECT_SOURCE)
+            time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
+            return raw
+        if self.camera_status == "LOST":
+            return self._reconnect_step()
+        if self.use_synthetic or self.cap is None or not self.cap.isOpened():
+            # Tidak ada kamera fisik sama sekali
+            raw = self._generate_synthetic_frame()
+            time.sleep(cfg.SYNTHETIC_FRAME_INTERVAL_SECONDS)
+            return raw
+        return self._read_camera_frame()
+
+    def _reconnect_step(self) -> np.ndarray | None:
+        """Kamera lepas -> coba sambung ulang secara berkala."""
+        r, now = self._reader, time.time()
+        if now - r.last_reconnect_attempt >= cfg.CAMERA_RECONNECT_INTERVAL_SECONDS:
+            r.last_reconnect_attempt = now
+            # Kamera yang dicolok kembali bisa mendapat indeks berbeda,
+            # jadi dicari ulang lewat namanya sebelum dibuka.
+            target_index = self._find_index_by_name(self.camera_name)
+            if target_index is None:
+                self._log_waiting(now)
+                time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
+                self._set_status_frame(messages.FRAME_WAITING_DEVICE)
+                return None
+            if self._init_camera(target_index, r.lost_mode):
+                logger.info("Kamera tersambung kembali.")
+                self._waiting_since = None
+                r.lost_mode = None
+                self._restart_reading()
+                return None
+            # _init_camera menandai SYNTHETIC saat gagal; kembalikan ke
+            # LOST agar percobaan menyambung ulang terus berjalan.
+            self.camera_status = "LOST"
+        raw = self._generate_synthetic_frame(messages.FRAME_RECONNECTING)
+        time.sleep(cfg.STATUS_FRAME_INTERVAL_SECONDS)
+        return raw
+
+    def _read_camera_frame(self) -> np.ndarray | None:
+        """Operasi normal: satu frame kamera; None bila gagal dibaca atau kamera divonis lepas."""
+        ret, raw = self.cap.read()
+        if not ret or raw is None:
+            self._reader.consecutive_failures += 1
+            if self._reader.consecutive_failures >= cfg.CAMERA_LOST_THRESHOLD:
+                logger.warning("Kamera berhenti mengirim frame. "
+                               "Ditandai terputus, akan dicoba sambung ulang.")
+                self._mark_lost(messages.CAMERA_DISCONNECTED)
+            time.sleep(cfg.CAMERA_READ_RETRY_SECONDS)
+            return None
+        self._reader.consecutive_failures = 0
+        return None if self._camera_stalled() else raw
+
+    def _camera_stalled(self) -> bool:
+        """Laju baca dipantau per jendela; True bila kamera divonis lepas karena lajunya ambruk.
+
+        Kamera yang dicabut bisa tetap "berhasil" dibaca tetapi lajunya ambruk drastis
+        (kamera USB penguji: 25 -> 1,1 FPS) sambil mengembalikan frame berisi sampah
+        scanline, sehingga hitungan kegagalan baca saja tidak pernah terpicu.
+        """
+        r = self._reader
+        r.window_frames += 1
+        elapsed = time.time() - r.window_start
+        if elapsed < cfg.CAMERA_RATE_WINDOW_SECONDS:
+            return False
+        read_fps = r.window_frames / elapsed
+        r.window_start, r.window_frames = time.time(), 0
+        r.baseline_fps = max(r.baseline_fps, read_fps)
+        if r.baseline_fps < cfg.CAMERA_STALL_MIN_BASELINE:
+            return False
+        if read_fps >= r.baseline_fps * cfg.CAMERA_STALL_FPS_RATIO:
+            r.stall_since = None
+            return False
+        r.stall_since = r.stall_since or time.time()
+        if time.time() - r.stall_since < cfg.CAMERA_STALL_SECONDS:
+            return False
+        logger.warning(f"Laju kamera ambruk ({read_fps:.1f} dari {r.baseline_fps:.1f} FPS). Dianggap terputus.")
+        self._mark_lost(messages.CAMERA_STALLED)
+        return True
+
+    # --- Slot frame mentah ---------------------------------------------------------------
+
+    def _publish_raw(self, raw: np.ndarray):
+        self.frame_height, self.frame_width = raw.shape[:2]
+        with self.raw_lock:
+            self.latest_raw = raw
+            self.raw_seq += 1
+
+    def _set_status_frame(self, message: str):
+        """Frame pesan (sedang mengukur / menunggu perangkat), tanpa mengubah dimensi kamera."""
+        with self.raw_lock:
+            self.latest_raw = self._generate_synthetic_frame(message)
+            self.raw_seq += 1
 
     def _capture_loop(self):
         prev_time = time.time()
