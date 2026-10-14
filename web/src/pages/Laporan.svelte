@@ -189,6 +189,11 @@
     gap: var(--space-4);
     align-items: stretch;
   }
+  @media (max-width: 768px) {
+    .chart-row {
+      flex-direction: column;
+    }
+  }
 
   .laporan {
     display: flex;

@@ -43,31 +43,35 @@
   </div>
 
   <div class="nav">
-    <button class="btn icon" onclick={goPrev} disabled={loading || !range} title={TEXT.period.prev}>
-      <ChevronLeft size={16} aria-hidden="true" />
-    </button>
+    <div class="nav-range">
+      <button class="btn icon" onclick={goPrev} disabled={loading || !range} title={TEXT.period.prev}>
+        <ChevronLeft size={16} aria-hidden="true" />
+      </button>
+      
+      <span class="range-text" aria-live="polite">
+        {#if range}
+          {formatReportRange(range.from, range.to, TEXT.period.formatDate)}
+        {:else}
+          ...
+        {/if}
+      </span>
+      
+      <button class="btn icon" onclick={goNext} disabled={loading || !range} title={TEXT.period.next}>
+        <ChevronRight size={16} aria-hidden="true" />
+      </button>
+    </div>
     
-    <span class="range-text" aria-live="polite">
-      {#if range}
-        {formatReportRange(range.from, range.to, TEXT.period.formatDate)}
-      {:else}
-        ...
-      {/if}
-    </span>
-    
-    <button class="btn icon" onclick={goNext} disabled={loading || !range} title={TEXT.period.next}>
-      <ChevronRight size={16} aria-hidden="true" />
-    </button>
-    
-    <input type="date" value={date || (range?.from ?? '')} 
-           disabled={loading} 
-           onchange={(e) => { date = e.currentTarget.value }} 
-           class="date-input" 
-           title={TEXT.period.jumpToDate} />
+    <div class="nav-date">
+      <input type="date" value={date || (range?.from ?? '')} 
+             disabled={loading} 
+             onchange={(e) => { date = e.currentTarget.value }} 
+             class="date-input" 
+             title={TEXT.period.jumpToDate} />
 
-    {#if date !== ''}
-      <button class="btn today" onclick={goToday} disabled={loading}>{TEXT.period.today}</button>
-    {/if}
+      {#if date !== ''}
+        <button class="btn today" onclick={goToday} disabled={loading}>{TEXT.period.today}</button>
+      {/if}
+    </div>
   </div>
 </div>
 
@@ -79,6 +83,7 @@
     justify-content: space-between;
     gap: var(--space-4);
     margin-bottom: var(--space-4);
+    max-width: 100%;
   }
   .segmented {
     display: inline-flex;
@@ -86,6 +91,7 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     background: var(--surface-2);
+    max-width: 100%;
   }
   .segmented button {
     padding: 6px 16px;
@@ -108,27 +114,41 @@
   }
   .nav {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
+    max-width: 100%;
+  }
+  .nav-range {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .nav-date {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
   }
   .range-text {
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text);
-    min-width: 180px;
+    min-width: 130px;
     text-align: center;
   }
   .btn.icon {
     padding: 6px;
     border-radius: 50%;
+    flex-shrink: 0;
   }
   .btn.today {
-    margin-left: var(--space-2);
     font-size: var(--text-xs);
     padding: var(--space-1) var(--space-2);
+    flex-shrink: 0;
   }
   .date-input {
-    margin-left: var(--space-2);
     padding: var(--space-1) var(--space-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
@@ -136,5 +156,23 @@
     color: var(--text);
     font: inherit;
     font-size: var(--text-sm);
+    max-width: 140px;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 500px) {
+    .selector {
+      gap: var(--space-2);
+    }
+    .segmented button {
+      padding: 6px 12px;
+    }
+    .range-text {
+      font-size: var(--text-xs);
+      min-width: 0;
+    }
+    .date-input {
+      max-width: 130px;
+    }
   }
 </style>

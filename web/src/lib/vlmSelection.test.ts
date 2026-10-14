@@ -4,7 +4,7 @@ import { validationBadge, handleSelectionError } from './vlmSelection'
 describe('vlmSelection', () => {
   it('validationBadge memetakan status ke tone yang benar (tanpa danger/merah)', () => {
     expect(validationBadge('validated')).toEqual({ text: 'Teruji', tone: 'ok' })
-    expect(validationBadge('partial')).toEqual({ text: 'Sebagian', tone: 'accent' })
+    expect(validationBadge('partial')).toEqual({ text: 'Sebagian', tone: 'warn' })
     expect(validationBadge('outdated')).toEqual({ text: 'Kedaluwarsa', tone: 'warn' })
     expect(validationBadge('unvalidated')).toEqual({ text: 'Belum teruji', tone: 'warn' })
     expect(validationBadge('unsafe')).toEqual({ text: 'Tidak aman', tone: 'muted' })

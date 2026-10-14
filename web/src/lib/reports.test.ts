@@ -120,6 +120,13 @@ describe('calculateYAxis', () => {
         expect(ticks[i + 1].value).toBeGreaterThan(ticks[i].value)
         expect(ticks[i + 1].y).toBeLessThan(ticks[i].y)
       }
+
+      // Verifikasi posisi linear persis: y = paddingY + usableHeight * (1 - value / puncak)
+      const yMax = values[values.length - 1]
+      for (const t of ticks) {
+        const expectedY = paddingY + usableHeight * (1 - t.value / yMax)
+        expect(t.y).toBeCloseTo(expectedY, 5)
+      }
     }
   })
 

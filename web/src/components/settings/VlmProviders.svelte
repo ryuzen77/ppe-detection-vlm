@@ -321,7 +321,6 @@
     font-weight: 500;
   }
   .tone-ok { background: var(--ok); color: var(--text); }
-  .tone-accent { background: var(--accent); color: var(--on-accent); }
   .tone-warn { background: var(--warn); color: var(--surface); }
   .tone-muted { background: var(--border-strong); color: var(--text); }
   
