@@ -2,7 +2,8 @@
 
 Sebelum fungsi ±100 baris itu dipecah, perilaku kode lama untuk ribuan frame
 acak (orang masuk/keluar, tubuh terpotong, melangkah, VLM menjawab lengkap/kurang/
-gangguan dengan jeda beberapa frame) direkam di `golden/state_manager.json`.
+gangguan/galat dengan jeda beberapa frame, potongan gambar kosong) direkam di
+`golden/state_manager.json`, termasuk isi baris audit & riwayat (T42e).
 Refaktor tidak boleh mengubahnya.
 
 Bila perilaku SENGAJA diubah, bangkitkan ulang acuannya:
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 GOLDEN = Path(__file__).resolve().parent / "golden" / "state_manager.json"
 SCENARIOS, FRAMES, FPS = 18, 1200, 15
 VLM_DELAY_FRAMES = 4
+SLOW_VLM_DELAY_FRAMES = 3 * FPS   # > jeda jalur kosong: hasil tiba setelah sesi berakhir (T42e)
 CFG_OVERRIDES = {"STANDBY_RESET_DELAY_SECONDS": 1.5, "READY_HOLD_SECONDS": 1.0, "STABLE_FRAMES_REQUIRED": 3,
                  "VLM_SYSTEM_RETRY_SECONDS": 2.0, "DECIDED_TRACK_MEMORY_SECONDS": 10.0}
 
@@ -28,9 +30,10 @@ CFG_OVERRIDES = {"STANDBY_RESET_DELAY_SECONDS": 1.5, "READY_HOLD_SECONDS": 1.0, 
 class _World:
     """Jam, suara, VLM, dan audit tiruan yang dipasang ke modul state_manager."""
 
-    def __init__(self, sm_module, monkeypatch, first_reply: int = 0):
+    def __init__(self, sm_module, monkeypatch, first_reply: int = 0, delay_frames: int = VLM_DELAY_FRAMES):
         from backend.vlm_analyzer import InspectionResult
-        self.now, self.sounds, self.pending, self.vlm_calls = 1000.0, [], [], 0
+        self.delay = delay_frames / FPS
+        self.now, self.sounds, self.pending, self.vlm_calls, self.audits = 1000.0, [], [], 0, []
         clock = types.SimpleNamespace(time=lambda: self.now, strftime=real_time.strftime)
         monkeypatch.setattr(sm_module, "time", clock)
         ap = sm_module.audio_player
@@ -38,18 +41,25 @@ class _World:
         monkeypatch.setattr(ap, "play_step_back", lambda clip_type="": self.sounds.append(f"mundur:{clip_type}"))
         monkeypatch.setattr(ap, "play_result", lambda is_complete, missing_items=None:
                             self.sounds.append(f"hasil:{is_complete}:{','.join(missing_items or [])}"))
-        monkeypatch.setattr(sm_module.report_mgr, "save_inspection", lambda **k: {"snapshot_filename": ""})
+        monkeypatch.setattr(sm_module.report_mgr, "save_inspection", self._save)
         replies = [InspectionResult(is_complete=True, inference_source="VLM_LIVE:x"),
                    InspectionResult(is_complete=False, missing_items=["Helm Keselamatan"], inference_source="VLM_LIVE:x"),
-                   InspectionResult(is_system_unavailable=True)]
+                   InspectionResult(is_system_unavailable=True), None]
 
         def analyze(crop):
             self.vlm_calls += 1
-            return replies[(self.vlm_calls - 1 + first_reply) % len(replies)]
+            reply = replies[(self.vlm_calls - 1 + first_reply) % len(replies)]
+            if reply is None:
+                raise RuntimeError("galat VLM tiruan")
+            return reply
         monkeypatch.setattr(sm_module.vlm_analyzer, "analyze_person", analyze)
 
+    def _save(self, crop_img, **fields):
+        self.audits.append(dict(fields, crop_shape=list(crop_img.shape)))
+        return {"snapshot_filename": f"bukti-{len(self.audits)}.jpg"}
+
     def submit(self, fn, *args):
-        self.pending.append((self.now + VLM_DELAY_FRAMES / FPS, fn, args))
+        self.pending.append((self.now + self.delay, fn, args))
 
     def run_due(self):
         due = [p for p in self.pending if p[0] <= self.now]
@@ -84,6 +94,8 @@ def _people(rng, frame_i, state):
         kp = [[0, 0, 0.9]] * 17 if facing else [[0, 0, 0.9]] * 5 + [[0, 0, 0.1]] * 2 + [[0, 0, 0.9]] * 10
         y = state["y"]
         crop = (rng.integers(0, 255, (24, 12, 3))).astype(np.uint8)
+        if state["seed"] % 4 == 3 and rng.random() < 0.3:   # potongan gagal dibuat (T42e)
+            crop = None
         out.append(DetectionResult(track_id=state["tid"], bbox=[400, int(y - 250), 500, int(y + 250)], is_full_body=full,
                                    reason=messages.POSE_OK if full else messages.POSE_FEET_CLIPPED,
                                    is_inside_corridor=rng.random() > 0.05, keypoints=kp, crop_img=crop, conf=0.9,
@@ -102,7 +114,8 @@ def run_scenarios(monkeypatch):
         monkeypatch.setattr(cfg, k, v)
     out = []
     for seed in range(SCENARIOS):
-        world = _World(sm, monkeypatch, first_reply=seed)
+        world = _World(sm, monkeypatch, first_reply=seed,
+                       delay_frames=SLOW_VLM_DELAY_FRAMES if seed % 6 == 4 else VLM_DELAY_FRAMES)
         mgr = sm.StateManager()
         monkeypatch.setattr(mgr, "executor", types.SimpleNamespace(submit=world.submit))
         notifier.set_idle()
@@ -112,12 +125,18 @@ def run_scenarios(monkeypatch):
         for i in range(FRAMES):
             world.now += 1 / FPS
             world.sounds.clear()
+            audits, history = len(world.audits), len(mgr.inspection_history)
             mgr.update_frame_detections(_people(rng, i, state))
             world.run_due()
             s = mgr.session
+            newest = None
+            if len(mgr.inspection_history) != history:   # riwayat baru tanpa jam dinding
+                newest = {k: v for k, v in mgr.inspection_history[0].items() if k != "timestamp"}
             out.append([seed, i, None if s is None else s.session_id - base, None if s is None else s.state,
                         None if s is None else s.track_id, None if s is None else s.stable_frames,
-                        notifier.current_state, list(world.sounds), world.vlm_calls, len(mgr.inspection_history)])
+                        notifier.current_state, list(world.sounds), world.vlm_calls, len(mgr.inspection_history),
+                        world.audits[audits:], newest,
+                        None if s is None or s.vlm_result is None else s.vlm_result.model_dump()])
     return out
 
 
@@ -133,7 +152,13 @@ def test_acuan_mencakup_semua_keadaan():
     states = {r[3] for r in rows}
     assert {"STEP_BACK_WARNING", "STABILIZING", "ANALYZING", "ANALYZED", "WAITING_SYSTEM", None} <= states, states
     assert {"GREEN", "RED", "OFF"} <= {r[6] for r in rows}
-
+    # T42e: baris audit, hasil terlambat (sesi sudah berakhir), sesi diulang setelah galat
+    # VLM / potongan kosong (ANALYZING → mundur ke awal, sesi sama, tanpa audit)
+    assert any(r[10] for r in rows) and any(r[11] for r in rows)
+    assert any(r[10] and r[3] != "ANALYZED" for r in rows), "hasil terlambat tidak terekam"
+    retried = [(a, b) for a, b in zip(rows, rows[1:]) if a[0] == b[0] and a[2] == b[2]
+               and a[3] == "ANALYZING" and b[3] in ("INITIAL", "STABILIZING") and not b[10]]
+    assert {a[8] == b[8] for a, b in retried} == {True, False}, "galat VLM & potongan kosong harus sama-sama terekam"
 
 if __name__ == "__main__" and "--regenerate" in sys.argv:
     import conftest  # noqa: F401
