@@ -102,6 +102,12 @@ class ModelValidation:
 
 
 VALIDATIONS = (
+    # T58 Gemini (izin pengguna 14-10: total 5 foto, jaga RPM): 5/5 benar — apd_10 & apd_4 (salah
+    # tolak model lokal) lolos, no_34 (tangan bernoda semen) tidak dianggap rokok. Tanpa konfirmasi
+    # kedua (eval_vlm memanggil VLM langsung). Median ~1,75 dtk.
+    ModelValidation("gemini", "gemini-3.5-flash-lite", "T58", "2026-10-14", photos=5, missed=0, false_rejects=0,
+                    median_seconds=1.75, complete=False,
+                    note="T58: apd_1, apd_10, apd_4, no_1, no_34; data/eval 20261014-070915"),
     # T58 (prompt T48 + larangan rokok + konfirmasi kedua), 84 foto: 0 lolos; salah tolak apd_10;
     # galat apd_19 & no_23 (sama dgn sebelumnya); rokok palsu no_34 (tangan bernoda semen)
     # dibatalkan konfirmasi. Setelah galat no_23 Ollama memuat ulang model 26% di CPU (T38):
