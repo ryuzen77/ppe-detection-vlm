@@ -16,6 +16,7 @@ from . import ppe_rules
 from . import report_summary
 from .config import cfg
 from . import messages
+from .disk_guard import BYTES_PER_GB
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ BACKUP_SOURCE_PREFIX = "VLM_CADANGAN:"
 
 # Retensi (T20): umur data dihitung dalam hari
 SECONDS_PER_DAY = 24 * 60 * 60
+BYTES_PER_MB = 1024 ** 2
 
 # Akhiran foto bukti yang sedang ditulis (lihat _write_snapshot)
 SNAPSHOT_TMP_SUFFIX = ".tmp"
@@ -529,87 +531,83 @@ class ReportManager:
         return deleted_count, reclaimed_bytes
 
     def cleanup_old_data(self):
-        """Pembersihan data sesuai kebijakan retensi (T20)."""
-        now = time.time()
-        deleted_photos = 0
-        deleted_audits = 0
-        reclaimed_bytes = 0
+        """Pembersihan data sesuai kebijakan retensi (T20).
 
+        Urutan tetap: audit kedaluwarsa (beserta fotonya) → foto kedaluwarsa →
+        pengaman ukuran folder. Basis data diperbarui dulu baru berkas dihapus,
+        jadi audit tidak pernah menunjuk foto yang sudah tidak ada.
+        """
+        now = time.time()
         try:
             with self._get_connection() as conn:
-                cursor = conn.cursor()
-
-                # 1. Hapus audit (dan fotonya) yang melewati batas RETENTION_AUDIT_DAYS
-                if cfg.RETENTION_AUDIT_DAYS > 0:
-                    audit_cutoff = now - (cfg.RETENTION_AUDIT_DAYS * SECONDS_PER_DAY)
-                    audit_cutoff_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(audit_cutoff))
-                    
-                    cursor.execute("SELECT snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''", (audit_cutoff_str,))
-                    audit_photos = [row["snapshot_filename"] for row in cursor.fetchall()]
-                    
-                    cursor.execute("DELETE FROM worker_inspections WHERE timestamp < ?", (audit_cutoff_str,))
-                    deleted_audits += cursor.rowcount
-                    conn.commit()
-                    
-                    d_count, r_bytes = self._delete_photos(audit_photos)
-                    deleted_photos += d_count
-                    reclaimed_bytes += r_bytes
-
-                # 2. Hapus foto yang melewati batas RETENTION_PHOTO_DAYS
-                if cfg.RETENTION_PHOTO_DAYS > 0:
-                    photo_cutoff = now - (cfg.RETENTION_PHOTO_DAYS * SECONDS_PER_DAY)
-                    photo_cutoff_str = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(photo_cutoff))
-                    
-                    cursor.execute("SELECT snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''", (photo_cutoff_str,))
-                    old_photos = [row["snapshot_filename"] for row in cursor.fetchall()]
-                    
-                    cursor.execute("UPDATE worker_inspections SET snapshot_filename = '' WHERE timestamp < ? AND snapshot_filename != ''", (photo_cutoff_str,))
-                    conn.commit()
-                    
-                    d_count, r_bytes = self._delete_photos(old_photos)
-                    deleted_photos += d_count
-                    reclaimed_bytes += r_bytes
-
-                # 3. Pengaman ukuran folder
-                if cfg.RETENTION_MAX_PHOTO_GB > 0:
-                    max_bytes = cfg.RETENTION_MAX_PHOTO_GB * 1024 * 1024 * 1024
-                    photos = []
-                    total_size = 0
-                    for p in self.snapshots_dir.glob("*.jpg"):
-                        try:
-                            st = p.stat()
-                            photos.append((st.st_mtime, p))
-                            total_size += st.st_size
-                        except OSError:
-                            pass
-                    
-                    if total_size > max_bytes:
-                        photos.sort(key=lambda x: x[0])  # oldest first
-                        bytes_to_free = total_size - max_bytes
-                        to_delete_names = []
-                        for mtime, p in photos:
-                            if bytes_to_free <= 0:
-                                break
-                            try:
-                                size = p.stat().st_size
-                                to_delete_names.append(p.name)
-                                bytes_to_free -= size
-                            except OSError:
-                                pass
-                        
-                        # Update DB first, then delete files
-                        for fname in to_delete_names:
-                            cursor.execute("UPDATE worker_inspections SET snapshot_filename = '' WHERE snapshot_filename = ?", (fname,))
-                        conn.commit()
-                        
-                        d_count, r_bytes = self._delete_photos(to_delete_names)
-                        deleted_photos += d_count
-                        reclaimed_bytes += r_bytes
-
+                steps = (self._expire_audits(conn, now), self._expire_photos(conn, now),
+                         self._enforce_photo_quota(conn))
+            deleted_audits, deleted_photos, reclaimed_bytes = (sum(column) for column in zip(*steps))
             if deleted_photos > 0 or deleted_audits > 0:
                 logger.info(f"Retensi data: menghapus {deleted_audits} audit dan {deleted_photos} foto "
-                            f"(membebaskan {reclaimed_bytes / (1024*1024):.1f} MB).")
+                            f"(membebaskan {reclaimed_bytes / BYTES_PER_MB:.1f} MB).")
         except Exception as e:
             logger.error(f"Gagal membersihkan data tua: {e}")
+
+    @staticmethod
+    def _cutoff(now: float, days: int) -> str:
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now - days * SECONDS_PER_DAY))
+
+    @staticmethod
+    def _photos_before(conn: sqlite3.Connection, cutoff: str) -> list[str]:
+        rows = conn.execute("SELECT snapshot_filename FROM worker_inspections "
+                            "WHERE timestamp < ? AND snapshot_filename != ''", (cutoff,))
+        return [row["snapshot_filename"] for row in rows.fetchall()]
+
+    def _expire_audits(self, conn: sqlite3.Connection, now: float) -> tuple[int, int, int]:
+        """Audit lebih tua dari RETENTION_AUDIT_DAYS dihapus beserta fotonya. (audit, foto, byte)."""
+        if cfg.RETENTION_AUDIT_DAYS <= 0:
+            return 0, 0, 0
+        cutoff = self._cutoff(now, cfg.RETENTION_AUDIT_DAYS)
+        photos = self._photos_before(conn, cutoff)
+        deleted = conn.execute("DELETE FROM worker_inspections WHERE timestamp < ?", (cutoff,)).rowcount
+        conn.commit()
+        return (deleted, *self._delete_photos(photos))
+
+    def _expire_photos(self, conn: sqlite3.Connection, now: float) -> tuple[int, int, int]:
+        """Foto lebih tua dari RETENTION_PHOTO_DAYS dihapus; baris auditnya tetap."""
+        if cfg.RETENTION_PHOTO_DAYS <= 0:
+            return 0, 0, 0
+        cutoff = self._cutoff(now, cfg.RETENTION_PHOTO_DAYS)
+        photos = self._photos_before(conn, cutoff)
+        conn.execute("UPDATE worker_inspections SET snapshot_filename = '' "
+                     "WHERE timestamp < ? AND snapshot_filename != ''", (cutoff,))
+        conn.commit()
+        return (0, *self._delete_photos(photos))
+
+    def _enforce_photo_quota(self, conn: sqlite3.Connection) -> tuple[int, int, int]:
+        """Folder foto melebihi RETENTION_MAX_PHOTO_GB: foto terlama (mtime) dihapus, termasuk yatim."""
+        if cfg.RETENTION_MAX_PHOTO_GB <= 0:
+            return 0, 0, 0
+        names = self._oldest_photos_over(cfg.RETENTION_MAX_PHOTO_GB * BYTES_PER_GB)
+        if not names:
+            return 0, 0, 0
+        for fname in names:
+            conn.execute("UPDATE worker_inspections SET snapshot_filename = '' WHERE snapshot_filename = ?", (fname,))
+        conn.commit()
+        return (0, *self._delete_photos(names))
+
+    def _oldest_photos_over(self, max_bytes: float) -> list[str]:
+        """Nama foto terlama yang harus dihapus supaya total ukuran folder <= max_bytes."""
+        photos = []
+        for path in self.snapshots_dir.glob("*.jpg"):
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            photos.append((st.st_mtime, st.st_size, path.name))
+        excess = sum(size for _, size, _ in photos) - max_bytes
+        names = []
+        for _, size, name in sorted(photos, key=lambda photo: photo[0]):
+            if excess <= 0:
+                break
+            names.append(name)
+            excess -= size
+        return names
 
 report_mgr = ReportManager()
