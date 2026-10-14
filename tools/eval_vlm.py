@@ -69,12 +69,15 @@ class GpuSampler(threading.Thread):
 
 
 class CameraLoad(threading.Thread):
-    """YOLO kedua yang terus berinferensi, meniru thread kamera produksi."""
+    """Detektor gerbang yang terus berinferensi, meniru thread kamera produksi.
+
+    Memakai `detector` yang sama (potongan foto sudah disiapkan sebelum beban dimulai),
+    bukan YOLO kedua: di mode GPU dGPU (14-10) YOLO kedua membuat VRAM 8 GB penuh dan
+    Ollama macet, padahal gerbang sungguhan hanya memuat satu YOLO.
+    """
 
     def __init__(self, frame):
         super().__init__(daemon=True)
-        from ultralytics import YOLO
-        self.model = YOLO(cfg.YOLO_MODEL_PATH)
         self.frame = frame
         self.stop_flag = threading.Event()
         self.frames = 0
@@ -82,7 +85,7 @@ class CameraLoad(threading.Thread):
     def run(self):
         while not self.stop_flag.is_set():
             t = time.time()
-            self.model.predict(self.frame, device=detector.device, verbose=False, classes=[0])
+            detector.detect_and_track(self.frame)
             self.frames += 1
             self.stop_flag.wait(max(0.0, 1.0 / LOAD_FPS - (time.time() - t)))
 

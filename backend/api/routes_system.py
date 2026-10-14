@@ -34,6 +34,8 @@ async def health_check():
         "startup_warnings": list(startup_checks.warnings),
         # Sisa disk data (T53): ok / low / critical
         "disk": disk_guard.status(),
+        # Kesehatan VLM lokal (T56): ok / slow / partial_gpu / unknown + aplikasi lain di GPU
+        "local_vlm": vlm_analyzer.local_guard.status(),
     }
 
 @router.post("/api/reset", dependencies=[Depends(require_admin)])

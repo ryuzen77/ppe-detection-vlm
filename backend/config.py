@@ -312,6 +312,23 @@ class Config:
     LOCAL_GPU_CHECK_SECONDS: float = float(_env("LOCAL_GPU_CHECK_SECONDS", "60"))
     # Lama menunggu jeda antar-inspeksi sebelum memuat ulang (jangan putus pekerja)
     LOCAL_GPU_REPAIR_WAIT_SECONDS: float = 30.0
+    # Kesehatan VLM lokal (T56). Uji 14-10: VRAM penuh oleh aplikasi lain membuat Ollama
+    # macet padahal /api/ps tetap "100% GPU", jadi gejala (lambat/habis waktu) yang dipantau.
+    # Normal ±3,6-4,4 dtk dengan YOLO; batas cadangan 12 dtk.
+    LOCAL_SLOW_SECONDS: float = float(_env("LOCAL_SLOW_SECONDS", "8"))
+    LOCAL_SLOW_STREAK: int = int(_env("LOCAL_SLOW_STREAK", "2"))
+    # Muat ulang karena lambat paling sering sekali per jeda ini (tidak berulang terus)
+    LOCAL_SLOW_RELOAD_COOLDOWN_SECONDS: float = 300.0
+    # Daftar proses lain di GPU NVIDIA (nvidia-smi) untuk petunjuk operator; proses
+    # gerbang sendiri (Ollama, proses ini) & shell Windows yang tak bisa ditutup diabaikan.
+    NVIDIA_SMI_TIMEOUT_SECONDS: float = 5.0
+    LOCAL_GPU_OWN_NAMES: tuple = ("ollama", "llama-server")
+    LOCAL_GPU_IGNORED_APPS: tuple = ("explorer.exe", "dwm.exe", "csrss.exe")
+    # Pemanasan VLM lokal memakai satu panggilan bergambar seukuran potongan pekerja (T56):
+    # ping teks saja meninggalkan penyandi gambar "dingin", inspeksi pertama 7,7 dtk dengan
+    # YOLO (uji 14-10) dan 13 dtk di gerbang (habis waktu).
+    VLM_WARMUP_IMAGE_WIDTH: int = 220
+    VLM_WARMUP_IMAGE_HEIGHT: int = 640
     # Versi Ollama tempat model lokal divalidasi (06-10); berbeda = peringatan saat start (T29)
     OLLAMA_VALIDATED_VERSION: str = _env("OLLAMA_VALIDATED_VERSION", "0.34.4")
     STARTUP_CHECK_TIMEOUT_SECONDS: float = 2.0
