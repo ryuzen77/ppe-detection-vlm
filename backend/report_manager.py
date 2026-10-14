@@ -56,6 +56,16 @@ _CREATE_TABLE_V1 = """
     )
 """
 
+# Kolom yang diisi saat audit baru ditulis (id & default diisi SQLite)
+_INSPECTION_COLUMNS = (
+    "track_id", "timestamp", "date_str", "time_str", "is_complete", "items_json",
+    "missing_items", "notes", "inference_source", "inference_time_ms", "snapshot_filename",
+)
+_INSERT_INSPECTION = (
+    f"INSERT INTO worker_inspections ({', '.join(_INSPECTION_COLUMNS)}) "
+    f"VALUES ({', '.join('?' * len(_INSPECTION_COLUMNS))})"
+)
+
 _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_timestamp ON worker_inspections(timestamp DESC)",
     "CREATE INDEX IF NOT EXISTS idx_is_complete ON worker_inspections(is_complete)",
@@ -317,40 +327,21 @@ class ReportManager:
         """
         now = time.localtime()
         iso_timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", now)
-        date_str = time.strftime("%Y-%m-%d", now)
         time_str = time.strftime("%H:%M:%S", now)
-        file_time_slug = time.strftime("%Y%m%d_%H%M%S", now)
-
-        snapshot_filename = ""
-        if crop_img is not None and crop_img.size > 0:
-            snapshot_filename = f"worker_{track_id}_{file_time_slug}.jpg"
-            if not self._write_snapshot(self.snapshots_dir / snapshot_filename, crop_img):
-                snapshot_filename = ""
-
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO worker_inspections (
-                    track_id, timestamp, date_str, time_str, is_complete,
-                    items_json, missing_items, notes, inference_source,
-                    inference_time_ms, snapshot_filename
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                track_id,
-                iso_timestamp,
-                date_str,
-                time_str,
-                1 if is_complete else 0,
-                json.dumps(items, ensure_ascii=False),
-                json.dumps(missing_items, ensure_ascii=False),
-                notes,
-                inference_source,
-                inference_time_ms,
-                snapshot_filename
-            ))
-            record_id = cursor.lastrowid
-            conn.commit()
-
+        snapshot_filename = self._save_snapshot(track_id, crop_img, now)
+        record_id = self._insert_inspection((
+            track_id,
+            iso_timestamp,
+            time.strftime("%Y-%m-%d", now),
+            time_str,
+            1 if is_complete else 0,
+            json.dumps(items, ensure_ascii=False),
+            json.dumps(missing_items, ensure_ascii=False),
+            notes,
+            inference_source,
+            inference_time_ms,
+            snapshot_filename
+        ))
         return {
             "id": record_id,
             "track_id": track_id,
@@ -362,6 +353,20 @@ class ReportManager:
             "inference_source": inference_source,
             "inference_time_ms": inference_time_ms
         }
+
+    def _save_snapshot(self, track_id: int, crop_img: Optional[np.ndarray], now: time.struct_time) -> str:
+        """Nama foto bukti yang tertulis; kosong bila tanpa potongan atau gagal ditulis."""
+        if crop_img is None or crop_img.size == 0:
+            return ""
+        name = f"worker_{track_id}_{time.strftime('%Y%m%d_%H%M%S', now)}.jpg"
+        return name if self._write_snapshot(self.snapshots_dir / name, crop_img) else ""
+
+    def _insert_inspection(self, values: tuple) -> int:
+        """Satu baris audit (urutan nilai = `_INSPECTION_COLUMNS`); mengembalikan id-nya."""
+        with self._get_connection() as conn:
+            record_id = conn.execute(_INSERT_INSPECTION, values).lastrowid
+            conn.commit()
+        return record_id
 
     @staticmethod
     def _row_to_record(row: sqlite3.Row) -> dict:
