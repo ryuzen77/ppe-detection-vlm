@@ -25,7 +25,6 @@ COLOR_SOURCE = "web/src/styles/tokens.css"
 # Utang lama (audit 28-09-2026). Daftar ini hanya boleh MENYUSUT: fungsi baru yang
 # panjang ditolak, dan entri yang sudah dipendekkan wajib dihapus dari sini.
 LONG_FUNCTIONS_DEBT = {
-    "backend/video/capture.py::_reader_loop",
     "tools/bench_vlm.py::main",
     "tools/eval_vlm.py::main",
     "backend/video/capture.py::_init_camera",
