@@ -3,8 +3,8 @@
 Sebelum fungsi ±60 baris itu dipecah, perilaku kode lama direkam di
 `golden/save_inspection.json`: ratusan panggilan acak berbenih di folder sementara
 pytest (isi item & catatan Unicode, daftar kurang kosong/berisi, potongan gambar
-tidak ada/kosong/sah, foto gagal ditulis). Yang direkam: nilai kembali, baris
-SQLite apa adanya (kolom mentah), dan berkas foto yang ada. Jam dibekukan per
+tidak ada/kosong/sah, foto gagal ditulis). Yang direkam: nilai kembali, log per
+panggilan, baris SQLite apa adanya (kolom mentah), dan berkas foto yang ada. Jam dibekukan per
 panggilan, jadi acuan tidak bergantung pada tanggal uji. Refaktor tidak boleh
 mengubahnya.
 
@@ -13,6 +13,7 @@ Bila perilaku SENGAJA diubah, bangkitkan ulang acuannya:
 """
 
 import json
+import logging
 import sys
 import time
 import types
@@ -52,8 +53,22 @@ def _items(rng):
     }
 
 
+class _Logs(logging.Handler):
+    def __init__(self, sink):
+        super().__init__(logging.INFO)
+        self.sink = sink
+
+    def emit(self, record):
+        self.sink.append([record.levelname, record.getMessage()])
+
+
 def run_calls(root, monkeypatch):
     import backend.report_manager as rm
+
+    logs = []
+    handler, level = _Logs(logs), rm.logger.level
+    rm.logger.addHandler(handler)
+    rm.logger.setLevel(logging.INFO)  # setLevel, bukan atribut: cache isEnabledFor ikut dibersihkan
 
     clock_now = [START]
     clock = types.SimpleNamespace(**{k: getattr(time, k) for k in dir(time) if not k.startswith("_")})
@@ -98,12 +113,15 @@ def run_calls(root, monkeypatch):
                 inference_time_ms=round(float(rng.uniform(800, 9000)), 2),
                 crop_img=_crop(rng),
             )
-            out.append(["panggilan", i, meta])
+            out.append(["panggilan", i, meta, list(logs)])
+            logs.clear()
         conn = mgr._get_connection()
         rows = [list(r) for r in conn.execute("SELECT * FROM worker_inspections ORDER BY id")]
         conn.close()
     finally:
         mgr._opened = False
+        rm.logger.removeHandler(handler)
+        rm.logger.setLevel(level)
     files = sorted(p.name for p in snapshots.iterdir())
     out.append(["baris", rows])
     out.append(["berkas", files])
@@ -128,6 +146,7 @@ def test_acuan_mencakup_semua_jalur():
     )
     names = [m["snapshot_filename"] for m in metas if m["snapshot_filename"]]
     assert len(names) != len(set(names)), "nama foto kembar (ID & detik sama) harus terekam"
+    assert any(e[3] for e in data if e[0] == "panggilan"), "log gagal tulis foto harus terekam"
 
 
 if __name__ == "__main__" and "--regenerate" in sys.argv:
