@@ -60,18 +60,42 @@ uv pip compile requirements-dev.txt --universal --python-version 3.12 --torch-ba
 
 ### Mesin gerbang: GPU & VLM lokal
 
-VLM cadangan (Ollama) sangat peka terhadap clock GPU. Terukur 06-10 di laptop RTX 4060:
-dengan GPU ditahan manajemen daya (900–1.400 MHz) waktu baca prompt 3,1 dtk; setelah mode
-dGPU + overclock aktif (±2.600 MHz) 1,4 dtk — latensi VLM lokal 5,3 → 3,5 dtk.
+VLM cadangan (Ollama) sangat peka terhadap **clock GPU** dan **VRAM**. Ini hanya berpengaruh saat
+gerbang memakai cadangan (VLM utama cloud tidak bergantung pada GPU laptop). Terukur di laptop
+RTX 4060 8 GB:
 
-- **Mode GPU dGPU** (Legion: Lenovo Vantage / Legion Space → GPU mode dGPU, aktif setelah restart)
-  dan **GPU Overclock / Dynamic Boost** menyala; rencana daya **Performance**.
-- NVIDIA Control Panel → Manage 3D settings → Preferred graphics processor →
-  **High-performance NVIDIA processor**.
+| Mode GPU (Legion) | Clock saat inferensi | Baca prompt | Per inspeksi | Terukur |
+| :-- | :-- | --: | --: | :-- |
+| dGPU + overclock | ±2.600 MHz | 1,4–1,5 dtk | ±3,5 dtk | 06-10 |
+| Hybrid, overclock mati | — | 2,0–2,1 dtk | 4,0–4,5 dtk | 14-10 |
+| Hybrid + "Prefer maximum performance" & GPU NVIDIA dipilih per aplikasi | sebagian besar 780–960 MHz | 3,1–3,2 dtk | 5,3–5,9 dtk | 14-10 |
+
+Di mode Hybrid driver menahan clock GPU untuk program komputasi (CUDA) seperti Ollama;
+pengaturan per aplikasi di NVIDIA Control Panel tidak mengangkatnya. **Mode GPU ditentukan oleh
+peran laptop:**
+
+- **Saat menjadi gerbang / demo: mode dGPU** (Lenovo Vantage / Legion Space → GPU working mode
+  dGPU, berlaku setelah restart), rencana daya **Performance**, laptop dicolok. Overclock tidak
+  wajib. Kombinasi dGPU tanpa overclock belum diukur, jadi jalankan cek cepat di bawah.
+- **Saat kerja harian (IDE, browser, rapat): mode Hybrid**, overclock mati. Aplikasi biasa
+  memakai GPU Intel sehingga VRAM NVIDIA tidak penuh.
+- **Di mode dGPU semua aplikasi memakai GPU NVIDIA.** VRAM 8 GB hampir habis oleh
+  `qwen2.5vl:7b` (±5,5 GB) + YOLO + Windows. Bila browser, Discord, IDE, dan sejenisnya ikut
+  terbuka, Windows memindah sebagian memori ke RAM. Akibatnya VLM lokal macet diam-diam,
+  padahal `ollama ps` tetap "100% GPU". Di laptop gerbang **jalankan gerbang saja**.
+  Penjaga T56 memantau gejala ini: dua panggilan lambat/habis waktu berturut-turut memicu
+  peringatan di log dan di `GET /api/health` → `local_vlm` (beserta nama aplikasi lain di
+  GPU yang perlu ditutup), lalu model dimuat ulang.
+- Pengaturan NVIDIA Control Panel per aplikasi (`ollama.exe`, `llama-server.exe`, `python.exe`):
+  Preferred graphics processor = **High-performance NVIDIA processor**, Power management mode =
+  **Prefer maximum performance**, CUDA Sysmem Fallback = **Prefer No Sysmem Fallback**. Pengaturan ini
+  tidak merugikan, tetapi tidak menggantikan mode dGPU.
 - **Kunci versi Ollama** (validasi model dilakukan di 0.34.4) dan **matikan update otomatis**
   di aplikasi Ollama (Settings), supaya kecepatan & perilaku tidak berubah diam-diam.
-- Cek cepat: `python tools/bench_vlm.py picture_test --prompts P0 --limit 3` — waktu baca
-  masukan (`baca_input_median_ms`) harus ±1.500 ms; bila ±3.000 ms, GPU sedang ditahan.
+- Cek cepat (setelah `nvidia-smi` menunjukkan tidak ada aplikasi lain di GPU):
+  `python tools/bench_vlm.py picture_test --prompts P0 --limit 3`. Waktu baca masukan
+  (`baca_input_median_ms`) harus ±1.500 ms. Bila ±2.000–3.000 ms, GPU sedang ditahan (masih
+  Hybrid atau tidak dicolok).
 
 ## 2. Konfigurasi (`backend/.env`)
 
@@ -156,8 +180,10 @@ mengikuti kamera yang dipilih operator di lokasi (cukup sekali; sesudahnya dibuk
 
 1. `backend/.env`: `CAMERA_AUTOSTART=true`, `CAMERA_NAME=` (kosong), `IOT_*` sesuai perangkat. Akun admin sudah
    dibuat dari `http://localhost:8000` di mesin gerbang (sekali; tersimpan di `DATA_DIR/accounts.db`).
-2. Mesin: mode GPU dGPU + rencana daya Performance, Ollama **0.34.4** dengan update otomatis mati
-   (lihat "Mesin gerbang: GPU & VLM lokal"); pintasan Startup terpasang (`install_autostart.ps1`).
+2. Mesin: mode GPU **dGPU** (pindah dari Hybrid, restart) + rencana daya Performance + dicolok, Ollama
+   **0.34.4** dengan update otomatis mati (lihat "Mesin gerbang: GPU & VLM lokal"); pintasan Startup terpasang
+   (`install_autostart.ps1`). Tutup aplikasi lain; `nvidia-smi` tidak menampilkan aplikasi selain Ollama/gerbang.
+   Selesai demo, kembalikan ke Hybrid bila laptop dipakai kerja harian.
 3. Di lokasi: colok kamera eksternal → buka dashboard → **Pilih Kamera** (Pengaturan) → pilih kamera eksternal.
    Bila laptop masih mengingat kamera lain, gerbang menunggu kamera itu dengan lampu kuning: cukup pilih ulang.
 4. Uji cepat: tutup lensa (kuning + suara "terhalang"), satu giliran APD lengkap (hijau), satu giliran tanpa
