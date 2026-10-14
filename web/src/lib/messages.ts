@@ -24,6 +24,7 @@ export const NAV = {
 
 export const CONNECTION = {
   lost: 'Server terputus',
+  signedOut: 'Belum masuk',
 } as const
 
 export const CAMERA_CHIP: Record<CameraState | 'UNKNOWN', string> = {
