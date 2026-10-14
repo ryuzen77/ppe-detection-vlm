@@ -17,6 +17,8 @@
   import { session } from '../lib/stores/session.svelte'
   import { LOGIN } from '../lib/messages'
   import { telemetry } from '../lib/stores/telemetry.svelte'
+  import { health } from '../lib/stores/health.svelte'
+  import { localVlmChipView } from '../lib/localVlm'
 
   let now = $state(new Date())
   const clock = setInterval(() => (now = new Date()), CLOCK.tickMs)
@@ -28,6 +30,7 @@
   const vlm = $derived(vlmChip(t))
   const iot = $derived(iotChip(t))
   const connection = $derived(connectionView(session.authenticated, telemetry.status))
+  const localVlm = $derived(localVlmChipView(health.localVlm))
 </script>
 
 <header class="topbar">
@@ -64,6 +67,9 @@
 
       <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
       <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
+      {#if localVlm}
+        <span class="chip tone-{localVlm.tone}" title={chipTitle(localVlm.text, localVlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{localVlm.text}</span></span>
+      {/if}
     {/if}
     {#if session.authenticated}
       <span class="chip tone-ok" title={AUTH.accounts}>

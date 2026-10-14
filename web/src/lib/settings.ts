@@ -109,3 +109,7 @@ export const CHART = {
 } as const
 
 export const MIN_PASSWORD_LENGTH = 12;
+
+export const HEALTH_POLL = {
+  intervalMs: 10000,
+} as const;

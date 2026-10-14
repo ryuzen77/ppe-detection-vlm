@@ -11,6 +11,7 @@
   import Login from './pages/Login.svelte'
   import Setup from './pages/Setup.svelte'
   import { catalog } from './lib/stores/catalog.svelte'
+  import { health } from './lib/stores/health.svelte'
   import { telemetry } from './lib/stores/telemetry.svelte'
   import { toasts } from './lib/stores/toasts.svelte'
   import Laporan from './pages/Laporan.svelte'
@@ -25,7 +26,10 @@
     session.load()
     api.onUnauthorized = () => { session.clear() }
   })
-  onDestroy(() => telemetry.stop())
+  onDestroy(() => {
+    telemetry.stop()
+    health.stop()
+  })
 
   $effect(() => {
     const current = { 
@@ -45,8 +49,10 @@
     const action = telemetryAction(session)
     if (action === 'start') {
       telemetry.start()
+      health.start()
     } else if (action === 'stop') {
       telemetry.stop()
+      health.stop()
     }
   })
 

@@ -3,6 +3,7 @@
   import ZoneSettings from '../components/settings/ZoneSettings.svelte'
   import Accounts from '../components/settings/Accounts.svelte'
   import VlmProviders from '../components/settings/VlmProviders.svelte'
+  import LocalVlmCard from '../components/settings/LocalVlmCard.svelte'
   import { api } from '../lib/api/client'
   import type { LightTestAction, VlmInfo } from '../lib/api/types'
   import { SETTINGS_TAB } from '../lib/messages'
@@ -101,6 +102,8 @@
     <Accounts />
 
     <VlmProviders />
+
+    <LocalVlmCard />
 
     <section class="card">
       <h2>{SETTINGS_TAB.lightTest}</h2>
