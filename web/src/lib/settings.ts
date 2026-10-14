@@ -103,7 +103,7 @@ export const CHART = {
   gap: 16,
   paddingY: 24,
   axisXStart: 40,
-  missingLabelWidth: 150,
+  missingLabelWidth: 180,
   minWidth: 600,
   maxMissingItems: 5,
 } as const

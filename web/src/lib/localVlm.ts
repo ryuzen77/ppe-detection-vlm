@@ -3,7 +3,7 @@
  * Sesuai Kontrak T56 di docs/RENCANA.md.
  */
 import type { LocalVlmHealth, LocalVlmState } from './api/types'
-import { LOCAL_VLM } from './messages'
+import { LOCAL_VLM, percent, seconds } from './messages'
 
 export interface LocalVlmChip {
   tone: 'warn'
@@ -53,18 +53,18 @@ export function formatGpuRatio(ratio: number | null | undefined): string {
   if (ratio == null || typeof ratio !== 'number' || Number.isNaN(ratio)) {
     return LOCAL_VLM.emptyValue
   }
-  return `${Math.round(ratio * 100)}%`
+  return percent(ratio * 100)
 }
 
 /**
- * Format latensi inspeksi terakhir dalam detik, misal 3.6 -> '3.6 dtk'.
+ * Format latensi inspeksi terakhir dalam detik, misal 3.6 -> '3,6 dtk'.
  * Nilai null/undefined ditampilkan '—'.
  */
 export function formatLatency(latency: number | null | undefined): string {
   if (latency == null || typeof latency !== 'number' || Number.isNaN(latency)) {
     return LOCAL_VLM.emptyValue
   }
-  return `${latency.toFixed(1)} dtk`
+  return seconds(latency * 1000)
 }
 
 /**
@@ -83,4 +83,15 @@ export function formatOtherGpuApps(apps: string[] | null | undefined): string {
  */
 export function hasOtherGpuApps(apps: string[] | null | undefined): boolean {
   return Boolean(apps && apps.length > 0)
+}
+
+/**
+ * Spanduk 'Tutup aplikasi ini' hanya tampil bila ada aplikasi lain di GPU
+ * DAN VLM cadangan memang sedang bermasalah ('slow' atau 'partial_gpu').
+ * Saat VLM normal ('ok' atau 'unknown'), aplikasi lain tidak perlu diperingatkan.
+ */
+export function shouldShowGpuAppsWarning(health: LocalVlmHealth | null | undefined): boolean {
+  if (!health) return false
+  const isProblematic = health.state === 'slow' || health.state === 'partial_gpu'
+  return isProblematic && hasOtherGpuApps(health.other_gpu_apps)
 }

@@ -80,7 +80,8 @@
     gap: var(--space-3);
   }
   .label {
-    width: 140px;
+    width: 180px;
+    flex-shrink: 0;
     font-size: var(--text-sm);
     color: var(--text-muted);
     white-space: nowrap;

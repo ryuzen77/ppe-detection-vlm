@@ -7,7 +7,7 @@
     formatGpuRatio,
     formatLatency,
     formatOtherGpuApps,
-    hasOtherGpuApps
+    shouldShowGpuAppsWarning
   } from '../../lib/localVlm'
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert'
 
@@ -21,7 +21,7 @@
   const latencyText = $derived(formatLatency(vlm?.last_latency_s))
   const slowStreak = $derived(vlm?.slow_streak ?? 0)
   const otherAppsText = $derived(formatOtherGpuApps(vlm?.other_gpu_apps))
-  const showWarning = $derived(hasOtherGpuApps(vlm?.other_gpu_apps))
+  const showWarning = $derived(shouldShowGpuAppsWarning(vlm))
 </script>
 
 <section class="card">

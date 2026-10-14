@@ -95,19 +95,36 @@ describe('formatReportRange', () => {
 })
 
 describe('calculateYAxis', () => {
-  it('maxTotal 0 atau 1 -> tick bulat', () => {
-    // maxTotal 0 -> harusnya 1
-    const ticks0 = calculateYAxis(0, 10, 100)
-    // maxTotal 1
-    const ticks1 = calculateYAxis(1, 10, 100)
-    // Cek tick memiliki nilai bulat dan menurun dari bawah ke atas (karena y dari SVG)
-    expect(ticks1.length).toBeGreaterThan(0)
-    expect(Number.isInteger(ticks1[0].value)).toBe(true)
-    // y menurun (tick 0 di bawah -> y besar, tick 1 di atas -> y kecil)
-    const val0 = ticks1.find(t => t.value === 0)
-    const val1 = ticks1.find(t => t.value === 1)
-    if (val0 && val1) {
-      expect(val1.y).toBeLessThan(val0.y)
+  it('menghasilkan tick bilangan bulat unik, terurut naik, dan y menurun', () => {
+    const testCases = [0, 1, 2, 3, 4, 7, 10, 17, 100]
+
+    for (const maxTotal of testCases) {
+      const paddingY = 24
+      const usableHeight = 192
+      const ticks = calculateYAxis(maxTotal, paddingY, usableHeight)
+
+      expect(ticks.length).toBeGreaterThanOrEqual(2)
+      
+      const values = ticks.map(t => t.value)
+      // Semua tick harus integer
+      expect(values.every(v => Number.isInteger(v))).toBe(true)
+      // Tidak ada tick duplikat
+      expect(new Set(values).size).toBe(values.length)
+      // Tick harus dimulai dari 0
+      expect(values[0]).toBe(0)
+      // Nilai puncak tick harus >= maxTotal
+      expect(values[values.length - 1]).toBeGreaterThanOrEqual(maxTotal)
+
+      // Verifikasi urutan nilai naik dan koordinat y menurun (karena Y=0 di atas)
+      for (let i = 0; i < ticks.length - 1; i++) {
+        expect(ticks[i + 1].value).toBeGreaterThan(ticks[i].value)
+        expect(ticks[i + 1].y).toBeLessThan(ticks[i].y)
+      }
     }
+  })
+
+  it('menghasilkan step bulat 1 untuk maxTotal kecil (<= 4)', () => {
+    const ticks = calculateYAxis(3, 20, 100)
+    expect(ticks.map(t => t.value)).toEqual([0, 1, 2, 3, 4])
   })
 })

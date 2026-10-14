@@ -1,13 +1,13 @@
 import type { VlmValidationStatus } from './api/types'
 
-export type ValidationTone = 'ok' | 'warn' | 'muted'
+export type ValidationTone = 'ok' | 'accent' | 'warn' | 'muted'
 
 export function validationBadge(status: VlmValidationStatus): { text: string; tone: ValidationTone } {
   switch (status) {
     case 'validated':
       return { text: 'Teruji', tone: 'ok' }
     case 'partial':
-      return { text: 'Sebagian', tone: 'ok' }
+      return { text: 'Sebagian', tone: 'accent' }
     case 'outdated':
       return { text: 'Kedaluwarsa', tone: 'warn' }
     case 'unvalidated':
