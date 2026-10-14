@@ -36,6 +36,7 @@ class _Cap:
         return self.open
 
     def set(self, prop, value):
+        self.world.requests.append([int(prop), value])   # permintaan ke driver (T42d)
         return True
 
     def release(self):
@@ -50,7 +51,8 @@ class _Cap:
         w.now += SLOW_READ_SECONDS if behavior == "slow" else READ_SECONDS
         if not self.open or self.name not in w.visible or behavior in ("fail", "noframes"):
             return False, None
-        return True, np.full((3, 4, 1), 100 + DEVICES.index(self.name), np.uint8)
+        i = DEVICES.index(self.name)
+        return True, np.full((3 + i, 4 + i, 1), 100 + i, np.uint8)   # ukuran beda per kamera
 
 
 class _World:
@@ -61,7 +63,7 @@ class _World:
         self.seed, self.now, self.raise_next, self.enum_fails = seed, 1000.0, False, False
         self.visible = list(DEVICES)
         self.behavior = {name: "ok" for name in DEVICES}
-        self.resets, self.saved, self.messages = 0, [], []
+        self.resets, self.saved, self.messages, self.requests = 0, [], [], []
         mode = CameraMode(64, 48, 30.0, "MJPG", 640, 480)
 
         def names():
@@ -91,7 +93,9 @@ class _World:
         monkeypatch.setattr(camera_manager, "autostart_target",
                             lambda: (DEVICES[1], {"width": 64, "height": 48, "req_width": 800, "req_height": 600}, 1))
         monkeypatch.setattr(capture_mod.camera_mgr, "get_device",
-                            lambda i: {"selected_mode": {"width": 64, "height": 48}} if i == 2 else None)
+                            lambda i: {"selected_mode": {"width": 64, "height": 48}} if i == 2
+                            else {"selected_mode": {"width": 64, "height": 48, "req_width": 1280, "req_height": 720,
+                                                    "fps": 25.0, "fourcc": "YUY2"}} if i == 0 else None)
         monkeypatch.setattr(capture_mod.camera_mgr, "record_device_modes", lambda *a: None)
         monkeypatch.setattr(capture_mod.state_mgr, "reset_all", self._reset)
         monkeypatch.setattr(capture_mod.hud, "draw_synthetic_frame", synthetic)
@@ -128,9 +132,9 @@ class _World:
 def _snapshot(svc, world):
     raw = svc.latest_raw
     return [svc.camera_status, svc.camera_error, svc.camera_index, svc.camera_name, svc.camera_name_verified,
-            svc.use_synthetic, None if svc.active_mode is None else svc.active_mode.get("req_width"),
+            svc.use_synthetic, svc.active_mode,
             svc.frame_width, svc.frame_height, None if raw is None else int(raw.flat[0]),
-            world.resets, len(world.saved), svc._device_missing]
+            world.resets, len(world.saved), svc._device_missing, world.requests[-3:]]
 
 
 def run_scenarios(monkeypatch):
@@ -139,6 +143,9 @@ def run_scenarios(monkeypatch):
     out = []
     for seed in range(SCENARIOS):
         monkeypatch.setattr(cfg, "CAMERA_AUTOSTART", seed % 2 == 1)
+        monkeypatch.setattr(cfg, "CAMERA_AUTO_MODE", seed % 3 != 2)
+        monkeypatch.setattr(cfg, "FRAME_WIDTH", 1024)    # beda dari semua mode tiruan: cabang mode manual terlihat
+        monkeypatch.setattr(cfg, "FRAME_HEIGHT", 576)
         world = _World(seed, capture, monkeypatch)
         rows, step = [], [0]
 
