@@ -398,56 +398,68 @@ class StateManager:
 
             # Pemeriksaan sudah terjadi, jadi selalu tercatat di audit, termasuk
             # bila pekerjanya sudah pergi sebelum hasil tiba.
-            saved_meta = report_mgr.save_inspection(
-                track_id=track_id,
-                is_complete=result.is_complete,
-                items={key: item.model_dump() for key, item in result.items.items()},
-                missing_items=result.missing_items,
-                notes=result.notes,
-                inference_source=result.inference_source,
-                inference_time_ms=result.inference_time_ms,
-                crop_img=crop_img
-            )
-
+            saved_meta = self._save_audit(track_id, result, crop_img)
             with self.lock:
-                record = {
-                    "track_id": track_id,
-                    "timestamp": time.strftime("%H:%M:%S"),
-                    "is_complete": result.is_complete,
-                    "items": {key: item.model_dump() for key, item in result.items.items()},
-                    "missing_items": result.missing_items,
-                    "notes": result.notes,
-                    "inference_source": result.inference_source,
-                    "inference_time_ms": result.inference_time_ms,
-                    "decided_by": result.decided_by,
-                    "snapshot_filename": saved_meta.get("snapshot_filename", "")
-                }
-                self.inspection_history.insert(0, record)
-                if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
-                    self.inspection_history.pop()
-
-                session = self.session
-                if session is None or session.session_id != session_id:
-                    # Pekerja sudah meninggalkan jalur: lampu dan suara tidak
-                    # boleh ditujukan ke orang berikutnya.
-                    logger.info(f"Hasil sesi #{session_id} tiba setelah sesi berakhir; gerbang tidak diubah.")
-                    return
-
-                session.vlm_result = result
-                session.state = TrackState.ANALYZED
-                session.analysis_timestamp = time.time()
-                self._remember_decision(track_id, result, session.analysis_timestamp)
-
-                if result.is_complete:
-                    logger.info(f"Sesi #{session_id}: APD LENGKAP! Green Light ON.")
-                else:
-                    logger.info(f"Sesi #{session_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
-                self._show_decision(result)
-                audio_player.play_result(is_complete=result.is_complete, missing_items=result.missing_items)
+                self._record_history(track_id, result, saved_meta)
+                self._apply_decision(session_id, track_id, result)
 
         except Exception as e:
             logger.exception(f"Error during VLM analysis for session #{session_id}: {e}")
             self._retry_session(session_id)
+
+    @staticmethod
+    def _items_payload(result: InspectionResult) -> dict:
+        return {key: item.model_dump() for key, item in result.items.items()}
+
+    def _save_audit(self, track_id: int, result: InspectionResult, crop_img: np.ndarray) -> dict:
+        return report_mgr.save_inspection(
+            track_id=track_id,
+            is_complete=result.is_complete,
+            items=self._items_payload(result),
+            missing_items=result.missing_items,
+            notes=result.notes,
+            inference_source=result.inference_source,
+            inference_time_ms=result.inference_time_ms,
+            crop_img=crop_img
+        )
+
+    def _record_history(self, track_id: int, result: InspectionResult, saved_meta: dict):
+        """Riwayat dashboard (terbaru di depan, dibatasi MAX_HISTORY_RECORDS). Pemanggil memegang lock."""
+        self.inspection_history.insert(0, {
+            "track_id": track_id,
+            "timestamp": time.strftime("%H:%M:%S"),
+            "is_complete": result.is_complete,
+            "items": self._items_payload(result),
+            "missing_items": result.missing_items,
+            "notes": result.notes,
+            "inference_source": result.inference_source,
+            "inference_time_ms": result.inference_time_ms,
+            "decided_by": result.decided_by,
+            "snapshot_filename": saved_meta.get("snapshot_filename", "")
+        })
+        if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
+            self.inspection_history.pop()
+
+    def _apply_decision(self, session_id: int, track_id: int, result: InspectionResult):
+        """Kunci keputusan ke sesi, lalu lampu & suara. Pemanggil memegang lock."""
+        session = self.session
+        if session is None or session.session_id != session_id:
+            # Pekerja sudah meninggalkan jalur: lampu dan suara tidak
+            # boleh ditujukan ke orang berikutnya.
+            logger.info(f"Hasil sesi #{session_id} tiba setelah sesi berakhir; gerbang tidak diubah.")
+            return
+
+        session.vlm_result = result
+        session.state = TrackState.ANALYZED
+        session.analysis_timestamp = time.time()
+        self._remember_decision(track_id, result, session.analysis_timestamp)
+
+        if result.is_complete:
+            logger.info(f"Sesi #{session_id}: APD LENGKAP! Green Light ON.")
+        else:
+            logger.info(f"Sesi #{session_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
+        self._show_decision(result)
+        audio_player.play_result(is_complete=result.is_complete, missing_items=result.missing_items)
 
     def _wait_for_system(self, session_id: int, result: InspectionResult):
         """Utama & cadangan gagal: tanpa keputusan, tanpa baris audit, tanpa LED merah.
