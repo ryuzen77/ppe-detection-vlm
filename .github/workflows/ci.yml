@@ -19,6 +19,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+          # Tanpa ini uv pip sync gagal "No virtual environment found" (setup-uv tidak lagi
+          # mengaktifkan .venv hanya karena python-version diisi)
+          activate-environment: true
           enable-cache: true
           cache-dependency-glob: backend/requirements-dev.lock
 
