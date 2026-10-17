@@ -1,0 +1,19 @@
+# Environment conda untuk DEPRO: hanya Python 3.12 + uv.
+#
+# Paket Python (termasuk torch versi CUDA) TIDAK dipasang dari sini, tetapi dari
+# berkas terkunci backend/requirements*.lock lewat uv, supaya versinya sama persis
+# dengan CI dan mesin gerbang. PyTorch sudah berhenti menerbitkan paket di channel
+# conda-nya; wheel pip membawa runtime CUDA sendiri, jadi cukup driver NVIDIA.
+#
+#   conda env create -f environment.yml
+#   conda activate apd_detection
+#   uv pip sync --torch-backend cu132 backend/requirements.lock
+#
+# Rincian: docs/INSTALASI.md §1.
+name: apd_detection
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - uv
