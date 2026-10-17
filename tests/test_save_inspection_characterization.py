@@ -3,7 +3,7 @@
 Sebelum fungsi ±60 baris itu dipecah, perilaku kode lama direkam di
 `golden/save_inspection.json`: ratusan panggilan acak berbenih di folder sementara
 pytest (isi item & catatan Unicode, daftar kurang kosong/berisi, potongan gambar
-tidak ada/kosong/sah, foto gagal ditulis). Yang direkam: nilai kembali, log per
+tidak ada/kosong/sah, foto gagal ditulis, ID & detik sama → nama berakhiran nomor (T64)). Yang direkam: nilai kembali, log per
 panggilan, baris SQLite apa adanya (kolom mentah), dan berkas foto yang ada. Jam dibekukan per
 panggilan, jadi acuan tidak bergantung pada tanggal uji. Refaktor tidak boleh
 mengubahnya.
@@ -145,7 +145,9 @@ def test_acuan_mencakup_semua_jalur():
         "Unicode apa adanya"
     )
     names = [m["snapshot_filename"] for m in metas if m["snapshot_filename"]]
-    assert len(names) != len(set(names)), "nama foto kembar (ID & detik sama) harus terekam"
+    # T64: ID & detik sama tidak lagi menimpa foto; nama berikutnya berakhiran _2, _3, ...
+    assert len(names) == len(set(names)), "nama foto tidak boleh kembar"
+    assert any(n.endswith("_2.jpg") for n in names), "jalur nama berakhiran nomor harus terekam"
     assert any(e[3] for e in data if e[0] == "panggilan"), "log gagal tulis foto harus terekam"
 
 
