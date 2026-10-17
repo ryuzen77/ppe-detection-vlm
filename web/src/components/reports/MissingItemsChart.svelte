@@ -31,7 +31,7 @@
     <div class="chart-content">
       {#each displayItems as item}
         <div class="row">
-          <div class="label" title={item.label}>{item.label}</div>
+          <div class="label" style="width: {labelWidth}px;" title={item.label}>{item.label}</div>
           <div class="bar-area">
             <div class="bar" style="width: {getBarWidth(item.count)}">
               <span class="count" class:inside={item.count / maxCount > 0.1}>
@@ -53,7 +53,8 @@
     padding: var(--space-4);
     margin-bottom: var(--space-4);
     flex: 1;
-    min-width: 300px;
+    min-width: 0;
+    max-width: 100%;
   }
   .header {
     margin-bottom: var(--space-4);
@@ -80,13 +81,18 @@
     gap: var(--space-3);
   }
   .label {
-    width: 140px;
+    flex-shrink: 0;
     font-size: var(--text-sm);
     color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     text-align: right;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
   .bar-area {
     flex: 1;

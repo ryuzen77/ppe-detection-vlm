@@ -10,6 +10,8 @@
   
   import { calculateYAxis } from '../../lib/reports'
 
+  let scrollWidth = $state(0)
+
   // Chart dimensions
   const height = CHART.height
   const barWidth = CHART.barWidth
@@ -18,14 +20,19 @@
   const axisXStart = CHART.axisXStart
   const usableHeight = height - paddingY * 2
   
-  // Calculate total width based on number of buckets
-  const width = $derived(Math.max(CHART.minWidth, buckets.length * (barWidth + gap) + axisXStart))
-  
-  function getBarHeight(val: number) {
-    return (val / maxTotal) * usableHeight
-  }
+  // Calculate width: at least minRequiredWidth to avoid crowded bars, or fills available container width
+  const minRequiredWidth = $derived(axisXStart + buckets.length * (barWidth + gap) + gap)
+  const width = $derived(Math.max(scrollWidth || 0, minRequiredWidth))
   
   const yTicks = $derived(calculateYAxis(maxTotal, paddingY, usableHeight))
+  const yMax = $derived(yTicks[yTicks.length - 1]?.value || maxTotal || 1)
+  
+  function getBarHeight(val: number) {
+    return (val / yMax) * usableHeight
+  }
+
+  const availablePlotWidth = $derived(Math.max(0, width - axisXStart - gap))
+  const slotWidth = $derived(buckets.length > 0 ? availablePlotWidth / buckets.length : (barWidth + gap))
 </script>
 
 <div class="chart-container" role="figure" aria-label={TEXT.charts.complianceTitle}>
@@ -44,7 +51,7 @@
   {#if totals.total === 0}
     <div class="empty">{TEXT.charts.noData}</div>
   {:else}
-    <div class="svg-scroll">
+    <div class="svg-scroll" bind:clientWidth={scrollWidth}>
       <svg {width} {height} viewBox="0 0 {width} {height}">
         <!-- Y Axis Guidelines -->
         {#each yTicks as t}
@@ -59,7 +66,8 @@
         
         <!-- Bars -->
         {#each buckets as b, i}
-          {@const x = axisXStart + gap + i * (barWidth + gap)}
+          {@const slotCenter = axisXStart + gap / 2 + i * slotWidth + slotWidth / 2}
+          {@const x = slotCenter - barWidth / 2}
           {@const passedH = getBarHeight(b.passed)}
           {@const rejectedH = getBarHeight(b.rejected)}
           {@const totalH = passedH + rejectedH}
@@ -81,7 +89,7 @@
             {/if}
             
             <!-- X Axis Label -->
-            <text x={x + barWidth / 2} y={height - 6} 
+            <text x={slotCenter} y={height - 6} 
                   class="axis-label" text-anchor="middle">
               {b.label}
             </text>
@@ -99,6 +107,9 @@
     border-radius: var(--radius-lg);
     padding: var(--space-4);
     margin-bottom: var(--space-4);
+    flex: 2;
+    min-width: 0;
+    max-width: 100%;
   }
   .header {
     display: flex;
@@ -142,6 +153,8 @@
   .svg-scroll {
     overflow-x: auto;
     overflow-y: hidden;
+    width: 100%;
+    max-width: 100%;
   }
   svg {
     display: block;

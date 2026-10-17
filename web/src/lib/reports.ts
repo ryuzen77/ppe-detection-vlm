@@ -72,10 +72,42 @@ export interface YAxisTick {
 }
 
 export function calculateYAxis(maxTotal: number, paddingY: number, usableHeight: number): YAxisTick[] {
-  return [0, 0.25, 0.5, 0.75, 1].map(tick => ({
-    y: paddingY + usableHeight * (1 - tick),
-    value: Math.round(maxTotal * tick)
-  }))
+  const safeMax = Math.max(0, Math.ceil(maxTotal))
+  let step = 1
+  let yMax = 4
+
+  if (safeMax <= 4) {
+    step = 1
+    yMax = 4
+  } else {
+    const rawStep = safeMax / 4
+    const magnitude = 10 ** Math.floor(Math.log10(rawStep))
+    const normalized = rawStep / magnitude
+
+    let niceFactor = 1
+    if (magnitude >= 10 && normalized > 2 && normalized <= 2.5) {
+      niceFactor = 2.5
+    } else if (normalized > 5) {
+      niceFactor = 10
+    } else if (normalized > 2) {
+      niceFactor = 5
+    } else if (normalized > 1) {
+      niceFactor = 2
+    }
+
+    step = Math.max(1, Math.round(niceFactor * magnitude))
+    yMax = Math.ceil(safeMax / step) * step
+  }
+
+  const ticks: YAxisTick[] = []
+  for (let val = 0; val <= yMax; val += step) {
+    const ratio = val / yMax
+    ticks.push({
+      y: paddingY + usableHeight * (1 - ratio),
+      value: val,
+    })
+  }
+  return ticks
 }
 
 /** Batasi 0..100 untuk lebar meter */

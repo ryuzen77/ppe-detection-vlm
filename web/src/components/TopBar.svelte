@@ -89,7 +89,7 @@
     height: var(--topbar-h);
     display: flex;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-4);
     padding: 0 var(--space-5);
     border-bottom: 1px solid var(--border);
     background: var(--surface);
@@ -145,20 +145,20 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 6px;
     font-size: var(--text-sm);
   }
   .chip,
   .gate {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
+    gap: 5px;
+    padding: 3px 8px;
     border-radius: 999px;
     border: 1px solid var(--border);
     color: var(--text-muted);
     white-space: nowrap;
-    min-width: 0;
+    flex-shrink: 0;
   }
   .chip :global(svg),
   .dot {
@@ -223,20 +223,25 @@
   }
   .clock {
     color: var(--text-muted);
-    padding-left: var(--space-2);
+    padding-left: var(--space-1);
+    flex-shrink: 0;
   }
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1280px) {
+    .brand-tagline {
+      display: none;
+    }
+  }
+  @media (max-width: 1150px) {
     .topbar {
-      gap: var(--space-4);
+      gap: var(--space-3);
       padding: 0 var(--space-4);
     }
-    .brand-tagline,
     .clock {
       display: none;
     }
   }
-  @media (max-width: 1000px) {
+  @media (max-width: 1024px) {
     .chip .label {
       position: absolute;
       width: 1px;
@@ -246,7 +251,6 @@
     }
     .chip {
       padding: 4px 6px;
-      flex-shrink: 0;
     }
   }
   @media (max-width: 560px) {

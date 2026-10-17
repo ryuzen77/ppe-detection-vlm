@@ -7,7 +7,7 @@ export function validationBadge(status: VlmValidationStatus): { text: string; to
     case 'validated':
       return { text: 'Teruji', tone: 'ok' }
     case 'partial':
-      return { text: 'Sebagian', tone: 'ok' }
+      return { text: 'Sebagian', tone: 'warn' }
     case 'outdated':
       return { text: 'Kedaluwarsa', tone: 'warn' }
     case 'unvalidated':

@@ -7,6 +7,7 @@ import {
   formatLatency,
   formatOtherGpuApps,
   hasOtherGpuApps,
+  shouldShowGpuAppsWarning,
 } from './localVlm'
 import type { LocalVlmHealth } from './api/types'
 
@@ -111,10 +112,10 @@ describe('localVlm - localVlmStatusText', () => {
 })
 
 describe('localVlm - formatGpuRatio', () => {
-  it('memformat rasio menjadi persentase bulat', () => {
+  it('memformat rasio menjadi persentase dengan format Indonesia', () => {
     expect(formatGpuRatio(1.0)).toBe('100%')
     expect(formatGpuRatio(0.5)).toBe('50%')
-    expect(formatGpuRatio(0.264)).toBe('26%')
+    expect(formatGpuRatio(0.264)).toBe('26,4%')
     expect(formatGpuRatio(0)).toBe('0%')
   })
 
@@ -126,10 +127,10 @@ describe('localVlm - formatGpuRatio', () => {
 })
 
 describe('localVlm - formatLatency', () => {
-  it('memformat latensi satu desimal dengan satuan dtk', () => {
-    expect(formatLatency(3.6)).toBe('3.6 dtk')
-    expect(formatLatency(12)).toBe('12.0 dtk')
-    expect(formatLatency(0)).toBe('0.0 dtk')
+  it('memformat latensi satu desimal dengan koma dan satuan dtk', () => {
+    expect(formatLatency(3.6)).toBe('3,6 dtk')
+    expect(formatLatency(12)).toBe('12,0 dtk')
+    expect(formatLatency(0)).toBe('0,0 dtk')
   })
 
   it('menampilkan tanda pisah bila latensi null, undefined, atau bukan angka', () => {
@@ -152,5 +153,55 @@ describe('localVlm - formatOtherGpuApps & hasOtherGpuApps', () => {
     expect(formatOtherGpuApps(['Code.exe'])).toBe('Code.exe')
     expect(formatOtherGpuApps(['Code.exe', 'explorer.exe'])).toBe('Code.exe, explorer.exe')
     expect(hasOtherGpuApps(['Code.exe'])).toBe(true)
+  })
+})
+
+describe('localVlm - shouldShowGpuAppsWarning', () => {
+  it('tidak menampilkan peringatan bila data kosong atau tidak ada aplikasi lain', () => {
+    expect(shouldShowGpuAppsWarning(null)).toBe(false)
+    expect(shouldShowGpuAppsWarning(undefined)).toBe(false)
+    expect(shouldShowGpuAppsWarning({
+      state: 'slow',
+      gpu_ratio: 1.0,
+      slow_streak: 2,
+      last_latency_s: 9.0,
+      other_gpu_apps: [],
+    })).toBe(false)
+  })
+
+  it('tidak menampilkan peringatan saat state normal (ok atau unknown) meski ada aplikasi lain', () => {
+    expect(shouldShowGpuAppsWarning({
+      state: 'ok',
+      gpu_ratio: 1.0,
+      slow_streak: 0,
+      last_latency_s: 3.5,
+      other_gpu_apps: ['Code.exe'],
+    })).toBe(false)
+
+    expect(shouldShowGpuAppsWarning({
+      state: 'unknown',
+      gpu_ratio: null,
+      slow_streak: 0,
+      last_latency_s: null,
+      other_gpu_apps: ['Code.exe'],
+    })).toBe(false)
+  })
+
+  it('menampilkan peringatan hanya bila state slow atau partial_gpu dan ada aplikasi lain', () => {
+    expect(shouldShowGpuAppsWarning({
+      state: 'slow',
+      gpu_ratio: 1.0,
+      slow_streak: 2,
+      last_latency_s: 9.0,
+      other_gpu_apps: ['Code.exe'],
+    })).toBe(true)
+
+    expect(shouldShowGpuAppsWarning({
+      state: 'partial_gpu',
+      gpu_ratio: 0.5,
+      slow_streak: 0,
+      last_latency_s: 18.0,
+      other_gpu_apps: ['Discord.exe'],
+    })).toBe(true)
   })
 })
