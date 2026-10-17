@@ -8,10 +8,10 @@ echo ========================================================
 echo.
 
 rem Environment Python 3.12 (docs\INSTALASI.md bagian 1). Urutan pencarian:
-rem   1. SAFEGUARD_VENV bila diisi (folder venv atau env conda)
+rem   1. SAFEGUARD_VENV bila diisi (jalur env conda di lokasi tidak umum)
 rem   2. env conda DEPRO_CONDA_ENV (bawaan "ppe_detection") yang sedang aktif
 rem   3. env conda itu di lokasi instal Miniconda/Anaconda yang umum
-rem   4. venv lama %USERPROFILE%\.venvs\apd_py312
+rem Hanya env conda; venv lama (~/.venvs) sengaja tidak dicari supaya tidak bentrok.
 rem Autostart tidak menjalankan "conda activate", jadi langkah 3 yang biasanya terpakai.
 if not defined DEPRO_CONDA_ENV set "DEPRO_CONDA_ENV=ppe_detection"
 set "PYEXE="
@@ -30,11 +30,10 @@ if not defined PYEXE call :try_env "%USERPROFILE%\anaconda3\envs\%DEPRO_CONDA_EN
 if not defined PYEXE call :try_env "%LOCALAPPDATA%\miniconda3\envs\%DEPRO_CONDA_ENV%"
 if not defined PYEXE call :try_env "%ProgramData%\miniconda3\envs\%DEPRO_CONDA_ENV%"
 if not defined PYEXE call :try_env "%ProgramData%\anaconda3\envs\%DEPRO_CONDA_ENV%"
-if not defined PYEXE call :try_env "%USERPROFILE%\.venvs\apd_py312"
 
 if not defined PYEXE (
-    echo [GALAT] Environment Python "%DEPRO_CONDA_ENV%" tidak ditemukan.
-    echo Buat sekali dari akar repo, di Anaconda Prompt:
+    echo [GALAT] Env conda "%DEPRO_CONDA_ENV%" tidak ditemukan atau paketnya belum lengkap.
+    echo Dari akar repo, di Anaconda Prompt ^(lewati baris pertama bila env sudah ada^):
     echo   conda env create -f environment.yml
     echo   conda activate %DEPRO_CONDA_ENV%
     echo   uv pip sync --torch-backend cu132 backend\requirements.lock
@@ -51,7 +50,7 @@ cd /d "%~dp0"
 pause
 exit /b
 
-rem Env conda menaruh python.exe di akar env; venv di Scripts\. Env yang bukan
+rem Env conda menaruh python.exe di akar env (Scripts\ hanya jaga-jaga). Env yang bukan
 rem Python 3.12 atau belum berisi paket (torch, fastapi) dilewati, mis. env yang
 rem baru dibuat tetapi uv pip sync belum selesai.
 :try_env

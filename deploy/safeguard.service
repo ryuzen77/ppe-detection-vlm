@@ -21,7 +21,8 @@ User=safeguard
 # Grup video: akses /dev/videoN; audio: pengumuman suara; dialout: lampu serial
 SupplementaryGroups=video audio dialout
 WorkingDirectory=/opt/safeguard
-Environment=SAFEGUARD_VENV=/opt/safeguard/.venv
+# Env conda ppe_detection (docs/INSTALASI.md bagian 1); sesuaikan dengan `conda env list`
+Environment=SAFEGUARD_VENV=/opt/conda/envs/ppe_detection
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/safeguard/start_system.sh
 Restart=on-failure

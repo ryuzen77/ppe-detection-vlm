@@ -219,7 +219,8 @@ risiko (§2.2a), bukan dirombak sekaligus di luar task.
 
 Environment Python (sekali): lihat [docs/INSTALASI.md](docs/INSTALASI.md) §1
 (Miniconda: `conda env create -f environment.yml`, `conda activate ppe_detection`, lalu
-`uv pip sync --torch-backend cu132 backend/requirements-dev.lock`; venv lama tetap jalan).
+`uv pip sync --torch-backend cu132 backend/requirements-dev.lock`). Hanya env ini yang dipakai;
+jangan membuat venv terpisah.
 
 ```bash
 python -m backend                 # server (dari akar repo)

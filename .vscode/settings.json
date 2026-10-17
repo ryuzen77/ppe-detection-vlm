@@ -1,5 +1,5 @@
 {
-  "python.defaultInterpreterPath": "C:\\Users\\zenin\\.venvs\\apd_py312\\Scripts\\python.exe",
+  "python.defaultInterpreterPath": "${env:USERPROFILE}\\miniconda3\\envs\\ppe_detection\\python.exe",
   "python.analysis.extraPaths": [
     "./backend"
   ],

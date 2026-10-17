@@ -36,9 +36,9 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 - Memperbarui setelah `git pull` yang mengubah `.lock`: jalankan lagi `uv pip sync`
   yang sama di env `ppe_detection`.
 
-**Tanpa conda (venv biasa).** Masih didukung, misalnya untuk server Linux/Docker:
-`uv venv --python 3.12 ~/.venvs/apd_py312`, lalu
-`uv pip sync --python ~/.venvs/apd_py312/bin/python --torch-backend cu132 backend/requirements.lock`.
+**Satu environment saja.** Proyek hanya memakai env conda `ppe_detection`; venv terpisah
+(mis. `~/.venvs/...`) tidak dipakai lagi supaya tidak ada dua Python dengan versi paket
+berbeda. IDE (VS Code, Antigravity) diarahkan ke Python env itu juga.
 
 **Linux.** Perintah conda dan uv sama persis. Suara
 butuh pustaka sistem, karena SDL di dalam pygame memuat driver audio dengan nama
@@ -60,11 +60,10 @@ di log). OpenCV memakai varian `opencv-python-headless`, jadi tidak butuh `libGL
 
 `start_system.bat` dan `start_system.sh` mencari environment Python dengan urutan:
 
-1. `SAFEGUARD_VENV` bila diisi (folder venv atau env conda);
+1. `SAFEGUARD_VENV` bila diisi (jalur env conda di lokasi tidak umum);
 2. env conda `ppe_detection` yang sedang aktif;
 3. env conda `ppe_detection` di lokasi instal Miniconda/Anaconda yang umum
    (`~/miniconda3`, `~/anaconda3`, dan seterusnya). Nama env bisa diganti lewat `DEPRO_CONDA_ENV`;
-4. venv lama `~/.venvs/apd_py312`.
 
 Kandidat yang bukan Python 3.12 atau belum berisi paket (`torch`, `fastapi`; misalnya env baru
 yang `uv pip sync`-nya belum selesai) dilewati dengan
