@@ -4,21 +4,43 @@ Ringkasan singkatnya ada di [README](../README.md). Dokumen ini berisi rincianny
 
 ## 1. Prasyarat lingkungan
 
-Python **3.12**. Versi dependensi dikunci di `backend/requirements.lock` (server)
-dan `backend/requirements-dev.lock` (server + pytest). Environment dibuat sekali
-dengan [uv](https://docs.astral.sh/uv/) dari akar repo:
+Python **3.12** lewat **Miniconda**. Versi paket dikunci di `backend/requirements.lock`
+(server) dan `backend/requirements-dev.lock` (server + pytest + ruff).
+
+- **Conda hanya menyediakan Python 3.12 dan [uv](https://docs.astral.sh/uv/)**
+  (`environment.yml`, channel conda-forge). Semua paket Python, termasuk PyTorch
+  versi CUDA, dipasang uv dari berkas terkunci, jadi versinya sama persis dengan CI.
+  PyTorch sudah berhenti menerbitkan paket di channel conda-nya sendiri dan
+  menganjurkan wheel pip.
+- **Tidak perlu CUDA Toolkit.** Wheel torch `+cu132` membawa runtime CUDA sendiri;
+  yang dibutuhkan hanya driver NVIDIA yang cukup baru: `nvidia-smi` menampilkan
+  **CUDA Version 13.2** atau lebih tinggi.
+
+Sekali per mesin, dari akar repo (Anaconda Prompt, atau PowerShell setelah
+`conda init powershell`):
 
 ```powershell
-uv venv --python 3.12 "$env:USERPROFILE\.venvs\apd_py312"
-uv pip sync --python "$env:USERPROFILE\.venvs\apd_py312\Scripts\python.exe" --torch-backend cu132 backend\requirements-dev.lock
+conda env create -f environment.yml
+conda activate apd_detection
+uv pip sync --torch-backend cu132 backend/requirements-dev.lock     # mesin gerbang cukup requirements.lock
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
-`--torch-backend cu132` wajib. Torch versi CUDA hanya ada di index PyTorch,
-sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi
-**sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, supaya torch
-versi CPU tidak terpasang diam-diam.
+- uv memasang ke environment conda yang **sedang aktif** (`CONDA_PREFIX`); env `base`
+  ditolak, jadi aktifkan `apd_detection` dulu.
+- Unduhan pertama ±4 GB (torch + pustaka CUDA); di koneksi biasa bisa 20–30 menit.
+- `--torch-backend cu132` wajib. Torch versi CUDA hanya ada di index PyTorch,
+  sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi
+  **sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, supaya torch
+  versi CPU tidak terpasang diam-diam.
+- Memperbarui setelah `git pull` yang mengubah `.lock`: jalankan lagi `uv pip sync`
+  yang sama di env `apd_detection`.
 
-**Linux.** Perintahnya sama, dengan jalur `~/.venvs/apd_py312/bin/python`. Suara
+**Tanpa conda (venv biasa).** Masih didukung, misalnya untuk server Linux/Docker:
+`uv venv --python 3.12 ~/.venvs/apd_py312`, lalu
+`uv pip sync --python ~/.venvs/apd_py312/bin/python --torch-backend cu132 backend/requirements.lock`.
+
+**Linux.** Perintah conda dan uv sama persis. Suara
 butuh pustaka sistem, karena SDL di dalam pygame memuat driver audio dengan nama
 standar dan tidak memakai salinan yang dibawa wheel-nya:
 
@@ -36,8 +58,20 @@ sudo apt install libglib2.0-0 libpulse0 libasound2
 Tanpa paket-paket ini sistem tetap berjalan, hanya tanpa suara (ada peringatan
 di log). OpenCV memakai varian `opencv-python-headless`, jadi tidak butuh `libGL`.
 
-`start_system.bat` dan `start_system.sh` memakai environment ini secara otomatis.
-Lokasinya bisa diganti lewat variabel `SAFEGUARD_VENV`.
+`start_system.bat` dan `start_system.sh` mencari environment Python dengan urutan:
+
+1. `SAFEGUARD_VENV` bila diisi (folder venv atau env conda);
+2. env conda `apd_detection` yang sedang aktif;
+3. env conda `apd_detection` di lokasi instal Miniconda/Anaconda yang umum
+   (`~/miniconda3`, `~/anaconda3`, dan seterusnya). Nama env bisa diganti lewat `DEPRO_CONDA_ENV`;
+4. venv lama `~/.venvs/apd_py312`.
+
+Kandidat yang bukan Python 3.12 (misalnya env lama yang belum dibuat ulang) dilewati dengan
+pesan `[INFO] Dilewati`, jadi env usang tidak pernah dipakai diam-diam.
+
+Karena itu autostart Windows (`deploy/windows/install_autostart.ps1`) tidak perlu
+`conda activate`. Bila Miniconda dipasang di tempat lain, isi `SAFEGUARD_VENV`
+dengan jalur env-nya (lihat `conda env list`).
 
 ### Memperbarui versi yang dikunci
 
