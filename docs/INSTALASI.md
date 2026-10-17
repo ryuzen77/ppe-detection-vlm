@@ -21,20 +21,20 @@ Sekali per mesin, dari akar repo (Anaconda Prompt, atau PowerShell setelah
 
 ```powershell
 conda env create -f environment.yml
-conda activate apd_detection
+conda activate ppe_detection
 uv pip sync --torch-backend cu132 backend/requirements-dev.lock     # mesin gerbang cukup requirements.lock
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
 - uv memasang ke environment conda yang **sedang aktif** (`CONDA_PREFIX`); env `base`
-  ditolak, jadi aktifkan `apd_detection` dulu.
+  ditolak, jadi aktifkan `ppe_detection` dulu.
 - Unduhan pertama ±4 GB (torch + pustaka CUDA); di koneksi biasa bisa 20–30 menit.
 - `--torch-backend cu132` wajib. Torch versi CUDA hanya ada di index PyTorch,
   sedangkan paket lain tetap diambil dari PyPI. Tanpa flag ini instalasi
   **sengaja gagal** dengan pesan `torch==…+cu132` tidak ditemukan, supaya torch
   versi CPU tidak terpasang diam-diam.
 - Memperbarui setelah `git pull` yang mengubah `.lock`: jalankan lagi `uv pip sync`
-  yang sama di env `apd_detection`.
+  yang sama di env `ppe_detection`.
 
 **Tanpa conda (venv biasa).** Masih didukung, misalnya untuk server Linux/Docker:
 `uv venv --python 3.12 ~/.venvs/apd_py312`, lalu
@@ -61,12 +61,13 @@ di log). OpenCV memakai varian `opencv-python-headless`, jadi tidak butuh `libGL
 `start_system.bat` dan `start_system.sh` mencari environment Python dengan urutan:
 
 1. `SAFEGUARD_VENV` bila diisi (folder venv atau env conda);
-2. env conda `apd_detection` yang sedang aktif;
-3. env conda `apd_detection` di lokasi instal Miniconda/Anaconda yang umum
+2. env conda `ppe_detection` yang sedang aktif;
+3. env conda `ppe_detection` di lokasi instal Miniconda/Anaconda yang umum
    (`~/miniconda3`, `~/anaconda3`, dan seterusnya). Nama env bisa diganti lewat `DEPRO_CONDA_ENV`;
 4. venv lama `~/.venvs/apd_py312`.
 
-Kandidat yang bukan Python 3.12 (misalnya env lama yang belum dibuat ulang) dilewati dengan
+Kandidat yang bukan Python 3.12 atau belum berisi paket (`torch`, `fastapi`; misalnya env baru
+yang `uv pip sync`-nya belum selesai) dilewati dengan
 pesan `[INFO] Dilewati`, jadi env usang tidak pernah dipakai diam-diam.
 
 Karena itu autostart Windows (`deploy/windows/install_autostart.ps1`) tidak perlu

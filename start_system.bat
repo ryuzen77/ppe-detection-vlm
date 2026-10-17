@@ -9,17 +9,17 @@ echo.
 
 rem Environment Python 3.12 (docs\INSTALASI.md bagian 1). Urutan pencarian:
 rem   1. SAFEGUARD_VENV bila diisi (folder venv atau env conda)
-rem   2. env conda DEPRO_CONDA_ENV (bawaan "apd_detection") yang sedang aktif
+rem   2. env conda DEPRO_CONDA_ENV (bawaan "ppe_detection") yang sedang aktif
 rem   3. env conda itu di lokasi instal Miniconda/Anaconda yang umum
 rem   4. venv lama %USERPROFILE%\.venvs\apd_py312
 rem Autostart tidak menjalankan "conda activate", jadi langkah 3 yang biasanya terpakai.
-if not defined DEPRO_CONDA_ENV set "DEPRO_CONDA_ENV=apd_detection"
+if not defined DEPRO_CONDA_ENV set "DEPRO_CONDA_ENV=ppe_detection"
 set "PYEXE="
 
 if defined SAFEGUARD_VENV (
     call :try_env "%SAFEGUARD_VENV%"
     if not defined PYEXE (
-        echo [GALAT] SAFEGUARD_VENV tidak berisi Python 3.12: %SAFEGUARD_VENV%
+        echo [GALAT] SAFEGUARD_VENV bukan Python 3.12 dengan paket terpasang: %SAFEGUARD_VENV%
         pause
         exit /b 1
     )
@@ -52,15 +52,16 @@ pause
 exit /b
 
 rem Env conda menaruh python.exe di akar env; venv di Scripts\. Env yang bukan
-rem Python 3.12 (mis. env lama yang belum dibuat ulang) dilewati.
+rem Python 3.12 atau belum berisi paket (torch, fastapi) dilewati, mis. env yang
+rem baru dibuat tetapi uv pip sync belum selesai.
 :try_env
 set "CANDIDATE="
 if exist "%~1\python.exe" set "CANDIDATE=%~1\python.exe"
 if not defined CANDIDATE if exist "%~1\Scripts\python.exe" set "CANDIDATE=%~1\Scripts\python.exe"
 if not defined CANDIDATE exit /b
-"%CANDIDATE%" -c "import sys; sys.exit(sys.version_info[:2] != (3, 12))" >nul 2>&1
+"%CANDIDATE%" -c "import sys, importlib.util as u; sys.exit(sys.version_info[:2] != (3, 12) or not all(u.find_spec(m) for m in ('torch', 'fastapi')))" >nul 2>&1
 if errorlevel 1 (
-    echo [INFO] Dilewati, bukan Python 3.12: %CANDIDATE%
+    echo [INFO] Dilewati, bukan Python 3.12 atau paket belum terpasang: %CANDIDATE%
     exit /b
 )
 set "PYEXE=%CANDIDATE%"
