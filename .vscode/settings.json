@@ -1,11 +1,5 @@
 {
   "python.defaultInterpreterPath": "${env:USERPROFILE}\\miniconda3\\envs\\ppe_detection\\python.exe",
-  "python.analysis.typeCheckingMode": "standard",
-  "python.analysis.extraPaths": [
-    "./backend",
-    "./tests",
-    "./tools"
-  ],
   "python.autoComplete.extraPaths": [
     "./backend"
   ],

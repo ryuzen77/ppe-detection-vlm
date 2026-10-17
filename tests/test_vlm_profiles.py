@@ -50,7 +50,8 @@ def test_status_model_saat_ini():
     assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.VALIDATED
     # Gemini T58: 5 foto (izin pengguna 14-10) → sebagian
     assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.PARTIAL
-    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", v).prompt_version == v
+    record = profiles.find_validation("gemini", "gemini-3.5-flash-lite", v)
+    assert record is not None and record.prompt_version == v
     assert profiles.validation_status("openrouter", "model-baru", v) == profiles.UNVALIDATED
     assert profiles.validation_status("ollama", "qwen2.5vl:3b", v) == profiles.UNSAFE
 
@@ -58,7 +59,8 @@ def test_status_model_saat_ini():
 def test_validasi_prompt_lama_kedaluwarsa():
     assert profiles.validation_status("ollama", "qwen2.5vl:7b", "T99") == profiles.OUTDATED
     # tanpa catatan untuk versi itu, yang dipakai catatan terbaru
-    assert profiles.find_validation("gemini", "gemini-3.5-flash-lite", "T99").prompt_version == "T58"
+    record = profiles.find_validation("gemini", "gemini-3.5-flash-lite", "T99")
+    assert record is not None and record.prompt_version == "T58"
 
 
 def test_model_yang_pernah_meloloskan_apd_kurang_ditandai_tidak_aman():

@@ -26,7 +26,7 @@ def _checked_dates(*values: Optional[str]):
 
 
 @router.get("/api/reports")
-async def get_worker_reports(limit: int = 50, offset: int = 0, status: str = "all", date: str = None,
+async def get_worker_reports(limit: int = 50, offset: int = 0, status: str = "all", date: Optional[str] = None,
                              date_from: Optional[str] = Query(None, alias="from"),
                              date_to: Optional[str] = Query(None, alias="to")):
     """Returns paginated worker inspection records with global compliance statistics."""

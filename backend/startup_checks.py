@@ -55,7 +55,7 @@ def account_created():
     warnings[:] = [w for w in warnings if w != stale]
 
 
-def ollama_version(base_url: str, get: Callable = None) -> Optional[str]:
+def ollama_version(base_url: str, get: Optional[Callable] = None) -> Optional[str]:
     """Versi server Ollama lewat /api/version; None bila tidak terjangkau."""
     import httpx
     root = base_url[:-3] if base_url.rstrip("/").endswith("/v1") else base_url.rstrip("/")

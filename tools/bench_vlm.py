@@ -29,6 +29,7 @@ import json
 import statistics
 import time
 from dataclasses import replace
+from typing import Any
 from pathlib import Path
 
 import eval_vlm  # noqa: F401  (menyetel VLM_BACKUP_PROVIDER=none sebelum config dimuat)
@@ -136,7 +137,7 @@ def build_prompts(variant: str, items) -> tuple[str, str]:
                   f"Bentuk JSON:\n{minimal_shape(items, smoking=smoking, reason=reason)}")
         return system, SHORT_USER
     if variant == "P2":
-        rules = "\n".join(COMPACT_RULES.get(i.key, i.prompt_rule) for i in items)
+        rules = "\n".join(COMPACT_RULES.get(i.key, i.prompt_rule or "") for i in items)
         system = (f"{SHORT_HEADER}\n{rules}\n{REAL_PERSON_RULE}\n{SMOKING_RULE}\n"
                   f"Bentuk JSON:\n{minimal_shape(items)}")
         return system, SHORT_USER
@@ -229,7 +230,7 @@ def to_production_payload(data, variant: str, items=None) -> dict:
     if variant in BIT_VARIANTS:
         keys = flag_keys(items, short=variant == "PC")
         values = data if variant == "PB" else [data.get(k) for k, _ in keys]
-        result = {"items": {}}
+        result: dict[str, Any] = {"items": {}}
         for (_, (item_key, field)), value in zip(keys, values):
             if item_key:
                 result["items"].setdefault(item_key, {})[field] = value == 1
@@ -261,7 +262,8 @@ def ollama_root() -> str:
     return base[:-3] if base.rstrip("/").endswith("/v1") else base.rstrip("/")
 
 
-def call(client: httpx.Client, model: str, system: str, user: str, image_b64: str, fmt="json") -> dict:
+def call(client: httpx.Client, model: str, system: str, user: str, image_b64: str,
+         fmt: str | dict = "json") -> dict:
     body = {
         "model": model, "stream": False, "format": fmt, "keep_alive": "10m",
         "options": {"temperature": cfg.VLM_TEMPERATURE},

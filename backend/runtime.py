@@ -56,7 +56,7 @@ def _run_startup_checks():
     import torch
     from . import camera_manager, startup_checks
     local = vlm_analyzer._local_engine()
-    ollama_url = (local.provider.base_url if local is not None and local.provider_name == "ollama"
+    ollama_url = (getattr(local.provider, "base_url", None) if local is not None and local.provider_name == "ollama"
                   and local.provider is not None else None)
     camera = camera_manager.autostart_target()[0] if cfg.CAMERA_AUTOSTART else ""
     startup_checks.run(torch.cuda.is_available(), ollama_url, camera, camera_manager.list_device_names)

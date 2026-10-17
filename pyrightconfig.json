@@ -1,0 +1,7 @@
+{
+  "include": ["backend", "tests", "tools", "scripts"],
+  "exclude": ["**/__pycache__", "web", "data", "iot", "picture_test"],
+  "extraPaths": ["backend", "tests", "tools"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard"
+}

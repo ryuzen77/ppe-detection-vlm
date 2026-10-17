@@ -7,6 +7,7 @@ if not __package__:
     sys.exit("Jalankan server dari akar repo dengan: python -m backend")
 
 from pathlib import Path
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -38,7 +39,7 @@ class PayloadTooLargeError(Exception):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Model, kamera, audio, IoT, dan basis data dibuka di sini, bukan saat impor
     runtime.start()
     base = f"http://localhost:{cfg.PORT}"
@@ -158,7 +159,8 @@ def server_config():
     import uvicorn
     config = uvicorn.Config(app, host=cfg.HOST, port=cfg.PORT, reload=False,
                             log_level=cfg.LOG_LEVEL.lower(), log_config=None,
-                            timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS)
+                            # anotasi uvicorn int, tetapi nilainya dipakai asyncio.wait_for (float boleh)
+                            timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS)  # pyright: ignore[reportArgumentType]
     logging.getLogger(ACCESS_LOGGER).setLevel(cfg.LOG_ACCESS_LEVEL)
     return config
 

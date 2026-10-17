@@ -56,7 +56,7 @@ class _Result:
 
 class _Model:
     def __init__(self):
-        self.next = None
+        self.next: object = None
 
     def track(self, **_):
         return [self.next]
@@ -93,14 +93,16 @@ def _head_near_top(rng):
 def run_cases():
     rng = np.random.default_rng(41)
     detector = PersonDetector()
-    detector.model = _Model()
+    model = _Model()
+    detector.model = model  # pyright: ignore[reportAttributeAccessIssue]
     frame = np.zeros((FRAME_H, FRAME_W, 3), np.uint8)
     out = []
     for i in range(CASES):
         bbox, kpts = _head_near_top(rng) if i % 4 == 0 else _person(rng)
         with_pose = i % 4 == 0 or rng.random() > 0.1
-        detector.model.next = _Result([bbox], [i + 1], [0.9], [kpts] if with_pose else None)
+        model.next = _Result([bbox], [i + 1], [0.9], [kpts] if with_pose else None)
         d = detector.detect_and_track(frame)[0]
+        assert d.crop_img is not None
         out.append([d.is_full_body, d.reason, getattr(d, "clip_type", ""), list(d.crop_img.shape[:2]),
                     None if d.foot_y is None else round(d.foot_y, 6)])
     return out

@@ -29,7 +29,7 @@ class FakeMessagesServer:
                 self.end_headers()
                 self.wfile.write(payload)
 
-            def log_message(self, *args):
+            def log_message(self, format, *args):
                 pass
 
         self.httpd = HTTPServer(("127.0.0.1", 0), Handler)
@@ -100,6 +100,7 @@ def test_engine_memakai_batas_token_dari_config(server, monkeypatch):
     monkeypatch.setattr(cfg, "VLM_ANTHROPIC_MAX_TOKENS", 777)
     engine = VLMEngine("utama", "anthropic", "model-uji", api_key="kunci-uji", base_url=server.base_url)
     assert engine.build() is True
+    assert engine.provider is not None
     engine.provider.ping()
     assert server.requests[-1]["body"]["max_tokens"] == 777
     engine.close()

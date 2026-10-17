@@ -6,7 +6,6 @@ import time
 import os
 import csv
 import io
-import itertools
 from datetime import date
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -377,17 +376,20 @@ class ReportManager:
         pertama tertimpa, sehingga bukti audit menunjuk orang yang salah.
         """
         with self._snapshot_lock:
-            for n in itertools.count(1):
+            n = 1
+            while True:
                 name = f"{stem}.jpg" if n == 1 else f"{stem}_{n}.jpg"
                 if name not in self._snapshots_in_progress and not (self.snapshots_dir / name).exists():
                     self._snapshots_in_progress.add(name)
                     return name
+                n += 1
 
     def _insert_inspection(self, values: tuple) -> int:
         """Satu baris audit (urutan nilai = `_INSPECTION_COLUMNS`); mengembalikan id-nya."""
         with self._get_connection() as conn:
             record_id = conn.execute(_INSERT_INSPECTION, values).lastrowid
             conn.commit()
+        assert record_id is not None, "INSERT selalu mengisi lastrowid"
         return record_id
 
     @staticmethod

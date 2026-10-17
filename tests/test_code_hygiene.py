@@ -7,6 +7,7 @@ import ast
 import re
 import shutil
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,7 @@ def _tracked_files() -> list[str]:
     return out.stdout.splitlines()
 
 
-def _text_files(paths: list[str]):
+def _text_files(paths: Iterable[str]):
     for rel in paths:
         path = ROOT / rel
         if path.suffix.lower() in BINARY_SUFFIXES or not path.is_file():
@@ -63,12 +64,12 @@ def _text_files(paths: list[str]):
             continue
 
 
-def _body_length(node: ast.AST) -> int:
+def _body_length(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     """Panjang badan fungsi tanpa docstring (docstring panjang bukan kerumitan)."""
     body = node.body
     if isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
         body = body[1:]
-    return body[-1].end_lineno - body[0].lineno + 1 if body else 0
+    return (body[-1].end_lineno or body[-1].lineno) - body[0].lineno + 1 if body else 0
 
 
 def _long_functions(paths: list[str]) -> set[str]:

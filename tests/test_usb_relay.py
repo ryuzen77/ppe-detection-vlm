@@ -205,7 +205,7 @@ def test_penjaga_hanya_menyentuh_relay_bila_dipakai(monkeypatch, enabled, iot_ty
 # --- Menemukan papan (hidapi tiruan) --------------------------------------------------------------
 
 def fake_hid(devices):
-    module = types.ModuleType("hid")
+    module = types.SimpleNamespace()
     module.enumerate = lambda vid, pid: [
         {"product_string": product, "path": i} for i, (product, _) in enumerate(devices)
         if (vid, pid) == (usb_relay.VENDOR_ID, usb_relay.PRODUCT_ID)]
@@ -218,6 +218,7 @@ def test_menemukan_papan_menurut_serial(monkeypatch):
     first, second = FakeDevice(serial=b"AAAAA"), FakeDevice(serial=b"HURTM")
     monkeypatch.setitem(sys.modules, "hid", fake_hid([("USBRelay2", first), ("USBRelay2", second)]))
     found = usb_relay.find_board("HURTM")
+    assert found is not None
     assert found.serial == "HURTM" and found.channel_count == 2 and first.closed
 
 

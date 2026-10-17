@@ -1,4 +1,6 @@
 """Google Gemini lewat SDK `google-genai` (pengganti `google-generativeai` yang sudah dihentikan)."""
+from typing import Any
+
 from .. import messages
 from .base import VLMProvider
 
@@ -58,13 +60,15 @@ class GeminiProvider(VLMProvider):
         )
         return (response.text or "").strip()
 
-    def _common(self) -> dict:
+    def _common(self) -> dict[str, Any]:
         # Automatic function calling (model memanggil fungsi Python) aktif secara
         # bawaan di SDK dan memunculkan peringatan "Direct use of automatic
         # function calling" di setiap panggilan, padahal tidak dipakai di sini.
-        options = {"automatic_function_calling": self._types.AutomaticFunctionCallingConfig(disable=True)}
+        options: dict[str, Any] = {"automatic_function_calling": self._types.AutomaticFunctionCallingConfig(disable=True)}
         if self.temperature is not None:
             options["temperature"] = self.temperature
         if self.thinking_level:
-            options["thinking_config"] = self._types.ThinkingConfig(thinking_level=self.thinking_level)
+            # SDK menerima nama level berupa str (pydantic mengubahnya ke enum ThinkingLevel)
+            options["thinking_config"] = self._types.ThinkingConfig(  # pyright: ignore[reportArgumentType]
+                thinking_level=self.thinking_level)  # pyright: ignore[reportArgumentType]
         return options

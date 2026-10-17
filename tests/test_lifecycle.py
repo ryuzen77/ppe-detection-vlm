@@ -6,6 +6,7 @@ APD tidak lengkap.
 """
 import json
 import time
+from typing import Any
 
 import pytest
 
@@ -54,7 +55,7 @@ class VLMTiruan(VLMProvider):
 
 
 def _det(full_body: bool, **kwargs):
-    base = dict(track_id=TRACK_ID, is_inside_corridor=True, crop_img=person_crop(), conf=0.95)
+    base: dict[str, Any] = dict(track_id=TRACK_ID, is_inside_corridor=True, crop_img=person_crop(), conf=0.95)
     if full_body:
         base.update(bbox=[470, 50, 810, 660], is_full_body=True, reason=messages.POSE_OK)
     else:
@@ -417,7 +418,7 @@ def test_antrean_di_belakang_zona_tidak_memulai_sesi(gerbang, zona):
 
 
 def test_subjek_keluar_zona_mengakhiri_sesi_walau_antrean_terlihat(gerbang, zona, vlm):
-    subjek = dict(full_body=True, track_id=TRACK_ID, foot_y=0.78)
+    subjek: dict[str, Any] = dict(full_body=True, track_id=TRACK_ID, foot_y=0.78)
     antrean = _det(full_body=True, track_id=TRACK_ID + 1, foot_y=0.5)
     for _ in range(cfg.STABLE_FRAMES_REQUIRED):
         gerbang.update_frame_detections([_det(**subjek), antrean])

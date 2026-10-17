@@ -170,4 +170,5 @@ def test_kandidat_dibatasi(terkirim, monkeypatch):
     monkeypatch.setattr(cfg, "READY_HOLD_SECONDS", 5.0)
     for _ in range(cfg.READY_MAX_CANDIDATES * 3):
         state_mgr.update_frame_detections([_det()])
+    assert state_mgr.session is not None
     assert len(state_mgr.session.candidates) == cfg.READY_MAX_CANDIDATES

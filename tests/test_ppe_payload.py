@@ -9,7 +9,9 @@ from backend.vlm_analyzer import VLMAnalyzer
 
 
 def missing_label(key):
-    return ppe_rules.get_item(key).missing_label
+    item = ppe_rules.get_item(key)
+    assert item is not None, key
+    return item.missing_label
 
 
 # --- Aturan katalog ------------------------------------------------------------

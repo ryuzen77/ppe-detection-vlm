@@ -114,10 +114,11 @@ class FakeEngine:
 def guard(monkeypatch):
     engine = FakeEngine(FakeProvider())
     g = LocalModelGuard(threading.Lock(), lambda: engine)
-    g.forced = []
-    monkeypatch.setattr(g, "trigger", lambda force=False: g.forced.append(force))
+    # objek tiruan: catat permintaan muat ulang paksa
+    g.forced = []  # pyright: ignore[reportAttributeAccessIssue]
+    monkeypatch.setattr(g, "trigger", lambda force=False: g.forced.append(force))  # pyright: ignore[reportAttributeAccessIssue]
     monkeypatch.setattr(guard_mod.gpu_processes, "other_gpu_apps", lambda: ["Discord.exe"])
-    g.engine = engine
+    g.engine = engine  # pyright: ignore[reportAttributeAccessIssue]
     return g
 
 
@@ -242,7 +243,7 @@ def test_analyzer_mencatat_hanya_panggilan_lokal_utama(catalog_defaults, monkeyp
     calls = []
     monkeypatch.setattr(a.local_guard, "record_call", lambda latency, now: calls.append(latency))
     a.analyze_person(person_crop())
-    assert len(a.backup.provider.calls) == 2 and len(calls) == 1 and calls[0] is not None
+    assert len(a.backup.provider.calls) == 2 and len(calls) == 1  # pyright: ignore and calls[0] is not None
     a.backup.executor.shutdown(wait=False)
 
 

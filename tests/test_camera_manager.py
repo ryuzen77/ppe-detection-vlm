@@ -182,7 +182,8 @@ def test_open_capture_memakai_backend_os(monkeypatch):
     dibuat = pasang_cv2(monkeypatch, backend_berhasil=True)
     cap = camera_manager.open_capture(2)
     assert len(dibuat) == 1
-    assert cap.backend == camera_manager.cv2.CAP_V4L2 and cap.index == 2
+    # cap = VideoCapture tiruan dari pasang_cv2 (punya .backend & .index)
+    assert cap.backend == camera_manager.cv2.CAP_V4L2 and cap.index == 2  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_open_capture_jatuh_ke_backend_bawaan_bila_gagal(monkeypatch):
@@ -190,7 +191,7 @@ def test_open_capture_jatuh_ke_backend_bawaan_bila_gagal(monkeypatch):
     cap = camera_manager.open_capture(1)
     assert len(dibuat) == 2
     assert dibuat[0].released  # percobaan pertama dilepas, tidak bocor
-    assert cap.backend is None and cap.isOpened()
+    assert cap.backend is None and cap.isOpened()  # pyright: ignore[reportAttributeAccessIssue]
 
 
 # --- Nama kamera lintas thread & pemantau keberadaan (24-09) --------------------

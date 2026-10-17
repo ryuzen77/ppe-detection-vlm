@@ -149,6 +149,7 @@ def check_choice(choice: Choice, confirm_unvalidated: bool):
 def _check_validation(choice: Choice, confirm_unvalidated: bool):
     status, record = validation_of(choice)
     if status == profiles.UNSAFE:
+        assert record is not None, "status UNSAFE selalu berasal dari catatan validasi"
         raise SelectionError("unsafe_model", messages.VLM_SELECT_UNSAFE.format(
             provider=choice.provider, model=choice.model, missed=record.missed, photos=record.photos))
     if status in NEEDS_CONFIRMATION and not confirm_unvalidated:

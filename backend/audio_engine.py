@@ -1,6 +1,7 @@
 import logging
 import time
 import threading
+from typing import Optional
 from queue import Empty, Queue
 import pygame
 from .config import cfg
@@ -83,15 +84,17 @@ class AudioEngine:
             logger.warning(f"File not found: {audio_file}")
             return
 
+        channel = self.channel
+        assert channel is not None, "channel ada selama audio aktif (enabled)"
         try:
             if urgent:
-                self.channel.stop()
+                channel.stop()
             else:
-                while self.channel.get_busy() and self.is_running:
+                while channel.get_busy() and self.is_running:
                     if self._urgent.is_set():
                         return
                     time.sleep(cfg.AUDIO_POLL_SECONDS)
-            self.channel.play(self._load(audio_file))
+            channel.play(self._load(audio_file))
             self.last_played_time[sound_name] = now
         except Exception as e:
             logger.warning(f"Error playing {sound_name}: {e}")
@@ -125,7 +128,7 @@ class AudioEngine:
         else:
             self.play("mundur", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
 
-    def result_sound(self, is_complete: bool, missing_items: list[str] = None) -> str:
+    def result_sound(self, is_complete: bool, missing_items: Optional[list[str]] = None) -> str:
         """Nama suara untuk hasil inspeksi.
 
         Satu item kurang → suara khusus item itu, diambil dari `audio_missing`
@@ -142,7 +145,7 @@ class AudioEngine:
                 return item.audio_missing
         return "tidak_lengkap"
 
-    def play_result(self, is_complete: bool, missing_items: list[str] = None):
+    def play_result(self, is_complete: bool, missing_items: Optional[list[str]] = None):
         """Plays corresponding voice based on PPE detection result."""
         self.play(self.result_sound(is_complete, missing_items), min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS,
                   urgent=True)

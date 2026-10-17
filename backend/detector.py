@@ -7,7 +7,7 @@ import numpy as np
 # untuk pelacak). Dimatikan: semua dependensi berasal dari requirements.lock, dan
 # paket yang hilang harus gagal jelas, bukan diam-diam mengubah environment.
 os.environ.setdefault("YOLO_AUTOINSTALL", "false")
-from ultralytics import YOLO  # noqa: E402
+from ultralytics import YOLO  # noqa: E402  # pyright: ignore[reportPrivateImportUsage]
 import torch
 from .config import cfg
 from . import zone
@@ -59,7 +59,9 @@ class PersonDetector:
 
     def _track(self, frame: np.ndarray):
         """Jalankan pelacak YOLO; (kotak, ID, keyakinan, titik pose | None) atau None bila tak ada orang."""
-        results = self.model.track(
+        model = self.model
+        assert model is not None, "model dimuat sebelum frame pertama"
+        results = model.track(
             source=frame,
             persist=True,
             tracker=cfg.TRACKER_TYPE,
@@ -75,9 +77,10 @@ class PersonDetector:
         if r.boxes is None or r.boxes.id is None:
             return None
         has_pose = r.keypoints is not None and r.keypoints.data is not None
-        keypoints_data = r.keypoints.data.cpu().numpy() if has_pose else None
-        return (r.boxes.xyxy.cpu().numpy(), r.boxes.id.int().cpu().numpy(), r.boxes.conf.cpu().numpy(),
-                keypoints_data)
+        # Stub ultralytics menyebut Tensor | ndarray; saat inferensi selalu Tensor (punya .cpu()).
+        keypoints_data = r.keypoints.data.cpu().numpy() if has_pose else None  # pyright: ignore
+        return (r.boxes.xyxy.cpu().numpy(), r.boxes.id.int().cpu().numpy(),  # pyright: ignore
+                r.boxes.conf.cpu().numpy(), keypoints_data)  # pyright: ignore
 
     def detect_and_track(self, frame: np.ndarray) -> list[DetectionResult]:
         """Runs YOLO tracking and height-adaptive full-body filter on the current frame."""

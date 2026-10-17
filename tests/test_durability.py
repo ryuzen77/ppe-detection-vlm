@@ -70,13 +70,17 @@ def test_belum_ada_catatan_tidak_melaporkan_apa_pun():
 
 
 def test_berhenti_rapi_dilaporkan_info_dengan_lama_mati():
-    level, msg = uptime.describe_previous({uptime.KEY_LAST_ALIVE: 0.0, uptime.KEY_CLEAN: True}, 125.0)
+    report = uptime.describe_previous({uptime.KEY_LAST_ALIVE: 0.0, uptime.KEY_CLEAN: True}, 125.0)
+    assert report is not None
+    level, msg = report
     assert level == logging.INFO
     assert "2 menit 5 detik" in msg
 
 
 def test_berhenti_mendadak_dilaporkan_peringatan():
-    level, msg = uptime.describe_previous({uptime.KEY_LAST_ALIVE: 0.0, uptime.KEY_CLEAN: False}, 3 * 3600 + 60)
+    report = uptime.describe_previous({uptime.KEY_LAST_ALIVE: 0.0, uptime.KEY_CLEAN: False}, 3 * 3600 + 60)
+    assert report is not None
+    level, msg = report
     assert level == logging.WARNING
     assert "MENDADAK" in msg and "3 jam 1 menit" in msg
 
@@ -123,5 +127,6 @@ def test_stop_saat_detak_sedang_menulis_tetap_tercatat_rapi(tmp_path, monkeypatc
     time.sleep(0.1)       # stop() sudah dipanggil saat detak masih menulis
     release.set()
     stopper.join(2)
+    assert m._thread is not None
     m._thread.join(2)  # tulisan detak (bila ada) harus sudah terjadi sebelum diperiksa
     assert json.loads(path.read_text())[uptime.KEY_CLEAN] is True
