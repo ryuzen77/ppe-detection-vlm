@@ -324,3 +324,10 @@ def test_endpoint_uji(client):
     assert r.status_code == 200 and r.json()["ok"] is True
     r = client.post("/api/config/vlm/test", json={"provider": "deepseek", "model": "m"})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "missing_key"
+
+
+@pytest.mark.parametrize("provider", ["", "none", "  NONE "])
+def test_endpoint_uji_tanpa_penyedia_ditolak_400(client, provider):
+    # T65: dulu Choice.parse -> None lalu check_choice(None) -> AttributeError -> HTTP 500
+    r = client.post("/api/config/vlm/test", json={"role": "backup", "provider": provider, "model": "m"})
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "unknown_provider"
