@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 # Peluncur DEPRO (Digital Safety Protection) untuk Linux/macOS (padanan start_system.bat).
 # Environment Python 3.12 (docs/INSTALASI.md bagian 1). Urutan pencarian:
-#   1. SAFEGUARD_VENV bila diisi (folder venv atau env conda; mis. systemd)
+#   1. SAFEGUARD_VENV bila diisi (jalur env conda di lokasi tidak umum; mis. systemd)
 #   2. env conda DEPRO_CONDA_ENV (bawaan "ppe_detection") yang sedang aktif
 #   3. env conda itu di lokasi instal Miniconda/Anaconda yang umum
-#   4. venv lama ~/.venvs/apd_py312
+# Hanya env conda; venv lama (~/.venvs) sengaja tidak dicari supaya tidak bentrok.
 # Konfigurasi dibaca dari backend/.env.
 set -eu
 
@@ -21,8 +21,6 @@ else
         CANDIDATES="$CANDIDATES
 $base/envs/$DEPRO_CONDA_ENV"
     done
-    CANDIDATES="$CANDIDATES
-$HOME/.venvs/apd_py312"
 fi
 
 PYEXE=""
@@ -40,8 +38,8 @@ $CANDIDATES
 EOF
 
 if [ -z "$PYEXE" ]; then
-    echo "[GALAT] Environment Python tidak ditemukan (SAFEGUARD_VENV / env conda \"$DEPRO_CONDA_ENV\")." >&2
-    echo "Buat sekali dari akar repo:" >&2
+    echo "[GALAT] Env conda \"$DEPRO_CONDA_ENV\" tidak ditemukan atau paketnya belum lengkap." >&2
+    echo "Dari akar repo (lewati baris pertama bila env sudah ada):" >&2
     echo "  conda env create -f environment.yml" >&2
     echo "  conda activate $DEPRO_CONDA_ENV" >&2
     echo "  uv pip sync --torch-backend cu132 backend/requirements.lock" >&2
