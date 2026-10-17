@@ -6,6 +6,7 @@ import time
 import os
 import csv
 import io
+import itertools
 from datetime import date
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -133,6 +134,10 @@ class ReportManager:
         self.snapshots_dir = Path(snapshots_dir)
         self._opened = False
         self._open_lock = threading.Lock()
+        # Nama foto yang sedang ditulis thread VLM lain (T64): dipesan di bawah lock
+        # supaya dua inspeksi paralel tidak memilih nama yang sama.
+        self._snapshot_lock = threading.Lock()
+        self._snapshots_in_progress: set[str] = set()
 
     def open(self) -> "ReportManager":
         """Menyiapkan folder dan membawa skema ke versi terkini. Idempoten.
@@ -358,8 +363,25 @@ class ReportManager:
         """Nama foto bukti yang tertulis; kosong bila tanpa potongan atau gagal ditulis."""
         if crop_img is None or crop_img.size == 0:
             return ""
-        name = f"worker_{track_id}_{time.strftime('%Y%m%d_%H%M%S', now)}.jpg"
-        return name if self._write_snapshot(self.snapshots_dir / name, crop_img) else ""
+        name = self._reserve_snapshot_name(f"worker_{track_id}_{time.strftime('%Y%m%d_%H%M%S', now)}")
+        try:
+            return name if self._write_snapshot(self.snapshots_dir / name, crop_img) else ""
+        finally:
+            with self._snapshot_lock:
+                self._snapshots_in_progress.discard(name)
+
+    def _reserve_snapshot_name(self, stem: str) -> str:
+        """`<stem>.jpg`, atau `<stem>_2.jpg`, `_3`, ... bila nama itu sudah ada / sedang ditulis.
+
+        T64: ID pelacak + detik saja bisa kembar (dua inspeksi di detik yang sama) dan foto
+        pertama tertimpa, sehingga bukti audit menunjuk orang yang salah.
+        """
+        with self._snapshot_lock:
+            for n in itertools.count(1):
+                name = f"{stem}.jpg" if n == 1 else f"{stem}_{n}.jpg"
+                if name not in self._snapshots_in_progress and not (self.snapshots_dir / name).exists():
+                    self._snapshots_in_progress.add(name)
+                    return name
 
     def _insert_inspection(self, values: tuple) -> int:
         """Satu baris audit (urutan nilai = `_INSPECTION_COLUMNS`); mengembalikan id-nya."""
