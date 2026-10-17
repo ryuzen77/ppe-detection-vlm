@@ -79,10 +79,10 @@
             <ul class="ppe">
               {#each judged(rec) as item (item.key)}
                 {@const a = assessItem(item, rec.items[item.key])}
-                <li class="st-{a.status}" title="{item.label}: {a.text}">
-                  <PpeIcon name={item.icon_name} size={16} />
-                  {#if a.status === 'ok'}<Check size={12} strokeWidth={3} aria-hidden="true" />
-                  {:else}<X size={12} strokeWidth={3} aria-hidden="true" />{/if}
+                <li class="st-{a.status}" title="{item.label}: {a.text}" aria-label="{item.label}: {a.text}">
+                  <PpeIcon name={item.icon_name} size={20} />
+                  {#if a.status === 'ok'}<Check size={14} strokeWidth={2.75} aria-hidden="true" />
+                  {:else}<X size={14} strokeWidth={2.75} aria-hidden="true" />{/if}
                   <span class="sr">{item.label}: {a.text}</span>
                 </li>
               {/each}
@@ -186,8 +186,8 @@
   .ppe li {
     display: inline-flex;
     align-items: center;
-    gap: 1px;
-    padding: 2px 4px;
+    gap: 2px;
+    padding: 2px 5px;
     border-radius: var(--radius-sm);
   }
   .st-ok {

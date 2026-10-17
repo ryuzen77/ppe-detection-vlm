@@ -74,7 +74,6 @@
   h2.big {
     font-size: var(--text-2xl);
     letter-spacing: 0.01em;
-    text-transform: uppercase;
   }
   p {
     margin: 0;

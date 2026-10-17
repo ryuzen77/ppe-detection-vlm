@@ -100,14 +100,15 @@ describe('assessItem', () => {
     key: 'rompi', label: 'Rompi', short_label: 'Rompi', icon: '', icon_name: 'safety-vest', ok_label: 'Terpasang', fail_label: 'Tidak ada',
     reports_color: true, required: true, prohibited: false, qualifier: { key: 'is_valid_color', fail_label: 'Bukan hi-vis' },
   }
-  it('belum dinilai = pending (kuning)', () => {
-    expect(assessItem(rompi, undefined)).toEqual({ status: 'pending', text: 'Belum dinilai' })
+  it('belum dinilai = pending (netral saat default/siaga, kuning saat menilai)', () => {
+    expect(assessItem(rompi, undefined)).toEqual({ status: 'pending', text: 'Belum dinilai', tone: 'neutral' })
+    expect(assessItem(rompi, undefined, 'analyzing')).toEqual({ status: 'pending', text: 'Belum dinilai', tone: 'warn' })
   })
   it('lengkap menampilkan warna bila item melaporkan warna', () => {
-    expect(assessItem(rompi, { detected: true, color: 'orange', description: '', is_valid_color: true })).toEqual({ status: 'ok', text: 'orange' })
+    expect(assessItem(rompi, { detected: true, color: 'orange', description: '', is_valid_color: true })).toEqual({ status: 'ok', text: 'orange', tone: 'ok' })
   })
   it('terdeteksi tetapi syarat tambahan gagal', () => {
-    expect(assessItem(rompi, { detected: true, color: 'biru', description: '', is_valid_color: false })).toEqual({ status: 'missing', text: 'Bukan hi-vis' })
+    expect(assessItem(rompi, { detected: true, color: 'biru', description: '', is_valid_color: false })).toEqual({ status: 'missing', text: 'Bukan hi-vis', tone: 'danger' })
   })
   it('tidak terdeteksi', () => {
     expect(assessItem(rompi, { detected: false, color: '', description: '' }).status).toBe('missing')
@@ -120,14 +121,15 @@ describe('assessItem', () => {
   }
 
   it('larangan: belum dinilai = pending', () => {
-    expect(assessItem(larangan, null)).toEqual({ status: 'pending', text: 'Belum dinilai' })
-    expect(assessItem(larangan, undefined)).toEqual({ status: 'pending', text: 'Belum dinilai' })
+    expect(assessItem(larangan, null)).toEqual({ status: 'pending', text: 'Belum dinilai', tone: 'neutral' })
+    expect(assessItem(larangan, undefined)).toEqual({ status: 'pending', text: 'Belum dinilai', tone: 'neutral' })
   })
 
   it('larangan: terdeteksi (melanggar) = missing ("Terlihat")', () => {
     expect(assessItem(larangan, { detected: true, color: '', description: '' })).toEqual({
       status: 'missing',
       text: 'Terlihat',
+      tone: 'danger',
     })
   })
 
@@ -135,14 +137,17 @@ describe('assessItem', () => {
     expect(assessItem(larangan, { detected: false, color: '', description: '' })).toEqual({
       status: 'ok',
       text: 'Tidak Ada',
+      tone: 'ok',
     })
     expect(assessItem(larangan, { detected: null as any, color: '', description: '' })).toEqual({
       status: 'ok',
       text: 'Tidak Ada',
+      tone: 'ok',
     })
     expect(assessItem(larangan, {} as any)).toEqual({
       status: 'ok',
       text: 'Tidak Ada',
+      tone: 'ok',
     })
   })
 })

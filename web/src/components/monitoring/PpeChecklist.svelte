@@ -1,18 +1,20 @@
 <script lang="ts">
-  // Checklist APD per item: hijau = ada, merah = kurang, kuning = belum dinilai
-  // (keputusan pengguna). Satu baris per item, tanpa kotak berlapis.
+  // Checklist APD per item: hijau = ada, merah = kurang, kuning = belum dinilai (saat menilai/menunggu),
+  // netral = saat siaga (keputusan T50). Satu baris per item, tanpa kotak berlapis.
   import Check from '@lucide/svelte/icons/check'
   import Minus from '@lucide/svelte/icons/minus'
   import X from '@lucide/svelte/icons/x'
   import type { InspectionResult, PpeItem } from '../../lib/api/types'
+  import type { GateKind } from '../../lib/gate'
   import { CHECKLIST } from '../../lib/messages'
   import { assessItem } from '../../lib/ppe'
   import PpeIcon from '../PpeIcon.svelte'
 
-  let { items, result, decidedBy }: {
+  let { items, result, decidedBy, gateKind = 'standby' }: {
     items: PpeItem[]
     result: InspectionResult | null
     decidedBy: string
+    gateKind?: GateKind
   } = $props()
 </script>
 
@@ -25,8 +27,8 @@
   </header>
   <ul>
     {#each items as item (item.key)}
-      {@const a = assessItem(item, result?.items?.[item.key])}
-      <li class="st-{a.status}">
+      {@const a = assessItem(item, result?.items?.[item.key], gateKind)}
+      <li class="st-{a.status} tone-{a.tone}">
         <span class="item-icon"><PpeIcon name={item.icon_name} /></span>
         <span class="name">{item.label}</span>
         <span class="state">
@@ -60,7 +62,6 @@
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text-muted);
-    text-transform: uppercase;
     letter-spacing: 0.06em;
   }
   .backup {
@@ -99,15 +100,21 @@
     gap: 6px;
     font-size: var(--text-sm);
   }
+  .tone-ok .state,
   .st-ok .state {
     color: var(--ok);
   }
+  .tone-danger .state,
   .st-missing .state {
     color: var(--danger);
     font-weight: 600;
   }
+  .tone-warn .state,
   .st-pending .state {
     color: var(--warn);
+  }
+  .tone-neutral .state {
+    color: var(--text-muted);
   }
   .empty {
     color: var(--text-faint);

@@ -41,7 +41,7 @@
   <VideoPanel onPickCamera={pickCamera} />
   <aside>
     <DecisionPanel {gate} />
-    <PpeChecklist items={catalog.active} {result} decidedBy={result?.decided_by ?? ''} />
+    <PpeChecklist items={catalog.active} {result} decidedBy={result?.decided_by ?? ''} gateKind={gate.kind} />
     <RecentHistory records={t?.history ?? []} />
   </aside>
 </div>

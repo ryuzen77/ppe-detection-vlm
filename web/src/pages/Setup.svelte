@@ -71,7 +71,7 @@
         </div>
 
         <div class="input-group">
-          <label for="confirm">{AUTH.repeatNewPassword}</label>
+          <label for="confirm">{AUTH.repeatPassword}</label>
           <input type="password" id="confirm" bind:value={confirmPassword} disabled={loading} />
         </div>
         

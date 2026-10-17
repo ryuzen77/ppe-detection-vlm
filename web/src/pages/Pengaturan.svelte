@@ -140,12 +140,24 @@
     padding: var(--space-8) var(--space-4);
     display: flex;
     justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
   }
   .content {
-    width: min(600px, 100%);
+    width: 100%;
+    max-width: 600px;
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
+  }
+  @media (min-width: 1280px) {
+    .content {
+      max-width: 1360px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-6);
+      align-items: start;
+    }
   }
   .card {
     padding: var(--space-6);

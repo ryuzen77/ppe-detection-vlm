@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidZoneBand, zoneLineY } from './zone';
+import { isValidZoneBand, zoneLineY, ratioToPercent, percentToRatio } from './zone';
 
 describe('zone module', () => {
   it('isValidZoneBand', () => {
@@ -12,5 +12,18 @@ describe('zone module', () => {
 
   it('zoneLineY computes correctly', () => {
     expect(zoneLineY(0.5, 10, 200)).toBe(110);
+  });
+
+  it('ratioToPercent dan percentToRatio konversi timbal balik dengan benar', () => {
+    expect(ratioToPercent(0.7)).toBe(70);
+    expect(ratioToPercent(0.85)).toBe(85);
+    expect(ratioToPercent(0)).toBe(0);
+    expect(ratioToPercent(1)).toBe(100);
+
+    expect(percentToRatio(70)).toBe(0.7);
+    expect(percentToRatio(85)).toBe(0.85);
+    expect(percentToRatio(100)).toBe(1);
+    expect(percentToRatio(-5)).toBe(0);
+    expect(percentToRatio(120)).toBe(1);
   });
 });

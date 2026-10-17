@@ -119,9 +119,11 @@
   }
 </script>
 
-{#if loading}
-  <p>{VLM_SETTINGS.loading}</p>
-{:else if data}
+<section class="card">
+  <h2>{SETTINGS_TAB.vlm}</h2>
+  {#if loading}
+    <p>{VLM_SETTINGS.loading}</p>
+  {:else if data}
   <div class="header-info">
     <p class="source-info">
       {VLM_SETTINGS.activeSource}: <strong>{data.current.primary?.source === 'dashboard' ? VLM_SETTINGS.sourceDashboard : VLM_SETTINGS.sourceEnv}</strong>
@@ -266,9 +268,21 @@
     {/if}
   </div>
 
-{/if}
+  {/if}
+</section>
 
 <style>
+  .card {
+    padding: var(--space-6);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    color: var(--text);
+  }
+  h2 {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-lg);
+  }
   .header-info {
     margin-bottom: var(--space-4);
   }

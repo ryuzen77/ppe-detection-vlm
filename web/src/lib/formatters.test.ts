@@ -17,3 +17,48 @@ describe('formatServerDate', () => {
     expect(formatServerDate('not-a-date')).toBe('not-a-date')
   })
 })
+
+import { formatDeviceMeta } from './formatters'
+import type { CameraDevice } from './api/types'
+
+describe('formatDeviceMeta', () => {
+  it('menghasilkan Kamera 1 · kemampuan belum dipindai untuk index 0 belum dipindai', () => {
+    const dev: CameraDevice = {
+      index: 0,
+      name: 'Integrated Webcam',
+      available: true,
+      scanned: false,
+      in_use: false,
+      selected_mode: null,
+      modes: [],
+    }
+    expect(formatDeviceMeta(dev)).toBe('Kamera 1 · kemampuan belum dipindai')
+  })
+
+  it('menghasilkan informasi mode bila mode terpilih ada', () => {
+    const dev: CameraDevice = {
+      index: 1,
+      name: 'USB Camera',
+      available: true,
+      scanned: true,
+      in_use: false,
+      selected_mode: { width: 1280, height: 720, fps: 30, fourcc: 'MJPG' },
+      modes: [],
+    }
+    expect(formatDeviceMeta(dev)).toBe('Kamera 2 · 1280×720 @30 fps')
+  })
+
+  it('menghasilkan tidak tersedia bila sudah dipindai tapi tidak ada mode yang cocok', () => {
+    const dev: CameraDevice = {
+      index: 2,
+      name: 'Faulty Camera',
+      available: false,
+      scanned: true,
+      in_use: false,
+      selected_mode: null,
+      modes: [],
+    }
+    expect(formatDeviceMeta(dev)).toBe('Kamera 3 · tidak tersedia')
+  })
+})
+
