@@ -1,5 +1,5 @@
 # Lint + tes di Linux dan Windows dari dependensi terkunci.
-# Catatan: repo belum punya remote; workflow ini aktif begitu didorong ke GitHub.
+# Berjalan di GitHub (repo privat) setiap push dan pull request.
 name: CI
 
 on:
@@ -63,4 +63,6 @@ jobs:
         run: npm test
       - run: npm run build
       - name: web/dist sesuai sumber
-        run: git diff --exit-code -- dist || (echo "web/dist usang: jalankan 'npm run build' lalu commit" && exit 1)
+        # Blok "|": teks "usang: jalankan" tanpa kutip membuat YAML tidak sah (CI tidak pernah jalan)
+        run: |
+          git diff --exit-code -- dist || (echo "web/dist usang: jalankan 'npm run build' lalu commit" && exit 1)
