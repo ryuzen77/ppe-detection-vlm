@@ -2,13 +2,13 @@
 # Peluncur DEPRO (Digital Safety Protection) untuk Linux/macOS (padanan start_system.bat).
 # Environment Python 3.12 (docs/INSTALASI.md bagian 1). Urutan pencarian:
 #   1. SAFEGUARD_VENV bila diisi (folder venv atau env conda; mis. systemd)
-#   2. env conda DEPRO_CONDA_ENV (bawaan "apd_detection") yang sedang aktif
+#   2. env conda DEPRO_CONDA_ENV (bawaan "ppe_detection") yang sedang aktif
 #   3. env conda itu di lokasi instal Miniconda/Anaconda yang umum
 #   4. venv lama ~/.venvs/apd_py312
 # Konfigurasi dibaca dari backend/.env.
 set -eu
 
-DEPRO_CONDA_ENV="${DEPRO_CONDA_ENV:-apd_detection}"
+DEPRO_CONDA_ENV="${DEPRO_CONDA_ENV:-ppe_detection}"
 
 if [ -n "${SAFEGUARD_VENV:-}" ]; then
     CANDIDATES="$SAFEGUARD_VENV"
@@ -29,12 +29,12 @@ PYEXE=""
 # Satu kandidat per baris (jalur boleh berspasi)
 while IFS= read -r env_dir; do
     [ -n "$env_dir" ] && [ -x "$env_dir/bin/python" ] || continue
-    # Env yang bukan Python 3.12 (mis. env lama yang belum dibuat ulang) dilewati
-    if "$env_dir/bin/python" -c "import sys; sys.exit(sys.version_info[:2] != (3, 12))" >/dev/null 2>&1; then
+    # Env yang bukan Python 3.12 atau belum berisi paket (uv pip sync belum selesai) dilewati
+    if "$env_dir/bin/python" -c "import sys, importlib.util as u; sys.exit(sys.version_info[:2] != (3, 12) or not all(u.find_spec(m) for m in ('torch', 'fastapi')))" >/dev/null 2>&1; then
         PYEXE="$env_dir/bin/python"
         break
     fi
-    echo "[INFO] Dilewati, bukan Python 3.12: $env_dir/bin/python" >&2
+    echo "[INFO] Dilewati, bukan Python 3.12 atau paket belum terpasang: $env_dir/bin/python" >&2
 done <<EOF
 $CANDIDATES
 EOF

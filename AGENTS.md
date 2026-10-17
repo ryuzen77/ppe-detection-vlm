@@ -218,7 +218,7 @@ risiko (§2.2a), bukan dirombak sekaligus di luar task.
 ## 6. Perintah
 
 Environment Python (sekali): lihat [docs/INSTALASI.md](docs/INSTALASI.md) §1
-(Miniconda: `conda env create -f environment.yml`, `conda activate apd_detection`, lalu
+(Miniconda: `conda env create -f environment.yml`, `conda activate ppe_detection`, lalu
 `uv pip sync --torch-backend cu132 backend/requirements-dev.lock`; venv lama tetap jalan).
 
 ```bash

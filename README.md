@@ -34,7 +34,7 @@ Kamera → YOLO26 pose (tubuh utuh?) → VLM menilai APD → lampu · suara · a
 | OS | Windows 10/11 (utama) atau Linux |
 | GPU | NVIDIA, disarankan VRAM 8 GB (untuk VLM cadangan lokal). Tanpa GPU NVIDIA belum diuji |
 | Driver NVIDIA | `nvidia-smi` menampilkan **CUDA Version 13.2 atau lebih baru**. CUDA Toolkit **tidak** perlu dipasang |
-| Python | Lewat [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) (environment `apd_detection`, Python 3.12) |
+| Python | Lewat [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) (environment `ppe_detection`, Python 3.12) |
 | Kamera | Webcam USB (diuji dengan Logitech C920) |
 | Internet | Untuk VLM utama (cloud) dan unduhan pertama (paket Python ±4 GB, bobot YOLO 24 MB) |
 | Opsional | [Ollama](https://ollama.com) untuk VLM cadangan lokal; relay USB/ESP32 untuk lampu fisik |
@@ -55,7 +55,7 @@ nvidia-smi                      # baris "CUDA Version" harus 13.2 atau lebih bar
 
 ```powershell
 conda env create -f environment.yml
-conda activate apd_detection
+conda activate ppe_detection
 ```
 
 ### 3. Pasang paket Python dari berkas terkunci
@@ -65,7 +65,7 @@ uv pip sync --torch-backend cu132 backend/requirements.lock
 ```
 
 Perintah ini memasang PyTorch versi CUDA beserta runtime CUDA-nya (tanpa CUDA
-Toolkit) ke environment `apd_detection` yang sedang aktif. Unduhan pertama ±4 GB dan bisa
+Toolkit) ke environment `ppe_detection` yang sedang aktif. Unduhan pertama ±4 GB dan bisa
 makan 20–30 menit. Untuk pengembangan (pytest, ruff), ganti dengan
 `backend/requirements-dev.lock`.
 
@@ -94,7 +94,7 @@ key, gerbang langsung memakai VLM cadangan ini.
 ## Menjalankan
 
 ```powershell
-conda activate apd_detection
+conda activate ppe_detection
 python -m backend               # atau .\start_system.bat (Linux: ./start_system.sh)
 ```
 
@@ -104,7 +104,7 @@ python -m backend               # atau .\start_system.bat (Linux: ./start_system
 3. Hentikan server dengan `Ctrl+C`.
 
 Saat pertama kali dijalankan, bobot YOLO (`yolo26s-pose.pt`) diunduh otomatis.
-`start_system.bat` / `start_system.sh` menemukan environment `apd_detection` sendiri dan
+`start_system.bat` / `start_system.sh` menemukan environment `ppe_detection` sendiri dan
 menyalakan ulang server bila crash; cocok untuk autostart (lihat
 [docs/INSTALASI.md](docs/INSTALASI.md)).
 
@@ -115,7 +115,8 @@ menyalakan ulang server bila crash; cocok untuk autostart (lihat
 | `torch.cuda.is_available()` = `False` | Driver NVIDIA terlalu lama atau tidak ada. Perbarui driver sampai `nvidia-smi` menampilkan CUDA 13.2+ |
 | `torch==…+cu132` tidak ditemukan | Flag `--torch-backend cu132` terlupa (sengaja gagal supaya torch CPU tidak terpasang diam-diam) |
 | `conda activate` tidak dikenal di PowerShell | Jalankan sekali `conda init powershell`, lalu buka ulang PowerShell |
-| `uv pip sync` menolak memasang ke env `base` | Aktifkan dulu `conda activate apd_detection` |
+| `uv pip sync` menolak memasang ke env `base` | Aktifkan dulu `conda activate ppe_detection` |
+| `FileNotFoundError` di `ssl.py`, atau unduhan uv gagal TLS | Shell masih mewarisi `SSL_CERT_FILE` dari env conda yang sudah dihapus. Buka shell baru lalu `conda activate ppe_detection`, atau kosongkan `SSL_CERT_FILE` & `SSL_CERT_DIR` |
 | VLM cadangan lambat (> 6 dtk per pekerja) | Laptop dengan GPU ganda: pakai mode dGPU dan tutup aplikasi lain. Rincian di [docs/INSTALASI.md](docs/INSTALASI.md) |
 
 ## Pengembangan
