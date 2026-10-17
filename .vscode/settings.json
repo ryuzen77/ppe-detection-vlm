@@ -1,10 +1,15 @@
 {
   "python.defaultInterpreterPath": "${env:USERPROFILE}\\miniconda3\\envs\\ppe_detection\\python.exe",
+  "python.analysis.typeCheckingMode": "standard",
   "python.analysis.extraPaths": [
-    "./backend"
+    "./backend",
+    "./tests",
+    "./tools"
   ],
   "python.autoComplete.extraPaths": [
     "./backend"
   ],
-  "code-runner.runInTerminal": true
+  "code-runner.runInTerminal": true,
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda"
 }

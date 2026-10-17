@@ -72,6 +72,8 @@ async def list_vlm_providers():
 def test_vlm_provider(body: TestBody):
     """1 ping + 1 gambar sintetis ke penyedia itu (memakai kuota penyedia itu)."""
     choice = Choice.parse(body.model_dump())
+    if choice is None:   # penyedia kosong / "none": tidak ada yang bisa diuji (dulu HTTP 500, T65)
+        raise _error(400, "unknown_provider", messages.VLM_SELECT_UNKNOWN_PROVIDER.format(provider=body.provider))
     try:
         vlm_selection.check_choice(choice, confirm_unvalidated=True)
     except SelectionError as e:
