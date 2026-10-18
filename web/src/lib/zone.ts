@@ -7,3 +7,15 @@ export function isValidZoneBand(yMin: number, yMax: number, minHeight: number): 
 export function zoneLineY(y: number, offsetY: number, drawH: number): number {
   return offsetY + (y * drawH);
 }
+
+/** Konversi rasio 0..1 ke persentase bulat (0..100) untuk label operator */
+export function ratioToPercent(ratio: number): number {
+  return Math.round(ratio * 100);
+}
+
+/** Konversi persentase 0..100 ke rasio desimal 0..1 */
+export function percentToRatio(percent: number): number {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  return Math.round(clamped) / 100;
+}
+

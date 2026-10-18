@@ -3,11 +3,21 @@
   import type { Zone } from '../../lib/api/types'
   import { SETTINGS_TAB, withError } from '../../lib/messages'
   import { STAND_ZONE } from '../../lib/settings'
-  import { isValidZoneBand } from '../../lib/zone'
+  import { isValidZoneBand, ratioToPercent, percentToRatio } from '../../lib/zone'
 
   let zone = $state<Zone | null>(null)
   let errorMsg = $state('')
   let successMsg = $state('')
+
+  function onTopNumberInput(val: number) {
+    if (!zone || !Number.isFinite(val)) return
+    zone.y_min = percentToRatio(val)
+  }
+
+  function onBottomNumberInput(val: number) {
+    if (!zone || !Number.isFinite(val)) return
+    zone.y_max = percentToRatio(val)
+  }
 
   $effect(() => {
     api.zone().then(z => zone = z).catch(() => {})
@@ -77,14 +87,71 @@
     
     <div class="zone-controls" class:disabled={!zone.enabled}>
       <div class="slider-group">
-        <label>
-          {SETTINGS_TAB.sliderTop(zone.y_min.toFixed(2))}
-          <input type="range" min="0" max="1" step={STAND_ZONE.sliderStep} bind:value={zone.y_min} onchange={saveRange} disabled={!zone.enabled} />
-        </label>
-        <label>
-          {SETTINGS_TAB.sliderBottom(zone.y_max.toFixed(2))}
-          <input type="range" min="0" max="1" step={STAND_ZONE.sliderStep} bind:value={zone.y_max} onchange={saveRange} disabled={!zone.enabled} />
-        </label>
+        <div class="control-row">
+          <label for="zone-top-range">
+            {SETTINGS_TAB.zoneTopLabel(ratioToPercent(zone.y_min))}
+          </label>
+          <div class="inputs-pair">
+            <input
+              id="zone-top-range"
+              type="range"
+              min="0"
+              max="1"
+              step={STAND_ZONE.sliderStep}
+              bind:value={zone.y_min}
+              onchange={saveRange}
+              disabled={!zone.enabled}
+              aria-label={SETTINGS_TAB.zoneTopLabel(ratioToPercent(zone.y_min))}
+            />
+            <div class="number-input-wrap">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={ratioToPercent(zone.y_min)}
+                oninput={(e) => onTopNumberInput(e.currentTarget.valueAsNumber)}
+                onchange={saveRange}
+                disabled={!zone.enabled}
+                aria-label={SETTINGS_TAB.zoneTopPercentAria}
+              />
+              <span class="unit">%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label for="zone-bottom-range">
+            {SETTINGS_TAB.zoneBottomLabel(ratioToPercent(zone.y_max))}
+          </label>
+          <div class="inputs-pair">
+            <input
+              id="zone-bottom-range"
+              type="range"
+              min="0"
+              max="1"
+              step={STAND_ZONE.sliderStep}
+              bind:value={zone.y_max}
+              onchange={saveRange}
+              disabled={!zone.enabled}
+              aria-label={SETTINGS_TAB.zoneBottomLabel(ratioToPercent(zone.y_max))}
+            />
+            <div class="number-input-wrap">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={ratioToPercent(zone.y_max)}
+                oninput={(e) => onBottomNumberInput(e.currentTarget.valueAsNumber)}
+                onchange={saveRange}
+                disabled={!zone.enabled}
+                aria-label={SETTINGS_TAB.zoneBottomPercentAria}
+              />
+              <span class="unit">%</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="calibrate-section">
@@ -139,15 +206,44 @@
     flex-direction: column;
     gap: var(--space-3);
   }
-  .slider-group label {
+  .control-row {
     display: flex;
     flex-direction: column;
+    gap: var(--space-1);
+  }
+  .control-row label {
     font-size: var(--text-sm);
     color: var(--text-muted);
   }
-  .slider-group input {
-    margin-top: var(--space-1);
-    width: 100%;
+  .inputs-pair {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .inputs-pair input[type="range"] {
+    flex: 1;
+    min-width: 0;
+  }
+  .number-input-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+  .number-input-wrap input[type="number"] {
+    width: 60px;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .unit {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
   .calibrate-section {
     display: flex;

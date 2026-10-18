@@ -42,11 +42,13 @@
     </span>
   </div>
 
-  <nav aria-label={NAV.label}>
-    {#each ROUTES as route (route)}
-      <a href={href(route)} aria-current={router.current === route ? 'page' : undefined}>{NAV[route]}</a>
-    {/each}
-  </nav>
+  {#if session.authenticated && !session.setupRequired}
+    <nav aria-label={NAV.label}>
+      {#each ROUTES as route (route)}
+        <a href={href(route)} aria-current={router.current === route ? 'page' : undefined}>{NAV[route]}</a>
+      {/each}
+    </nav>
+  {/if}
 
   <div class="status">
     {#if router.current !== 'monitoring' && gate.kind !== 'offline'}
@@ -114,7 +116,6 @@
     font-size: 0.625rem;
     color: var(--text-muted);
     letter-spacing: 0.06em;
-    text-transform: uppercase;
   }
   nav {
     display: flex;

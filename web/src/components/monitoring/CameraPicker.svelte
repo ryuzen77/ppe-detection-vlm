@@ -6,6 +6,7 @@
   import { api } from '../../lib/api/client'
   import type { CameraCatalog, CameraDevice } from '../../lib/api/types'
   import { CAMERA_PICKER as TEXT, modeLabel, withError } from '../../lib/messages'
+  import { formatDeviceMeta } from '../../lib/formatters'
   import { CAMERA_POLL } from '../../lib/settings'
 
   let { open = $bindable(false) }: { open?: boolean } = $props()
@@ -32,12 +33,6 @@
     if (data.scanning) return TEXT.scanning
     if (data.last_scan_time && data.last_scan_time !== NEVER_SCANNED) return TEXT.lastScan(data.last_scan_time)
     return TEXT.scanOptional
-  }
-
-  function deviceMeta(dev: CameraDevice): string {
-    const parts = [TEXT.index(dev.index)]
-    parts.push(dev.selected_mode ? modeLabel(dev.selected_mode) : dev.scanned === false ? TEXT.notScanned : TEXT.unavailable)
-    return parts.join(' · ')
   }
 
   async function refresh(): Promise<CameraCatalog | null> {
@@ -148,7 +143,7 @@
       >
         <span class="name">{dev.name || TEXT.deviceFallback(dev.index)}</span>
         <span class="meta">
-          {deviceMeta(dev)}
+          {formatDeviceMeta(dev)}
           {#if dev.index === activeIndex} · <span class="active">{TEXT.inUse}</span>{/if}
           {#if catalog?.saved?.name && dev.name === catalog.saved.name && dev.index !== activeIndex} · {TEXT.lastUsed}{/if}
         </span>
