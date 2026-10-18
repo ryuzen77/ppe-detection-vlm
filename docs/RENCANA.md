@@ -500,6 +500,28 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
      ulang dengan foto nyata di T34a/uji relawan. Konsekuensi untuk T34b: jumlah pekerja terdaftar dipantau — bila jauh
      melewati batas yang teruji (nilai di `config.py`), admin diberi peringatan karena orang tak dikenali naik tajam
      (galeri 3.305 di LFW: separuh pekerja tak dikenali); saat itu evaluasi ulang (model GPU atau galeri per shift).
+   - **Kebijakan pendaftaran (pengguna 18-10):** pekerja tanpa masker; **kacamata biasa boleh dan WAJIB didaftarkan
+     dengan kacamata**; **kacamata hitam tidak boleh**. Usul T34b: simpan beberapa templat per pekerja (mis. dengan &
+     tanpa kacamata, dengan & tanpa helm) dan ambil skor tertinggi, bukan satu templat rata-rata.
+   - **Hasil T34a (18-10, kamera Logitech HD Pro C920 1080p, `tools/fr_eval/face_probe.py`, 1 orang, Intel 0095,
+     acuan = kondisi pertama tanpa helm, ambang 0,55; median per kondisi):**
+
+     | Resolusi | Kondisi | Wajah terdeteksi | Lebar wajah / jarak mata | Mirip acuan | Frame ≥ 0,55 |
+     | :-- | :-- | --: | --: | --: | --: |
+     | 1920×1080 | tanpa helm (acuan) | 100% | 56 / 26 px | 0,87 | 90% |
+     | 1920×1080 | helm | 97% | 66 / 30 px | 0,79 | 93% |
+     | 1920×1080 | kacamata | 100% | 71 / 33 px | 0,55 | 47% |
+     | 1920×1080 | helm + kacamata | 97% | 76 / 33 px | 0,40 | 0% |
+     | 864×480 | tanpa helm (acuan) | 100% | 43 / 20 px | 0,96 | 100% |
+     | 864×480 | helm | 100% | 35 / 16 px | 0,73 | 100% |
+     | 864×480 | kacamata | 99% | 40 / 18 px | 0,62 | 79% |
+     | 864×480 | helm + kacamata | 100% | 40 / 18 px | 0,63 | 100% |
+
+     Helm tidak menurunkan skor; kacamata yang tidak didaftarkan menurunkan tajam (→ kebijakan di atas). Di 480p jarak
+     mata 16–20 px (di bawah ±30 px yang umum dibutuhkan FR); skor tinggi di 480p tidak berarti aman karena acuan diambil
+     di momen yang sama dan risiko orang LAIN mirip naik pada wajah kecil → **FR memakai potongan kepala dari frame
+     resolusi penuh** (YOLO boleh tetap di frame kecil). YuNet frame penuh 1080p ±43 ms → di gerbang hanya pada potongan.
+     Laju kamera 6–10 fps di 720p/1080p (ruangan redup; kamera menurunkan fps saat gelap) perlu dicek dengan cahaya cukup.
 1. **T34a — uji ukuran wajah (fisik, perlu pengguna di depan kamera):** ukur piksel wajah dari posisi kamera
    sekarang dengan/tanpa helm, masker, kacamata; ukur waktu YuNet + SFace di CPU. **Tidak menyimpan data wajah.**
    Hasilnya menentukan kamera cukup atau perlu tambahan.

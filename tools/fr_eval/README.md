@@ -12,7 +12,7 @@ dlib dikunci ke build CPU; build bawaan conda-forge menarik CUDA/cuDNN (GB).
 ```bash
 conda create -n fr_eval -c conda-forge --override-channels python=3.12 "dlib=20.0.1=cpu_*" uv
 conda activate fr_eval
-uv pip install numpy opencv-python-headless onnxruntime openvino
+uv pip install numpy opencv-python onnxruntime openvino
 ```
 
 Selalu jalankan setelah `conda activate fr_eval`: memanggil `python.exe` env langsung tanpa
@@ -67,6 +67,18 @@ align + entri model).
 
 ```bash
 python tools/fr_eval/eval_openset.py --only sface intel_0095 sface_int8 --distractors 0 3000
+```
+
+## Uji wajah di kamera gerbang (T34a)
+
+Server gerbang harus mati (kamera hanya untuk satu proses). Jendela pratinjau
+(cermin) menampilkan hitung mundur, kotak wajah, ukuran wajah, dan skor kemiripan;
+kondisi pertama = acuan pendaftaran sementara (hanya di memori). Tidak ada foto
+atau embedding yang disimpan. Butuh `opencv-python` (bukan `-headless`) di env `fr_eval`.
+
+```bash
+python tools/fr_eval/face_probe.py --size 1920x1080
+python tools/fr_eval/face_probe.py --size 854x480 --conditions "kacamata,helm + kacamata,helm"
 ```
 
 ## Uji nyata (langkah 3b)

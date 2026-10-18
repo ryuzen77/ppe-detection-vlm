@@ -159,3 +159,12 @@ def open_set_rates(
         "wrong_name": float(np.mean(accepted & (mated_best != truth))),
         "fnir": float(1.0 - np.mean(correct)),
     }
+
+
+def interocular_px(points: np.ndarray) -> float:
+    """Jarak antar-mata (landmark 0 & 1 urutan YuNet): ukuran wajah yang tidak terpengaruh helm/rambut."""
+    return float(np.linalg.norm(points[0] - points[1]))
+
+
+def share_at_or_above(values: list[float], threshold: float) -> float:
+    return float(np.mean(np.asarray(values) >= threshold)) if values else 0.0

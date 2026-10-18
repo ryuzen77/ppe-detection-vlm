@@ -135,3 +135,10 @@ def test_templat_galeri_rata_rata_ternormalisasi():
     emb = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
     templates = metrics.gallery_templates(emb, [np.array([0, 1]), np.array([2])])
     assert np.allclose(templates, [[2**-0.5, 2**-0.5], [1.0, 0.0]])
+
+
+def test_jarak_antar_mata_dan_porsi_lolos_ambang():
+    points = np.array([[10.0, 20.0], [40.0, 60.0], [0, 0], [0, 0], [0, 0]])
+    assert metrics.interocular_px(points) == 50.0
+    assert metrics.share_at_or_above([0.4, 0.55, 0.7, 0.2], 0.55) == 0.5
+    assert metrics.share_at_or_above([], 0.55) == 0.0

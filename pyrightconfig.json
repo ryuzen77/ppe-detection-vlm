@@ -1,6 +1,6 @@
 {
   "include": ["backend", "tests", "tools", "scripts"],
-  "exclude": ["**/__pycache__", "web", "data", "iot", "picture_test", "tools/fr_eval/bench_speed.py", "tools/fr_eval/eval_lfw.py", "tools/fr_eval/eval_openset.py", "tools/fr_eval/runtimes.py"],
+  "exclude": ["**/__pycache__", "web", "data", "iot", "picture_test", "tools/fr_eval/bench_speed.py", "tools/fr_eval/eval_lfw.py", "tools/fr_eval/eval_openset.py", "tools/fr_eval/face_probe.py", "tools/fr_eval/runtimes.py"],
   "extraPaths": ["backend", "tests", "tools", "tools/fr_eval"],
   "pythonVersion": "3.12",
   "typeCheckingMode": "standard"
