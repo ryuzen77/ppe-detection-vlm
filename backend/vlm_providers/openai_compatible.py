@@ -64,12 +64,15 @@ class OpenAICompatibleProvider(VLMProvider):
             # pekerja pertama setelah gerbang sepi menunggu ~38 dtk (terukur T22)
             # dan ditolak karena timeout. keep_alive=-1 pada API asli Ollama
             # memuat model sekarang dan menahannya selama server Ollama hidup.
-            response = self._client.post(f"{self._ollama_root()}/api/generate",
-                                         json={"model": self.model, "keep_alive": -1},
-                                         timeout=self.warmup_timeout)
-            if response.status_code >= 400:
-                raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
+            self._keep_alive(-1)
         self.ping()
+
+    def _keep_alive(self, seconds: int):
+        """API asli Ollama: -1 = muat & tahan di GPU, 0 = keluarkan dari GPU sekarang."""
+        response = self._client.post(f"{self._ollama_root()}/api/generate",
+                                     json={"model": self.model, "keep_alive": seconds}, timeout=self.warmup_timeout)
+        if response.status_code >= 400:
+            raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
 
     def _ollama_root(self) -> str:
         return self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
@@ -91,12 +94,14 @@ class OpenAICompatibleProvider(VLMProvider):
         """Bongkar lalu muat lagi; Ollama mengulang pencarian GPU saat memuat."""
         if self.name != "ollama":
             return
-        root = self._ollama_root()
-        for keep_alive in (0, -1):
-            response = self._client.post(f"{root}/api/generate", json={"model": self.model, "keep_alive": keep_alive},
-                                         timeout=self.warmup_timeout)
-            if response.status_code >= 400:
-                raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
+        for seconds in (0, -1):
+            self._keep_alive(seconds)
+
+    def unload(self):
+        """Cadangan dimatikan (T70): model keluar dari VRAM sekarang, bukan menunggu Ollama restart
+        (model dimuat dengan keep_alive=-1, jadi tanpa ini tetap di GPU selamanya)."""
+        if self.name == "ollama":
+            self._keep_alive(0)
 
     def ping(self) -> str:
         return self._chat({

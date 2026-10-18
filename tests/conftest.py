@@ -36,6 +36,8 @@ for _nama in PROVIDER_KEY_ENVS:
 # Tidak membuka port serial / HTTP ke lampu gerbang sungguhan
 os.environ["IOT_ENABLED"] = "false"
 os.environ["ADMIN_TOKEN"] = ""
+# Nama kamera gerbang di backend/.env membuat tes autostart bergantung pada mesin
+os.environ["CAMERA_NAME"] = ""
 # Kunci templat wajah asli di backend/.env tidak pernah dipakai tes; tes yang butuh
 # kunci memberi kunci uji sendiri (T34b)
 os.environ["FACE_DATA_KEY"] = ""

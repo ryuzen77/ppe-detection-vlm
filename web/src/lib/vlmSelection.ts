@@ -34,3 +34,22 @@ export function handleSelectionError(code: string, message: string): ActionRequi
   // unsafe_model, missing_key, engine_failed, etc.
   return { type: 'error', code, message, isWarn: false }
 }
+
+export type BackupChange = 'unchanged' | 'disable' | 'enable_local' | 'other'
+
+/**
+ * Jenis perubahan VLM cadangan saat admin menekan Terapkan (T70).
+ * `disable` perlu konfirmasi (model dikeluarkan dari GPU, pekerja menunggu bila VLM utama gangguan);
+ * `enable_local` butuh waktu menyiapkan model di GPU, jadi teks menunggunya berbeda.
+ */
+export function backupChange(
+  current: { provider: string; model: string } | null,
+  nextProvider: string,
+  nextModel: string,
+  providers: { name: string; is_local: boolean }[],
+): BackupChange {
+  const same = (current?.provider ?? '') === nextProvider && (current?.model ?? '') === (nextProvider ? nextModel : '')
+  if (same) return 'unchanged'
+  if (!nextProvider) return 'disable'
+  return providers.find((p) => p.name === nextProvider)?.is_local ? 'enable_local' : 'other'
+}

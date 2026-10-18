@@ -141,3 +141,15 @@ def test_cadangan_lokal_gagal_memicu_pemeriksaan(monkeypatch):
     result = a.analyze_person(person_crop())
     assert result.is_system_unavailable
     assert triggered == [True]
+
+
+def test_keluarkan_model_dari_gpu_saat_cadangan_dimatikan():
+    # T70: keep_alive=-1 menahan model selamanya; mematikan cadangan harus mengirim keep_alive=0
+    calls = []
+
+    def handler(req):
+        calls.append((req.url.path, json.loads(req.content)["keep_alive"]))
+        return httpx.Response(200, json={})
+    _ollama(handler).unload()
+    assert calls == [("/api/generate", 0)]
+    OpenAICompatibleProvider(api_key="k", model="m", base_url="http://x.test/v1", name="openrouter").unload()
