@@ -1,6 +1,7 @@
 """Pemilihan mode kamera dan pelacakan kamera tersimpan lewat namanya."""
 import sys
 
+import numpy as np
 import pytest
 
 from backend import camera_manager
@@ -231,3 +232,92 @@ def test_kamera_bernama_asli_yang_hilang_tetap_terdeteksi_dicabut(perangkat):
     svc = _layanan_kamera("GENERAL WEBCAM", terverifikasi=True)
     svc._check_presence()
     assert svc._device_missing is True
+
+
+# --- MJPG diminta saat membuka kamera (T34c2) -----------------------------------------
+
+YUY2_CODE = camera_manager.cv2.VideoWriter.fourcc(*"YUY2")
+
+
+class C920Tiruan:
+    """Meniru C920 di OpenCV 5 + DirectShow (uji 18-10): MJPG hanya bila diminta sebagai parameter
+    pembukaan; set() resolusi = kembali YUY2, yang dibatasi USB 2.0 di resolusi besar."""
+
+    clock = [0.0]
+
+    def __init__(self, index, backend=None, params=None):
+        p = dict(zip(params[::2], params[1::2])) if params else {}
+        cv2 = camera_manager.cv2
+        self.mjpg = p.get(cv2.CAP_PROP_FOURCC) == camera_manager.FOURCC_MJPG
+        self.w, self.h = p.get(cv2.CAP_PROP_FRAME_WIDTH, 640), p.get(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    def isOpened(self):
+        return True
+
+    def release(self):
+        pass
+
+    def set(self, prop, value):
+        cv2 = camera_manager.cv2
+        if prop == cv2.CAP_PROP_FRAME_WIDTH:
+            self.w, self.mjpg = value, False
+        elif prop == cv2.CAP_PROP_FRAME_HEIGHT:
+            self.h, self.mjpg = value, False
+        return True
+
+    def get(self, prop):
+        return camera_manager.FOURCC_MJPG if self.mjpg else YUY2_CODE
+
+    def fps(self):
+        if self.mjpg:
+            return 29.0
+        return 5.0 if self.h >= 1080 else 10.0 if self.h >= 720 else 25.0
+
+    def read(self):
+        C920Tiruan.clock[0] += 1.0 / self.fps()
+        return True, np.zeros((self.h, self.w, 3), np.uint8)
+
+
+@pytest.fixture
+def c920(monkeypatch):
+    C920Tiruan.clock = [0.0]
+    dibuat = []
+
+    def video_capture(index, backend=None, params=None):
+        cap = C920Tiruan(index, backend, params)
+        dibuat.append((index, params))
+        return cap
+    monkeypatch.setattr(camera_manager.cv2, "VideoCapture", video_capture)
+    monkeypatch.setattr(camera_manager, "time", type("T", (), {
+        "time": staticmethod(lambda: C920Tiruan.clock[0]),
+        "sleep": staticmethod(lambda s: C920Tiruan.clock.__setitem__(0, C920Tiruan.clock[0] + s))}))
+    monkeypatch.setattr(camera_manager.cfg, "CAMERA_SETTLE_SECONDS", 0.5)
+    return dibuat
+
+
+def test_open_capture_mjpg_memberi_format_ukuran_dan_laju_saat_membuka(c920):
+    camera_manager.open_capture(0, (1920, 1080))
+    cv2 = camera_manager.cv2
+    params = dict(zip(c920[0][1][::2], c920[0][1][1::2]))
+    assert params == {cv2.CAP_PROP_FOURCC: camera_manager.FOURCC_MJPG, cv2.CAP_PROP_FRAME_WIDTH: 1920,
+                      cv2.CAP_PROP_FRAME_HEIGHT: 1080, cv2.CAP_PROP_FPS: camera_manager.cfg.FPS}
+    camera_manager.open_capture(0)
+    assert c920[1][1] is None, "tanpa mjpg_size, pembukaan sama seperti sebelum T34c2"
+
+
+def test_pemindaian_menemukan_1080p_mjpg_dan_gerbang_memilihnya(c920):
+    modes = camera_manager.probe_modes(0, measure_seconds=1.0)
+    by_key = {(m.width, m.height, m.fourcc): m.fps for m in modes}
+    assert by_key[(1920, 1080, "YUY2")] == pytest.approx(5.0, abs=1)
+    assert by_key[(1920, 1080, "MJPG")] == pytest.approx(29.0, abs=1)
+    assert all(h >= camera_manager.cfg.CAMERA_MJPG_MIN_HEIGHT for (_, h, f) in by_key if f == "MJPG")
+    best = camera_manager.pick_best_mode(modes)
+    assert best is not None and (best.width, best.height, best.fourcc) == (1920, 1080, "MJPG")
+
+
+def test_mjpg_yang_ditolak_driver_tidak_dicatat(c920, monkeypatch):
+    monkeypatch.setattr(C920Tiruan, "get", lambda self, prop: YUY2_CODE)  # driver mengabaikan MJPG
+    modes = camera_manager.probe_modes(0, measure_seconds=1.0)
+    assert not any(m.fourcc == "MJPG" for m in modes)
+    best = camera_manager.pick_best_mode(modes)
+    assert best is not None and best.height < 720, "tetap memilih mode lancar seperti sebelum T34c2"

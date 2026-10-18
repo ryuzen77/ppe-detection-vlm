@@ -132,6 +132,12 @@ class Config:
     # Sebagian kamera USB baru mencapai laju stabilnya beberapa detik setelah dibuka
     # (kamera penguji: 1 FPS di detik pertama, 26 FPS baru di detik keempat).
     CAMERA_SETTLE_SECONDS: float = 3.5
+    # MJPG (T34c2). Pada OpenCV 5 + DirectShow, MJPG hanya diterima bila diminta SAAT kamera
+    # dibuka (parameter VideoCapture); set() sesudahnya — juga mengganti resolusi — kembali ke
+    # YUY2 yang dibatasi USB 2.0 (uji 18-10, Logitech C920: 1080p YUY2 5 fps vs MJPG 29 fps).
+    # Diukur untuk resolusi sebesar ini ke atas; di bawahnya YUY2 sudah cukup lancar.
+    CAMERA_MJPG_MIN_HEIGHT: int = 720
+    CAMERA_MJPG_WARMUP_FRAMES: int = 10   # frame dibuang setelah dibuka, sebelum laju diukur
     CAMERA_MIN_HEIGHT: int = 400           # Di bawah ini, crop untuk VLM terlalu kecil
     CAMERA_TARGET_ASPECT: float = 16 / 9   # Cocok dengan viewport dashboard
     CAMERA_ASPECT_TOLERANCE: float = 0.05
