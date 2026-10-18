@@ -22,7 +22,7 @@ import { formatDeviceMeta } from './formatters'
 import type { CameraDevice } from './api/types'
 
 describe('formatDeviceMeta', () => {
-  it('menghasilkan Kamera 1 · kemampuan belum dipindai untuk index 0 belum dipindai', () => {
+  it('menghasilkan Kamera 0 · kemampuan belum dipindai untuk index 0 belum dipindai', () => {
     const dev: CameraDevice = {
       index: 0,
       name: 'Integrated Webcam',
@@ -32,7 +32,7 @@ describe('formatDeviceMeta', () => {
       selected_mode: null,
       modes: [],
     }
-    expect(formatDeviceMeta(dev)).toBe('Kamera 1 · kemampuan belum dipindai')
+    expect(formatDeviceMeta(dev)).toBe('Kamera 0 · kemampuan belum dipindai')
   })
 
   it('menghasilkan informasi mode bila mode terpilih ada', () => {
@@ -45,7 +45,7 @@ describe('formatDeviceMeta', () => {
       selected_mode: { width: 1280, height: 720, fps: 30, fourcc: 'MJPG' },
       modes: [],
     }
-    expect(formatDeviceMeta(dev)).toBe('Kamera 2 · 1280×720 @30 fps')
+    expect(formatDeviceMeta(dev)).toBe('Kamera 1 · 1280×720 @30 fps')
   })
 
   it('menghasilkan tidak tersedia bila sudah dipindai tapi tidak ada mode yang cocok', () => {
@@ -58,7 +58,7 @@ describe('formatDeviceMeta', () => {
       selected_mode: null,
       modes: [],
     }
-    expect(formatDeviceMeta(dev)).toBe('Kamera 3 · tidak tersedia')
+    expect(formatDeviceMeta(dev)).toBe('Kamera 2 · tidak tersedia')
   })
 })
 

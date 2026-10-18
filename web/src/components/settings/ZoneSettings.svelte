@@ -113,7 +113,7 @@
                 oninput={(e) => onTopNumberInput(e.currentTarget.valueAsNumber)}
                 onchange={saveRange}
                 disabled={!zone.enabled}
-                aria-label="Batas atas persentase"
+                aria-label={SETTINGS_TAB.zoneTopPercentAria}
               />
               <span class="unit">%</span>
             </div>
@@ -146,7 +146,7 @@
                 oninput={(e) => onBottomNumberInput(e.currentTarget.valueAsNumber)}
                 onchange={saveRange}
                 disabled={!zone.enabled}
-                aria-label="Batas bawah persentase"
+                aria-label={SETTINGS_TAB.zoneBottomPercentAria}
               />
               <span class="unit">%</span>
             </div>

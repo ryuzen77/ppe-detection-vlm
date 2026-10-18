@@ -141,7 +141,7 @@
         class:selected={dev.index === choice}
         onclick={() => (choice = dev.index)}
       >
-        <span class="name">{dev.name || TEXT.cameraNumber(dev.index)}</span>
+        <span class="name">{dev.name || TEXT.deviceFallback(dev.index)}</span>
         <span class="meta">
           {formatDeviceMeta(dev)}
           {#if dev.index === activeIndex} · <span class="active">{TEXT.inUse}</span>{/if}

@@ -25,5 +25,7 @@ describe('zone module', () => {
     expect(percentToRatio(100)).toBe(1);
     expect(percentToRatio(-5)).toBe(0);
     expect(percentToRatio(120)).toBe(1);
+    expect(percentToRatio(37.6)).toBe(0.38);
+    expect(percentToRatio(37.4)).toBe(0.37);
   });
 });

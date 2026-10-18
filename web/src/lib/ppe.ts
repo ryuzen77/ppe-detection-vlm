@@ -6,19 +6,16 @@
  * lengkap/tidak tetap dihitung backend; ini hanya untuk teks & warna per baris.
  */
 import type { ItemResult, PpeItem } from './api/types'
-import type { GateKind } from './gate'
+import type { GateKind, Tone } from './gate'
 import { CHECKLIST } from './messages'
 
 /** ok: lengkap | missing: kurang | pending: belum dinilai */
 export type ItemStatus = 'ok' | 'missing' | 'pending'
 
-/** Warna / tone tampilan item di checklist: netral saat siaga, kuning saat menilai/menunggu, hijau/merah saat ada hasil */
-export type ItemTone = 'ok' | 'danger' | 'warn' | 'neutral'
-
 export interface ItemAssessment {
   status: ItemStatus
   text: string
-  tone: ItemTone
+  tone: Tone
 }
 
 /**
@@ -27,7 +24,7 @@ export interface ItemAssessment {
  * - saat sedang menilai atau menunggu ('analyzing', 'waiting', 'position'): kuning ('warn')
  * - setelah ada hasil: tetap hijau ('ok') atau merah ('danger')
  */
-export function ppeItemTone(status: ItemStatus, gateKind: GateKind = 'standby'): ItemTone {
+export function ppeItemTone(status: ItemStatus, gateKind: GateKind = 'standby'): Tone {
   if (status === 'ok') return 'ok'
   if (status === 'missing') return 'danger'
   if (gateKind === 'analyzing' || gateKind === 'waiting' || gateKind === 'position') {

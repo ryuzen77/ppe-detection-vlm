@@ -333,6 +333,8 @@ export const SETTINGS_TAB = {
   sliderBottom: (v: string) => `Bawah (y_max: ${v})`,
   zoneTopLabel: (pct: number) => `Batas atas ${pct}% tinggi gambar`,
   zoneBottomLabel: (pct: number) => `Batas bawah ${pct}% tinggi gambar`,
+  zoneTopPercentAria: 'Batas atas persentase',
+  zoneBottomPercentAria: 'Batas bawah persentase',
   zoneInvalidBand: 'Pita zona tidak sah atau terlalu sempit',
   zoneLoading: 'Memuat pengaturan zona...',
   camera: 'Kamera',

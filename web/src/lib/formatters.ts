@@ -8,9 +8,9 @@ export function formatServerDate(dateStr: string | null): string {
   return d.toLocaleString('id-ID')
 }
 
-/** Format metadata kamera yang ramah operator (mis. "Kamera 1 · kemampuan belum dipindai") */
+/** Format metadata kamera yang ramah operator (mis. "Kamera 0 · kemampuan belum dipindai") */
 export function formatDeviceMeta(dev: CameraDevice): string {
-  const parts = [CAMERA_PICKER.cameraNumber(dev.index)]
+  const parts = [CAMERA_PICKER.deviceFallback(dev.index)]
   parts.push(
     dev.selected_mode
       ? modeLabel(dev.selected_mode)
