@@ -171,7 +171,6 @@ export const CAMERA_PICKER = {
   listLabel: 'Kamera',
   none: 'Tidak ada kamera terdeteksi. Colokkan kamera lalu tekan Pindai.',
   deviceFallback: (index: number) => `Kamera ${index}`,
-  cameraNumber: (index: number) => `Kamera ${index + 1}`,
   index: (index: number) => `index ${index}`,
   notScanned: 'belum dipindai',
   capabilityNotScanned: 'kemampuan belum dipindai',
