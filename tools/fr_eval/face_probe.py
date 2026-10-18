@@ -120,8 +120,8 @@ def _face_info(face: np.ndarray | None, similarity: float | None = None, thresho
     return lines
 
 
-def _countdown(cap, detector, label: str, args) -> None:
-    end = time.time() + args.pause
+def _countdown(cap, detector, label: str, args, seconds: float) -> None:
+    end = time.time() + seconds
     while (left := end - time.time()) > 0:
         print(f"\r>>> Bersiap: {label.upper()} - mulai dalam {left:.0f} dtk   ", end="", flush=True)
         ok, frame = cap.read()  # sekaligus membuang frame lama
@@ -131,7 +131,9 @@ def _countdown(cap, detector, label: str, args) -> None:
 
 
 def _record(cap, detector, embed, entry: dict, label: str, args, reference: np.ndarray | None) -> ConditionLog:
-    _countdown(cap, detector, label, args)
+    # Kondisi pertama boleh diberi jeda lebih lama: waktu untuk berjalan ke posisi pemeriksaan
+    first = reference is None and args.first_pause is not None
+    _countdown(cap, detector, label, args, args.first_pause if first else args.pause)
     print(f"\r>>> MEREKAM: {label.upper()} ({args.seconds:g} dtk)          ", flush=True)
     _beep(1)
     log, end = ConditionLog(label), time.time() + args.seconds
@@ -206,6 +208,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--conditions", default=DEFAULT_CONDITIONS, help="dipisah koma; yang pertama = acuan")
     parser.add_argument("--seconds", type=float, default=6.0, help="lama rekam per kondisi")
     parser.add_argument("--pause", type=float, default=8.0, help="hitung mundur sebelum tiap kondisi")
+    parser.add_argument("--first-pause", type=float, help="hitung mundur kondisi pertama (bawaan = --pause)")
     parser.add_argument("--model", default="intel_0095")
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     parser.add_argument("--no-preview", dest="preview", action="store_false", help="tanpa jendela pratinjau")
