@@ -369,8 +369,8 @@ lambat pada sistem absensi pengguna sebelumnya): skor tertinggi di bawah ambang 
 3. Pendaftaran oleh admin di Pengaturan: 3–5 foto lewat kamera gerbang, setelah persetujuan tertulis pekerja.
 4. Yang disimpan hanya **embedding** (bukan foto wajah pendaftaran). Ganti model FR = daftar ulang.
 5. Persetujuan, DPIA, dan kebijakan dari HR/Legal perusahaan (di luar kode; wajib sebelum dipakai sungguhan).
-6. **Satu gerbang dulu, SQLite terenkripsi** (bukan PostgreSQL/pgvector). pgvector ditinjau ulang hanya bila kelak ada
-   server pusat banyak gerbang (rencana "basis data terpusat").
+6. **Satu gerbang dulu, SQLite terenkripsi** (bukan PostgreSQL/pgvector). pgvector untuk server pusat banyak gerbang
+   sudah direncanakan (18-10, lihat "PostgreSQL + pgvector untuk data wajah terpusat"); T34b menyiapkan antarmukanya.
 
 **Teknis:**
 
@@ -404,7 +404,7 @@ lambat pada sistem absensi pengguna sebelumnya): skor tertinggi di bawah ambang 
 | Keamanan data spesifik | Embedding terenkripsi AES-GCM, kunci di luar `DATA_DIR`, enkripsi disk |
 | Pembatasan akses | Hanya admin (akun & peran T51) yang mendaftar/melihat/menghapus |
 | Jejak akses | Daftar/hapus/akses data pekerja dicatat di `security.jsonl` (T53) |
-| Hak hapus & masa simpan | Tombol hapus data wajah (embedding + MP3 nama); hapus saat pekerja nonaktif / sesuai kebijakan HR |
+| Hak hapus & masa simpan | Tombol hapus data wajah (embedding + MP3 nama); **hapus otomatis 30 hari setelah pekerja nonaktif** (keputusan 18-10) |
 | DPIA & kebijakan | Dokumen HR/Legal (di luar kode) |
 
 **Risiko & mitigasi:** salah kenal (ambang ketat + voting; ragu = tidak dikenali); masker/kacamata gelap menurunkan
@@ -531,13 +531,24 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
    sekarang dengan/tanpa helm, masker, kacamata; ukur waktu YuNet + SFace di CPU. **Tidak menyimpan data wajah.**
    Hasilnya menentukan kamera cukup atau perlu tambahan.
 2. **T34b — pendaftaran & penyimpanan terenkripsi** (backend): tabel, enkripsi, daftar/hapus, log keamanan, tes.
+   **Keputusan pengguna 18-10:**
+   - **Persetujuan = admin mencentang** "persetujuan tertulis sudah ditandatangani" saat mendaftar; disimpan per
+     pekerja: waktu, admin yang mencentang, versi formulir (teks & versi di `messages.py`/`config.py`). Pendaftaran
+     ditolak tanpa centang. Formulir kertasnya tetap dari HR/Legal.
+   - **Hapus otomatis 30 hari setelah pekerja dinonaktifkan:** embedding + MP3 nama dihapus permanen, baris pekerja
+     disisakan tanpa data wajah (riwayat audit tetap bernama). Angka di `config.py`; berjalan di pembersihan retensi
+     yang sudah ada (T20); setiap penghapusan dicatat di `security.jsonl`. Hapus manual oleh admin tetap tersedia
+     (langsung, tanpa menunggu 30 hari).
+   - **Disiapkan untuk PostgreSQL + pgvector** (rencana panjang di bawah): akses data pekerja lewat satu antarmuka
+     repository (`WorkerStore`: daftar, tambah templat, nonaktifkan, hapus, muat galeri); T34b hanya membuat
+     implementasi SQLite. Tiap templat menyimpan versi model & dimensi supaya bisa dipindah tanpa salah tafsir.
 3. **T34c — pengenalan dalam sesi + audit** (backend): FR di jendela diam, kunci identitas per sesi, kolom audit,
    tes karakterisasi state machine diperluas.
 4. **T34d — suara nama** (backend): MP3 per pekerja saat daftar, diputar setelah "lolos".
 5. **T34e — UI** (Gemini): halaman pendaftaran pekerja + persetujuan, laporan & filter per pekerja.
 
-**Pertanyaan terbuka:** masa simpan data wajah menurut kebijakan HR; siapa yang boleh mendaftarkan; isi formulir
-persetujuan; perlu atau tidak tampilan nama di layar Monitoring.
+**Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
+(Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
@@ -579,6 +590,31 @@ Selesai & digabung (dikeluarkan dari antrean 14-10): T51, T57, T58, T46, T47, T4
   berhenti karena jaringan ke pusat). Persiapan murah: akses DB tetap terpusat di satu modul repository
   (`report_manager.py`). Risiko dinilai saat rencananya matang (§2.2a). Pertanyaan terbuka: jumlah gerbang target,
   laporan jarak jauh, pengelola server di lokasi.
+- **PostgreSQL + pgvector untuk data wajah terpusat (rencana panjang, permintaan pengguna 18-10; melanjutkan
+  "basis data terpusat").** Belum dikerjakan; T34b menyiapkan antarmuka `WorkerStore` supaya pindahnya hanya menambah
+  implementasi, bukan mengubah gerbang.
+  - **Kapan dipakai:** banyak gerbang berbagi satu daftar pekerja (daftar sekali, dikenali di semua gerbang), atau
+    jumlah pekerja jauh melewati batas galeri yang teruji (±300 per gerbang, T34m2). Untuk satu gerbang, SQLite +
+    numpy di memori sudah cukup (10.000 pekerja < 0,1 ms per pencarian).
+  - **Pembagian peran:** server pusat = sumber kebenaran pendaftaran (PostgreSQL + pgvector); **gerbang tetap mencari
+    di memori lokal** dari salinan galeri yang ditarik dari pusat dan disimpan terenkripsi di SQLite gerbang, jadi FR
+    tetap jalan saat jaringan putus (sejalan dengan "kirim-dan-simpan" audit). pgvector dipakai di pusat untuk:
+    cek pendaftaran ganda (orang sama didaftarkan dua kali, 1:N ke seluruh pekerja), pencarian lintas lokasi oleh
+    admin, dan kalibrasi ambang dari data nyata.
+  - **Skema pusat (usulan):** `workers` (id, nomor pegawai unik, nama, lokasi, aktif, persetujuan: waktu/admin/versi,
+    `deactivated_at`) dan `face_templates` (id, worker_id, `embedding vector(256)` untuk Intel 0095, `model_version`,
+    kondisi foto mis. kacamata/helm, dibuat oleh/kapan). Indeks HNSW `vector_cosine_ops`; pencarian
+    `ORDER BY embedding <=> $1 LIMIT k` lalu ambang. Ganti model = kolom/indeks baru per `model_version` + daftar ulang.
+  - **Catatan keamanan penting:** pgvector hanya bisa mengindeks vektor **tanpa enkripsi kolom** (AES-GCM per baris
+    seperti di SQLite gerbang membuat indeks tidak bisa dipakai). Pengganti di pusat: enkripsi disk/volume (LUKS / KMS
+    penyedia), TLS wajib gerbang↔pusat, peran DB terpisah (gerbang hanya baca galerinya; tulis hanya layanan admin),
+    row-level security per lokasi, log akses (`pgaudit`) → masuk DPIA sebagai perbedaan perlakuan dengan gerbang.
+  - **Retensi sama dengan gerbang:** hapus templat 30 hari setelah nonaktif dijalankan di pusat; gerbang ikut
+    menghapus salinannya pada sinkron berikutnya (penghapusan juga dikirim, bukan hanya penambahan).
+  - **Tahapan kasar:** (1) server pusat + skema + migrasi dari ekspor SQLite gerbang; (2) layanan pendaftaran pusat +
+    sinkron galeri ke gerbang; (3) kirim-dan-simpan audit; (4) akun terpusat. Risiko dinilai saat rencana matang
+    (kemungkinan **Tinggi**: data biometrik lintas jaringan). Pertanyaan terbuka: siapa mengelola server, lokasi
+    server (on-premise / cloud — berpengaruh ke transfer data pribadi UU PDP), jumlah gerbang & pekerja target.
 - **Akun terpusat & peran operator (rencana panjang, keputusan pengguna 07-10):** saat dipasang di banyak gerbang, akun per gerbang merepotkan (karyawan keluar = hapus di setiap gerbang). Arah: akun di server pusat (sejalan dengan basis data terpusat) atau login kantor (SSO/LDAP) bila perusahaan punya; gerbang memeriksa ke pusat dan tetap punya **akun lokal darurat** saat jaringan putus. Peran operator vs admin diaktifkan saat itu (T51 sudah menyiapkan kolom `role` & `require_role`). Risiko dinilai saat rencananya matang.
 - **IoT & palang boom** (tahap setelah fitur utama berjalan): ESP, relay, LED merah/hijau/kuning, sirine bila
   perlu; sensor setelah palang memastikan pekerja lewat sebelum palang menutup. Tahap 1: **berurutan penuh**
