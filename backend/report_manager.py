@@ -37,7 +37,18 @@ SNAPSHOTS_DIR = cfg.SNAPSHOTS_DIR
 # Versi skema, disimpan di `PRAGMA user_version`.
 #   0 — skema awal: sebelas kolom tetap untuk helm, rompi, celana, dan sepatu
 #   1 — hasil per item disimpan generik di `items_json`, mengikuti `ppe_rules`
-SCHEMA_VERSION = 1
+#   2 — identitas pekerja dari pengenalan wajah (T34c1); kolom boleh kosong (audit lama &
+#       gerbang tanpa FR). Nama & nomor pegawai disalin saat inspeksi: audit adalah catatan
+#       siapa yang lewat SAAT ITU, dan tetap terbaca setelah data wajah pekerja dihapus retensi.
+SCHEMA_VERSION = 2
+
+_V2_COLUMNS = (
+    ("worker_id", "INTEGER"),
+    ("employee_no", "TEXT"),
+    ("worker_name", "TEXT"),
+    ("fr_status", "TEXT"),
+    ("fr_score", "REAL"),
+)
 
 _CREATE_TABLE_V1 = """
     CREATE TABLE {name} (
@@ -60,17 +71,28 @@ _CREATE_TABLE_V1 = """
 _INSPECTION_COLUMNS = (
     "track_id", "timestamp", "date_str", "time_str", "is_complete", "items_json",
     "missing_items", "notes", "inference_source", "inference_time_ms", "snapshot_filename",
+    *(name for name, _ in _V2_COLUMNS),
 )
 _INSERT_INSPECTION = (
     f"INSERT INTO worker_inspections ({', '.join(_INSPECTION_COLUMNS)}) "
     f"VALUES ({', '.join('?' * len(_INSPECTION_COLUMNS))})"
 )
 
+def _identity_values(identity: Optional[dict]) -> tuple:
+    """Nilai kolom v2 (urutan `_V2_COLUMNS`) dari hasil pengenalan wajah; None = tanpa FR."""
+    who = identity or {}
+    keys = {"worker_id": "worker_id", "employee_no": "employee_no", "worker_name": "name",
+            "fr_status": "status", "fr_score": "score"}
+    return tuple(who.get(keys[column]) for column, _ in _V2_COLUMNS)
+
+
 _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_timestamp ON worker_inspections(timestamp DESC)",
     "CREATE INDEX IF NOT EXISTS idx_is_complete ON worker_inspections(is_complete)",
     # Filter & ringkasan per rentang tanggal (T49); tanpa ini laporan bulanan memindai seluruh tabel
     "CREATE INDEX IF NOT EXISTS idx_date_str ON worker_inspections(date_str)",
+    # Laporan & filter per pekerja (T34)
+    "CREATE INDEX IF NOT EXISTS idx_worker_id ON worker_inspections(worker_id)",
 )
 
 
@@ -251,8 +273,9 @@ class ReportManager:
         try:
             if not has_table:
                 conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections"))
-            else:
+            elif version == 0:
                 self._migrate_v0_to_v1(conn)
+            self._migrate_v1_to_v2(conn, existing=has_table)
             for sql in _CREATE_INDEXES:
                 conn.execute(sql)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -314,6 +337,15 @@ class ReportManager:
             )
         logger.info(f"Migrasi skema v0 -> v1: {len(rows)} baris dipindahkan.")
 
+    @staticmethod
+    def _migrate_v1_to_v2(conn: sqlite3.Connection, existing: bool):
+        """Kolom identitas pekerja (T34c1). Baris lama tetap, kolom barunya kosong.
+        Database baru juga melewati langkah ini (tabel v1 + kolom v2), tanpa log migrasi."""
+        for name, sql_type in _V2_COLUMNS:
+            conn.execute(f"ALTER TABLE worker_inspections ADD COLUMN {name} {sql_type}")
+        if existing:
+            logger.info("Migrasi skema v1 -> v2: kolom identitas pekerja ditambahkan.")
+
     def save_inspection(
         self,
         track_id: int,
@@ -323,11 +355,13 @@ class ReportManager:
         notes: str,
         inference_source: str,
         inference_time_ms: float,
-        crop_img: Optional[np.ndarray] = None
+        crop_img: Optional[np.ndarray] = None,
+        identity: Optional[dict] = None,
     ) -> dict:
         """Saves inspection snapshot to disk and inserts record into SQLite.
 
-        `items` berisi hasil per item APD, dikunci `PPEItem.key`.
+        `items` berisi hasil per item APD, dikunci `PPEItem.key`. `identity` (T34c1): hasil
+        pengenalan wajah `{worker_id, employee_no, name, status, score}`; None = tanpa FR.
         """
         now = time.localtime()
         iso_timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", now)
@@ -344,7 +378,8 @@ class ReportManager:
             notes,
             inference_source,
             inference_time_ms,
-            snapshot_filename
+            snapshot_filename,
+            *_identity_values(identity),
         ))
         return {
             "id": record_id,
@@ -500,10 +535,18 @@ class ReportManager:
         missing_list = _parse_json(row["missing_items"], [])
         results = _parse_json(row["items_json"], {})
         status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
-        return ([number, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str]
+        return ([number, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str,
+                 self._worker_csv_text(row)]
                 + [self._item_csv_text(item, results.get(item.key)) for item in items]
                 + ["; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
                    row["inference_source"], row["inference_time_ms"], row["notes"], row["snapshot_filename"]])
+
+    @staticmethod
+    def _worker_csv_text(row) -> str:
+        """Nama dari pengenalan wajah (T34c1); kosong untuk audit lama / gerbang tanpa FR."""
+        if row["worker_name"]:
+            return messages.CSV_FACE_RECOGNIZED.format(name=row["worker_name"], employee_no=row["employee_no"])
+        return messages.CSV_FACE_UNKNOWN if row["fr_status"] == "unknown" else messages.CSV_EMPTY
 
     def iter_csv_chunks(self, date_from: Optional[str] = None, date_to: Optional[str] = None):
         """CSV audit HSE/K3 per potongan CSV_EXPORT_BATCH_ROWS baris (T43).
@@ -513,7 +556,8 @@ class ReportManager:
         Kolom per item APD dibangkitkan dari katalog `ppe_rules`.
         """
         items = ppe_rules.get_items()
-        yield self._csv_text([messages.CSV_HEADER_LEADING + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
+        header = messages.CSV_HEADER_LEADING + [messages.CSV_HEADER_WORKER_NAME]
+        yield self._csv_text([header + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
         conditions, params = _range_clause(date_from, date_to)
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         number = 0

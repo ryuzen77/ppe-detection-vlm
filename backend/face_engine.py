@@ -86,6 +86,14 @@ def pick_enrollment_face(detections: list[FaceDetection], min_interocular: float
     return usable[0]
 
 
+def pick_subject_face(detections: list[FaceDetection], min_interocular: float) -> Optional[FaceDetection]:
+    """Wajah subjek pada potongan tubuh pekerja (T34c1): yang terbesar, asal cukup besar untuk
+    dikenali. Berbeda dengan pendaftaran, wajah lain tidak membuat frame ditolak (potongan
+    pekerja bisa memuat sebagian orang antre), tetapi juga tidak pernah dipilih bila lebih kecil."""
+    usable = [d for d in detections if d.interocular_px >= min_interocular]
+    return max(usable, key=lambda d: d.interocular_px) if usable else None
+
+
 def normalize(vector: np.ndarray) -> np.ndarray:
     flat = np.asarray(vector, dtype=np.float32).ravel()
     return flat / np.linalg.norm(flat)
@@ -142,6 +150,16 @@ class FaceEngine:
             detector, request = self._models()
             detection = pick_enrollment_face(self._detect(detector, frame), cfg.FACE_MIN_INTEROCULAR_PX)
             return FaceSample(detection, self._embed(request, frame, detection))
+
+    def subject_embeddings(self, crops: list[np.ndarray]) -> list[Optional[np.ndarray]]:
+        """Embedding wajah subjek per potongan pekerja; None bila tidak ada wajah yang cukup besar."""
+        with self._lock:
+            detector, request = self._models()
+            vectors: list[Optional[np.ndarray]] = []
+            for crop in crops:
+                face = pick_subject_face(self._detect(detector, crop), cfg.FACE_MIN_INTEROCULAR_PX)
+                vectors.append(None if face is None else self._embed(request, crop, face))
+            return vectors
 
 
 engine = FaceEngine()

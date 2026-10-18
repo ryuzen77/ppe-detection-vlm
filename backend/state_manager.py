@@ -1,14 +1,15 @@
 import logging
 import time
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Optional, List
 import numpy as np
 
 from .config import cfg
 from . import messages
 from .detector import DetectionResult
-from . import frame_quality
+from . import face_identity, frame_quality
 from .readiness import ReadinessTracker
 from .vlm_analyzer import vlm_analyzer, InspectionResult
 from .audio_engine import audio_player
@@ -93,6 +94,8 @@ class GateSession:
         self.seen_with_subject: set[int] = set()
         # Jendela "diam & menghadap kamera" sebelum dipotret (T46)
         self.readiness = ReadinessTracker()
+        # Siapa pekerjanya (T34c1); None = belum/tidak dicoba
+        self.identity: Optional[face_identity.Identity] = None
 
     def restart_candidates(self, bbox: list):
         """Rangkaian kandidat terputus: frame lama tidak boleh ikut dinilai."""
@@ -114,6 +117,8 @@ class StateManager:
     def __init__(self):
         self.session: Optional[GateSession] = None
         self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix="VLM_Worker")
+        # Pengenalan wajah paralel dengan VLM (T34c1): keputusan APD tidak menunggu FR
+        self.fr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="FR_Worker")
         self.lock = threading.Lock()
         self.inspection_history: List[dict] = []
         self.latest_detections: List[DetectionResult] = []
@@ -372,9 +377,10 @@ class StateManager:
             session=session.session_id, held=session.readiness.held_seconds(now),
             restarts=session.readiness.restarts, frames=session.stable_frames))
         session.state = TrackState.ANALYZING
-        crop_to_analyze, track_id = None, det.track_id
+        crop_to_analyze, track_id, identity = None, det.track_id, None
         if session.candidates:
             best = frame_quality.choose_best(session.candidates, session.prev_bbox)
+            identity = self._start_identity(session)
             crop_to_analyze, track_id = best.crop, best.track_id
             logger.info(
                 f"Sesi #{session.session_id}: frame terbaik #{session.candidates.index(best) + 1} dari "
@@ -384,9 +390,40 @@ class StateManager:
         session.candidates = []
         logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{track_id} (1 frame)...")
         audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
-        self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze)
+        self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze, identity)
 
-    def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray]):
+    def _start_identity(self, session: GateSession) -> Optional[Future]:
+        """FR pada FACE_VOTE_FRAMES potongan terbaik (skor `choose_best`), paralel dengan VLM.
+        Nama dipasang ke sesi begitu selesai, supaya Monitoring menampilkannya lebih awal."""
+        if not face_identity.identifier.store.face_ready():
+            return None  # FR mati (tanpa kunci): gerbang berperilaku persis seperti sebelum T34
+        ranked = sorted(session.candidates, key=lambda c: c.score, reverse=True)[:cfg.FACE_VOTE_FRAMES]
+        return self.fr_executor.submit(self._identify_session, session.session_id, [c.crop for c in ranked])
+
+    def _identify_session(self, session_id: int, crops: list[np.ndarray]) -> face_identity.Identity:
+        """Dijalankan di thread FR. Nama dipasang ke sesi DI SINI, bukan lewat add_done_callback:
+        callback future yang sudah selesai berjalan di thread pemanggil (_start_analysis, yang
+        memegang self.lock) sehingga mengambil kunci lagi = deadlock (terjadi saat T34c1 diuji)."""
+        identity = face_identity.identifier.identify(crops, session_id)
+        with self.lock:
+            if self.session is not None and self.session.session_id == session_id:
+                self.session.identity = identity
+        return identity
+
+    @staticmethod
+    def _await_identity(session_id: int, future: Optional[Future]) -> Optional[face_identity.Identity]:
+        """Identitas untuk audit: tunggu sebentar bila FR belum selesai; lewat = tidak dikenali."""
+        if future is None:
+            return None
+        try:
+            return future.result(timeout=cfg.FACE_IDENTIFY_TIMEOUT_SECONDS)
+        except FutureTimeout:
+            logger.warning(messages.LOG_FACE_TIMEOUT.format(session=session_id,
+                                                            seconds=cfg.FACE_IDENTIFY_TIMEOUT_SECONDS))
+            return face_identity.Identity(face_identity.UNKNOWN)
+
+    def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray],
+                          identity_future: Optional[Future] = None):
         if crop_img is None:
             self._retry_session(session_id)
             return
@@ -400,9 +437,10 @@ class StateManager:
 
             # Pemeriksaan sudah terjadi, jadi selalu tercatat di audit, termasuk
             # bila pekerjanya sudah pergi sebelum hasil tiba.
-            saved_meta = self._save_audit(track_id, result, crop_img)
+            identity = self._await_identity(session_id, identity_future)
+            saved_meta = self._save_audit(track_id, result, crop_img, identity)
             with self.lock:
-                self._record_history(track_id, result, saved_meta)
+                self._record_history(track_id, result, saved_meta, identity)
                 self._apply_decision(session_id, track_id, result)
 
         except Exception as e:
@@ -413,7 +451,11 @@ class StateManager:
     def _items_payload(result: InspectionResult) -> dict:
         return {key: item.model_dump() for key, item in result.items.items()}
 
-    def _save_audit(self, track_id: int, result: InspectionResult, crop_img: np.ndarray) -> dict:
+    def _save_audit(self, track_id: int, result: InspectionResult, crop_img: np.ndarray,
+                    identity: Optional[face_identity.Identity] = None) -> dict:
+        extra = {} if identity is None else {"identity": {
+            "worker_id": identity.worker_id, "employee_no": identity.employee_no, "name": identity.name,
+            "status": identity.status, "score": identity.score}}
         return report_mgr.save_inspection(
             track_id=track_id,
             is_complete=result.is_complete,
@@ -422,10 +464,12 @@ class StateManager:
             notes=result.notes,
             inference_source=result.inference_source,
             inference_time_ms=result.inference_time_ms,
-            crop_img=crop_img
+            crop_img=crop_img,
+            **extra,
         )
 
-    def _record_history(self, track_id: int, result: InspectionResult, saved_meta: dict):
+    def _record_history(self, track_id: int, result: InspectionResult, saved_meta: dict,
+                        identity: Optional[face_identity.Identity] = None):
         """Riwayat dashboard (terbaru di depan, dibatasi MAX_HISTORY_RECORDS). Pemanggil memegang lock."""
         self.inspection_history.insert(0, {
             "track_id": track_id,
@@ -437,7 +481,11 @@ class StateManager:
             "inference_source": result.inference_source,
             "inference_time_ms": result.inference_time_ms,
             "decided_by": result.decided_by,
-            "snapshot_filename": saved_meta.get("snapshot_filename", "")
+            "snapshot_filename": saved_meta.get("snapshot_filename", ""),
+            # Identitas dari pengenalan wajah (T34c1); None = tanpa FR
+            "worker_name": identity.name if identity else None,
+            "employee_no": identity.employee_no if identity else None,
+            "fr_status": identity.status if identity else None,
         })
         if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
             self.inspection_history.pop()
@@ -565,7 +613,8 @@ class StateManager:
             "stable_frames": s.stable_frames,
             "retry_in_s": max(0.0, round(s.retry_at - time.time(), 1))
             if s.state == TrackState.WAITING_SYSTEM else None,
-            "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None
+            "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None,
+            "identity": s.identity.payload() if s.identity else None,
         }
 
 

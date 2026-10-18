@@ -503,6 +503,17 @@ class Config:
     # Jarak antar-mata minimal foto pendaftaran. T34a (Logitech 1080p, posisi pemeriksaan):
     # 26-33 px; di 864x480 hanya 16-20 px (terlalu kecil untuk FR yang andal)
     FACE_MIN_INTEROCULAR_PX: float = 24.0
+    # Pengenalan dalam sesi (T34c1): FR pada frame terbaik jendela diam; nama hanya bila
+    # cukup banyak frame menunjuk orang yang sama (keputusan pengguna 18-10: 2 dari 3).
+    # Salah nama lebih buruk daripada tanpa nama.
+    FACE_VOTE_FRAMES: int = 3
+    FACE_VOTES_REQUIRED: int = 2
+    # Ambang kemiripan kosinus: LFW galeri ±300 pada FPIR 0,1% (T34m2) — dikalibrasi ulang
+    # dengan foto nyata gerbang sebelum dipakai sungguhan
+    FACE_MATCH_THRESHOLD: float = 0.55
+    # Audit menunggu hasil FR paling lama ini setelah VLM selesai; lewat = "tidak dikenali"
+    # (FR berjalan paralel dengan VLM, jadi biasanya sudah selesai lebih dulu)
+    FACE_IDENTIFY_TIMEOUT_SECONDS: float = 2.0
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

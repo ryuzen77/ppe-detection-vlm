@@ -319,3 +319,12 @@ WORKER_FACE_TOO_SMALL = ("Wajah terlalu kecil di kamera (jarak antar-mata {measu
 WORKER_CAMERA_BUSY = "Ada orang di jalur pemeriksaan. Ambil foto pendaftaran saat gerbang tidak sedang memeriksa."
 WORKER_CAMERA_UNAVAILABLE = "Kamera belum aktif. Pilih kamera di Pengaturan lalu ulangi."
 FACE_ENGINE_LOAD_FAILED = "Mesin pengenalan wajah gagal dimuat dari {path}: {error}"
+# Pengenalan dalam sesi (T34c1); log memakai nomor pegawai, bukan nama (minimisasi data)
+LOG_FACE_RECOGNIZED = "Sesi #{session}: wajah dikenali, pegawai {employee_no} (skor {score:.2f}, {votes}/{frames} frame)."
+LOG_FACE_UNKNOWN = "Sesi #{session}: wajah tidak dikenali ({faces}/{frames} frame berwajah cukup besar)."
+LOG_FACE_FAILED = "Pengenalan wajah gagal, sesi dilanjutkan tanpa nama: {error}"
+LOG_FACE_TIMEOUT = "Sesi #{session}: pengenalan wajah melewati {seconds:g} dtk; audit dicatat tanpa nama."
+LOG_FACE_GALLERY_LOADED = "Galeri wajah dimuat: {templates} templat dari {workers} pekerja aktif."
+CSV_HEADER_WORKER_NAME = "Nama Pekerja (pengenalan wajah)"
+CSV_FACE_RECOGNIZED = "{name} ({employee_no})"
+CSV_FACE_UNKNOWN = "Tidak dikenali"
