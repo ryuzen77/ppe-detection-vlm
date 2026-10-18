@@ -8,3 +8,6 @@ web/dist/** text eol=lf
 # UI baru: LF di semua OS, supaya hasil build web/dist identik di Windows, Linux, CI, dan
 # setiap worktree (Vite menyalin akhir baris index.html apa adanya)
 web/** text=auto eol=lf
+# Bobot model ikut repo (T34b2) harus byte-identik dengan yang diuji: tanpa konversi akhir
+# baris (IR OpenVINO .xml teks akan berubah hash-nya bila dijadikan CRLF di Windows)
+backend/models/** -text
