@@ -424,6 +424,25 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
    - **Data uji:** relawan yang memberi persetujuan tertulis; foto uji **tidak di-commit, tidak diunggah** (aturan sama
      dengan `picture_test/`); dataset publik hanya bila lisensinya mengizinkan.
    - **Kriteria lolos** ditetapkan pengguna sebelum pengukuran (mis. FAR target, FRR maksimum, waktu FR maksimum).
+   - **Kandidat (analisa internet 18-10; detektor sama untuk semua: YuNet, MIT):**
+
+     | # | Pengenal | Lisensi bobot | Beban | Akurasi dilaporkan | Catatan |
+     | :-- | :-- | :-- | :-- | :-- | :-- |
+     | 1 | SFace (OpenCV Zoo) | Apache-2.0 | ringan, 128-d, sudah ada di OpenCV terpasang | LFW ±99,4–99,6% | patokan dasar |
+     | 2 | Intel `face-reidentification-retail-0095` (OpenVINO) | repo Apache-2.0; **per-model dicek** | sangat ringan (MobileNetV2, 1,1 jt param), 256-d | LFW 99,47% | kemungkinan tercepat |
+     | 3 | AuraFace-v1 | Apache-2.0 (data latih "berlisensi komersial", tidak dirinci) | berat (ResNet100) | CFP-FP 95,18 (ArcFace 98,87) | alternatif ArcFace komersial |
+     | 4 | dlib ResNet | bobot *public domain* (data latih VGG/FaceScrub perlu dicek) | sedang, 128-d | LFW 99,38% | model 2017; pasang dlib di Windows bisa sulit |
+     | 5 | AdaFace IR101 (versi NVIDIA) | NVIDIA Open Model License; **teks lengkap dicek** | berat (IR101) | kuat untuk wajah kualitas rendah | kartu model juga menyebut MIT & WebFace12M |
+
+     Gugur karena lisensi bobot: InsightFace (`buffalo_l`/ArcFace, non-komersial), EdgeFace (CC BY-NC-SA 4.0),
+     AdaFace asli WebFace4M/12M (dataset non-komersial), facenet-pytorch VGGFace2 (tidak jelas / dataset riset).
+   - **Usul kriteria lolos (menunggu keputusan pengguna):** FAR ≤ 0,1% (salah nama paling dihindari); FRR ≤ 5% tanpa
+     masker (kondisi bermasker dicatat terpisah); FR total ≤ 50 ms per sesi di CPU.
+   - **Usul data uji:** ≥ 10 relawan berpersetujuan tertulis, foto lewat kamera gerbang dalam kondisi tanpa helm /
+     helm / helm + masker / kacamata / dekat & jauh, ditambah beberapa orang "tidak terdaftar" untuk mengukur FAR.
+   - **Lingkungan uji:** env conda terpisah (mis. `fr_eval`) karena kandidat butuh paket berbeda (onnxruntime,
+     openvino, dlib); hanya model pemenang yang masuk kunci dependensi proyek. Lisensi tiap kandidat dipastikan dari
+     berkas lisensinya sebelum diuji serius; data latih kandidat 3 & 4 ditanyakan ke HR/Legal sebelum produksi.
 1. **T34a — uji ukuran wajah (fisik, perlu pengguna di depan kamera):** ukur piksel wajah dari posisi kamera
    sekarang dengan/tanpa helm, masker, kacamata; ukur waktu YuNet + SFace di CPU. **Tidak menyimpan data wajah.**
    Hasilnya menentukan kamera cukup atau perlu tambahan.
