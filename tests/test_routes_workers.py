@@ -5,11 +5,13 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, security_log, worker_store
+from backend import face_crypto, face_engine, security_log, worker_store
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
 from backend.config import cfg
+from backend.state_manager import state_mgr
+from backend.video.capture import video_service
 
 MODEL = "intel_0095"
 WORKER_KEYS = {
@@ -164,3 +166,97 @@ def test_bukan_admin_ditolak(client, store):
 @pytest.mark.real_auth
 def test_tanpa_login_ditolak(client, store):
     assert client.get("/api/workers").status_code == 401
+
+
+# --- Foto pendaftaran dari kamera (T34b2) ---
+
+
+class FakeEngine:
+    """Mesin FR tiruan: mencatat frame yang diterima, mengembalikan sampel atau galat yang diatur tes."""
+
+    def __init__(self, error=None):
+        self.frames = []
+        self.error = error
+
+    def enrollment_sample(self, frame):
+        self.frames.append(frame)
+        if self.error:
+            raise face_engine.FaceEngineError(self.error, "pesan uji")
+        row = np.array([[100, 100, 80, 100, 120, 120, 160, 120, 140, 140, 125, 160, 155, 160, 0.93]], np.float32)
+        detection = face_engine.parse_detections(row, 0.6)[0]
+        return face_engine.FaceSample(detection, np.ones(256, np.float32) / 16)
+
+
+@pytest.fixture
+def camera(monkeypatch):
+    """Kamera aktif berisi satu frame, jalur inspeksi kosong, mesin FR tiruan."""
+    frame = np.zeros((720, 1280, 3), np.uint8)
+    engine = FakeEngine()
+    monkeypatch.setattr(video_service, "camera_frame", lambda: frame)
+    monkeypatch.setattr(state_mgr, "session", None)
+    monkeypatch.setattr(face_engine, "engine", engine)
+    return engine
+
+
+def _photo(client, wid, condition="bare"):
+    return client.post(f"/api/workers/{wid}/templates", json={"condition": condition})
+
+
+def test_foto_pendaftaran_menjadi_templat_terenkripsi(client, store, camera, security_events):
+    wid = _create(client).json()["id"]
+    r = _photo(client, wid, "glasses")
+    assert r.status_code == 201
+    body = r.json()
+    assert set(body) == {"id", "condition", "model_version", "created_at", "quality"}
+    assert body["condition"] == "glasses" and body["model_version"] == cfg.FACE_MODEL_VERSION
+    assert body["quality"] == {"face_width_px": 80, "interocular_px": 40.0, "det_score": pytest.approx(0.93)}
+    gallery = store.load_gallery(cfg.FACE_MODEL_VERSION)
+    assert gallery.worker_ids.tolist() == [wid] and np.allclose(gallery.vectors[0], 1 / 16)
+    event = security_events[-1]
+    assert event["event"] == security_log.WORKER_TEMPLATE_ADDED and event["condition"] == "glasses"
+    assert not any(isinstance(v, list) and len(v) > 10 for v in event.values()), "tanpa embedding di log"
+
+
+@pytest.mark.parametrize("code, status", [("no_face", 422), ("multiple_faces", 422), ("face_too_small", 422)])
+def test_foto_tidak_layak_tidak_menyimpan_apa_pun(client, store, camera, code, status):
+    wid = _create(client).json()["id"]
+    camera.error = code
+    r = _photo(client, wid)
+    assert r.status_code == status and r.json()["detail"]["code"] == code
+    assert store.get(wid).templates == ()
+
+
+def test_kamera_tidak_dipakai_saat_jalur_terisi_atau_kamera_mati(client, store, camera, monkeypatch):
+    wid = _create(client).json()["id"]
+    monkeypatch.setattr(state_mgr, "session", object())
+    r = _photo(client, wid)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "camera_busy"
+    monkeypatch.setattr(state_mgr, "session", None)
+    monkeypatch.setattr(video_service, "camera_frame", lambda: None)
+    r = _photo(client, wid)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "camera_unavailable"
+    assert camera.frames == [] and store.get(wid).templates == ()
+
+
+def test_permintaan_pasti_ditolak_dicek_sebelum_kamera(client, store, camera, monkeypatch):
+    wid = _create(client).json()["id"]
+    r = _photo(client, wid, "kacamata_hitam")
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "invalid_condition"
+    client.post(f"/api/workers/{wid}/deactivate")
+    r = _photo(client, wid)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "inactive"
+    assert _photo(client, 999).status_code == 404
+    monkeypatch.setattr(worker_store, "store", worker_store.SqliteWorkerStore(store.path, key=""))
+    assert _photo(client, wid).json()["detail"]["code"] == "face_not_ready"
+    assert camera.frames == [], "kamera tidak disentuh untuk permintaan yang pasti ditolak"
+
+
+def test_foto_pendaftaran_khusus_admin(client, store, camera):
+    async def operator(request: Request) -> SessionUser:
+        user = SessionUser("operator-uji", "operator")
+        request.state.user = user
+        return user
+
+    app.dependency_overrides[require_session] = operator
+    wid = store.create("P-1", "Budi", True, "admin-uji").id
+    assert _photo(client, wid).status_code == 403 and camera.frames == []

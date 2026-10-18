@@ -577,7 +577,7 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
    | `POST /api/workers/{id}/activate` | b1 | — | 200 `Worker`; bila wajah sudah terhapus retensi: tetap 200, `face_deleted_at` terisi & `templates` kosong → UI meminta foto ulang (diubah dari usul 409 saat implementasi T34b1: dengan 409 pekerja itu tidak bisa diaktifkan lagi karena nomor pegawainya sudah terpakai) |
    | `DELETE /api/workers/{id}/face` | b1 | — | 204 (hapus data wajah segera, hak hapus UU PDP) |
    | `DELETE /api/workers/{id}/templates/{template_id}` | b1 | — | 204 |
-   | `POST /api/workers/{id}/templates` | b2 | `{"condition": "bare"\|"glasses"\|"helmet"\|"helmet_glasses"}` | 201 `Template` + `{"quality": {"face_width_px", "interocular_px", "det_score"}}`; 422 `no_face` / `multiple_faces` / `face_too_small`; 409 `camera_busy` (jalur inspeksi terisi); 503 `face_not_ready` |
+   | `POST /api/workers/{id}/templates` | b2 | `{"condition": "bare"\|"glasses"\|"helmet"\|"helmet_glasses"}` | 201 `Template` + `{"quality": {"face_width_px", "interocular_px", "det_score"}}`; 422 `no_face` / `multiple_faces` / `face_too_small`; 409 `camera_busy` (jalur inspeksi terisi) / `camera_unavailable` (kamera belum aktif atau frame sintetis — ditambahkan saat implementasi T34b2); 400 `invalid_condition`; 409 `inactive`; 404 `not_found`; 503 `face_not_ready` |
 
    `Worker` = `{"id", "employee_no", "name", "active", "consent": {"at", "by", "version"}, "created_at",
    "deactivated_at": str|null, "delete_after": str|null, "face_deleted_at": str|null, "templates": [Template]}`;

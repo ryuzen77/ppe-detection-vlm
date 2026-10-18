@@ -136,6 +136,18 @@ def normalize_employee_no(raw: object) -> str:
     return number
 
 
+def _check_condition(condition: str) -> None:
+    if condition not in cfg.FACE_CONDITIONS:
+        raise WorkerError(
+            "invalid_condition", messages.WORKER_INVALID_CONDITION.format(conditions=", ".join(cfg.FACE_CONDITIONS))
+        )
+
+
+def _check_active(worker: "Worker") -> None:
+    if not worker.active:
+        raise WorkerError("inactive", messages.WORKER_INACTIVE.format(worker_id=worker.id))
+
+
 def _not_found(worker_id: int) -> WorkerError:
     return WorkerError("not_found", messages.WORKER_NOT_FOUND.format(worker_id=worker_id))
 
@@ -318,15 +330,11 @@ class SqliteWorkerStore:
         self, worker_id: int, condition: str, model_version: str, vector: np.ndarray, actor: str
     ) -> Template:
         """Templat baru terenkripsi; hanya untuk pekerja aktif. Menghapus tanda `face_deleted_at`."""
-        if condition not in cfg.FACE_CONDITIONS:
-            raise WorkerError(
-                "invalid_condition", messages.WORKER_INVALID_CONDITION.format(conditions=", ".join(cfg.FACE_CONDITIONS))
-            )
+        _check_condition(condition)
         cipher, flat = self._cipher(), np.asarray(vector, dtype=np.float32).ravel()
 
         def insert(conn):
-            if not self._get(conn, worker_id).active:
-                raise WorkerError("inactive", messages.WORKER_INACTIVE.format(worker_id=worker_id))
+            _check_active(self._get(conn, worker_id))
             nonce, sealed = cipher.encrypt(flat, face_crypto.template_aad(worker_id, model_version))
             now = _now()
             cursor = conn.execute(
@@ -338,6 +346,12 @@ class SqliteWorkerStore:
             return Template(int(cursor.lastrowid or 0), condition, model_version, now)
 
         return self._run(insert)
+
+    def check_template_target(self, worker_id: int, condition: str) -> None:
+        """Cek sebelum mengambil foto (T34b2): kondisi sah & pekerja ada lagi aktif, supaya kamera
+        tidak dipakai untuk permintaan yang pasti ditolak. Dicek ulang saat menyimpan."""
+        _check_condition(condition)
+        _check_active(self.get(worker_id))
 
     # --- Galeri & retensi ---
 

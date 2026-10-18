@@ -312,3 +312,10 @@ FACE_TEMPLATE_UNREADABLE = ("{count} templat wajah tidak bisa dibuka (kunci FACE
 FACE_GALLERY_OVER_LIMIT = ("Pekerja aktif berwajah terdaftar {count} melewati batas teruji {limit}: risiko pekerja "
                            "tidak dikenali naik tajam. Evaluasi ulang model/galeri (docs/RENCANA.md T34).")
 FACE_RETENTION_PURGED = "Retensi wajah: data wajah {count} pekerja nonaktif lebih dari {days} hari dihapus."
+WORKER_NO_FACE = "Tidak ada wajah terdeteksi. Minta pekerja menghadap kamera di posisi pemeriksaan lalu ulangi."
+WORKER_MULTIPLE_FACES = "Terdeteksi {count} wajah. Pastikan hanya pekerja yang didaftarkan terlihat di kamera."
+WORKER_FACE_TOO_SMALL = ("Wajah terlalu kecil di kamera (jarak antar-mata {measured:.0f} px, minimal {minimum:.0f} px). "
+                         "Naikkan resolusi kamera atau minta pekerja lebih dekat lalu ulangi.")
+WORKER_CAMERA_BUSY = "Ada orang di jalur pemeriksaan. Ambil foto pendaftaran saat gerbang tidak sedang memeriksa."
+WORKER_CAMERA_UNAVAILABLE = "Kamera belum aktif. Pilih kamera di Pengaturan lalu ulangi."
+FACE_ENGINE_LOAD_FAILED = "Mesin pengenalan wajah gagal dimuat dari {path}: {error}"

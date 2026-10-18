@@ -1,4 +1,4 @@
-"""Data pekerja & templat wajah untuk admin (T34b1). Kontrak: docs/RENCANA.md, Rancangan T34 -> T34b.
+"""Data pekerja & templat wajah untuk admin (T34b1, foto pendaftaran T34b2). Kontrak: docs/RENCANA.md, Rancangan T34 -> T34b.
 
 Semua endpoint khusus admin. Jawaban tidak pernah memuat embedding maupun foto;
 setiap perubahan dicatat di security log (siapa, dari mana, pekerja mana).
@@ -9,7 +9,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from .. import auth, messages, security_log, worker_store
+from .. import auth, face_engine, messages, security_log, worker_store
+from ..config import cfg
+from ..state_manager import state_mgr
+from ..video.capture import video_service
 from .deps import client_address, require_admin
 
 logger = logging.getLogger(__name__)
@@ -20,6 +23,11 @@ _STATUS = {
     "template_not_found": 404,
     "employee_no_taken": 409,
     "inactive": 409,
+    "camera_busy": 409,
+    "camera_unavailable": 409,
+    "no_face": 422,
+    "multiple_faces": 422,
+    "face_too_small": 422,
     "face_not_ready": 503,
 }
 
@@ -30,7 +38,11 @@ class NewWorker(BaseModel):
     consent: bool = False
 
 
-def _error(error: worker_store.WorkerError) -> HTTPException:
+class NewTemplate(BaseModel):
+    condition: str = ""
+
+
+def _error(error: worker_store.WorkerError | face_engine.FaceEngineError) -> HTTPException:
     return HTTPException(
         status_code=_STATUS.get(error.code, 400), detail={"code": error.code, "message": error.message}
     )
@@ -47,10 +59,16 @@ def worker_json(worker: worker_store.Worker) -> dict:
         "deactivated_at": worker.deactivated_at,
         "delete_after": worker.delete_after,
         "face_deleted_at": worker.face_deleted_at,
-        "templates": [
-            {"id": t.id, "condition": t.condition, "model_version": t.model_version, "created_at": t.created_at}
-            for t in worker.templates
-        ],
+        "templates": [template_json(t) for t in worker.templates],
+    }
+
+
+def template_json(template: worker_store.Template) -> dict:
+    return {
+        "id": template.id,
+        "condition": template.condition,
+        "model_version": template.model_version,
+        "created_at": template.created_at,
     }
 
 
@@ -63,7 +81,7 @@ def _record(event: str, request: Request, user: auth.SessionUser, worker_id: int
 def _call(fn, *args):
     try:
         return fn(*args)
-    except worker_store.WorkerError as e:
+    except (worker_store.WorkerError, face_engine.FaceEngineError) as e:
         raise _error(e)
 
 
@@ -123,3 +141,40 @@ def delete_worker_template(
     _call(worker_store.store.delete_template, worker_id, template_id)
     _record(security_log.WORKER_TEMPLATE_DELETED, request, user, worker_id, template_id=template_id)
     return Response(status_code=204)
+
+
+def _enrollment_frame():
+    """Frame kamera untuk foto pendaftaran: tidak saat gerbang memeriksa orang (foto bisa milik
+    orang lain & jalur inspeksi tidak boleh diganggu), dan hanya dari kamera sungguhan."""
+    if state_mgr.session is not None:
+        raise worker_store.WorkerError("camera_busy", messages.WORKER_CAMERA_BUSY)
+    frame = video_service.camera_frame()
+    if frame is None:
+        raise worker_store.WorkerError("camera_unavailable", messages.WORKER_CAMERA_UNAVAILABLE)
+    return frame
+
+
+@router.post("/api/workers/{worker_id}/templates", status_code=201)
+def add_worker_template(
+    worker_id: int, body: NewTemplate, request: Request, user: auth.SessionUser = Depends(require_admin)
+):
+    """Foto pendaftaran dari kamera gerbang -> templat terenkripsi. Foto hanya di memori, tidak disimpan."""
+    store = worker_store.store
+    if not store.face_ready():
+        raise _error(worker_store.WorkerError("face_not_ready", messages.WORKER_FACE_NOT_READY))
+    _call(store.check_template_target, worker_id, body.condition)
+    sample = _call(lambda: face_engine.engine.enrollment_sample(_enrollment_frame()))
+    template = _call(
+        store.add_template, worker_id, body.condition, cfg.FACE_MODEL_VERSION, sample.vector, user.username
+    )
+    quality = sample.detection.quality()
+    _record(
+        security_log.WORKER_TEMPLATE_ADDED,
+        request,
+        user,
+        worker_id,
+        template_id=template.id,
+        condition=template.condition,
+        **quality,
+    )
+    return {**template_json(template), "quality": quality}
