@@ -542,6 +542,47 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
    - **Disiapkan untuk PostgreSQL + pgvector** (rencana panjang di bawah): akses data pekerja lewat satu antarmuka
      repository (`WorkerStore`: daftar, tambah templat, nonaktifkan, hapus, muat galeri); T34b hanya membuat
      implementasi SQLite. Tiap templat menyimpan versi model & dimensi supaya bisa dipindah tanpa salah tafsir.
+
+   **Rancangan & kontrak API T34b (USUL 18-10, menunggu persetujuan pengguna).** Dipecah dua:
+   **T34b1** = penyimpanan, persetujuan, retensi, log keamanan, API admin (tanpa kamera/model, tanpa dependensi baru;
+   `cryptography` sudah terkunci di `requirements.lock`). **T34b2** = mesin FR di gerbang (YuNet + Intel 0095, dependensi
+   baru `openvino`, berkas model ±5 MB ikut repo dengan berkas lisensinya supaya gerbang tanpa internet tetap jalan) +
+   ambil foto pendaftaran dari kamera.
+
+   - **Penyimpanan:** SQLite terpisah `DATA_DIR/workers.db` (terpisah dari audit & akun: cadangan audit tidak ikut
+     membawa data wajah). Tabel `workers` (id, `employee_no` unik, `name`, `active`, `consent_at`, `consent_by`,
+     `consent_version`, `created_at`, `created_by`, `deactivated_at`, `face_deleted_at`) dan `face_templates` (id,
+     `worker_id`, `condition`, `model_version`, `dim`, `nonce`, `ciphertext`, `created_at`, `created_by`).
+   - **Enkripsi:** AES-256-GCM per templat; data tambahan terautentikasi = `worker_id` + `model_version` (templat tidak
+     bisa dipindah ke baris lain). Kunci `FACE_DATA_KEY` (base64 32 byte) di `backend/.env`, **tidak pernah dibuat
+     otomatis ke `DATA_DIR`**. Kunci kosong → fitur FR mati dengan pesan jelas (`face_ready=false`); gerbang tetap
+     berjalan seperti sekarang. Kunci salah → templat gagal dibuka, dicatat, tidak membuat server mati.
+   - **Kondisi foto** (kunci API Inggris, label UI di `messages.ts`): `bare` (tanpa helm/kacamata), `glasses`,
+     `helmet`, `helmet_glasses`. Pekerja berkacamata wajib punya `glasses` (aturan di UI + peringatan API).
+   - **Retensi:** nonaktif → `delete_after = deactivated_at + FACE_RETENTION_DAYS (30)`; pembersihan retensi (T20)
+     menghapus templat & MP3 nama, mengisi `face_deleted_at`. Aktif lagi sebelum terhapus = penghapusan batal.
+   - **Log keamanan** (`security.jsonl`, tanpa embedding): `worker_created`, `worker_template_added`,
+     `worker_template_deleted`, `worker_deactivated`, `worker_activated`, `worker_face_deleted` (`reason`:
+     `manual`/`retention`), `face_key_error`.
+   - **Batas galeri:** `FACE_GALLERY_TESTED_LIMIT = 300` (T34m2); lewat batas → `limit.over=true` + peringatan di log.
+
+   Endpoint (semua `require_admin`; galat memakai bentuk `{"detail": {"code": "...", "message": "..."}}` seperti T51):
+
+   | Metode & jalur | Tahap | Badan permintaan | Jawaban |
+   | :-- | :-- | :-- | :-- |
+   | `GET /api/workers` | b1 | — | `{"face_ready": bool, "limit": {"tested": 300, "count": n, "over": bool}, "workers": [Worker]}` |
+   | `POST /api/workers` | b1 | `{"employee_no": str, "name": str, "consent": true}` | 201 `Worker`; 400 `consent_required` / `invalid_name` / `invalid_employee_no`; 409 `employee_no_taken`; 503 `face_not_ready` |
+   | `POST /api/workers/{id}/deactivate` | b1 | — | 200 `Worker` (`delete_after` terisi) |
+   | `POST /api/workers/{id}/activate` | b1 | — | 200 `Worker`; 409 `face_already_deleted` (daftar ulang foto) |
+   | `DELETE /api/workers/{id}/face` | b1 | — | 204 (hapus data wajah segera, hak hapus UU PDP) |
+   | `DELETE /api/workers/{id}/templates/{template_id}` | b1 | — | 204 |
+   | `POST /api/workers/{id}/templates` | b2 | `{"condition": "bare"\|"glasses"\|"helmet"\|"helmet_glasses"}` | 201 `Template` + `{"quality": {"face_width_px", "interocular_px", "det_score"}}`; 422 `no_face` / `multiple_faces` / `face_too_small`; 409 `camera_busy` (jalur inspeksi terisi); 503 `face_not_ready` |
+
+   `Worker` = `{"id", "employee_no", "name", "active", "consent": {"at", "by", "version"}, "created_at",
+   "deactivated_at": str|null, "delete_after": str|null, "face_deleted_at": str|null, "templates": [Template]}`;
+   `Template` = `{"id", "condition", "model_version", "created_at"}` (tanpa embedding, tanpa foto). Waktu = format
+   lokal gerbang seperti audit (`YYYY-MM-DDTHH:MM:SS`). Foto pendaftaran (b2) hanya di memori untuk dihitung lalu
+   dibuang; tidak ada pratinjau tersimpan.
 3. **T34c — pengenalan dalam sesi + audit** (backend): FR di jendela diam, kunci identitas per sesi, kolom audit,
    tes karakterisasi state machine diperluas.
 4. **T34d — suara nama** (backend): MP3 per pekerja saat daftar, diputar setelah "lolos".
