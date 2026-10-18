@@ -45,7 +45,7 @@ def client():
 
 
 def _create(client, number="P-001", name="Budi", consent=True):
-    return client.post("/api/workers", json={"employee_no": number, "name": name, "consent": consent, "gender": "male"})
+    return client.post("/api/workers", json={"employee_no": number, "name": name, "consent": consent, "nickname": "Budi", "gender": "male"})
 
 
 def test_daftar_kosong_dan_status_fitur(client, store):
@@ -157,7 +157,7 @@ def test_bukan_admin_ditolak(client, store):
         return user
 
     app.dependency_overrides[require_session] = operator
-    wid = store.create("P-1", "Budi", True, "admin-uji", gender="male").id
+    wid = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male").id
     for method, path in (
         ("get", "/api/workers"),
         ("post", "/api/workers"),
@@ -263,5 +263,5 @@ def test_foto_pendaftaran_khusus_admin(client, store, camera):
         return user
 
     app.dependency_overrides[require_session] = operator
-    wid = store.create("P-1", "Budi", True, "admin-uji", gender="male").id
+    wid = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male").id
     assert _photo(client, wid).status_code == 403 and camera.frames == []

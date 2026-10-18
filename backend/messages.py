@@ -345,7 +345,7 @@ SALUTATIONS = {"male": "Pak", "female": "Bu"}
 # Kalimat bernama diturunkan dari suara "lengkap" supaya isinya tidak pernah berbeda
 VOICE_PASS_NAMED = VOICE_TEXTS["lengkap"].rstrip(".") + ", {salutation} {nickname}."
 WORKER_INVALID_GENDER = "Jenis kelamin wajib dipilih (untuk sapaan Pak/Bu)."
-WORKER_INVALID_NICKNAME = "Nama panggilan maksimal {max} karakter, satu baris."
+WORKER_INVALID_NICKNAME = "Nama panggilan wajib diisi (maksimal {max} karakter, satu baris), mis. Zen untuk Muhammad Zen Fikri."
 LOG_VOICE_CREATED = "Suara nama pekerja #{worker_id} dibuat."
 LOG_VOICE_FAILED = ("Suara nama pekerja #{worker_id} gagal dibuat (layanan suara butuh internet): {error}. "
                     "Saat lolos, suara umum dipakai; ubah data pekerja untuk mencoba lagi.")

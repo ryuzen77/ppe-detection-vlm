@@ -35,13 +35,16 @@ def _wait(predicate, timeout=5.0):
 # --- Profil ---
 
 
-def test_jenis_kelamin_wajib_dan_menentukan_sapaan(store):
+def test_nama_panggilan_dan_jenis_kelamin_wajib(store):
     with pytest.raises(worker_store.WorkerError) as e:
-        store.create("P-1", "Budi Santoso", True, "admin-uji")
+        store.create("P-1", "Muhammad Zen Fikri", True, "admin-uji", gender="male")
+    assert e.value.code == "invalid_nickname", "tidak ditebak dari nama lengkap (bukan nama depan/belakang)"
+    with pytest.raises(worker_store.WorkerError) as e:
+        store.create("P-1", "Muhammad Zen Fikri", True, "admin-uji", nickname="Zen")
     assert e.value.code == "invalid_gender"
-    budi = store.create("P-1", "Budi Santoso", True, "admin-uji", gender="male")
+    zen = store.create("P-1", "Muhammad Zen Fikri", True, "admin-uji", nickname="Zen", gender="male")
     sari = store.create("P-2", "Sari Dewi", True, "admin-uji", nickname="Sari", gender="FEMALE")
-    assert (budi.nickname, budi.salutation) == ("Budi", "Pak"), "nama panggilan bawaan = kata pertama"
+    assert (zen.nickname, zen.salutation) == ("Zen", "Pak")
     assert (sari.gender, sari.salutation) == ("female", "Bu")
 
 
@@ -49,7 +52,7 @@ def test_nama_panggilan_divalidasi_dan_profil_bisa_diubah(store):
     with pytest.raises(worker_store.WorkerError) as e:
         store.create("P-1", "Budi", True, "admin-uji", nickname="x" * 31, gender="male")
     assert e.value.code == "invalid_nickname"
-    worker = store.create("P-1", "Budi Santoso", True, "admin-uji", gender="male")
+    worker = store.create("P-1", "Budi Santoso", True, "admin-uji", nickname="Budi", gender="male")
     revision = store.revision
     changed = store.update_profile(worker.id, nickname="  Pak   Budi ")
     assert changed.nickname == "Pak Budi" and changed.gender == "male" and store.revision > revision
@@ -83,7 +86,7 @@ def test_basis_data_t34b1_tanpa_kolom_profil_ditambah_kolomnya(tmp_path):
 
 
 def test_yang_dikirim_ke_layanan_suara_hanya_sapaan_dan_nama_panggilan(store, security_events):
-    worker = store.create("P-001", "Budi Santoso", True, "admin-uji", gender="male")
+    worker = store.create("P-001", "Budi Santoso", True, "admin-uji", nickname="Budi", gender="male")
     sent = []
 
     def record(text: str, path: Path) -> None:
@@ -104,7 +107,7 @@ def test_yang_dikirim_ke_layanan_suara_hanya_sapaan_dan_nama_panggilan(store, se
 
 
 def test_layanan_suara_gagal_tanpa_berkas_setengah_jadi(store, security_events, caplog):
-    worker = store.create("P-1", "Budi", True, "admin-uji", gender="male")
+    worker = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male")
 
     def offline(text, path):
         path.write_bytes(b"setengah")
@@ -116,7 +119,7 @@ def test_layanan_suara_gagal_tanpa_berkas_setengah_jadi(store, security_events, 
 
 
 def test_hapus_suara(store):
-    worker = store.create("P-1", "Budi", True, "admin-uji", gender="male")
+    worker = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male")
     worker_voice.synthesize(worker)
     assert worker_voice.delete([worker.id, 999]) == 1 and not worker_voice.voice_ready(worker.id)
 
@@ -127,7 +130,7 @@ def test_hapus_suara(store):
 def test_api_pendaftaran_profil_dan_hapus_wajah(store, no_cloud_voice):
     client = TestClient(app)
     r = client.post(
-        "/api/workers", json={"employee_no": "P-1", "name": "Sari Dewi", "consent": True, "gender": "female"}
+        "/api/workers", json={"employee_no": "P-1", "name": "Sari Dewi", "consent": True, "nickname": "Sari", "gender": "female"}
     )
     assert r.status_code == 201 and (r.json()["nickname"], r.json()["salutation"]) == ("Sari", "Bu")
     wid = r.json()["id"]
@@ -157,7 +160,7 @@ def _result(complete):
 
 
 def test_suara_bernama_hanya_saat_lolos_dan_dikenali(store):
-    worker = store.create("P-1", "Budi", True, "admin-uji", gender="male")
+    worker = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male")
     worker_voice.synthesize(worker)
     known = face_identity.Identity("recognized", worker.id, "Budi", "P-1", 0.8)
     assert StateManager._named_voice(_session(known), _result(True)) == {

@@ -166,10 +166,11 @@ def normalize_gender(raw: object) -> str:
     return gender
 
 
-def normalize_nickname(raw: object, name: str) -> str:
-    """Nama panggilan untuk suara (T34d); kosong = kata pertama nama lengkap."""
-    nickname = " ".join(str(raw or "").split()) or name.split()[0]
-    if len(nickname) > cfg.WORKER_NICKNAME_MAX_LENGTH or not nickname.isprintable():
+def normalize_nickname(raw: object) -> str:
+    """Nama panggilan untuk suara (T34d), WAJIB diisi admin. Tidak ditebak dari nama lengkap:
+    nama Indonesia tidak berpola nama depan/belakang ("Muhammad Zen Fikri" dipanggil "Zen")."""
+    nickname = " ".join(str(raw or "").split())
+    if not 1 <= len(nickname) <= cfg.WORKER_NICKNAME_MAX_LENGTH or not nickname.isprintable():
         raise WorkerError("invalid_nickname", messages.WORKER_INVALID_NICKNAME.format(max=cfg.WORKER_NICKNAME_MAX_LENGTH))
     return nickname
 
@@ -291,11 +292,11 @@ class SqliteWorkerStore:
     def create(self, employee_no: object, name: object, consent: bool, actor: str, nickname: object = "",
                gender: object = None) -> Worker:
         """Pekerja baru; persetujuan tertulis wajib dicentang admin (keputusan pengguna 18-10).
-        Jenis kelamin wajib (sapaan Pak/Bu suara nama, T34d)."""
+        Nama panggilan & jenis kelamin wajib (suara nama "Pak/Bu <nama panggilan>", T34d)."""
         if consent is not True:
             raise WorkerError("consent_required", messages.WORKER_CONSENT_REQUIRED)
         number, clean_name = normalize_employee_no(employee_no), normalize_name(name)
-        profile = (normalize_nickname(nickname, clean_name), normalize_gender(gender))
+        profile = (normalize_nickname(nickname), normalize_gender(gender))
         self._cipher()  # tanpa kunci, pekerja tidak bisa diberi wajah: tolak sejak awal
 
         def insert(conn):
@@ -315,7 +316,7 @@ class SqliteWorkerStore:
         """Ubah nama panggilan / jenis kelamin (T34d); None = tidak diubah. Suara nama dibuat ulang pemanggil."""
         def update(conn):
             current = self._get(conn, worker_id)
-            new_nickname = current.nickname if nickname is None else normalize_nickname(nickname, current.name)
+            new_nickname = current.nickname if nickname is None else normalize_nickname(nickname)
             new_gender = current.gender if gender is None else normalize_gender(gender)
             conn.execute("UPDATE workers SET nickname = ?, gender = ? WHERE id = ?", (new_nickname, new_gender, worker_id))
             return self._get(conn, worker_id)

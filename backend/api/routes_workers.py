@@ -38,7 +38,7 @@ class NewWorker(BaseModel):
     employee_no: str = ""
     name: str = ""
     consent: bool = False
-    nickname: str = ""   # T34d: kosong = kata pertama nama
+    nickname: str = ""   # T34d: wajib (nama yang diucapkan)
     gender: str = ""     # T34d: "male" | "female", wajib (sapaan Pak/Bu)
 
 
