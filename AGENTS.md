@@ -121,6 +121,14 @@ Khusus:
    → `npm run build` → commit `web/dist` → status `selesai`.
 5. Setelah `master` berubah, agen lain **rebase branch-nya ke `master`** sebelum
    melanjutkan (di folder masing-masing).
+6. **Rencana tetap ringkas** (dibaca setiap agen setiap sesi): saat status jadi
+   `selesai`, integrator memindah baris papan itu ke
+   [`docs/arsip/RENCANA-selesai.md`](docs/arsip/RENCANA-selesai.md) dalam commit
+   yang sama; kontrak/rancangan yang task-nya sudah selesai juga dipindah ke sana.
+   Arsip tidak dibaca rutin — cari di sana hanya bila butuh angka uji atau alasan
+   keputusan lama.
+7. **Push ke GitHub hanya setelah satu fitur utuh selesai tanpa bug** (keputusan
+   pengguna 18-10), atas permintaan pengguna; sebelumnya cukup commit lokal.
 
 ### 2.5 Komunikasi
 
