@@ -1,7 +1,7 @@
 {
   "include": ["backend", "tests", "tools", "scripts"],
-  "exclude": ["**/__pycache__", "web", "data", "iot", "picture_test"],
-  "extraPaths": ["backend", "tests", "tools"],
+  "exclude": ["**/__pycache__", "web", "data", "iot", "picture_test", "tools/fr_eval/bench_speed.py"],
+  "extraPaths": ["backend", "tests", "tools", "tools/fr_eval"],
   "pythonVersion": "3.12",
   "typeCheckingMode": "standard"
 }
