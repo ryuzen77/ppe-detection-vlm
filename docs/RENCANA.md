@@ -494,6 +494,11 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
      menentukan, perlu keputusan pengguna (jumlah pekerja; atau model lebih kuat di GPU). Batasan: LFW = foto berita
      tak terkontrol (pendaftaran di kamera gerbang biasanya memberi skor pekerja lebih tinggi); galeri 3.305 diisi
      orang berfoto pendaftaran 1; tanpa helm/masker → uji nyata tetap wajib.
+   - **Keputusan pengguna 18-10: asumsi ±300 pekerja per gerbang → model terpilih Intel 0095** (OpenVINO, CPU;
+     SFace sebagai cadangan bila OpenVINO bermasalah). Ambang awal dari LFW galeri 305 ≈ 0,55 (FPIR 0,1%), dikalibrasi
+     ulang dengan foto nyata di T34a/uji relawan. Konsekuensi untuk T34b: jumlah pekerja terdaftar dipantau — bila jauh
+     melewati batas yang teruji (nilai di `config.py`), admin diberi peringatan karena orang tak dikenali naik tajam
+     (galeri 3.305 di LFW: separuh pekerja tak dikenali); saat itu evaluasi ulang (model GPU atau galeri per shift).
 1. **T34a — uji ukuran wajah (fisik, perlu pengguna di depan kamera):** ukur piksel wajah dari posisi kamera
    sekarang dengan/tanpa helm, masker, kacamata; ukur waktu YuNet + SFace di CPU. **Tidak menyimpan data wajah.**
    Hasilnya menentukan kamera cukup atau perlu tambahan.
@@ -504,7 +509,7 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 5. **T34e — UI** (Gemini): halaman pendaftaran pekerja + persetujuan, laporan & filter per pekerja.
 
 **Pertanyaan terbuka:** masa simpan data wajah menurut kebijakan HR; siapa yang boleh mendaftarkan; isi formulir
-persetujuan; jumlah pekerja per gerbang (perkiraan); perlu atau tidak tampilan nama di layar Monitoring.
+persetujuan; perlu atau tidak tampilan nama di layar Monitoring.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
