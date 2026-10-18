@@ -52,6 +52,11 @@ class FakeProvider(VLMProvider):
         if self.fail_warm_up:
             raise RuntimeError(self.warm_up_error)
 
+    unloads = 0
+
+    def unload(self):
+        self.unloads += 1
+
 
 @pytest.fixture
 def env(monkeypatch, tmp_path):
@@ -331,3 +336,58 @@ def test_endpoint_uji_tanpa_penyedia_ditolak_400(client, provider):
     # T65: dulu Choice.parse -> None lalu check_choice(None) -> AttributeError -> HTTP 500
     r = client.post("/api/config/vlm/test", json={"role": "backup", "provider": provider, "model": "m"})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "unknown_provider"
+
+
+# --- T70: cadangan dimatikan = model keluar dari GPU -----------------------------------
+
+def _wait_unloaded(provider, expected=1, timeout=3.0):
+    end = time.time() + timeout
+    while time.time() < end and provider.unloads < expected:
+        time.sleep(0.01)
+    return provider.unloads
+
+
+def test_mematikan_cadangan_mengeluarkan_model_dari_gpu(analyzer):
+    old_backup = analyzer.backup.provider
+    analyzer.apply_selection(Selection(Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD),
+                             lambda: True)
+    assert analyzer.backup is None
+    assert _wait_unloaded(old_backup) == 1
+
+
+def test_cadangan_yang_tetap_dipakai_tidak_dikeluarkan(analyzer):
+    backup = analyzer.backup.provider
+    analyzer.apply_selection(Selection(Choice("openai", "model-baru"), Choice("ollama", "qwen2.5vl:7b"),
+                                       vlm_selection.SOURCE_DASHBOARD), lambda: True)
+    time.sleep(0.2)
+    assert analyzer.backup.provider is backup and backup.unloads == 0
+
+
+def test_ganti_model_lokal_yang_lama_dikeluarkan(analyzer):
+    old = analyzer.backup.provider
+    analyzer.apply_selection(Selection(Choice("gemini", "gemini-3.5-flash-lite"), Choice("ollama", "qwen2.5vl:3b"),
+                                       vlm_selection.SOURCE_DASHBOARD), lambda: True)
+    assert _wait_unloaded(old) == 1 and analyzer.backup.provider.unloads == 0
+
+
+def test_saat_menyala_tanpa_cadangan_model_sisa_sesi_lalu_dikeluarkan(env, fakes, monkeypatch):
+    made, _ = fakes
+    monkeypatch.setattr(vlm_selection, "effective_selection", lambda: Selection(
+        Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD))
+    a = VLMAnalyzer()
+    a.start()
+    stale = [p for p in made if p.name == "ollama"]
+    assert a.backup is None and len(stale) == 1 and _wait_unloaded(stale[0]) == 1
+    assert a.primary is not None
+    a.primary.close()
+
+
+def test_saat_menyala_env_tanpa_cadangan_tidak_menyentuh_ollama(env, fakes, monkeypatch):
+    made, _ = fakes
+    monkeypatch.setattr(cfg, "VLM_BACKUP_PROVIDER", "none")
+    monkeypatch.setattr(vlm_selection, "effective_selection", lambda: Selection(
+        Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD))
+    a = VLMAnalyzer()
+    a.start()
+    assert not any(p.name == "ollama" for p in made) and a.primary is not None
+    a.primary.close()

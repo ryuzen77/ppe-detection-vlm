@@ -253,9 +253,23 @@ class VLMEngine:
     def choice(self) -> Choice:
         return Choice(self.provider_name, self.model_name)
 
-    def close(self):
-        """Melepas thread engine yang sudah diganti; panggilan yang berjalan tidak dipotong."""
+    def close(self, unload: bool = False):
+        """Melepas thread engine yang sudah diganti; panggilan yang berjalan tidak dipotong.
+        `unload` (T70): model lokal juga dikeluarkan dari GPU, di latar supaya admin tidak menunggu."""
         self.executor.shutdown(wait=False)
+        if unload and self.is_local and self.provider is not None:
+            threading.Thread(target=self._unload, name="VLM_Unload", daemon=True).start()
+
+    def _unload(self):
+        try:
+            self.provider.unload()  # pyright: ignore[reportOptionalMemberAccess] (dicek di close)
+            logger.info(messages.LOG_VLM_LOCAL_UNLOADED.format(who=self.who))
+        except Exception as e:
+            logger.warning(messages.LOG_VLM_LOCAL_UNLOAD_FAILED.format(who=self.who, error=e))
+
+    def local_key(self) -> tuple:
+        """Model lokal yang sama = penyedia, alamat, dan nama model sama."""
+        return self.provider_name, self.base_url, self.model_name
 
     def warm_up(self) -> Optional[float]:
         self.warm_error = ""
@@ -360,6 +374,15 @@ class VLMAnalyzer:
         self.selection_source = selection.source
         self._reset_breaker()
         self._publish_status()
+        self._release_stale_local_model()
+
+    def _release_stale_local_model(self):
+        """Cadangan lokal dimatikan (pilihan dashboard) tetapi .env masih menyebutnya: model sisa sesi lalu
+        tetap di VRAM karena Ollama proses terpisah & keep_alive=-1. Dikeluarkan saat menyala (T70)."""
+        if self._local_engine() is not None or cfg.VLM_BACKUP_PROVIDER == vlm_selection.NO_BACKUP:
+            return
+        stale = self._new_engine(ROLE_BACKUP, Choice(cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL))
+        stale.close(unload=stale.is_local)
 
     @staticmethod
     def _new_engine(role: str, choice: Choice) -> VLMEngine:
@@ -438,9 +461,12 @@ class VLMAnalyzer:
 
     @staticmethod
     def _discard(engines: tuple, keep: tuple):
+        """Engine yang tidak dipakai lagi dilepas; model lokalnya dikeluarkan dari GPU kecuali model
+        yang sama masih dipakai engine yang dipertahankan (T70: cadangan mati = benar-benar mati)."""
+        kept_local = {k.local_key() for k in keep if k is not None and k.is_local}
         for engine in engines:
             if engine is not None and all(engine is not k for k in keep):
-                engine.close()
+                engine.close(unload=engine.is_local and engine.local_key() not in kept_local)
 
     def test_choice(self, role: str, choice: Choice) -> dict:
         """Tombol "Uji": 1 ping + 1 gambar sintetis lewat engine sementara (memakai kuota penyedia).

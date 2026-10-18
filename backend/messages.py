@@ -328,3 +328,6 @@ LOG_FACE_GALLERY_LOADED = "Galeri wajah dimuat: {templates} templat dari {worker
 CSV_HEADER_WORKER_NAME = "Nama Pekerja (pengenalan wajah)"
 CSV_FACE_RECOGNIZED = "{name} ({employee_no})"
 CSV_FACE_UNKNOWN = "Tidak dikenali"
+# --- VLM cadangan dimatikan (T70) ---
+LOG_VLM_LOCAL_UNLOADED = "Model {who} dikeluarkan dari GPU (tidak dipakai lagi)."
+LOG_VLM_LOCAL_UNLOAD_FAILED = "Gagal mengeluarkan model {who} dari GPU: {error}. VRAM baru lega setelah Ollama dimulai ulang."

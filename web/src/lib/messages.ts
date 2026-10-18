@@ -428,6 +428,13 @@ export const VLM_SETTINGS = {
   providerLabel: 'Penyedia',
   modelLabel: 'Model',
   noBackup: '(Tanpa cadangan)',
+  // T70: cadangan mati = model keluar dari GPU; aktif lagi = menunggu model siap
+  noBackupHint:
+    'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa). Model cadangan dikeluarkan dari GPU.',
+  disableBackupConfirm:
+    'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
+  applyingLocalBackup:
+    'Menyiapkan model cadangan di GPU (bisa sampai sekitar 1 menit). Gerbang tetap memakai pilihan lama sampai model siap...',
   missingKey: '(isi key di .env)',
   missingBaseUrl: '(isi VLM_BASE_URL di .env)',
   

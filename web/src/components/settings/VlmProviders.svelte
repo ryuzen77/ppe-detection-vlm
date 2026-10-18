@@ -3,7 +3,7 @@
   import { api } from '../../lib/api/client'
   import type { VlmChoice, VlmProvidersResponse, VlmTestResponse, VlmModelEntry } from '../../lib/api/types'
   import { SETTINGS_TAB, VLM_SETTINGS } from '../../lib/messages'
-  import { validationBadge, handleSelectionError } from '../../lib/vlmSelection'
+  import { validationBadge, handleSelectionError, backupChange } from '../../lib/vlmSelection'
   import Server from '@lucide/svelte/icons/server'
   import { extractApiError } from '../../lib/api/error'
 
@@ -24,6 +24,7 @@
 
   let confirmation = $state<{code: string, message: string} | null>(null)
   let resetConfirmation = $state(false)
+  let disableConfirmation = $state(false)
 
   async function load() {
     try {
@@ -42,15 +43,23 @@
   onMount(load)
 
   const providers = $derived(data?.providers || [])
+  // T70: mematikan cadangan perlu konfirmasi; mengaktifkan cadangan lokal = menunggu model siap
+  const change = $derived(backupChange(data?.current.backup ?? null, backupProvider, backupModel, providers))
+
+  function requestApply() {
+    if (change === 'disable') disableConfirmation = true
+    else handleApply(false)
+  }
 
   function findModel(pName: string, mName: string): VlmModelEntry | undefined {
     return providers.find(p => p.name === pName)?.models.find(m => m.model === mName)
   }
 
   async function handleApply(confirmUnvalidated = false) {
-    applyStatus = VLM_SETTINGS.applying
+    applyStatus = change === 'enable_local' ? VLM_SETTINGS.applyingLocalBackup : VLM_SETTINGS.applying
     applying = true
     confirmation = null
+    disableConfirmation = false
     errorMsg = ''
     try {
       const primary: VlmChoice = { provider: primaryProvider, model: primaryModel }
@@ -196,6 +205,9 @@
           {/each}
         </select>
       </label>
+      {#if !backupProvider}
+        <p class="hint">{VLM_SETTINGS.noBackupHint}</p>
+      {/if}
       
       {#if backupProvider}
         {@const pList = providers.find(p => p.name === backupProvider)}
@@ -261,8 +273,18 @@
     </div>
   {/if}
 
+  {#if disableConfirmation}
+    <div class="confirmation-box">
+      <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {VLM_SETTINGS.disableBackupConfirm}</p>
+      <div class="actions">
+        <button class="btn btn-secondary" onclick={() => disableConfirmation = false} disabled={applying}>{VLM_SETTINGS.cancelBtn}</button>
+        <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
+      </div>
+    </div>
+  {/if}
+
   <div class="footer-actions">
-    <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
+    <button class="btn btn-primary" onclick={requestApply} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
     {#if applyStatus}
       <span class="status-msg">{applyStatus}</span>
     {/if}
@@ -334,6 +356,8 @@
     font-size: var(--text-xs);
     font-weight: 500;
   }
+  /* T70: konsekuensi cadangan mati */
+  .hint { font-size: var(--text-sm); color: var(--text-muted); margin: 0.25rem 0 0; }
   .tone-ok { background: var(--ok); color: var(--text); }
   .tone-warn { background: var(--warn); color: var(--surface); }
   .tone-muted { background: var(--border-strong); color: var(--text); }

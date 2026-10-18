@@ -39,6 +39,9 @@ class VLMProvider(ABC):
     def reload(self):
         """Memuat ulang model lokal (mis. setelah sebagian jatuh ke CPU). Bawaan: tidak ada."""
 
+    def unload(self):
+        """Mengeluarkan model lokal dari memori GPU (T70). Bawaan (cloud): tidak ada yang dimuat."""
+
     def analyze(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> dict:
         """Memanggil model lalu mengurai jawabannya sebagai objek JSON."""
         return parse_json_reply(self.generate(image_jpeg, system_prompt, user_prompt))
