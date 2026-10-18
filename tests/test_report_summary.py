@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import sqlite3
+import threading
 from datetime import date
 
 import pytest
@@ -152,3 +153,58 @@ def test_ekspor_dikirim_per_potongan_dengan_nomor_berlanjut(mgr, monkeypatch):
 def test_api_ekspor_mengalir_sama_dengan_teks_utuh(mgr):
     r = TestClient(app).get("/api/reports/export", params={"from": "2026-10-01", "to": "2026-10-31"})
     assert r.status_code == 200 and r.text == mgr.export_csv_text("2026-10-01", "2026-10-31")
+
+
+def _next_in_new_thread(gen):
+    """Ambil satu potongan dari thread baru, seperti pool thread Starlette (iterate_in_threadpool)."""
+    out = {}
+
+    def step():
+        try:
+            out["chunk"] = next(gen)
+        except StopIteration:
+            out["done"] = True
+        except Exception as e:  # dicatat supaya tes menampilkan galat aslinya
+            out["error"] = e
+
+    worker = threading.Thread(target=step)
+    worker.start()
+    worker.join()
+    if "error" in out:
+        raise out["error"]
+    return out.get("chunk")
+
+
+def test_ekspor_tetap_utuh_walau_tiap_potongan_dari_thread_berbeda(mgr, monkeypatch):
+    # T68: koneksi SQLite dibuat di generator lalu dipakai thread lain -> ProgrammingError,
+    # CSV terpotong diam-diam setelah potongan pertama.
+    from backend.config import cfg
+    monkeypatch.setattr(cfg, "CSV_EXPORT_BATCH_ROWS", 1)
+    gen = mgr.iter_csv_chunks()
+    chunks = []
+    while (chunk := _next_in_new_thread(gen)) is not None:
+        chunks.append(chunk)
+    assert "".join(chunks) == mgr.export_csv_text()
+    assert len(chunks) == 1 + 4, "header + 4 potongan satu baris"
+
+
+def test_unduhan_dibatalkan_koneksi_ekspor_ditutup(mgr, monkeypatch):
+    from backend.config import cfg
+    from backend import report_manager as rm_mod
+    monkeypatch.setattr(cfg, "CSV_EXPORT_BATCH_ROWS", 1)
+    opened = []
+    real_connect = rm_mod.sqlite3.connect
+
+    def spy(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(rm_mod.sqlite3, "connect", spy)
+    gen = mgr.iter_csv_chunks()
+    next(gen)   # header
+    next(gen)   # potongan pertama, lalu klien memutus
+    gen.close()
+    assert opened, "ekspor membuka koneksi"
+    with pytest.raises(sqlite3.ProgrammingError):
+        opened[-1].execute("SELECT 1")   # koneksi sudah ditutup

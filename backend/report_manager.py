@@ -191,8 +191,8 @@ class ReportManager:
                 pass
             return False
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path), timeout=cfg.DB_TIMEOUT_SECONDS)
+    def _connect(self, check_same_thread: bool = True) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self.db_path), timeout=cfg.DB_TIMEOUT_SECONDS, check_same_thread=check_same_thread)
         conn.row_factory = sqlite3.Row
         # Per koneksi: dulu hanya disetel (NORMAL) di koneksi inisialisasi yang
         # langsung ditutup, jadi tidak pernah berlaku untuk penulisan audit (T37)
@@ -517,12 +517,20 @@ class ReportManager:
         conditions, params = _range_clause(date_from, date_to)
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         number = 0
-        with self._get_connection() as conn:
+        # T68: StreamingResponse mengambil tiap potongan lewat pool thread, jadi potongan berikutnya
+        # bisa datang dari thread lain. Koneksi ini hanya dipakai satu pengambil secara berurutan
+        # (tidak pernah bersamaan), maka aman lintas thread; ditutup juga bila unduhan dibatalkan.
+        if not self._opened:
+            self.open()
+        conn = self._connect(check_same_thread=False)
+        try:
             cursor = conn.execute(f"SELECT * FROM worker_inspections {where} ORDER BY id ASC", params)
             while batch := cursor.fetchmany(cfg.CSV_EXPORT_BATCH_ROWS):
                 rows = [self._csv_row(number + i, row, items) for i, row in enumerate(batch, start=1)]
                 number += len(batch)
                 yield self._csv_text(rows)
+        finally:
+            conn.close()
 
     def export_csv_text(self, date_from: Optional[str] = None, date_to: Optional[str] = None) -> str:
         """Seluruh CSV sebagai satu teks (alat & tes); API memakai iter_csv_chunks."""
