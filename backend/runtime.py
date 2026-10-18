@@ -17,6 +17,7 @@ from .disk_guard import disk_guard
 from .storage import prepare_data_dir
 from . import ppe_rules
 from .report_manager import SECONDS_PER_DAY, report_mgr
+from . import worker_store
 from .audio_engine import audio_player
 from .notifier import notifier
 from .detector import detector
@@ -44,6 +45,8 @@ def _prune_logs():
 def _retention_loop():
     while not _cleanup_stop.is_set():
         report_mgr.cleanup_old_data()
+        # Templat wajah pekerja nonaktif > FACE_RETENTION_DAYS (T34b)
+        worker_store.run_retention()
         _prune_logs()
         if cfg.RETENTION_INTERVAL_HOURS <= 0:
             break
@@ -60,6 +63,8 @@ def _run_startup_checks():
                   and local.provider is not None else None)
     camera = camera_manager.autostart_target()[0] if cfg.CAMERA_AUTOSTART else ""
     startup_checks.run(torch.cuda.is_available(), ollama_url, camera, camera_manager.list_device_names)
+    # Kunci templat wajah: kosong/rusak = FR mati, gerbang tetap jalan (T34b)
+    worker_store.log_key_status()
 
 
 def start():

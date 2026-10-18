@@ -22,6 +22,14 @@ LOCKOUT_STARTED = "lockout_started"
 SETUP_DENIED = "setup_denied"
 FORBIDDEN = "forbidden"
 VLM_CHANGE = "vlm_change"
+# Data pekerja & templat wajah (T34b); tidak pernah berisi embedding
+WORKER_CREATED = "worker_created"
+WORKER_TEMPLATE_ADDED = "worker_template_added"
+WORKER_TEMPLATE_DELETED = "worker_template_deleted"
+WORKER_DEACTIVATED = "worker_deactivated"
+WORKER_ACTIVATED = "worker_activated"
+WORKER_FACE_DELETED = "worker_face_deleted"
+FACE_KEY_ERROR = "face_key_error"
 
 
 def record(event: str, **fields):
