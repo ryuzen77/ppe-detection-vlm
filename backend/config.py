@@ -503,6 +503,14 @@ class Config:
     FACE_CONSENT_VERSION: str = _env("FACE_CONSENT_VERSION", "1")
     WORKER_NAME_MAX_LENGTH: int = 80
     WORKER_EMPLOYEE_NO_MAX_LENGTH: int = 32
+    # Suara nama saat lolos (T34d): sapaan dari jenis kelamin (messages.SALUTATIONS) + nama panggilan
+    WORKER_GENDERS: tuple = ("male", "female")
+    WORKER_NICKNAME_MAX_LENGTH: int = 30
+    # MP3 nama per pekerja = data pribadi, jadi di DATA_DIR (bukan aset rilis di backend/audio)
+    # dan ikut terhapus bersama data wajah
+    VOICE_DIR: Path = DATA_DIR / "voices"
+    # Batas tunggu layanan suara (gTTS) saat membuat MP3 nama; lewat = suara umum dipakai
+    VOICE_TTS_TIMEOUT_SECONDS: float = 15.0
     # Mesin FR (T34b2): YuNet + Intel 0095, berkas & lisensi di backend/models/face/.
     # Versi model ikut terenkripsi di tiap templat: ganti model = daftar ulang semua pekerja.
     FACE_MODEL_DIR: Path = BASE_DIR / "models" / "face"

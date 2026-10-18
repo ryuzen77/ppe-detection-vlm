@@ -7,9 +7,11 @@ setiap perubahan dicatat di security log (siapa, dari mana, pekerja mana).
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from typing import Optional
+
 from pydantic import BaseModel
 
-from .. import auth, face_engine, messages, security_log, worker_store
+from .. import auth, face_engine, messages, security_log, worker_store, worker_voice
 from ..config import cfg
 from ..state_manager import state_mgr
 from ..video.capture import video_service
@@ -36,6 +38,15 @@ class NewWorker(BaseModel):
     employee_no: str = ""
     name: str = ""
     consent: bool = False
+    nickname: str = ""   # T34d: kosong = kata pertama nama
+    gender: str = ""     # T34d: "male" | "female", wajib (sapaan Pak/Bu)
+
+
+class WorkerProfile(BaseModel):
+    """PATCH: hanya kolom yang dikirim yang diubah (T34d)."""
+
+    nickname: Optional[str] = None
+    gender: Optional[str] = None
 
 
 class NewTemplate(BaseModel):
@@ -59,6 +70,10 @@ def worker_json(worker: worker_store.Worker) -> dict:
         "deactivated_at": worker.deactivated_at,
         "delete_after": worker.delete_after,
         "face_deleted_at": worker.face_deleted_at,
+        "nickname": worker.nickname,
+        "gender": worker.gender,
+        "salutation": worker.salutation,
+        "voice_ready": worker_voice.voice_ready(worker.id),
         "templates": [template_json(t) for t in worker.templates],
     }
 
@@ -98,7 +113,9 @@ def list_workers():
 
 @router.post("/api/workers", status_code=201)
 def create_worker(body: NewWorker, request: Request, user: auth.SessionUser = Depends(require_admin)):
-    worker = _call(worker_store.store.create, body.employee_no, body.name, body.consent, user.username)
+    worker = _call(lambda: worker_store.store.create(body.employee_no, body.name, body.consent, user.username,
+                                                     nickname=body.nickname, gender=body.gender))
+    worker_voice.request(worker)
     _record(
         security_log.WORKER_CREATED,
         request,
@@ -130,6 +147,7 @@ def activate_worker(worker_id: int, request: Request, user: auth.SessionUser = D
 @router.delete("/api/workers/{worker_id}/face", status_code=204)
 def delete_worker_face(worker_id: int, request: Request, user: auth.SessionUser = Depends(require_admin)):
     deleted = _call(worker_store.store.delete_face, worker_id)
+    worker_voice.delete([worker_id])  # MP3 nama ikut terhapus bersama data wajah (T34d)
     _record(security_log.WORKER_FACE_DELETED, request, user, worker_id, reason="manual", templates=deleted)
     return Response(status_code=204)
 
@@ -178,3 +196,14 @@ def add_worker_template(
         **quality,
     )
     return {**template_json(template), "quality": quality}
+
+
+@router.patch("/api/workers/{worker_id}")
+def update_worker(worker_id: int, body: WorkerProfile, request: Request,
+                  user: auth.SessionUser = Depends(require_admin)):
+    """Ubah nama panggilan / jenis kelamin (T34d); suara nama dibuat ulang di latar."""
+    worker = _call(lambda: worker_store.store.update_profile(worker_id, nickname=body.nickname, gender=body.gender))
+    worker_voice.request(worker)
+    _record(security_log.WORKER_UPDATED, request, user, worker_id,
+            fields=[k for k in ("nickname", "gender") if getattr(body, k) is not None])
+    return worker_json(worker)

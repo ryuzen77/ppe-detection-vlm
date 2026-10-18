@@ -338,3 +338,14 @@ CSV_FACE_UNKNOWN = "Tidak dikenali"
 LOG_VLM_LOCAL_UNLOADED = "Model {who} dikeluarkan dari GPU (tidak dipakai lagi)."
 LOG_VLM_STALE_CHECK_SKIPPED = "Pemeriksaan model {who} sisa sesi lalu dilewati (Ollama tidak terjangkau): {error}"
 LOG_VLM_LOCAL_UNLOAD_FAILED = "Gagal mengeluarkan model {who} dari GPU: {error}. VRAM baru lega setelah Ollama dimulai ulang."
+
+# --- Suara nama pekerja (T34d) ---
+# Sapaan dari jenis kelamin yang diisi saat pendaftaran (keputusan pengguna 19-10)
+SALUTATIONS = {"male": "Pak", "female": "Bu"}
+# Kalimat bernama diturunkan dari suara "lengkap" supaya isinya tidak pernah berbeda
+VOICE_PASS_NAMED = VOICE_TEXTS["lengkap"].rstrip(".") + ", {salutation} {nickname}."
+WORKER_INVALID_GENDER = "Jenis kelamin wajib dipilih (untuk sapaan Pak/Bu)."
+WORKER_INVALID_NICKNAME = "Nama panggilan maksimal {max} karakter, satu baris."
+LOG_VOICE_CREATED = "Suara nama pekerja #{worker_id} dibuat."
+LOG_VOICE_FAILED = ("Suara nama pekerja #{worker_id} gagal dibuat (layanan suara butuh internet): {error}. "
+                    "Saat lolos, suara umum dipakai; ubah data pekerja untuk mencoba lagi.")

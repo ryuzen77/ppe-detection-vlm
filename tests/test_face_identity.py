@@ -59,7 +59,7 @@ def store(tmp_path):
 
 
 def _enroll(store, number, name, vector):
-    worker = store.create(number, name, True, "admin-uji")
+    worker = store.create(number, name, True, "admin-uji", gender="male")
     store.add_template(worker.id, "bare", cfg.FACE_MODEL_VERSION, vector, "admin-uji")
     return worker
 

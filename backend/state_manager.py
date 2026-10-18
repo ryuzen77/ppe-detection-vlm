@@ -9,7 +9,7 @@ import numpy as np
 from .config import cfg
 from . import messages
 from .detector import DetectionResult
-from . import face_identity, frame_quality
+from . import face_identity, frame_quality, worker_voice
 from .readiness import ReadinessTracker
 from .vlm_analyzer import vlm_analyzer, InspectionResult
 from .audio_engine import audio_player
@@ -509,7 +509,18 @@ class StateManager:
         else:
             logger.info(f"Sesi #{session_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
         self._show_decision(result)
-        audio_player.play_result(is_complete=result.is_complete, missing_items=result.missing_items)
+        audio_player.play_result(is_complete=result.is_complete, missing_items=result.missing_items,
+                                 **self._named_voice(session, result))
+
+    @staticmethod
+    def _named_voice(session: GateSession, result: InspectionResult) -> dict:
+        """Suara "Silakan masuk, Pak/Bu <nama>" (T34d): hanya saat LOLOS dan pekerja DIKENALI FR;
+        selain itu suara umum. Kosong = argumen tidak dikirim (pemanggil lama tidak berubah)."""
+        identity = session.identity
+        if not result.is_complete or identity is None or identity.status != face_identity.RECOGNIZED:
+            return {}
+        voice = worker_voice.pass_voice(identity.worker_id)
+        return {} if voice is None else {"named_voice": voice}
 
     def _wait_for_system(self, session_id: int, result: InspectionResult):
         """Utama & cadangan gagal: tanpa keputusan, tanpa baris audit, tanpa LED merah.
