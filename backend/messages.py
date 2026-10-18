@@ -289,3 +289,26 @@ DISK_CRITICAL = ("Sisa disk data KRITIS {free_gb:.1f} GB (batas {limit_gb:.1f} G
 DISK_OK = "Sisa disk data kembali cukup ({free_gb:.1f} GB): log berkas normal lagi."
 DISK_CHECK_FAILED = "Gagal memeriksa sisa disk {path}: {error}"
 LOG_PRUNED = "{count} salinan log lama (melewati masa simpan) dihapus dari {path}."
+
+# --- Data pekerja & templat wajah (T34b) ---
+WORKER_CONSENT_REQUIRED = "Centang dulu bahwa persetujuan tertulis pekerja sudah ditandatangani."
+WORKER_INVALID_NAME = "Nama pekerja wajib diisi (maksimal {max} karakter)."
+WORKER_INVALID_EMPLOYEE_NO = ("Nomor pegawai wajib diisi (maksimal {max} karakter: huruf, angka, titik, garis bawah, "
+                              "garis miring, atau tanda hubung).")
+WORKER_EMPLOYEE_NO_TAKEN = "Nomor pegawai '{employee_no}' sudah terdaftar."
+WORKER_NOT_FOUND = "Pekerja #{worker_id} tidak ditemukan."
+WORKER_TEMPLATE_NOT_FOUND = "Foto wajah #{template_id} milik pekerja #{worker_id} tidak ditemukan."
+WORKER_INVALID_CONDITION = "Kondisi foto harus salah satu dari: {conditions}."
+WORKER_INACTIVE = "Pekerja #{worker_id} nonaktif; aktifkan dulu sebelum menambah foto wajah."
+WORKER_FACE_NOT_READY = ("Fitur pengenalan wajah belum aktif: FACE_DATA_KEY di backend/.env kosong atau tidak valid. "
+                         "Buat kunci dengan: python -m backend.face_crypto generate-key")
+FACE_KEY_MISSING = "FACE_DATA_KEY kosong: pengenalan wajah mati, gerbang berjalan tanpa nama pekerja."
+FACE_KEY_INVALID = ("FACE_DATA_KEY tidak valid (harus base64 dari {size} byte): pengenalan wajah mati. "
+                    "Buat kunci baru dengan: python -m backend.face_crypto generate-key")
+FACE_KEY_GENERATED = ("Salin baris berikut ke backend/.env. Simpan juga cadangannya di tempat aman: kunci hilang = "
+                      "semua pekerja harus didaftarkan ulang. Jangan dikirim lewat chat/email.")
+FACE_TEMPLATE_UNREADABLE = ("{count} templat wajah tidak bisa dibuka (kunci FACE_DATA_KEY berbeda dari saat "
+                            "pendaftaran?); pekerja terkait tidak akan dikenali sampai didaftarkan ulang.")
+FACE_GALLERY_OVER_LIMIT = ("Pekerja aktif berwajah terdaftar {count} melewati batas teruji {limit}: risiko pekerja "
+                           "tidak dikenali naik tajam. Evaluasi ulang model/galeri (docs/RENCANA.md T34).")
+FACE_RETENTION_PURGED = "Retensi wajah: data wajah {count} pekerja nonaktif lebih dari {days} hari dihapus."

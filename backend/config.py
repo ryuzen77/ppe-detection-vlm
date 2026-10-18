@@ -422,6 +422,9 @@ class Config:
     RUNTIME_SETTINGS_PATH: Path = DATA_DIR / "runtime_settings.json"
     # Akun pengguna (T51), terpisah dari audit.db supaya retensi/ekspor audit tidak menyentuhnya
     ACCOUNTS_DB_PATH: Path = DATA_DIR / "accounts.db"
+    # Pekerja & templat wajah terenkripsi (T34b), terpisah dari audit.db: cadangan/ekspor
+    # audit tidak ikut membawa data biometrik
+    WORKERS_DB_PATH: Path = DATA_DIR / "workers.db"
     # Catatan hidup server: kapan terakhir hidup & apakah berhenti rapi (T37)
     UPTIME_STATE_PATH: Path = DATA_DIR / "uptime.json"
     UPTIME_HEARTBEAT_SECONDS: float = 30.0
@@ -469,6 +472,22 @@ class Config:
     RETENTION_MAX_PHOTO_GB: float = float(_env("RETENTION_MAX_PHOTO_GB", "2.0"))
     # Interval pemeriksaan retensi di latar belakang (jam)
     RETENTION_INTERVAL_HOURS: int = int(_env("RETENTION_INTERVAL_HOURS", "24"))
+
+    # Identitas wajah (T34b). Kunci AES-256 (base64, 32 byte) HANYA di backend/.env, tidak
+    # pernah dibuat otomatis ke DATA_DIR: salinan folder data saja tidak membuka templat
+    # wajah. Kosong = fitur FR mati dan gerbang tetap berjalan seperti biasa.
+    FACE_DATA_KEY: str = _env("FACE_DATA_KEY", "")
+    # Templat wajah dihapus sekian hari setelah pekerja dinonaktifkan (keputusan pengguna 18-10)
+    FACE_RETENTION_DAYS: int = int(_env("FACE_RETENTION_DAYS", "30"))
+    # Jumlah pekerja yang teruji memenuhi kriteria (T34m2, LFW: FPIR 0,1%, FNIR <= 5%).
+    # Lewat batas ini orang tak dikenali naik tajam -> admin diberi peringatan.
+    FACE_GALLERY_TESTED_LIMIT: int = 300
+    # Kondisi foto pendaftaran; pekerja berkacamata wajib punya "glasses" (T34a)
+    FACE_CONDITIONS: tuple = ("bare", "glasses", "helmet", "helmet_glasses")
+    # Versi formulir persetujuan tertulis (dari HR/Legal) yang dicentang admin saat mendaftar
+    FACE_CONSENT_VERSION: str = _env("FACE_CONSENT_VERSION", "1")
+    WORKER_NAME_MAX_LENGTH: int = 80
+    WORKER_EMPLOYEE_NO_MAX_LENGTH: int = 32
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

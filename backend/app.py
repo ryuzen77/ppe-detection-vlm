@@ -27,6 +27,7 @@ from .api import (
     routes_stream,
     routes_system,
     routes_vlm,
+    routes_workers,
     routes_zone,
     websocket,
 )
@@ -122,7 +123,7 @@ app.add_middleware(
 # WebSocket memeriksa sesinya sendiri (dependensi HTTP tidak berlaku untuk /ws).
 app.include_router(routes_auth.router)
 for _module in (routes_system, routes_vlm, routes_cameras, routes_ppe,
-                routes_reports, routes_stream, routes_zone, routes_accounts):
+                routes_reports, routes_stream, routes_zone, routes_accounts, routes_workers):
     app.include_router(_module.router, dependencies=[Depends(require_session)])
 app.include_router(websocket.router)
 

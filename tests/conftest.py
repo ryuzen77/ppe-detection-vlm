@@ -36,6 +36,9 @@ for _nama in PROVIDER_KEY_ENVS:
 # Tidak membuka port serial / HTTP ke lampu gerbang sungguhan
 os.environ["IOT_ENABLED"] = "false"
 os.environ["ADMIN_TOKEN"] = ""
+# Kunci templat wajah asli di backend/.env tidak pernah dipakai tes; tes yang butuh
+# kunci memberi kunci uji sendiri (T34b)
+os.environ["FACE_DATA_KEY"] = ""
 # Log hanya ke konsol (ditangkap pytest); berkas log yang terbuka menghalangi
 # penghapusan folder sementara di Windows
 os.environ["LOG_TO_FILE"] = "false"
