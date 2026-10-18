@@ -227,6 +227,10 @@ def _analisa_selesai(gerbang, crop=None, track_id=TRACK_ID):
     for _ in range(cfg.STABLE_FRAMES_REQUIRED):
         gerbang.update_frame_detections([_det(full_body=True, track_id=track_id, **extra)])
     assert _wait_for(lambda: _active() is not None and _active()["state"] == TrackState.ANALYZED)
+    # Pekerja masih berdiri di depan kamera saat keputusan keluar (kamera terus mengirim frame).
+    # Tanpa frame ini, lama analisa + simpan audit ikut terhitung "hilang" dan, dengan jeda reset
+    # tes 0,2 dtk, sesi bisa tertutup sebelum tes mensimulasikan apa pun (CI Windows 18-10, T69).
+    gerbang.update_frame_detections([_det(full_body=True, track_id=track_id, **extra)])
 
 
 def test_pergantian_id_pelacak_di_tengah_sesi_tidak_menganalisa_ulang(gerbang, vlm):
