@@ -484,3 +484,59 @@ export interface VlmTestResponse {
   latency_ms: number | null
   error: string
 }
+
+// --- Pekerja & Identitas Wajah (T34) -------------------------------------------
+
+export interface WorkerTemplate {
+  id: number
+  condition: string
+  model_version: string
+  created_at: string
+}
+
+export interface WorkerConsent {
+  at: string
+  by: string
+  version: string
+}
+
+export interface Worker {
+  id: number
+  employee_no: string
+  name: string
+  active: boolean
+  consent: WorkerConsent
+  created_at: string
+  deactivated_at: string | null
+  delete_after: string | null
+  face_deleted_at: string | null
+  nickname?: string
+  gender?: 'male' | 'female' | string
+  salutation?: string
+  voice_ready?: boolean
+  templates: WorkerTemplate[]
+}
+
+export interface WorkersResponse {
+  face_ready: boolean
+  limit: {
+    tested: number
+    count: number
+    over: boolean
+  }
+  workers: Worker[]
+}
+
+export interface NewWorkerRequest {
+  employee_no: string
+  name: string
+  consent: boolean
+  nickname?: string
+  gender?: 'male' | 'female' | string
+}
+
+export interface UpdateWorkerRequest {
+  nickname?: string
+  gender?: 'male' | 'female' | string
+}
+

@@ -2,6 +2,7 @@
     import CameraPicker from '../components/monitoring/CameraPicker.svelte'
   import ZoneSettings from '../components/settings/ZoneSettings.svelte'
   import Accounts from '../components/settings/Accounts.svelte'
+  import WorkerSettings from '../components/settings/WorkerSettings.svelte'
   import VlmProviders from '../components/settings/VlmProviders.svelte'
   import LocalVlmCard from '../components/settings/LocalVlmCard.svelte'
   import { api } from '../lib/api/client'
@@ -100,6 +101,8 @@
     </section>
 
     <Accounts />
+
+    <WorkerSettings />
 
     <VlmProviders />
 
