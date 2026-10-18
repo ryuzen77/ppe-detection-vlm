@@ -111,6 +111,10 @@ class VideoCaptureService:
         Perangkatnya terkunci oleh aliran video, jadi thread pembaca harus
         melepasnya dulu, mengukur, lalu membukanya kembali pada mode terbaik.
         """
+        if self.camera_index is None:
+            # T67: belum ada kamera dipilih -> tidak ada yang dioptimasi (dulu: galat palsu index None)
+            logger.info(messages.LOG_CAMERA_OPTIMIZE_NO_CAMERA)
+            return
         self._pending_optimize = True
         logger.info(f"Permintaan optimasi kamera index {self.camera_index} diterima.")
 
@@ -285,7 +289,7 @@ class VideoCaptureService:
         self.camera_name_verified = False
         return messages.CAMERA_FALLBACK_NAME.format(index=index)
 
-    def _init_camera(self, index: int | None = None, mode: dict | None = None) -> bool:
+    def _init_camera(self, index: int, mode: dict | None = None) -> bool:
         """Membuka kamera pada indeks tertentu dengan mode yang diminta.
 
         `mode` None berarti mode dipilih otomatis lewat pengukuran laju frame,
@@ -293,14 +297,11 @@ class VideoCaptureService:
         resolusi untuk semua kamera menghasilkan video tersendat di sebagian
         perangkat. Mengembalikan True jika kamera fisik berhasil dipakai.
         """
-        if index is None:
-            index = self.camera_index
-        # T67: index masih bisa None ("Pindai kamera" sebelum memilih kamera) -> galat palsu; abaian dihapus di T67
-        self._begin_opening(index)  # pyright: ignore[reportArgumentType]
+        self._begin_opening(index)
         if mode is None:
-            mode = self._scanned_mode(index)  # pyright: ignore[reportArgumentType]
+            mode = self._scanned_mode(index)
 
-        self.cap = camera_manager.open_capture(index)  # pyright: ignore[reportArgumentType]
+        self.cap = camera_manager.open_capture(index)
         if not self.cap.isOpened():
             return self._fall_back_to_synthetic(messages.CAMERA_OPEN_FAILED.format(index=index),
                                                 f"Kamera {index} tidak tersedia. Memakai generator sintetis.")
@@ -314,7 +315,7 @@ class VideoCaptureService:
         if probe is None:
             return self._fall_back_to_synthetic(messages.CAMERA_NO_FRAMES.format(index=index),
                                                 f"Kamera {index} tidak mengirim frame. Memakai generator sintetis.")
-        self._activate(index, probe, mode, target_w, target_h)  # pyright: ignore[reportArgumentType]
+        self._activate(index, probe, mode, target_w, target_h)
         return True
 
     def _begin_opening(self, index: int):
@@ -474,14 +475,17 @@ class VideoCaptureService:
         """Lepas kamera, ukur seluruh mode, buka lagi yang terbaik."""
         self._pending_optimize = False
         index = self.camera_index
+        if index is None:
+            # Kamera dilepas di antara permintaan & pemrosesan: tidak ada yang dioptimasi (T67)
+            logger.info(messages.LOG_CAMERA_OPTIMIZE_NO_CAMERA)
+            return
         self.camera_status = "OPTIMIZING"
         self._release_camera()
         self._set_status_frame(messages.FRAME_OPTIMIZING)
         logger.info(f"Mengukur mode kamera index {index}...")
-        # T67: index None saat belum ada kamera dipilih (lihat _init_camera); abaian dihapus di T67
-        modes = camera_manager.probe_modes(index)  # pyright: ignore[reportArgumentType]
+        modes = camera_manager.probe_modes(index)
         best = camera_manager.pick_best_mode(modes)
-        camera_mgr.record_device_modes(index, self._resolve_device_name(index), modes, best)  # pyright: ignore[reportArgumentType]
+        camera_mgr.record_device_modes(index, self._resolve_device_name(index), modes, best)
         self._init_camera(index, asdict(best) if best else None)
         self._restart_reading()
 
