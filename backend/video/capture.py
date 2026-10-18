@@ -147,6 +147,14 @@ class VideoCaptureService:
             self._device_missing = True
         return fault
 
+    def camera_frame(self) -> np.ndarray | None:
+        """Salinan frame kamera asli terbaru untuk foto pendaftaran wajah (T34b2); None bila kamera
+        belum aktif atau yang tampil frame pesan/sintetis (wajah di frame itu bukan orang nyata)."""
+        with self.raw_lock:
+            if self.use_synthetic or self.camera_status != "OK" or self.latest_raw is None:
+                return None
+            return self.latest_raw.copy()
+
     def get_camera_status(self) -> dict:
         blocked = self.camera_status == "OK" and self._health.fault == "blocked"
         return {

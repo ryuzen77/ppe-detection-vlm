@@ -6,6 +6,7 @@ index None, lalu dashboard menampilkan galat palsu "Kamera index None tidak dapa
 (status SYNTHETIC) padahal operator belum memilih kamera.
 """
 
+import numpy as np
 import pytest
 
 from backend.video import capture
@@ -52,3 +53,16 @@ def test_optimasi_kamera_aktif_tetap_berjalan(svc, monkeypatch):
     svc.request_optimize()
     svc._handle_requests()
     assert ("probe", 2) in svc.calls and opened == [2]
+
+
+def test_frame_pendaftaran_hanya_dari_kamera_sungguhan(svc):
+    # T34b2: foto pendaftaran wajah tidak boleh diambil dari frame pesan/sintetis
+    assert svc.camera_frame() is None, "belum ada kamera"
+    raw = np.full((480, 640, 3), 7, np.uint8)
+    svc.latest_raw, svc.camera_status, svc.use_synthetic = raw, "OK", False
+    copy = svc.camera_frame()
+    assert copy is not None and copy is not raw and np.array_equal(copy, raw), "salinan, bukan buffer kamera"
+    svc.use_synthetic = True
+    assert svc.camera_frame() is None
+    svc.use_synthetic, svc.camera_status = False, "LOST"
+    assert svc.camera_frame() is None

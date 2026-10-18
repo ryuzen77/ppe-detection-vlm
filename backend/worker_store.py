@@ -136,6 +136,18 @@ def normalize_employee_no(raw: object) -> str:
     return number
 
 
+def _check_condition(condition: str) -> None:
+    if condition not in cfg.FACE_CONDITIONS:
+        raise WorkerError(
+            "invalid_condition", messages.WORKER_INVALID_CONDITION.format(conditions=", ".join(cfg.FACE_CONDITIONS))
+        )
+
+
+def _check_active(worker: "Worker") -> None:
+    if not worker.active:
+        raise WorkerError("inactive", messages.WORKER_INACTIVE.format(worker_id=worker.id))
+
+
 def _not_found(worker_id: int) -> WorkerError:
     return WorkerError("not_found", messages.WORKER_NOT_FOUND.format(worker_id=worker_id))
 
@@ -145,6 +157,8 @@ class SqliteWorkerStore:
         self._path_override = path
         self._key_override = key
         self._lock = threading.Lock()
+        # Naik setiap penulisan: galeri pengenalan di memori (T34c1) tahu kapan harus dimuat ulang
+        self.revision = 0
 
     @property
     def path(self) -> Path:
@@ -182,7 +196,7 @@ class SqliteWorkerStore:
             conn.execute(statement)
         return conn
 
-    def _run(self, fn, checkpoint: bool = False):
+    def _run(self, fn, checkpoint: bool = False, mutates: bool = False):
         """Satu transaksi tulis eksklusif (BEGIN IMMEDIATE): cek & ubah tidak bisa disela.
         `checkpoint`: setelah menghapus data wajah, WAL dikosongkan supaya salinan lama ikut hilang."""
         with self._lock:
@@ -191,6 +205,8 @@ class SqliteWorkerStore:
                 conn.execute("BEGIN IMMEDIATE")
                 result = fn(conn)
                 conn.execute("COMMIT")
+                if mutates:
+                    self.revision += 1
                 if checkpoint:
                     conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 return result
@@ -260,7 +276,7 @@ class SqliteWorkerStore:
             )
             return self._get(conn, int(cursor.lastrowid or 0))
 
-        return self._run(insert)
+        return self._run(insert, mutates=True)
 
     def deactivate(self, worker_id: int) -> Worker:
         """Nonaktif: masa retensi berjalan sejak saat pertama dinonaktifkan (diulang tidak memperpanjang)."""
@@ -273,7 +289,7 @@ class SqliteWorkerStore:
             )
             return self._get(conn, worker_id)
 
-        return self._run(update)
+        return self._run(update, mutates=True)
 
     def activate(self, worker_id: int) -> Worker:
         """Aktif lagi: penghapusan terjadwal batal. Bila wajah sudah terhapus, foto harus diambil ulang."""
@@ -283,7 +299,7 @@ class SqliteWorkerStore:
             conn.execute("UPDATE workers SET active = 1, deactivated_at = NULL WHERE id = ?", (worker_id,))
             return self._get(conn, worker_id)
 
-        return self._run(update)
+        return self._run(update, mutates=True)
 
     def delete_face(self, worker_id: int) -> int:
         """Hapus semua templat wajah pekerja sekarang (hak hapus). Jumlah templat yang dihapus."""
@@ -292,7 +308,7 @@ class SqliteWorkerStore:
             self._get(conn, worker_id)
             return self._erase_templates(conn, [worker_id])
 
-        return self._run(remove, checkpoint=True)
+        return self._run(remove, checkpoint=True, mutates=True)
 
     @staticmethod
     def _erase_templates(conn: sqlite3.Connection, worker_ids: list[int]) -> int:
@@ -312,21 +328,17 @@ class SqliteWorkerStore:
                     messages.WORKER_TEMPLATE_NOT_FOUND.format(template_id=template_id, worker_id=worker_id),
                 )
 
-        self._run(remove, checkpoint=True)
+        self._run(remove, checkpoint=True, mutates=True)
 
     def add_template(
         self, worker_id: int, condition: str, model_version: str, vector: np.ndarray, actor: str
     ) -> Template:
         """Templat baru terenkripsi; hanya untuk pekerja aktif. Menghapus tanda `face_deleted_at`."""
-        if condition not in cfg.FACE_CONDITIONS:
-            raise WorkerError(
-                "invalid_condition", messages.WORKER_INVALID_CONDITION.format(conditions=", ".join(cfg.FACE_CONDITIONS))
-            )
+        _check_condition(condition)
         cipher, flat = self._cipher(), np.asarray(vector, dtype=np.float32).ravel()
 
         def insert(conn):
-            if not self._get(conn, worker_id).active:
-                raise WorkerError("inactive", messages.WORKER_INACTIVE.format(worker_id=worker_id))
+            _check_active(self._get(conn, worker_id))
             nonce, sealed = cipher.encrypt(flat, face_crypto.template_aad(worker_id, model_version))
             now = _now()
             cursor = conn.execute(
@@ -337,7 +349,13 @@ class SqliteWorkerStore:
             conn.execute("UPDATE workers SET face_deleted_at = NULL WHERE id = ?", (worker_id,))
             return Template(int(cursor.lastrowid or 0), condition, model_version, now)
 
-        return self._run(insert)
+        return self._run(insert, mutates=True)
+
+    def check_template_target(self, worker_id: int, condition: str) -> None:
+        """Cek sebelum mengambil foto (T34b2): kondisi sah & pekerja ada lagi aktif, supaya kamera
+        tidak dipakai untuk permintaan yang pasti ditolak. Dicek ulang saat menyimpan."""
+        _check_condition(condition)
+        _check_active(self.get(worker_id))
 
     # --- Galeri & retensi ---
 
@@ -378,7 +396,7 @@ class SqliteWorkerStore:
                 self._erase_templates(conn, ids)
             return ids
 
-        return self._run(purge, checkpoint=True)
+        return self._run(purge, checkpoint=True, mutates=True)
 
 
 store = SqliteWorkerStore()

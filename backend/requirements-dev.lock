@@ -102,6 +102,7 @@ numpy==2.5.3
     #   lap
     #   matplotlib
     #   opencv-python-headless
+    #   openvino
     #   pygrabber
     #   torchvision
     #   ultralytics
@@ -151,6 +152,10 @@ nvidia-nvtx==13.2.75 ; (platform_machine == 'aarch64' and sys_platform == 'linux
     # via cuda-toolkit
 opencv-python-headless==5.0.0.93
     # via -r requirements.txt
+openvino==2026.4.1
+    # via -r requirements.txt
+openvino-telemetry==2025.2.0
+    # via openvino
 packaging==26.3
     # via
     #   matplotlib

@@ -488,6 +488,32 @@ class Config:
     FACE_CONSENT_VERSION: str = _env("FACE_CONSENT_VERSION", "1")
     WORKER_NAME_MAX_LENGTH: int = 80
     WORKER_EMPLOYEE_NO_MAX_LENGTH: int = 32
+    # Mesin FR (T34b2): YuNet + Intel 0095, berkas & lisensi di backend/models/face/.
+    # Versi model ikut terenkripsi di tiap templat: ganti model = daftar ulang semua pekerja.
+    FACE_MODEL_DIR: Path = BASE_DIR / "models" / "face"
+    FACE_DETECTOR_FILE: str = "face_detection_yunet_2023mar.onnx"
+    FACE_RECOGNIZER_FILE: str = "face-reidentification-retail-0095.xml"
+    FACE_MODEL_VERSION: str = "intel_0095"
+    FACE_ALIGN_TEMPLATE: str = "omz"      # templat landmark Open Model Zoo untuk Intel 0095
+    FACE_INPUT_SIZE: int = 128            # potongan wajah ter-align (piksel persegi)
+    # Thread CPU OpenVINO: dibatasi supaya FR tidak merebut CPU dari YOLO/VLM (uji T34m:
+    # 2 thread = embedding p95 4 ms)
+    FACE_CPU_THREADS: int = 2
+    FACE_DET_SCORE_MIN: float = 0.6       # skor YuNet minimal sebuah wajah dihitung
+    # Jarak antar-mata minimal foto pendaftaran. T34a (Logitech 1080p, posisi pemeriksaan):
+    # 26-33 px; di 864x480 hanya 16-20 px (terlalu kecil untuk FR yang andal)
+    FACE_MIN_INTEROCULAR_PX: float = 24.0
+    # Pengenalan dalam sesi (T34c1): FR pada frame terbaik jendela diam; nama hanya bila
+    # cukup banyak frame menunjuk orang yang sama (keputusan pengguna 18-10: 2 dari 3).
+    # Salah nama lebih buruk daripada tanpa nama.
+    FACE_VOTE_FRAMES: int = 3
+    FACE_VOTES_REQUIRED: int = 2
+    # Ambang kemiripan kosinus: LFW galeri ±300 pada FPIR 0,1% (T34m2) — dikalibrasi ulang
+    # dengan foto nyata gerbang sebelum dipakai sungguhan
+    FACE_MATCH_THRESHOLD: float = 0.55
+    # Audit menunggu hasil FR paling lama ini setelah VLM selesai; lewat = "tidak dikenali"
+    # (FR berjalan paralel dengan VLM, jadi biasanya sudah selesai lebih dulu)
+    FACE_IDENTIFY_TIMEOUT_SECONDS: float = 2.0
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

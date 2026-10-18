@@ -26,3 +26,6 @@ hidapi>=0.14
 # Nama perangkat DirectShow untuk daftar kamera (khusus Windows; Linux membaca sysfs)
 pygrabber>=0.2 ; sys_platform == 'win32'
 pillow>=10.0.0
+# Pengenal wajah Intel face-reidentification-retail-0095 (format OpenVINO IR, CPU) untuk
+# identitas pekerja (T34; dipilih lewat uji T34m/T34m2/T34a, lihat docs/RENCANA.md)
+openvino>=2025.0
