@@ -40,7 +40,7 @@ class FakeProviderServer:
                 self.end_headers()
                 self.wfile.write(payload)
 
-            def log_message(self, *args):
+            def log_message(self, format, *args):
                 pass
 
         self.httpd = HTTPServer(("127.0.0.1", 0), Handler)
@@ -135,6 +135,7 @@ def test_preset_alamat_bawaan(nama):
 
 def test_base_url_eksplisit_menang_atas_preset():
     p = create_provider("qwen", api_key="k", model="m", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/")
+    assert isinstance(p, OpenAICompatibleProvider)
     assert p.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
@@ -155,7 +156,8 @@ def analyzer(catalog_defaults):
         engine.provider, engine.min_interval = provider, 0.0
         a.primary, a.backup = engine, None
 
-    a.pasang = pasang
+    # objek tiruan: pemasang engine tiruan ditempel ke analyzer
+    a.pasang = pasang  # pyright: ignore[reportAttributeAccessIssue]
     yield a
     if a.primary is not None:
         a.primary.executor.shutdown(wait=False)
@@ -191,6 +193,7 @@ def test_batas_waktu_http_terpisah_dari_pemanasan(server):
     # pemuatan model Ollama saat pemanasan boleh jauh lebih lama (T27).
     p = create_provider("ollama", api_key="", model="m", base_url=server.base_url,
                         http_timeout=13.0, warmup_timeout=120.0)
+    assert isinstance(p, OpenAICompatibleProvider)
     assert p._client.timeout.read == 13.0
     assert p.warmup_timeout == 120.0
 

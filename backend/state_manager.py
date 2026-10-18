@@ -281,10 +281,12 @@ class StateManager:
         return best
 
     def _end_session(self, now: float, reason: str):
-        logger.info(reason.format(session_id=self.session.session_id))
-        if self.session.vlm_result is not None:
+        session = self.session
+        assert session is not None, "hanya dipanggil saat ada sesi"
+        logger.info(reason.format(session_id=session.session_id))
+        if session.vlm_result is not None:
             # ID terakhir subjek (bisa berbeda dari ID saat dianalisa)
-            self._remember_decision(self.session.track_id, self.session.vlm_result, now)
+            self._remember_decision(session.track_id, session.vlm_result, now)
         self.session = None
         notifier.set_idle()
 

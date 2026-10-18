@@ -113,7 +113,9 @@ class GateLightLink:
         try:
             with self._lock:
                 command = COMMANDS[self._desired]
-            self._conn.write(f"{command}\n".encode())
+            conn = self._conn
+            assert conn is not None, "_try_open() baru saja membuka port"
+            conn.write(f"{command}\n".encode())
             self._read_acks()
         except Exception as e:
             self._fail(messages.IOT_LINK_LOST.format(error=str(e)[:120]))
@@ -142,7 +144,9 @@ class GateLightLink:
         # Port dibuka non-blocking (timeout 0): read() langsung mengembalikan yang
         # tersedia. `in_waiting` tidak dipakai karena di sebagian backend pyserial
         # (mis. socket:// Wokwi) isinya 0/1, bukan jumlah byte (temuan smoke test).
-        data = self._conn.read(cfg.IOT_RX_MAX_BYTES)
+        conn = self._conn
+        assert conn is not None, "dipanggil hanya dari tick() setelah port terbuka"
+        data = conn.read(cfg.IOT_RX_MAX_BYTES)
         if not data:
             return
         self._rx += data

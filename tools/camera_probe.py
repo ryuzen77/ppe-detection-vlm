@@ -240,7 +240,7 @@ def main() -> int:
     if args.index is None:
         ap.error("--index wajib (cari dulu dengan --find)")
     prepare_voice(SYSTEM_TEXTS + [f"Persiapan. {text}" for _, text in CONDITIONS])
-    from ultralytics import YOLO
+    from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
 
     model, cap = YOLO(cfg.YOLO_MODEL_PATH), open_camera(args.index)
     if not cap.isOpened():

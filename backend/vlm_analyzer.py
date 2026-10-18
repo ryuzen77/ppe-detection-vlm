@@ -152,12 +152,14 @@ def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
     record = vlm_profiles.find_validation(provider_name, model, messages.PROMPT_VERSION)
     if status == vlm_profiles.UNVALIDATED:
         warnings.append(messages.VLM_MODEL_UNVALIDATED.format(who=who))
-    elif status == vlm_profiles.UNSAFE:
+        return warnings
+    assert record is not None or status == vlm_profiles.VALIDATED, "status lain berasal dari catatan validasi"
+    if status == vlm_profiles.UNSAFE and record is not None:
         warnings.append(messages.VLM_MODEL_UNSAFE.format(who=who, missed=record.missed, photos=record.photos))
-    elif status == vlm_profiles.OUTDATED:
+    elif status == vlm_profiles.OUTDATED and record is not None:
         warnings.append(messages.VLM_MODEL_OUTDATED.format(who=who, old=record.prompt_version,
                                                            current=messages.PROMPT_VERSION))
-    elif status == vlm_profiles.PARTIAL:
+    elif status == vlm_profiles.PARTIAL and record is not None:
         warnings.append(messages.VLM_MODEL_PARTIAL.format(who=who, note=record.note))
     return warnings
 
@@ -280,7 +282,9 @@ class VLMEngine:
         ping teks meninggalkan penyandi gambar & prompt sistem "dingin" sehingga pekerja
         pertama habis waktu (uji 14-10: 13 dtk > batas 12). Cloud tidak, karena memakan kuota."""
         start = time.time()
-        future = self.executor.submit(self.provider.analyze, warmup_image_jpeg(),
+        provider = self.provider
+        assert provider is not None, "pemanasan hanya untuk engine yang siap"
+        future = self.executor.submit(provider.analyze, warmup_image_jpeg(),
                                       system_prompt=build_system_prompt(), user_prompt=USER_PROMPT)
         try:
             future.result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
@@ -294,8 +298,10 @@ class VLMEngine:
         if wait > 0:
             logger.info(f"Menunggu jeda kuota {wait:.1f} dtk sebelum panggilan VLM {self.role}.")
             time.sleep(wait)
+        provider = self.provider
+        assert provider is not None, "call() hanya untuk engine yang siap"
         try:
-            future = self.executor.submit(self.provider.analyze, image_jpeg,
+            future = self.executor.submit(provider.analyze, image_jpeg,
                                           system_prompt=system_prompt, user_prompt=user_prompt)
             return future.result(timeout=self.timeout)
         finally:
@@ -447,7 +453,8 @@ class VLMAnalyzer:
             if engine.provider is None:
                 return {"ok": False, "latency_ms": None, "json_ok": False, "error": engine.error}
             start = time.time()
-            ping_error = self._attempt(engine, lambda: engine.executor.submit(engine.provider.ping)
+            provider = engine.provider
+            ping_error = self._attempt(engine, lambda: engine.executor.submit(provider.ping)
                                        .result(timeout=engine.timeout))
             latency = round((time.time() - start) * 1000, 1)
             if ping_error:
@@ -536,6 +543,7 @@ class VLMAnalyzer:
         for engine in self._engines():
             start = time.time()
             try:
+                assert engine.provider is not None, "_engines() hanya berisi engine yang siap"
                 engine.executor.submit(engine.provider.ping).result(timeout=engine.timeout)
                 dur = round((time.time() - start) * 1000, 1)
                 results.append({"role": engine.role, "ok": True, "latency_ms": dur})
@@ -559,16 +567,18 @@ class VLMAnalyzer:
         return now - self.primary_last_attempt >= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
 
     def _primary_result(self, ok: bool, now: float):
+        primary = self.primary
+        assert primary is not None, "hanya dipanggil setelah utama dicoba"
         if ok:
             if self.primary_down_since is not None:
-                logger.info(f"VLM {self.primary.who} pulih setelah {now - self.primary_down_since:.0f} dtk.")
+                logger.info(f"VLM {primary.who} pulih setelah {now - self.primary_down_since:.0f} dtk.")
             self.primary_failures = 0
             self.primary_down_since = None
             return
         self.primary_failures += 1
         if self.primary_failures >= cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN and self.primary_down_since is None:
             self.primary_down_since = now
-            logger.warning(f"VLM {self.primary.who} dianggap terputus setelah {self.primary_failures} kegagalan berturut-turut; "
+            logger.warning(f"VLM {primary.who} dianggap terputus setelah {self.primary_failures} kegagalan berturut-turut; "
                            f"inspeksi langsung ke cadangan, utama dicoba lagi setiap "
                            f"{cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS:g} dtk.")
 
@@ -676,18 +686,19 @@ class VLMAnalyzer:
             reasons = []
 
             now = time.time()
-            if self._primary_allowed(now):
+            primary = self.primary
+            if primary is not None and self._primary_allowed(now):
                 self.primary_last_attempt = now
                 try:
-                    result = self._try(self.primary, image_jpeg, aktif)
+                    result = self._try(primary, image_jpeg, aktif)
                     self._primary_result(True, time.time())
                     return self._finish(result, start_t)
                 except Exception as e:
                     self._primary_result(False, time.time())
-                    reason = self._describe(e, self.primary)
+                    reason = self._describe(e, primary)
                     reasons.append(f"utama: {reason}")
                     target = self.backup.who if self.backup is not None and self.backup.provider is not None else "-"
-                    logger.warning(f"VLM {self.primary.who} gagal ({reason}); beralih ke {target}.")
+                    logger.warning(f"VLM {primary.who} gagal ({reason}); beralih ke {target}.")
             elif self.primary is not None and self.primary.provider is not None:
                 reasons.append("utama: dianggap terputus")
 
@@ -750,7 +761,9 @@ class VLMAnalyzer:
         Hanya untuk alat evaluasi (tools/eval_vlm.py), yang mengukur model apa adanya.
         """
         aktif = ppe_rules.get_active_items()
-        data = self.primary.provider.analyze(
+        primary = self.primary
+        assert primary is not None and primary.provider is not None, "alat evaluasi butuh VLM utama yang siap"
+        data = primary.provider.analyze(
             self._optimize_image_for_vlm(image_bgr),
             system_prompt=build_system_prompt(aktif),
             user_prompt=USER_PROMPT,

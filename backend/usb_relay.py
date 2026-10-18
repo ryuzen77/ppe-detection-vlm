@@ -189,13 +189,15 @@ class UsbRelayLink:
         """Samakan relay dengan keadaan yang diminta, lalu buktikan dengan membaca balik."""
         with self._lock:
             wanted = self._masks.get(self._desired, 0)
-        actual = self._board.read_mask() & self._all
+        board = self._board
+        assert board is not None, "tick() membuka papan sebelum _apply()"
+        actual = board.read_mask() & self._all
         for channel in self._channels:
             bit = channel_mask(channel)
             if (wanted ^ actual) & bit:
-                self._board.switch(channel, bool(wanted & bit))
+                board.switch(channel, bool(wanted & bit))
         if actual != wanted:
-            actual = self._board.read_mask() & self._all
+            actual = board.read_mask() & self._all
         if actual != wanted:
             raise RelayMismatch(messages.IOT_RELAY_MISMATCH.format(wanted=wanted, actual=actual))
         self.last_ok = self._clock()

@@ -45,7 +45,9 @@ def _save(mgr, shade):
 
 
 def _shade(mgr, name):
-    return int(cv2.imread(str(mgr.snapshots_dir / name))[..., 0].mean().round())
+    image = cv2.imread(str(mgr.snapshots_dir / name))
+    assert image is not None, name
+    return int(image[..., 0].mean().round())
 
 
 def test_dua_inspeksi_detik_sama_fotonya_tidak_saling_menimpa(frozen_mgr):

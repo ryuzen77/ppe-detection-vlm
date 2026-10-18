@@ -77,7 +77,7 @@ CANDIDATE_RESOLUTIONS: list[tuple[int, int]] = [
 # MJPG sering membuka laju frame tinggi pada resolusi besar untuk kamera USB.
 # Sebagian driver menolaknya dan tetap memakai format bawaan; itu terdeteksi
 # saat fourcc aktual dibaca kembali.
-FOURCC_MJPG = cv2.VideoWriter_fourcc(*"MJPG")
+FOURCC_MJPG = cv2.VideoWriter.fourcc(*"MJPG")
 
 
 def _fourcc_to_text(value: int) -> str:
@@ -236,7 +236,7 @@ def probe_modes(index: int, measure_seconds: float = 0.8) -> list[CameraMode]:
                 width=actual_w,
                 height=actual_h,
                 fps=round(fps, 1),
-                fourcc=_fourcc_to_text(cap.get(cv2.CAP_PROP_FOURCC)),
+                fourcc=_fourcc_to_text(int(cap.get(cv2.CAP_PROP_FOURCC))),
                 req_width=req_w,
                 req_height=req_h,
             ))

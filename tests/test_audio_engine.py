@@ -34,10 +34,12 @@ def engine(tmp_path):
     e.audio_dir = tmp_path
     for name in ("sedang_analisa", "lengkap", "mundur"):
         (tmp_path / f"{name}.mp3").write_bytes(b"x")
-    e.channel = FakeChannel()
+    # objek tiruan pengganti pygame
+    e.channel = FakeChannel()  # pyright: ignore[reportAttributeAccessIssue]
     e.enabled = True
     e.is_running = True
-    e._load = lambda path: path.stem  # nama suara sebagai "Sound"
+    # nama suara sebagai "Sound"
+    e._load = lambda path: path.stem  # pyright: ignore[reportAttributeAccessIssue]
     return e
 
 

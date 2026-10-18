@@ -37,6 +37,7 @@ def test_item_nonaktif_tidak_ditanyakan(catalog_defaults):
 def test_aturan_rompi_membedakan_bentuk_dari_warna():
     # T35: kaos kuning / hitam-kuning dikira rompi ketika aturan hanya menekankan warna
     rompi = ppe_rules.get_item("rompi")
+    assert rompi is not None and rompi.qualifier is not None
     assert "TANPA LENGAN" in rompi.prompt_rule
     assert "BUKAN rompi keselamatan" in rompi.prompt_rule
     assert "detected = false" in rompi.prompt_rule

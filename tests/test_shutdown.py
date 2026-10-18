@@ -15,11 +15,13 @@ import threading
 import time
 import urllib.request
 from pathlib import Path
+from typing import IO, Any, cast
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+POPEN_FLAGS: dict[str, Any]
 if sys.platform == "win32":
     STOP_SIGNAL = signal.CTRL_BREAK_EVENT
     POPEN_FLAGS = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -55,7 +57,10 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             **POPEN_FLAGS)
     output = []
-    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in proc.stdout],
+    # Tanpa text=True keluaran berupa bytes; **POPEN_FLAGS membuat pyright memilih overload teks
+    stdout = cast("IO[bytes] | None", proc.stdout)
+    assert stdout is not None
+    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in stdout],
                      daemon=True).start()
     try:
         for _ in range(240):
@@ -150,7 +155,10 @@ def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
     proc = subprocess.Popen([sys.executable, "-c", _WAIT_CLOSED_MACET], cwd=REPO_ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **POPEN_FLAGS)
     output = []
-    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in proc.stdout],
+    # Tanpa text=True keluaran berupa bytes; **POPEN_FLAGS membuat pyright memilih overload teks
+    stdout = cast("IO[bytes] | None", proc.stdout)
+    assert stdout is not None
+    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in stdout],
                      daemon=True).start()
     try:
         for _ in range(240):

@@ -134,7 +134,7 @@ def test_cadangan_lokal_gagal_memicu_pemeriksaan(monkeypatch):
     class Crash:
         def analyze(self, *args, **kwargs):
             raise RuntimeError("ollama HTTP 500")
-    backup.provider = Crash()
+    backup.provider = Crash()  # pyright: ignore[reportAttributeAccessIssue]
     a.backup = backup
     triggered = []
     monkeypatch.setattr(a.local_guard, "trigger", lambda: triggered.append(True))

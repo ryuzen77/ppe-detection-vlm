@@ -64,7 +64,8 @@ class DrainingQueueListener(QueueListener):
     rapi. Di sini penanda menunggu tempat; listener sendiri yang mengosongkannya."""
 
     def enqueue_sentinel(self):
-        self.queue.put(self._sentinel)
+        # Stub typeshed tidak memuat _sentinel & put() pada QueueListener.queue (queue.Queue nyata punya)
+        self.queue.put(self._sentinel)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 class RepeatFilter(logging.Filter):

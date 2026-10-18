@@ -11,8 +11,15 @@ from backend.config import cfg
 from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
 from backend.vlm_providers import VLMProvider, create_provider, parse_json_reply
 from backend.vlm_providers.gemini import GeminiProvider
+from backend.vlm_providers.openai_compatible import OpenAICompatibleProvider
 
 from helpers import person_crop
+
+
+def _item(key: str) -> ppe_rules.PPEItem:
+    item = ppe_rules.get_item(key)
+    assert item is not None, key
+    return item
 
 
 # --- Penguraian jawaban ---------------------------------------------------------
@@ -95,12 +102,13 @@ class FakeProvider(VLMProvider):
         self.reply, self.error, self.delay = reply, error, delay
         self.calls = []
 
-    def generate(self, image_jpeg, system_prompt, user_prompt):
+    def generate(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> str:
         self.calls.append((image_jpeg, system_prompt, user_prompt))
         time.sleep(self.delay)
         if self.error:
             raise self.error
-        return self.reply
+        # tiruan: reply None dipakai untuk menguji jawaban kosong dari penyedia
+        return self.reply  # pyright: ignore[reportReturnType]
 
     def ping(self):
         return "PONG"
@@ -133,7 +141,8 @@ def analyzer(catalog_defaults):
         a.backup = _engine("cadangan", cadangan, local=True, timeout=opsi.get("timeout_cadangan")) if cadangan else None
         return a
 
-    a.pasang = pasang
+    # objek tiruan: pemasang engine tiruan ditempel ke analyzer
+    a.pasang = pasang  # pyright: ignore[reportAttributeAccessIssue]
     yield a
     for e in (a.primary, a.backup):
         if e is not None:
@@ -347,6 +356,7 @@ def test_engine_meneruskan_suhu_dari_config(monkeypatch):
     utama = VLMEngine("utama", "gemini", "m", api_key="k")
     cadangan = VLMEngine("cadangan", "ollama", "m")
     assert utama.build() and cadangan.build()
+    assert isinstance(utama.provider, GeminiProvider) and isinstance(cadangan.provider, OpenAICompatibleProvider)
     assert utama.provider.temperature == 0.3 and cadangan.provider.temperature == 0.3
     for e in (utama, cadangan):
         e.executor.shutdown(wait=False)
@@ -361,7 +371,7 @@ class SequenceProvider(FakeProvider):
         super().__init__()
         self.replies = list(replies)
 
-    def generate(self, image_jpeg, system_prompt, user_prompt):
+    def generate(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> str:
         self.calls.append((image_jpeg, system_prompt, user_prompt))
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
@@ -383,10 +393,10 @@ def test_rokok_dikonfirmasi_pekerja_ditolak(analyzer):
     utama = SequenceProvider(_lengkap_dengan_rokok(), _konfirmasi(True))
     hasil = analyzer.pasang(utama=utama).analyze_person(person_crop())
     assert not hasil.is_complete
-    assert hasil.missing_items == [ppe_rules.get_item("rokok").missing_label]
+    assert hasil.missing_items == [_item("rokok").missing_label]
     _, system_prompt, user_prompt = utama.calls[1]
     assert system_prompt == messages.VLM_CONFIRM_SYSTEM_PROMPT
-    assert ppe_rules.get_item("rokok").confirm_prompt in user_prompt
+    assert _item("rokok").confirm_prompt in user_prompt
 
 
 def test_rokok_tidak_dikonfirmasi_pekerja_lolos(analyzer, caplog):
@@ -424,7 +434,7 @@ def test_konfirmasi_tidak_menghapus_kekurangan_apd_lain(analyzer):
     data["items"]["helm"] = {"detected": False}
     utama = SequenceProvider(json.dumps(data), _konfirmasi(False, "tangan kosong"))
     hasil = analyzer.pasang(utama=utama).analyze_person(person_crop())
-    assert hasil.missing_items == [ppe_rules.get_item("helm").missing_label]
+    assert hasil.missing_items == [_item("helm").missing_label]
 
 
 def test_konfirmasi_mempertahankan_penolakan_anti_spoofing(analyzer):

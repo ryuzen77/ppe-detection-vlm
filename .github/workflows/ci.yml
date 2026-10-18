@@ -40,6 +40,10 @@ jobs:
       - name: Ruff
         run: python -m ruff check .
 
+      # Versi pyright & pengaturannya satu sumber: scripts/check.py + pyrightconfig.json (T66)
+      - name: Pyright
+        run: python scripts/check.py pyright
+
       - name: Pytest
         run: python -m pytest -q
 

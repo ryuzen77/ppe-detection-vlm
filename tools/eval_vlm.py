@@ -154,6 +154,7 @@ def main():
     analyzer.start()
     if not analyzer.is_live_api():
         sys.exit(f"VLM {cfg.VLM_PROVIDER} tidak aktif (API key belum disetel?)")
+    assert analyzer.provider is not None
     provider, model = analyzer.provider.name, analyzer.provider.model
     active = [i.key for i in ppe_rules.get_active_items()]
     print(f"penyedia {provider} | model {model} | {len(files)} foto | item aktif {active}", flush=True)
@@ -222,6 +223,8 @@ def main():
     inc = [r for r in ok if not r["label_complete"]]
     com = [r for r in ok if r["label_complete"]]
     q = statistics.quantiles(lat, n=20) if len(lat) >= 2 else lat
+    assert analyzer.primary is not None
+    limit = analyzer.primary.timeout
     summary = {
         "provider": provider, "model": model, "foto": len(rows), "dikirim": len(sent),
         "jawaban_valid": len(ok), "galat_format_atau_lainnya": sum(r["status"] == "galat" for r in rows),
@@ -233,8 +236,7 @@ def main():
         "lengkap_ditolak": sum(not r["pred_complete"] for r in com),
         "latensi_median_s": round(statistics.median(lat), 2) if lat else None,
         "latensi_p95_s": round(q[-1], 2) if lat else None,
-        "selesai_dalam_batas_produksi": f"{sum(x <= analyzer.primary.timeout for x in lat)}/{len(sent)} "
-                                        f"(<= {analyzer.primary.timeout:g} dtk)",
+        "selesai_dalam_batas_produksi": f"{sum(x <= limit for x in lat)}/{len(sent)} (<= {limit:g} dtk)",
         "vram_sebelum_mb": vram_before, "vram_puncak_mb": max(sampler.samples) if sampler.samples else None,
         "porsi_gpu_ollama": residency,
         "yolo_paralel_fps": round(load.frames / elapsed, 1),

@@ -26,4 +26,4 @@ def install_shutdown_hook():
         original(self, sig, frame)
 
     uvicorn.Server.handle_exit = handle_exit
-    uvicorn.Server._safeguard_hooked = True
+    setattr(uvicorn.Server, "_safeguard_hooked", True)

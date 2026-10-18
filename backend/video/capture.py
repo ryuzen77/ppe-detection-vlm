@@ -295,11 +295,12 @@ class VideoCaptureService:
         """
         if index is None:
             index = self.camera_index
-        self._begin_opening(index)
+        # T67: index masih bisa None ("Pindai kamera" sebelum memilih kamera) -> galat palsu; abaian dihapus di T67
+        self._begin_opening(index)  # pyright: ignore[reportArgumentType]
         if mode is None:
-            mode = self._scanned_mode(index)
+            mode = self._scanned_mode(index)  # pyright: ignore[reportArgumentType]
 
-        self.cap = camera_manager.open_capture(index)
+        self.cap = camera_manager.open_capture(index)  # pyright: ignore[reportArgumentType]
         if not self.cap.isOpened():
             return self._fall_back_to_synthetic(messages.CAMERA_OPEN_FAILED.format(index=index),
                                                 f"Kamera {index} tidak tersedia. Memakai generator sintetis.")
@@ -313,7 +314,7 @@ class VideoCaptureService:
         if probe is None:
             return self._fall_back_to_synthetic(messages.CAMERA_NO_FRAMES.format(index=index),
                                                 f"Kamera {index} tidak mengirim frame. Memakai generator sintetis.")
-        self._activate(index, probe, mode, target_w, target_h)
+        self._activate(index, probe, mode, target_w, target_h)  # pyright: ignore[reportArgumentType]
         return True
 
     def _begin_opening(self, index: int):
@@ -343,7 +344,7 @@ class VideoCaptureService:
         """Minta driver menyimpan 1 frame saja; tidak semua backend menghormatinya,
         karena itu thread pembaca tetap membuang frame lama secara aktif."""
         try:
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # pyright: ignore[reportOptionalMemberAccess] (None ikut ditangkap)
         except Exception:
             pass
 
@@ -365,9 +366,11 @@ class VideoCaptureService:
 
     def _probe_frame(self) -> np.ndarray | None:
         """Frame nyata setelah beberapa pembacaan pemanasan; None bila kamera tidak mengirim frame."""
+        cap = self.cap
+        assert cap is not None, "dipanggil setelah kamera terbuka"
         ok, probe = False, None
         for _ in range(cfg.CAMERA_PROBE_READS):
-            ok, probe = self.cap.read()
+            ok, probe = cap.read()
         return probe if ok and probe is not None else None
 
     def _fall_back_to_synthetic(self, error: str, log_message: str) -> bool:
@@ -475,9 +478,10 @@ class VideoCaptureService:
         self._release_camera()
         self._set_status_frame(messages.FRAME_OPTIMIZING)
         logger.info(f"Mengukur mode kamera index {index}...")
-        modes = camera_manager.probe_modes(index)
+        # T67: index None saat belum ada kamera dipilih (lihat _init_camera); abaian dihapus di T67
+        modes = camera_manager.probe_modes(index)  # pyright: ignore[reportArgumentType]
         best = camera_manager.pick_best_mode(modes)
-        camera_mgr.record_device_modes(index, self._resolve_device_name(index), modes, best)
+        camera_mgr.record_device_modes(index, self._resolve_device_name(index), modes, best)  # pyright: ignore[reportArgumentType]
         self._init_camera(index, asdict(best) if best else None)
         self._restart_reading()
 
@@ -557,7 +561,9 @@ class VideoCaptureService:
 
     def _read_camera_frame(self) -> np.ndarray | None:
         """Operasi normal: satu frame kamera; None bila gagal dibaca atau kamera divonis lepas."""
-        ret, raw = self.cap.read()
+        cap = self.cap
+        assert cap is not None, "hanya dibaca saat kamera fisik terbuka"
+        ret, raw = cap.read()
         if not ret or raw is None:
             self._reader.consecutive_failures += 1
             if self._reader.consecutive_failures >= cfg.CAMERA_LOST_THRESHOLD:
