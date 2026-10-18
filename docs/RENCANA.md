@@ -411,6 +411,19 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 
 **Tahapan (masing-masing task sendiri, klaim di papan):**
 
+0. **T34m — evaluasi model nyata SEBELUM dipakai di proyek (keputusan pengguna 18-10).** Tidak ada model yang dipasang
+   ke gerbang sebelum lolos evaluasi ini. Alat ukur sendiri di `tools/` (pola `tools/bench_vlm.py`), hasilnya ditulis
+   di sini. Diukur per kandidat (YuNet + SFace dan kandidat lain yang lisensinya boleh dipakai komersial):
+   - **Kecepatan** di CPU laptop gerbang: median & p95 deteksi + embedding per wajah, dan waktu total FR per sesi;
+     dampak ke laju YOLO/VLM yang berjalan bersamaan.
+   - **Akurasi:** tingkat salah terima (FAR, orang lain dikenali sebagai pekerja) dan salah tolak (FRR, pekerja
+     terdaftar tidak dikenali) pada beberapa ambang → pilih ambang dengan FAR sangat rendah (salah nama lebih buruk
+     daripada tanpa nama).
+   - **Ketahanan:** dengan helm, masker, kacamata, wajah miring, cahaya kurang, dan ukuran wajah kecil (jarak kamera
+     gerbang).
+   - **Data uji:** relawan yang memberi persetujuan tertulis; foto uji **tidak di-commit, tidak diunggah** (aturan sama
+     dengan `picture_test/`); dataset publik hanya bila lisensinya mengizinkan.
+   - **Kriteria lolos** ditetapkan pengguna sebelum pengukuran (mis. FAR target, FRR maksimum, waktu FR maksimum).
 1. **T34a — uji ukuran wajah (fisik, perlu pengguna di depan kamera):** ukur piksel wajah dari posisi kamera
    sekarang dengan/tanpa helm, masker, kacamata; ukur waktu YuNet + SFace di CPU. **Tidak menyimpan data wajah.**
    Hasilnya menentukan kamera cukup atau perlu tambahan.
