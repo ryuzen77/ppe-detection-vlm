@@ -267,6 +267,21 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 3. **T34c — pengenalan dalam sesi + audit** (backend): FR di jendela diam, kunci identitas per sesi, kolom audit,
    tes karakterisasi state machine diperluas.
 4. **T34d — suara nama** (backend): MP3 per pekerja saat daftar, diputar setelah "lolos".
+   **Keputusan pengguna 18-10:**
+   - Kalimat saat lolos & dikenali: **"APD lengkap. Silakan masuk, Pak <nama panggilan>."** (struktur sama dengan suara
+     sekarang, nama di akhir). Tidak dikenali / FR belum selesai saat keputusan keluar = suara umum "APD lengkap. Silakan
+     masuk." (suara tidak pernah menunggu FR). **Ditolak = tanpa nama** (nama hanya di audit untuk teguran K3).
+   - Yang diucapkan **nama panggilan**, bukan nama lengkap, dengan sapaan hormat.
+   - **Usul integrator (menunggu konfirmasi):** sapaan dipilih admin saat mendaftar, **Pak/Bu** (bawaan Pak), supaya pekerja
+     perempuan tidak disapa "Pak".
+   - **Formulir persetujuan wajib menyebut** bahwa nama panggilan pekerja akan **diucapkan keras di gerbang** saat lolos
+     (teks formulir dari HR/Legal; versi formulir dicatat per pekerja lewat `FACE_CONSENT_VERSION`).
+   - Teknis: satu MP3 utuh per pekerja dibuat sekali saat pendaftaran/ubah nama panggilan (gTTS; butuh internet hanya saat
+     itu — gagal = pekerja tetap terdaftar, suara umum dipakai, bisa dibuat ulang); diputar offline; ikut terhapus bersama
+     data wajah (hapus manual & retensi 30 hari).
+   - **Perubahan kontrak (additive) untuk T34e:** `POST /api/workers` + `nickname` (opsional, bawaan kata pertama nama) &
+     `salutation` (`"pak"`|`"bu"`, bawaan `"pak"`); `Worker` + `nickname`, `salutation`, `voice_ready` (bool: MP3 nama ada);
+     endpoint baru `PATCH /api/workers/{id}` untuk mengubah nama panggilan/sapaan (MP3 dibuat ulang).
 5. **T34e — UI** (Gemini): halaman pendaftaran pekerja + persetujuan, laporan & filter per pekerja.
 
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
