@@ -429,11 +429,14 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
      | # | Pengenal | Lisensi bobot | Beban | Akurasi dilaporkan | Catatan |
      | :-- | :-- | :-- | :-- | :-- | :-- |
      | 1 | SFace (OpenCV Zoo) | Apache-2.0 | ringan, 128-d, sudah ada di OpenCV terpasang | LFW ±99,4–99,6% | patokan dasar |
-     | 2 | Intel `face-reidentification-retail-0095` (OpenVINO) | repo Apache-2.0; **per-model dicek** | sangat ringan (MobileNetV2, 1,1 jt param), 256-d | LFW 99,47% | kemungkinan tercepat |
+     | 2 | Intel `face-reidentification-retail-0095` (OpenVINO) | **Apache-2.0 (dikonfirmasi 18-10: `model.yml` → LICENSE repo)** | sangat ringan (MobileNetV2, 1,1 jt param), 256-d | LFW 99,47% | kemungkinan tercepat; format OpenVINO IR (butuh runtime OpenVINO); data latih tidak disebut; repo *maintenance mode* (tidak diperbarui) |
      | 3 | AuraFace-v1 | Apache-2.0 (data latih "berlisensi komersial", tidak dirinci) | berat (ResNet100) | CFP-FP 95,18 (ArcFace 98,87) | alternatif ArcFace komersial |
      | 4 | dlib ResNet | bobot *public domain* (data latih VGG/FaceScrub perlu dicek) | sedang, 128-d | LFW 99,38% | model 2017; pasang dlib di Windows bisa sulit |
-     | 5 | AdaFace IR101 (versi NVIDIA) | NVIDIA Open Model License; **teks lengkap dicek** | berat (IR101) | kuat untuk wajah kualitas rendah | kartu model juga menyebut MIT & WebFace12M |
+     | ~~5~~ | ~~AdaFace IR101 (versi NVIDIA)~~ | **GUGUR (dicek 18-10)** | — | — | NVIDIA menyatakan bukan buatannya; versi NGC = kemasan TensorRT dari CVLFace AdaFace IR101 WebFace12M; kartu model sumber tanpa lisensi ("ikuti lisensi dataset"); WebFace12M disebut hanya untuk riset akademik |
 
+     Kandidat tersisa 4 (1–4). Pengganti #5 opsional: varian SFace terkuantisasi int8 (lisensi sama) sebagai pembanding kecepatan.
+     Semua kandidat dilatih dari data wajah web; ketentuan dataset latih (kecuali AuraFace yang menyebut data berlisensi komersial)
+     tetap ditanyakan ke HR/Legal sebelum produksi.
      Gugur karena lisensi bobot: InsightFace (`buffalo_l`/ArcFace, non-komersial), EdgeFace (CC BY-NC-SA 4.0),
      AdaFace asli WebFace4M/12M (dataset non-komersial), facenet-pytorch VGGFace2 (tidak jelas / dataset riset).
    - **Usul kriteria lolos (menunggu keputusan pengguna):** FAR ≤ 0,1% (salah nama paling dihindari); FRR ≤ 5% tanpa
