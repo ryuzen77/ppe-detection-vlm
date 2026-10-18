@@ -334,6 +334,95 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 - Telemetri WebSocket: `"zone": {"enabled", "y_min", "y_max"}`; tiap `detections[i]` + `"foot_y": number | null`, `"in_zone": bool`
 - Orang di belakang zona (antrean) diabaikan; subjek yang keluar zona mengakhiri sesi setelah jeda jalur kosong. Pengaturan persisten di `data/runtime_settings.json`
 
+### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; belum dikerjakan)
+
+**Risiko: Tinggi** — data biometrik = data pribadi **spesifik** (UU PDP No. 27/2022); salah kenal = audit menunjuk orang yang salah.
+
+**Tujuan (pengguna 18-10):** audit per pekerja, supaya pelanggaran APD bisa ditindaklanjuti (teguran / arahan K3) ke
+orangnya. Kartu ID saja tidak cukup (bisa dipinjamkan). Setelah keputusan APD, suara menyebut nama:
+"Anda lolos, silakan masuk, <Nama>".
+
+**Batas yang tidak berubah (AGENTS.md §5):** keputusan APD tetap 100% oleh VLM. FR hanya menentukan *siapa*; tidak
+pernah mengubah lampu hijau/merah. Pekerja yang tidak dikenali tetap diperiksa APD-nya seperti biasa.
+
+**Alur:**
+
+```text
+Masuk jalur → tubuh utuh & diam (jendela kesiapan T46, sudah ada)
+   ├─ FR: wajah dari frame-frame diam → embedding → cocokkan → identitas DIKUNCI per sesi
+   └─ VLM menilai APD (tidak bergantung FR)
+→ keputusan → suara (+ nama bila lolos & dikenali) → audit: pekerja + keyakinan FR + hasil APD
+```
+
+FR dikerjakan di dalam jendela diam yang sudah ada, jadi tidak menambah waktu antre. Bila FR belum yakin saat
+keputusan APD keluar: suara tanpa nama, audit "tidak dikenali". FR **tidak pernah menunggu tanpa batas** (penyebab
+lambat pada sistem absensi pengguna sebelumnya): skor tertinggi di bawah ambang = "tidak dikenali" seketika.
+
+**Keputusan pengguna (18-10, mengikuti usulan integrator):**
+
+1. Lolos: nama disebut. Ditolak: suara hanya menyebut item yang kurang; nama tercatat di audit untuk supervisor
+   (tidak diumumkan di depan orang lain).
+2. Tidak dikenali (belum terdaftar / wajah tertutup / ragu): APD tetap diperiksa, suara tanpa nama, audit "tidak dikenali".
+3. Pendaftaran oleh admin di Pengaturan: 3–5 foto lewat kamera gerbang, setelah persetujuan tertulis pekerja.
+4. Yang disimpan hanya **embedding** (bukan foto wajah pendaftaran). Ganti model FR = daftar ulang.
+5. Persetujuan, DPIA, dan kebijakan dari HR/Legal perusahaan (di luar kode; wajib sebelum dipakai sungguhan).
+6. **Satu gerbang dulu, SQLite terenkripsi** (bukan PostgreSQL/pgvector). pgvector ditinjau ulang hanya bila kelak ada
+   server pusat banyak gerbang (rencana "basis data terpusat").
+
+**Teknis:**
+
+- Model ringan, CPU (VRAM 8 GB sudah penuh oleh YOLO + VLM cadangan): kandidat **YuNet** (deteksi) + **SFace**
+  (embedding 128 dimensi) dari OpenCV Zoo. **Lisensi diperiksa dulu**; model InsightFace tidak dipakai (bobotnya
+  non-komersial). Target: ≤ 50 ms FR per sesi di CPU (diukur, bukan ditebak).
+- Pencarian: semua embedding dimuat ke memori sebagai matriks numpy saat server menyala, cosine `matriks @ wajah`.
+  Terukur 18-10 di laptop pengembang: 1.000 pekerja 0,008 ms, 10.000 pekerja 0,084 ms, 100.000 pekerja 0,8 ms per
+  pencarian (128 dimensi) → tidak perlu indeks vektor untuk satu gerbang.
+- Keyakinan: voting beberapa frame terbaik (jumlah dibatasi, angka di `config.py`), ambang ketat. Salah nama lebih
+  buruk daripada tanpa nama: ragu → "tidak dikenali". Ambang awal ditetapkan dari data uji pendaftaran nyata.
+- Suara nama: MP3 per pekerja dibuat **sekali saat pendaftaran** (gTTS butuh internet saat itu saja), diputar offline.
+
+**Penyimpanan & enkripsi (SQLite di `DATA_DIR`):**
+
+- Tabel baru (nama final saat implementasi): pekerja (id, nama, nomor pegawai, aktif, tanggal & versi persetujuan,
+  didaftarkan oleh) dan embedding (id pekerja, embedding **terenkripsi AES-GCM** + nonce, versi model).
+- Kunci enkripsi di luar `DATA_DIR` (usul: variabel baru di `backend/.env`, sehingga salinan/cadangan `data/` saja
+  tidak membuka data wajah). Kunci hilang = semua pekerja didaftarkan ulang. Disarankan juga enkripsi disk mesin
+  gerbang (BitLocker / LUKS).
+- Dependensi baru kemungkinan `cryptography` → satu putaran dependensi (AGENTS.md §2.3).
+- Audit `worker_inspections`: kolom baru id pekerja + keyakinan FR (migrasi skema bernomor seperti sebelumnya).
+  Laporan & CSV: kolom nama, filter per pekerja.
+
+**Pemetaan UU PDP:**
+
+| Kewajiban | Pemenuhan di rancangan |
+| :-- | :-- |
+| Persetujuan jelas & spesifik (Pasal 20) | Formulir persetujuan; tanggal & versinya disimpan per pekerja |
+| Minimisasi | Hanya embedding, tanpa foto wajah pendaftaran |
+| Keamanan data spesifik | Embedding terenkripsi AES-GCM, kunci di luar `DATA_DIR`, enkripsi disk |
+| Pembatasan akses | Hanya admin (akun & peran T51) yang mendaftar/melihat/menghapus |
+| Jejak akses | Daftar/hapus/akses data pekerja dicatat di `security.jsonl` (T53) |
+| Hak hapus & masa simpan | Tombol hapus data wajah (embedding + MP3 nama); hapus saat pekerja nonaktif / sesuai kebijakan HR |
+| DPIA & kebijakan | Dokumen HR/Legal (di luar kode) |
+
+**Risiko & mitigasi:** salah kenal (ambang ketat + voting; ragu = tidak dikenali); masker/kacamata gelap menurunkan
+akurasi (diukur di T34a); wajah terlalu kecil di kamera tubuh utuh 1280×720 (diukur di T34a; mungkin perlu 1080p atau
+kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit, bukan kunci akses; deteksi
+*liveness* ditinjau bila kelak dipakai untuk akses); nama terdengar orang lain (hanya saat lolos).
+
+**Tahapan (masing-masing task sendiri, klaim di papan):**
+
+1. **T34a — uji ukuran wajah (fisik, perlu pengguna di depan kamera):** ukur piksel wajah dari posisi kamera
+   sekarang dengan/tanpa helm, masker, kacamata; ukur waktu YuNet + SFace di CPU. **Tidak menyimpan data wajah.**
+   Hasilnya menentukan kamera cukup atau perlu tambahan.
+2. **T34b — pendaftaran & penyimpanan terenkripsi** (backend): tabel, enkripsi, daftar/hapus, log keamanan, tes.
+3. **T34c — pengenalan dalam sesi + audit** (backend): FR di jendela diam, kunci identitas per sesi, kolom audit,
+   tes karakterisasi state machine diperluas.
+4. **T34d — suara nama** (backend): MP3 per pekerja saat daftar, diputar setelah "lolos".
+5. **T34e — UI** (Gemini): halaman pendaftaran pekerja + persetujuan, laporan & filter per pekerja.
+
+**Pertanyaan terbuka:** masa simpan data wajah menurut kebijakan HR; siapa yang boleh mendaftarkan; isi formulir
+persetujuan; jumlah pekerja per gerbang (perkiraan); perlu atau tidak tampilan nama di layar Monitoring.
+
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
 | # | Risiko | Task | Alasan risiko / isi |
@@ -350,6 +439,7 @@ Angka `y` = posisi kaki relatif tinggi gambar (0 = atas, 1 = bawah); kamera di a
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a/b) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 11 | Rendah | T44 — formatter & linter web (audit 28-09) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
+| 12 | **Tinggi** (rencana) | **T34 — identitas wajah (FR) untuk audit per pekerja** (rancangan 18-10, lihat "Rancangan T34") | Mulai dari T34a (uji ukuran wajah di gerbang, perlu pengguna di depan kamera); T34b–e menyusul. Persetujuan & DPIA dari HR/Legal sebelum dipakai sungguhan |
 
 Selesai & digabung (dikeluarkan dari antrean 14-10): T51, T57, T58, T46, T47, T45, T30, hapus UI lama + T18, T29, T39b, T41, T28, T43, T42a/b, T48, T53, T54, T55. Gemini antre: T57/T58-UI. Tinjauan Gemini terutang: T45b, T41, T29, T43, T42a, T42b, T48, T53, T54, T55, T57, T58.
 
