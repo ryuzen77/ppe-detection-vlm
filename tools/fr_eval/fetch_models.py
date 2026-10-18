@@ -1,4 +1,4 @@
-"""Unduh & verifikasi bobot kandidat FR (T34m) ke cache di luar repo.
+"""Unduh & verifikasi bobot kandidat FR dan dataset uji (T34m) ke cache di luar repo.
 
 Berkas yang sudah ada dan hash-nya cocok dilewati. Hash kosong di models.json
 berarti belum dipatok: hash hasil unduhan dicetak untuk disalin ke katalog.
@@ -12,7 +12,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from stats import CATALOG, load_catalog, model_files, models_dir, sha256_of, verify
+from stats import CATALOG, datasets_dir, load_catalog, model_files, models_dir, sha256_of, verify
 
 TIMEOUT_SECONDS = 900
 
@@ -53,9 +53,9 @@ def _fetch_entry(entry: dict, root: Path) -> bool:
 
 def main() -> int:
     catalog = load_catalog(CATALOG)
-    root = models_dir()
     entries = [catalog["detector"], *catalog["recognizers"]]
-    results = [_fetch_entry(entry, root) for entry in entries]
+    results = [_fetch_entry(entry, models_dir()) for entry in entries]
+    results += [_fetch_entry(entry, datasets_dir()) for entry in catalog.get("datasets", [])]
     return 0 if all(results) else 1
 
 

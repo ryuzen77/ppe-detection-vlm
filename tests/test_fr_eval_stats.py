@@ -41,7 +41,7 @@ def test_verifikasi_hash(tmp_path):
 
 def test_katalog_lengkap_dan_berlisensi():
     catalog = stats.load_catalog(stats.CATALOG)
-    entries = [catalog["detector"], *catalog["recognizers"]]
+    entries = [catalog["detector"], *catalog["recognizers"], *catalog["datasets"]]
     names = [e["name"] for e in entries]
     assert len(names) == len(set(names))
     for entry in entries:
@@ -54,5 +54,11 @@ def test_katalog_lengkap_dan_berlisensi():
 def test_folder_model_bisa_diganti_env(monkeypatch, tmp_path):
     monkeypatch.setenv(stats.MODELS_DIR_ENV, str(tmp_path))
     assert stats.models_dir() == tmp_path
+    assert stats.datasets_dir() == tmp_path.parent / "datasets"
     monkeypatch.delenv(stats.MODELS_DIR_ENV)
     assert stats.models_dir() == stats.DEFAULT_MODELS_DIR
+
+
+def test_nama_berkas_eksplisit_untuk_url_tanpa_nama():
+    assert stats.ModelFile("https://ndownloader.figshare.com/files/5976018", "", "lfw.tgz").filename == "lfw.tgz"
+    assert stats.ModelFile("https://contoh.test/a/model.onnx", "").filename == "model.onnx"

@@ -23,6 +23,11 @@ def models_dir() -> Path:
     return Path(os.environ.get(MODELS_DIR_ENV) or DEFAULT_MODELS_DIR)
 
 
+def datasets_dir() -> Path:
+    """Dataset uji (mis. LFW) di samping folder model, juga di luar repo."""
+    return models_dir().parent / "datasets"
+
+
 @dataclass(frozen=True)
 class Timing:
     p50_ms: float
@@ -34,10 +39,12 @@ class Timing:
 class ModelFile:
     url: str
     sha256: str
+    name: str = ""
 
     @property
     def filename(self) -> str:
-        return self.url.rsplit("/", 1)[-1]
+        """Nama dari URL, kecuali URL tidak memuatnya (mis. figshare `files/<id>`)."""
+        return self.name or self.url.rsplit("/", 1)[-1]
 
 
 def summarize(samples_ms: list[float]) -> Timing:
@@ -66,7 +73,7 @@ def load_catalog(path: Path) -> dict:
 
 
 def model_files(entry: dict) -> list[ModelFile]:
-    return [ModelFile(f["url"], f.get("sha256", "")) for f in entry["files"]]
+    return [ModelFile(f["url"], f.get("sha256", ""), f.get("file", "")) for f in entry["files"]]
 
 
 def sha256_of(path: Path) -> str:

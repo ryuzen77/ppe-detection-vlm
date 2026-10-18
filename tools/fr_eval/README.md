@@ -39,6 +39,37 @@ python tools/fr_eval/bench_speed.py --threads 0 --threads 2 --out <berkas>.json
 `--threads 2` meniru CPU yang dibagi dengan gerbang yang sedang berjalan.
 Estimasi sesi = percobaan × (YuNet + align + embedding) + pencarian 10.000 wajah.
 
-## Uji akurasi (langkah 3)
+## Uji akurasi pada LFW (langkah 3a)
 
-Butuh foto relawan dengan persetujuan tertulis; foto tidak di-commit dan tidak diunggah.
+LFW (foto berita tokoh publik) dipakai untuk MEMILIH model tanpa relawan. Diunduh
+oleh `fetch_models.py` dari mirror figshare yang dipakai scikit-learn (situs UMass
+tidak merespons; checksum dari sumber scikit-learn) ke `~/.cache/depro_fr_eval/datasets/lfw/`.
+Lisensi LFW tidak tertulis: hanya evaluasi internal, tidak di-commit/diunggah,
+tidak untuk melatih model.
+
+```bash
+python tools/fr_eval/eval_lfw.py --only sface intel_0095 sface_int8 --out <berkas>.json
+```
+
+- Akurasi 10-fold protokol resmi (`pairs.txt`): dibandingkan dengan angka publikasi
+  untuk memastikan align & praproses benar.
+- FAR/FRR dari semua pasangan (maks 20 foto per orang): ambang pada FAR 0,1% dan
+  0,01%, lalu FRR di ambang itu. Foto tanpa wajah terdeteksi dihitung terpisah.
+
+## Uji 1:N — pekerja terdaftar vs orang asing
+
+Gerbang mencari wajah di seluruh daftar pekerja, jadi ambang 1:1 tidak cukup:
+orang asing dibandingkan dengan semua pekerja sekaligus. Separuh tokoh LFW yang
+punya > 3 foto "didaftarkan" (3 foto, templat rata-rata), sisanya orang asing;
+galeri bisa diperbesar dengan `--distractors`. Juga mengukur waktu foto → keputusan
+untuk pekerja dan orang asing secara terpisah. Embedding di-cache (kunci = kode
+align + entri model).
+
+```bash
+python tools/fr_eval/eval_openset.py --only sface intel_0095 sface_int8 --distractors 0 3000
+```
+
+## Uji nyata (langkah 3b)
+
+Setelah model dipilih: foto relawan berpersetujuan tertulis lewat kamera gerbang
+(helm, masker, jarak); foto tidak di-commit dan tidak diunggah.

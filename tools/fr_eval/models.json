@@ -15,6 +15,7 @@
       "license": "Apache-2.0",
       "runtime": "opencv_sface",
       "input": 112,
+      "align": "arcface",
       "files": [
         {
           "url": "https://huggingface.co/opencv/opencv_zoo/resolve/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
@@ -27,6 +28,7 @@
       "license": "Apache-2.0",
       "runtime": "opencv_sface",
       "input": 112,
+      "align": "arcface",
       "files": [
         {
           "url": "https://huggingface.co/opencv/opencv_zoo/resolve/main/models/face_recognition_sface/face_recognition_sface_2021dec_int8.onnx",
@@ -39,6 +41,7 @@
       "license": "Apache-2.0",
       "runtime": "openvino",
       "input": 128,
+      "align": "omz",
       "files": [
         {
           "url": "https://storage.openvinotoolkit.org/repositories/open_model_zoo/2023.0/models_bin/1/face-reidentification-retail-0095/FP32/face-reidentification-retail-0095.xml",
@@ -55,6 +58,7 @@
       "license": "Apache-2.0",
       "runtime": "onnxruntime",
       "input": 112,
+      "align": "arcface",
       "files": [
         {
           "url": "https://huggingface.co/fal/AuraFace-v1/resolve/main/glintr100.onnx",
@@ -75,6 +79,24 @@
         {
           "url": "https://github.com/davisking/dlib-models/raw/master/shape_predictor_5_face_landmarks.dat.bz2",
           "sha256": "6e787bbebf5c9efdb793f6cd1f023230c4413306605f24f299f12869f95aa472"
+        }
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "name": "lfw",
+      "license": "tidak tertulis (UMass); hanya evaluasi internal, tidak dibagikan, tanya HR/Legal sebelum produksi",
+      "files": [
+        {
+          "url": "https://ndownloader.figshare.com/files/5976018",
+          "file": "lfw.tgz",
+          "sha256": "055f7d9c632d7370e6fb4afc7468d40f970c34a80d4c6f50ffec63f5a8d536c0"
+        },
+        {
+          "url": "https://ndownloader.figshare.com/files/5976006",
+          "file": "pairs.txt",
+          "sha256": "ea42330c62c92989f9d7c03237ed5d591365e89b3e649747777b70e692dc1592"
         }
       ]
     }
