@@ -309,15 +309,19 @@ class VideoCaptureService:
         if mode is None:
             mode = self._scanned_mode(index)
 
-        self.cap = camera_manager.open_capture(index)
+        target_w, target_h = self._requested_size(mode)
+        mjpg = bool(mode) and mode.get("fourcc") == camera_manager.MJPG_TEXT  # pyright: ignore[reportOptionalMemberAccess]
+        # MJPG (T34c2): ukuran & format diberikan saat membuka; set() sesudahnya kembali ke YUY2
+        self.cap = (camera_manager.open_capture(index, (target_w, target_h)) if mjpg
+                    else camera_manager.open_capture(index))
         if not self.cap.isOpened():
             return self._fall_back_to_synthetic(messages.CAMERA_OPEN_FAILED.format(index=index),
                                                 f"Kamera {index} tidak tersedia. Memakai generator sintetis.")
         self._limit_driver_buffer()
-        target_w, target_h = self._requested_size(mode)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_w)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_h)
-        self.cap.set(cv2.CAP_PROP_FPS, cfg.FPS)
+        if not mjpg:
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_w)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_h)
+            self.cap.set(cv2.CAP_PROP_FPS, cfg.FPS)
 
         probe = self._probe_frame()
         if probe is None:

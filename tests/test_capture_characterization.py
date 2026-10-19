@@ -29,8 +29,10 @@ READ_SECONDS, SLOW_READ_SECONDS = 0.04, 0.5
 class _Cap:
     """cv2.VideoCapture tiruan; perilakunya mengikuti keadaan dunia saat dibaca."""
 
-    def __init__(self, world, name):
+    def __init__(self, world, name, mjpg_size=None):
         self.world, self.name, self.open = world, name, name is not None and world.behavior[name] != "noopen"
+        if mjpg_size is not None and self.open:   # T34c2: MJPG = parameter pembukaan (hanya bila terbuka)
+            world.requests.append(["mjpg", *mjpg_size])
 
     def isOpened(self):
         return self.open
@@ -86,8 +88,9 @@ class _World:
         monkeypatch.setattr(capture_mod, "time", types.SimpleNamespace(time=lambda: self.now, sleep=sleep))
         monkeypatch.setattr(camera_manager, "list_device_names", names)
         monkeypatch.setattr(camera_manager, "open_capture",
-                            lambda i: _Cap(self, self.visible[i] if i is not None and 0 <= i < len(self.visible)
-                                           else None))  # seperti OpenCV: indeks None/tak ada = tidak terbuka
+                            lambda i, mjpg_size=None: _Cap(
+                                self, self.visible[i] if i is not None and 0 <= i < len(self.visible) else None,
+                                mjpg_size))  # seperti OpenCV: indeks None/tak ada = tidak terbuka
         monkeypatch.setattr(camera_manager, "probe_modes", probe)
         monkeypatch.setattr(camera_manager, "save_selection", lambda i, m, n="": self.saved.append([i, n]))
         monkeypatch.setattr(camera_manager, "autostart_target",

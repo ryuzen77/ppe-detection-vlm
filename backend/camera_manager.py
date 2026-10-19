@@ -42,14 +42,22 @@ else:
 LINUX_V4L_SYSFS = Path("/sys/class/video4linux")
 
 
-def open_capture(index: int) -> cv2.VideoCapture:
-    """Membuka kamera dengan backend OS ini; jatuh ke backend bawaan OpenCV bila gagal."""
-    cap = cv2.VideoCapture(index, CAPTURE_BACKEND)
+def open_capture(index: int, mjpg_size: Optional[tuple[int, int]] = None) -> cv2.VideoCapture:
+    """Membuka kamera dengan backend OS ini; jatuh ke backend bawaan OpenCV bila gagal.
+
+    `mjpg_size` (T34c2): buka langsung dalam MJPG pada resolusi itu. Format, ukuran, dan laju
+    harus menjadi parameter PEMBUKAAN — lihat CAMERA_MJPG_MIN_HEIGHT — dan pemanggil tidak
+    boleh mengubah resolusi sesudahnya.
+    """
+    params = [] if mjpg_size is None else [
+        cv2.CAP_PROP_FOURCC, FOURCC_MJPG, cv2.CAP_PROP_FRAME_WIDTH, mjpg_size[0],
+        cv2.CAP_PROP_FRAME_HEIGHT, mjpg_size[1], cv2.CAP_PROP_FPS, int(cfg.FPS)]
+    cap = cv2.VideoCapture(index, CAPTURE_BACKEND, params) if params else cv2.VideoCapture(index, CAPTURE_BACKEND)
     if cap.isOpened() or CAPTURE_BACKEND == cv2.CAP_ANY:
         return cap
     cap.release()
     logger.warning(f"{CAPTURE_BACKEND_NAME} gagal untuk index {index}, mencoba backend bawaan...")
-    return cv2.VideoCapture(index)
+    return cv2.VideoCapture(index, cv2.CAP_ANY, params) if params else cv2.VideoCapture(index)
 
 
 # Pilihan kamera operator disimpan supaya tidak perlu dipilih ulang setiap
@@ -78,6 +86,7 @@ CANDIDATE_RESOLUTIONS: list[tuple[int, int]] = [
 # Sebagian driver menolaknya dan tetap memakai format bawaan; itu terdeteksi
 # saat fourcc aktual dibaca kembali.
 FOURCC_MJPG = cv2.VideoWriter.fourcc(*"MJPG")
+MJPG_TEXT = "MJPG"
 
 
 def _fourcc_to_text(value: int) -> str:
@@ -216,34 +225,50 @@ def probe_modes(index: int, measure_seconds: float = 0.8) -> list[CameraMode]:
 
             # Renegosiasi mode butuh beberapa frame, jauh lebih singkat daripada
             # settle penuh karena perangkatnya sudah aktif.
-            ok, frame = False, None
-            for _ in range(5):
-                ok, frame = cap.read()
-            if not ok or frame is None:
-                continue
-
-            actual_h, actual_w = frame.shape[:2]
-
-            t0 = time.time()
-            frames = 0
-            while time.time() - t0 < measure_seconds:
-                if cap.read()[0]:
-                    frames += 1
-            elapsed = time.time() - t0
-            fps = frames / elapsed if elapsed > 0 else 0.0
-
-            _keep_fastest(found, CameraMode(
-                width=actual_w,
-                height=actual_h,
-                fps=round(fps, 1),
-                fourcc=_fourcc_to_text(int(cap.get(cv2.CAP_PROP_FOURCC))),
-                req_width=req_w,
-                req_height=req_h,
-            ))
+            mode = _measure_mode(cap, req_w, req_h, measure_seconds, warmup_frames=5)
+            if mode is not None:
+                _keep_fastest(found, mode)
     finally:
         cap.release()
 
+    _probe_mjpg_modes(index, measure_seconds, found)
     return list(found.values())
+
+
+def _measure_mode(cap: cv2.VideoCapture, req_w: int, req_h: int, measure_seconds: float,
+                  warmup_frames: int) -> Optional[CameraMode]:
+    """Laju frame TERUKUR mode yang sedang aktif di `cap`; None bila tidak ada frame."""
+    ok, frame = False, None
+    for _ in range(warmup_frames):
+        ok, frame = cap.read()
+    if not ok or frame is None:
+        return None
+    t0 = time.time()
+    frames = 0
+    while time.time() - t0 < measure_seconds:
+        if cap.read()[0]:
+            frames += 1
+    elapsed = time.time() - t0
+    height, width = frame.shape[:2]
+    return CameraMode(width=width, height=height, fps=round(frames / elapsed if elapsed > 0 else 0.0, 1),
+                      fourcc=_fourcc_to_text(int(cap.get(cv2.CAP_PROP_FOURCC))), req_width=req_w, req_height=req_h)
+
+
+def _probe_mjpg_modes(index: int, measure_seconds: float, found: dict):
+    """Resolusi besar diukur juga dalam MJPG (T34c2), dengan membuka ulang kamera per resolusi
+    karena MJPG hanya diterima saat dibuka. Mode dicatat hanya bila driver benar-benar memberi
+    MJPG; `pick_best_mode` lalu memilih yang paling lancar di antara YUY2 & MJPG."""
+    for req_w, req_h in CANDIDATE_RESOLUTIONS:
+        if req_h < cfg.CAMERA_MJPG_MIN_HEIGHT:
+            continue
+        cap = open_capture(index, (req_w, req_h))
+        try:
+            mode = _measure_mode(cap, req_w, req_h, measure_seconds, cfg.CAMERA_MJPG_WARMUP_FRAMES) \
+                if cap.isOpened() else None
+        finally:
+            cap.release()
+        if mode is not None and mode.fourcc == MJPG_TEXT:
+            _keep_fastest(found, mode)
 
 
 def pick_best_mode(modes: list[CameraMode]) -> Optional[CameraMode]:
