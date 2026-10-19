@@ -3,11 +3,12 @@ import {
   buildShots,
   fitPrompt,
   keepEnrollmentHold,
+  mirrorPreview,
   pollEnrollmentPreview,
   shotPrompts,
   type EnrollmentClient,
 } from './enrollment'
-import type { EnrollmentPlan, EnrollmentPreview } from './api/types'
+import type { CameraStatus, EnrollmentPlan, EnrollmentPreview } from './api/types'
 import { ENROLLMENT_HOLD } from './settings'
 
 const HOLD_S = 45
@@ -120,5 +121,16 @@ describe('pollEnrollmentPreview', () => {
     stop()
     await vi.advanceTimersByTimeAsync(5000)
     expect(fetchPreview).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('mirrorPreview', () => {
+  const cam = (over: Partial<CameraStatus>) => ({ status: 'OK', is_synthetic: false, ...over }) as CameraStatus
+
+  it('hanya kamera sungguhan yang dicerminkan (tulisan layar pesan tetap terbaca)', () => {
+    expect(mirrorPreview(cam({}))).toBe(true)
+    expect(mirrorPreview(cam({ is_synthetic: true }))).toBe(false)
+    expect(mirrorPreview(cam({ status: 'IDLE' }))).toBe(false)
+    expect(mirrorPreview(null)).toBe(false)
   })
 })

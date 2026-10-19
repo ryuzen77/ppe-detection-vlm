@@ -3,6 +3,7 @@
  * difoto tidak langsung diperiksa (uji nyata 19-10: foto selalu ditolak `camera_busy`).
  */
 import type {
+  CameraStatus,
   EnrollmentFit,
   EnrollmentHoldResponse,
   EnrollmentPlan,
@@ -105,4 +106,12 @@ export function pollEnrollmentPreview(
     stopped = true
     clearTimeout(timer)
   }
+}
+
+/**
+ * Pratinjau dibalik seperti cermin hanya untuk gambar kamera sungguhan: layar pesan server
+ * (kamera belum dipilih / terputus) berisi tulisan yang akan terbaca terbalik.
+ */
+export function mirrorPreview(camera: CameraStatus | null | undefined): boolean {
+  return camera?.status === 'OK' && !camera.is_synthetic
 }

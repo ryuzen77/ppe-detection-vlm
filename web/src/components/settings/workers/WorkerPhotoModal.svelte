@@ -9,11 +9,13 @@
     buildShots,
     fitPrompt,
     keepEnrollmentHold,
+    mirrorPreview,
     pollEnrollmentPreview,
     shotPrompts,
     type EnrollmentShot,
   } from '../../../lib/enrollment'
   import { getConditionLabel, formatTemplateQuality } from '../../../lib/workers'
+  import { telemetry } from '../../../lib/stores/telemetry.svelte'
   import Camera from '@lucide/svelte/icons/camera'
   import LoaderCircle from '@lucide/svelte/icons/loader-circle'
   import Volume2 from '@lucide/svelte/icons/volume-2'
@@ -30,6 +32,8 @@
   let shots = $state<EnrollmentShot[]>([])
   let index = $state(0)
   let preview = $state<EnrollmentPreview | null>(null)
+  // Belum ada jawaban pratinjau sama sekali = "memeriksa", bukan "gagal"
+  let previewChecked = $state(false)
   let taking = $state(false)
   let photoError = $state('')
   let photoSuccess = $state('')
@@ -48,6 +52,7 @@
     shots = []
     index = 0
     preview = null
+    previewChecked = false
     photoError = ''
     photoSuccess = ''
     taking = false
@@ -67,7 +72,10 @@
   // Indikator jarak hanya selama memotret
   $effect(() => {
     if (!shooting) return
-    return pollEnrollmentPreview(api.enrollmentPreview, (p) => (preview = p))
+    return pollEnrollmentPreview(api.enrollmentPreview, (p) => {
+      preview = p
+      previewChecked = true
+    })
   })
 
   /** Suara berurutan di speaker gerbang (pakai helm, lalu arah kepala). */
@@ -107,7 +115,15 @@
     if (index > 0) onSaved()
     else onClose()
   }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || !worker || taking) return
+    if (done) onSaved()
+    else close()
+  }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 {#if worker}
   <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-photo-title">
@@ -127,10 +143,9 @@
             <span>{WORKERS.cameraPreviewTitle}</span>
           </div>
           <div class="video-container">
-            <img src="{api.streamUrl()}?t={streamKey}" alt={WORKERS.cameraPreviewTitle} class="stream-img mirror" />
-            <div class="target-guide" aria-hidden="true"></div>
+            <img src="{api.streamUrl()}?t={streamKey}" alt={WORKERS.cameraPreviewTitle} class="stream-img" class:mirror={mirrorPreview(telemetry.data?.camera)} />
           </div>
-          <span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span>
+          {#if mirrorPreview(telemetry.data?.camera)}<span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span>{/if}
           <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
         </div>
       {/if}
@@ -149,7 +164,11 @@
           <span class="step">{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span>
           {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
           <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
-          {#if preview}
+          {#if !previewChecked}
+            <span class="fit">{ENROLLMENT_GUIDE.checkingFit}</span>
+          {:else if !preview}
+            <span class="fit">{ENROLLMENT_GUIDE.fitUnavailable}</span>
+          {:else}
             <span class="fit" class:ok={preview.fit === 'ok'}>
               {ENROLLMENT_GUIDE.fit[preview.fit]}{#if preview.interocular_px != null}
                 · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}
@@ -229,6 +248,9 @@
     padding: var(--space-6);
     width: 100%;
     max-width: 540px;
+    /* Layar laptop 768 px: tombol Ambil Foto tidak boleh terdorong keluar layar */
+    max-height: calc(100dvh - 2 * var(--space-4));
+    overflow-y: auto;
     box-shadow: 0 10px 25px var(--backdrop);
   }
 
@@ -354,14 +376,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
-  }
-
-  .target-guide {
-    position: absolute;
-    inset: 15% 30%;
-    border: 2px dashed var(--border-strong);
-    border-radius: var(--radius-full, 9999px);
-    pointer-events: none;
   }
 
   .preview-hint {
