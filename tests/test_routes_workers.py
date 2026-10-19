@@ -15,6 +15,10 @@ from backend.video.capture import video_service
 
 MODEL = "intel_0095"
 WORKER_KEYS = {
+    "nickname",  # T34d
+    "gender",
+    "salutation",
+    "voice_ready",
     "id",
     "employee_no",
     "name",
@@ -41,7 +45,7 @@ def client():
 
 
 def _create(client, number="P-001", name="Budi", consent=True):
-    return client.post("/api/workers", json={"employee_no": number, "name": name, "consent": consent})
+    return client.post("/api/workers", json={"employee_no": number, "name": name, "consent": consent, "nickname": "Budi", "gender": "male"})
 
 
 def test_daftar_kosong_dan_status_fitur(client, store):
@@ -60,7 +64,8 @@ def test_buat_pekerja_sesuai_kontrak_tanpa_data_wajah(client, store, security_ev
     assert set(worker) == WORKER_KEYS
     assert worker["consent"] == {"at": worker["created_at"], "by": "admin-uji", "version": cfg.FACE_CONSENT_VERSION}
     assert worker["active"] is True and worker["templates"] == [] and worker["delete_after"] is None
-    event = security_events[-1]
+    # suara nama dibuat di latar (T34d), jadi kejadian terakhir belum tentu worker_created
+    event = next(e for e in security_events if e["event"] == security_log.WORKER_CREATED)
     assert (event["event"], event["worker_id"], event["actor"], event["employee_no"]) == (
         security_log.WORKER_CREATED,
         worker["id"],
@@ -152,7 +157,7 @@ def test_bukan_admin_ditolak(client, store):
         return user
 
     app.dependency_overrides[require_session] = operator
-    wid = store.create("P-1", "Budi", True, "admin-uji").id
+    wid = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male").id
     for method, path in (
         ("get", "/api/workers"),
         ("post", "/api/workers"),
@@ -258,5 +263,5 @@ def test_foto_pendaftaran_khusus_admin(client, store, camera):
         return user
 
     app.dependency_overrides[require_session] = operator
-    wid = store.create("P-1", "Budi", True, "admin-uji").id
+    wid = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male").id
     assert _photo(client, wid).status_code == 403 and camera.frames == []

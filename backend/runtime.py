@@ -17,7 +17,7 @@ from .disk_guard import disk_guard
 from .storage import prepare_data_dir
 from . import ppe_rules
 from .report_manager import SECONDS_PER_DAY, report_mgr
-from . import worker_store
+from . import worker_store, worker_voice
 from .audio_engine import audio_player
 from .notifier import notifier
 from .detector import detector
@@ -45,8 +45,8 @@ def _prune_logs():
 def _retention_loop():
     while not _cleanup_stop.is_set():
         report_mgr.cleanup_old_data()
-        # Templat wajah pekerja nonaktif > FACE_RETENTION_DAYS (T34b)
-        worker_store.run_retention()
+        # Templat wajah pekerja nonaktif > FACE_RETENTION_DAYS (T34b) & MP3 namanya (T34d)
+        worker_voice.delete(worker_store.run_retention())
         _prune_logs()
         if cfg.RETENTION_INTERVAL_HOURS <= 0:
             break

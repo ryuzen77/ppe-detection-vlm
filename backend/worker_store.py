@@ -41,8 +41,10 @@ _SCHEMA = (
 )
 _WORKER_COLUMNS = (
     "id, employee_no, name, active, consent_at, consent_by, consent_version, created_at, "
-    "deactivated_at, face_deleted_at"
+    "deactivated_at, face_deleted_at, nickname, gender"
 )
+# Kolom profil suara (T34d); workers.db dari T34b1 belum punya, ditambahkan saat dibuka
+_PROFILE_COLUMNS = ("nickname", "gender")
 
 
 class WorkerError(Exception):
@@ -74,7 +76,14 @@ class Worker:
     created_at: str
     deactivated_at: Optional[str]
     face_deleted_at: Optional[str]
+    nickname: str = ""
+    gender: Optional[str] = None
     templates: tuple[Template, ...] = ()
+
+    @property
+    def salutation(self) -> Optional[str]:
+        """Sapaan untuk suara nama (T34d): Pak/Bu dari jenis kelamin; None bila belum diisi."""
+        return messages.SALUTATIONS.get(self.gender or "")
 
     @property
     def delete_after(self) -> Optional[str]:
@@ -100,7 +109,9 @@ class WorkerRepository(Protocol):
     def face_ready(self) -> bool: ...
     def all(self) -> list[Worker]: ...
     def get(self, worker_id: int) -> Worker: ...
-    def create(self, employee_no: object, name: object, consent: bool, actor: str) -> Worker: ...
+    def create(self, employee_no: object, name: object, consent: bool, actor: str, nickname: object = "",
+               gender: object = None) -> Worker: ...
+    def update_profile(self, worker_id: int, nickname: object = None, gender: object = None) -> Worker: ...
     def deactivate(self, worker_id: int) -> Worker: ...
     def activate(self, worker_id: int) -> Worker: ...
     def delete_face(self, worker_id: int) -> int: ...
@@ -146,6 +157,22 @@ def _check_condition(condition: str) -> None:
 def _check_active(worker: "Worker") -> None:
     if not worker.active:
         raise WorkerError("inactive", messages.WORKER_INACTIVE.format(worker_id=worker.id))
+
+
+def normalize_gender(raw: object) -> str:
+    gender = str(raw or "").strip().lower()
+    if gender not in cfg.WORKER_GENDERS:
+        raise WorkerError("invalid_gender", messages.WORKER_INVALID_GENDER)
+    return gender
+
+
+def normalize_nickname(raw: object) -> str:
+    """Nama panggilan untuk suara (T34d), WAJIB diisi admin. Tidak ditebak dari nama lengkap:
+    nama Indonesia tidak berpola nama depan/belakang ("Muhammad Zen Fikri" dipanggil "Zen")."""
+    nickname = " ".join(str(raw or "").split())
+    if not 1 <= len(nickname) <= cfg.WORKER_NICKNAME_MAX_LENGTH or not nickname.isprintable():
+        raise WorkerError("invalid_nickname", messages.WORKER_INVALID_NICKNAME.format(max=cfg.WORKER_NICKNAME_MAX_LENGTH))
+    return nickname
 
 
 def _not_found(worker_id: int) -> WorkerError:
@@ -194,6 +221,10 @@ class SqliteWorkerStore:
         conn.execute("PRAGMA secure_delete = ON;")
         for statement in _SCHEMA:
             conn.execute(statement)
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(workers)")}
+        for column in _PROFILE_COLUMNS:
+            if column not in existing:
+                conn.execute(f"ALTER TABLE workers ADD COLUMN {column} TEXT")
         return conn
 
     def _run(self, fn, checkpoint: bool = False, mutates: bool = False):
@@ -258,11 +289,14 @@ class SqliteWorkerStore:
 
     # --- Ubah ---
 
-    def create(self, employee_no: object, name: object, consent: bool, actor: str) -> Worker:
-        """Pekerja baru; persetujuan tertulis wajib dicentang admin (keputusan pengguna 18-10)."""
+    def create(self, employee_no: object, name: object, consent: bool, actor: str, nickname: object = "",
+               gender: object = None) -> Worker:
+        """Pekerja baru; persetujuan tertulis wajib dicentang admin (keputusan pengguna 18-10).
+        Nama panggilan & jenis kelamin wajib (suara nama "Pak/Bu <nama panggilan>", T34d)."""
         if consent is not True:
             raise WorkerError("consent_required", messages.WORKER_CONSENT_REQUIRED)
         number, clean_name = normalize_employee_no(employee_no), normalize_name(name)
+        profile = (normalize_nickname(nickname), normalize_gender(gender))
         self._cipher()  # tanpa kunci, pekerja tidak bisa diberi wajah: tolak sejak awal
 
         def insert(conn):
@@ -271,12 +305,23 @@ class SqliteWorkerStore:
             now = _now()
             cursor = conn.execute(
                 "INSERT INTO workers (employee_no, name, active, consent_at, consent_by, consent_version, "
-                "created_at, created_by) VALUES (?, ?, 1, ?, ?, ?, ?, ?)",
-                (number, clean_name, now, actor, cfg.FACE_CONSENT_VERSION, now, actor),
+                "created_at, created_by, nickname, gender) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?)",
+                (number, clean_name, now, actor, cfg.FACE_CONSENT_VERSION, now, actor, *profile),
             )
             return self._get(conn, int(cursor.lastrowid or 0))
 
         return self._run(insert, mutates=True)
+
+    def update_profile(self, worker_id: int, nickname: object = None, gender: object = None) -> Worker:
+        """Ubah nama panggilan / jenis kelamin (T34d); None = tidak diubah. Suara nama dibuat ulang pemanggil."""
+        def update(conn):
+            current = self._get(conn, worker_id)
+            new_nickname = current.nickname if nickname is None else normalize_nickname(nickname)
+            new_gender = current.gender if gender is None else normalize_gender(gender)
+            conn.execute("UPDATE workers SET nickname = ?, gender = ? WHERE id = ?", (new_nickname, new_gender, worker_id))
+            return self._get(conn, worker_id)
+
+        return self._run(update, mutates=True)
 
     def deactivate(self, worker_id: int) -> Worker:
         """Nonaktif: masa retensi berjalan sejak saat pertama dinonaktifkan (diulang tidak memperpanjang)."""

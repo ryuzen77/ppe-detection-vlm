@@ -28,7 +28,7 @@ def _vector(seed: int, dim: int = 256) -> np.ndarray:
 
 
 def _worker(store, number="P-001", name="Budi Santoso"):
-    return store.create(number, name, consent=True, actor="admin-uji")
+    return store.create(number, name, consent=True, actor="admin-uji", nickname="Budi", gender="male")
 
 
 def _raw_bytes(store) -> bytes:
@@ -100,7 +100,7 @@ def test_persetujuan_dicatat_per_pekerja(store, monkeypatch):
 )
 def test_data_pekerja_divalidasi(store, number, name, code):
     with pytest.raises(worker_store.WorkerError) as e:
-        store.create(number, name, consent=True, actor="admin-uji")
+        store.create(number, name, consent=True, actor="admin-uji", nickname="Budi", gender="male")
     assert e.value.code == code
 
 

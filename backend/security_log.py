@@ -30,6 +30,9 @@ WORKER_DEACTIVATED = "worker_deactivated"
 WORKER_ACTIVATED = "worker_activated"
 WORKER_FACE_DELETED = "worker_face_deleted"
 FACE_KEY_ERROR = "face_key_error"
+# Suara nama (T34d): profil diubah & MP3 dibuat lewat layanan suara pihak ketiga (bukti akuntabilitas)
+WORKER_UPDATED = "worker_updated"
+WORKER_VOICE_CREATED = "worker_voice_created"
 
 
 def record(event: str, **fields):

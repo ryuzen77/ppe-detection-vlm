@@ -1,5 +1,6 @@
 import logging
 import time
+from pathlib import Path
 import threading
 from typing import Optional
 from queue import Empty, Queue
@@ -73,7 +74,7 @@ class AudioEngine:
     def _load(self, audio_file):
         return pygame.mixer.Sound(str(audio_file))
 
-    def _handle(self, sound_name: str, min_interval: float, urgent: bool):
+    def _handle(self, sound_name: "str | Path", min_interval: float, urgent: bool):
         """Memutar satu suara. Suara penting memotong yang sedang berbunyi;
         suara biasa menunggu channel kosong dan dibuang bila suara penting datang."""
         if urgent:
@@ -84,13 +85,12 @@ class AudioEngine:
         if not self.enabled or self.is_muted:
             return
         now = time.time()
-        if now - self.last_played_time.get(sound_name, 0) < min_interval:
+        key = str(sound_name)
+        if now - self.last_played_time.get(key, 0) < min_interval:
             return
-        audio_file = self.audio_dir / f"{sound_name}.mp3"
-        if not audio_file.exists():
-            logger.warning(f"File not found: {audio_file}")
+        audio_file = self._audio_file(sound_name)
+        if audio_file is None:
             return
-
         channel = self.channel
         assert channel is not None, "channel ada selama audio aktif (enabled)"
         try:
@@ -102,9 +102,18 @@ class AudioEngine:
                         return
                     time.sleep(cfg.AUDIO_POLL_SECONDS)
             channel.play(self._load(audio_file))
-            self.last_played_time[sound_name] = now
+            self.last_played_time[key] = now
         except Exception as e:
             logger.warning(f"Error playing {sound_name}: {e}")
+
+    def _audio_file(self, sound_name: "str | Path") -> Optional[Path]:
+        """Nama suara = MP3 aset di AUDIO_DIR; Path = berkas di luar aset (suara nama pekerja
+        di DATA_DIR, T34d). None (dan dicatat) bila berkasnya tidak ada."""
+        audio_file = sound_name if isinstance(sound_name, Path) else self.audio_dir / f"{sound_name}.mp3"
+        if not audio_file.exists():
+            logger.warning(f"File not found: {audio_file}")
+            return None
+        return audio_file
 
     def _drop_pending(self):
         """Membuang suara yang belum sempat diputar."""
@@ -115,7 +124,7 @@ class AudioEngine:
                 return
             self.queue.task_done()
 
-    def play(self, sound_name: str, min_interval: float = 1.0, urgent: bool = False):
+    def play(self, sound_name: "str | Path", min_interval: float = 1.0, urgent: bool = False):
         """Mengantrekan suara. `urgent` (hasil keputusan, gangguan sistem) langsung
         memotong suara yang sedang berbunyi dan membuang antrean sebelumnya: di T35
         suara hasil tertahan ~1,3 dtk menunggu "sedang menganalisa" selesai."""
@@ -148,10 +157,14 @@ class AudioEngine:
                 return item.audio_missing
         return "tidak_lengkap"
 
-    def play_result(self, is_complete: bool, missing_items: Optional[list[str]] = None):
-        """Plays corresponding voice based on PPE detection result."""
-        self.play(self.result_sound(is_complete, missing_items), min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS,
-                  urgent=True)
+    def play_result(self, is_complete: bool, missing_items: Optional[list[str]] = None,
+                    named_voice: Optional[Path] = None):
+        """Suara keputusan. `named_voice` (T34d): MP3 "... Silakan masuk, Pak/Bu <nama>." pekerja yang
+        dikenali — hanya dipakai saat LOLOS; ditolak tetap tanpa nama (keputusan pengguna)."""
+        sound: "str | Path" = self.result_sound(is_complete, missing_items)
+        if is_complete and named_voice is not None and named_voice.is_file():
+            sound = named_voice
+        self.play(sound, min_interval=cfg.AUDIO_RESULT_DEBOUNCE_SECONDS, urgent=True)
 
     def stop(self):
         self.is_running = False

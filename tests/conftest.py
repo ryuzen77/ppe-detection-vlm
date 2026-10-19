@@ -60,6 +60,20 @@ def pytest_sessionfinish(session, exitstatus):
     shutil.rmtree(_TEST_ROOT, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def no_cloud_voice(monkeypatch):
+    """Suara nama pekerja (T34d) memakai gTTS = layanan Google. Tes tidak pernah mengirim nama
+    ke internet: pembuatan suara diganti penulis berkas tiruan."""
+    from backend import worker_voice
+    spoken = []
+
+    def fake_save(text, target):
+        spoken.append(text)
+        target.write_bytes(b"ID3-uji")
+    monkeypatch.setattr(worker_voice, "_gtts_save", fake_save)
+    return spoken
+
+
 @pytest.fixture
 def catalog_defaults(monkeypatch):
     """Item APD aktif kembali ke bawaan katalog, lalu dipulihkan setelah tes."""
