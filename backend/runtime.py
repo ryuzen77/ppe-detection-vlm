@@ -62,7 +62,8 @@ def _run_startup_checks():
     ollama_url = (getattr(local.provider, "base_url", None) if local is not None and local.provider_name == "ollama"
                   and local.provider is not None else None)
     camera = camera_manager.autostart_target()[0] if cfg.CAMERA_AUTOSTART else ""
-    startup_checks.run(torch.cuda.is_available(), ollama_url, camera, camera_manager.list_device_names)
+    startup_checks.run(torch.cuda.is_available(), ollama_url, camera, camera_manager.list_device_names,
+                       has_backup=vlm_analyzer.backup is not None)
     # Kunci templat wajah: kosong/rusak = FR mati, gerbang tetap jalan (T34b)
     worker_store.log_key_status()
 

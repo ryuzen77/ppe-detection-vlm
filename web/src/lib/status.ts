@@ -1,7 +1,7 @@
 /** Status kamera & VLM → nada warna + teks chip (logika murni, teruji). */
 import type { Telemetry } from './api/types'
 import type { Tone } from './gate'
-import { CAMERA_CHIP, VLM_CHIP, IOT_CHIP, cameraChipOk } from './messages'
+import { CAMERA_CHIP, VLM_CHIP, VLM_CHIP_NO_BACKUP, IOT_CHIP, cameraChipOk } from './messages'
 
 export interface Chip {
   tone: Tone
@@ -22,7 +22,9 @@ const VLM_TONE: Record<string, Tone> = { UTAMA: 'ok', CADANGAN: 'warn', GANGGUAN
 /** Nama penyedia/model sengaja tidak ditampilkan (keputusan pengguna): hanya status umum */
 export function vlmChip(t: Telemetry | null): Chip {
   const mode = t?.api_monitor?.mode
-  const label = mode ? VLM_CHIP[mode] : VLM_CHIP.UNKNOWN
+  // T71: tanpa cadangan (bawaan) operator perlu tahu bahwa gangguan VLM utama = pekerja menunggu
+  const noBackup = mode === 'UTAMA' && t?.api_monitor?.backup?.configured === false
+  const label = noBackup ? VLM_CHIP_NO_BACKUP : mode ? VLM_CHIP[mode] : VLM_CHIP.UNKNOWN
   return { tone: (mode && VLM_TONE[mode]) || 'neutral', text: label.text, hint: label.hint }
 }
 

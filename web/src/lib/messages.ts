@@ -45,6 +45,11 @@ export const VLM_CHIP: Record<VlmMode | 'UNKNOWN', { text: string; hint: string 
   GANGGUAN: { text: 'VLM gangguan', hint: 'VLM utama & cadangan tidak menjawab' },
   UNKNOWN: { text: 'VLM', hint: '' },
 }
+// T71: cadangan mati (bawaan) — tetap hijau, tetapi operator tahu konsekuensinya
+export const VLM_CHIP_NO_BACKUP = {
+  text: 'VLM utama · tanpa cadangan',
+  hint: 'Tanpa VLM cadangan: bila VLM utama gangguan atau kuota habis, pekerja diminta menunggu',
+}
 
 
 export const IOT_CHIP = {

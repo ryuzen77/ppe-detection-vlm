@@ -34,6 +34,12 @@ def check_ollama_version(version: Optional[str]) -> Optional[str]:
     return None
 
 
+def check_backup(has_backup: bool) -> Optional[str]:
+    """Tanpa cadangan (bawaan sejak T71) aman tetapi gerbang berhenti menerima pekerja
+    saat VLM utama gangguan; admin perlu tahu sebelum itu terjadi."""
+    return None if has_backup else messages.STARTUP_NO_BACKUP
+
+
 def check_camera(target: str, visible: list[str]) -> Optional[str]:
     if not target or target in visible:
         return None
@@ -67,11 +73,11 @@ def ollama_version(base_url: str, get: Optional[Callable] = None) -> Optional[st
 
 
 def run(cuda_available: bool, ollama_base_url: Optional[str], camera_target: str,
-        visible_cameras: Callable[[], list[str]]) -> list[str]:
+        visible_cameras: Callable[[], list[str]], has_backup: bool = True) -> list[str]:
     """Menjalankan semua pemeriksaan; hasilnya disimpan di `warnings` & dicatat di log."""
     from .accounts import store
     results = [check_cuda(cuda_available), check_legacy_admin_token(cfg.LEGACY_ADMIN_TOKEN_SET),
-               check_accounts(store.count())]
+               check_accounts(store.count()), check_backup(has_backup)]
     if ollama_base_url:
         results.append(check_ollama_version(ollama_version(ollama_base_url)))
     if camera_target:

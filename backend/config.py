@@ -301,10 +301,15 @@ class Config:
     VLM_TEST_IMAGE_PX: int = 256
 
     # --- VLM cadangan (T27) ---
-    # Dipakai OTOMATIS saat VLM utama gagal, di inspeksi yang sama. Bawaannya VLM
-    # lokal lewat Ollama bila utama berada di cloud; "none" = tanpa cadangan.
+    # Dipakai OTOMATIS saat VLM utama gagal, di inspeksi yang sama. Bawaan "none"
+    # (T71, keputusan pengguna 19-10): model lokal 7B memakan ~6 GB VRAM & menunda
+    # start, dan perangkat edge belum tentu punya GPU. Tanpa cadangan gerbang tetap
+    # aman (pekerja diminta menunggu). Diaktifkan dari Pengaturan, atau "ollama" di .env.
     # Lokasi tanpa internet cukup menjadikan VLM lokal sebagai utama.
-    VLM_BACKUP_PROVIDER: str = _env("VLM_BACKUP_PROVIDER", "none" if VLM_IS_LOCAL else "ollama").lower()
+    VLM_BACKUP_PROVIDER: str = _env("VLM_BACKUP_PROVIDER", "none").lower()
+    # Penyedia lokal yang modelnya bisa tertinggal di GPU antar sesi (keep_alive=-1);
+    # saat menyala tanpa VLM lokal, model bawaannya dikeluarkan bila masih dimuat (T71)
+    VLM_LOCAL_BACKUP_PROVIDER: str = "ollama"
     VLM_BACKUP_MODEL: str = _env("VLM_BACKUP_MODEL", vlm_profiles.default_model(VLM_BACKUP_PROVIDER))
     VLM_BACKUP_BASE_URL: str = _env("VLM_BACKUP_BASE_URL", "")
     VLM_BACKUP_API_KEY: str = _env("VLM_BACKUP_API_KEY", provider_api_key(VLM_BACKUP_PROVIDER))
