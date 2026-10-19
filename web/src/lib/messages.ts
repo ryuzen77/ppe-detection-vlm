@@ -80,6 +80,10 @@ export const GATE = {
   denied: { title: 'Ditolak', detail: 'APD belum lengkap — akses ditolak.' },
   analyzing: { title: 'Menganalisis APD…', detail: 'Posisi sudah pas. Pekerja mohon diam sejenak.' },
   holding: { title: 'Posisi pas', detail: 'Menahan posisi sebelum dianalisis…' },
+  enrollment: {
+    title: 'Mode pendaftaran wajah',
+    detail: 'Pemeriksaan APD dijeda sementara oleh admin; gerbang memeriksa lagi saat foto selesai.',
+  },
 } as const
 
 /** Kalimat panel keputusan saat kamera belum siap, per status kamera */
@@ -570,5 +574,7 @@ export const WORKERS = {
   errDeleteTemplate: 'Gagal menghapus foto templat',
   errUpdate: 'Gagal memperbarui profil pekerja',
   errTakePhoto: 'Gagal mengambil foto wajah dari kamera',
+  enrollmentHoldHint: 'Pemeriksaan gerbang dijeda selama jendela ini terbuka.',
+  errEnrollmentHold: 'Gerbang gagal dijeda: foto bisa ditolak bila ada orang di jalur pemeriksaan.',
 } as const
 

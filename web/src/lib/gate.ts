@@ -19,6 +19,7 @@ export type GateKind =
   | 'granted' // APD lengkap
   | 'denied' // APD kurang
   | 'waiting' // utama & cadangan VLM gagal: mohon tunggu
+  | 'enrollment' // admin memotret wajah pendaftaran: pemeriksaan dijeda (T75)
 
 export type Tone = 'neutral' | 'ok' | 'danger' | 'warn'
 
@@ -44,6 +45,8 @@ function view(kind: GateKind, tone: Tone, text: { title: string; detail?: string
 
 export function gateView(t: Telemetry | null, connection: ConnectionStatus): GateView {
   if (connection !== 'connected' || !t) return view('offline', 'neutral', GATE.offline)
+  // Jeda pendaftaran menimpa semuanya: gerbang memang tidak sedang memeriksa siapa pun
+  if (t.enrollment?.active) return view('enrollment', 'warn', GATE.enrollment)
 
   const a = t.active_track
   if (!a) {

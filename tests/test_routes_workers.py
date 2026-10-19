@@ -265,3 +265,40 @@ def test_foto_pendaftaran_khusus_admin(client, store, camera):
     app.dependency_overrides[require_session] = operator
     wid = store.create("P-1", "Budi", True, "admin-uji", nickname="Budi", gender="male").id
     assert _photo(client, wid).status_code == 403 and camera.frames == []
+
+
+# --- Mode pendaftaran wajah (T75) ---
+
+
+@pytest.fixture
+def enrollment():
+    state_mgr.release_enrollment()
+    yield
+    state_mgr.release_enrollment()
+
+
+def test_jeda_pendaftaran_membuat_foto_bisa_diambil(client, store, camera, security_events, enrollment, monkeypatch):
+    """Uji nyata 19-10: orang yang difoto memulai sesi sehingga foto selalu camera_busy."""
+    wid = _create(client).json()["id"]
+    monkeypatch.setattr(state_mgr, "session", object())
+    assert _photo(client, wid).status_code == 409
+    r = client.post("/api/workers/enrollment")
+    assert r.status_code == 200 and r.json() == {"active": True, "hold_s": cfg.ENROLLMENT_HOLD_SECONDS}
+    assert _photo(client, wid).status_code == 201
+    client.post("/api/workers/enrollment")  # denyut
+    assert client.delete("/api/workers/enrollment").status_code == 204
+    assert client.delete("/api/workers/enrollment").status_code == 204
+    events = [(e["event"], e["actor"]) for e in security_events if e["event"].startswith("enrollment_")]
+    assert events == [(security_log.ENROLLMENT_STARTED, "admin-uji"), (security_log.ENROLLMENT_ENDED, "admin-uji")]
+
+
+def test_jeda_pendaftaran_khusus_admin(client, enrollment):
+    async def operator(request: Request) -> SessionUser:
+        user = SessionUser("operator-uji", "operator")
+        request.state.user = user
+        return user
+
+    app.dependency_overrides[require_session] = operator
+    assert client.post("/api/workers/enrollment").status_code == 403
+    assert client.delete("/api/workers/enrollment").status_code == 403
+    assert state_mgr.get_telemetry()["enrollment"]["active"] is False

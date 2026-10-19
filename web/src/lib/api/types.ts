@@ -227,6 +227,7 @@ export interface Telemetry {
   light: LightStatus
   iot: { enabled: boolean; connected: boolean; last_ack_age_s: number | null; error: string | null }
   camera_fault: 'lost' | 'blocked' | 'frozen' | null
+  enrollment?: EnrollmentStatus
   history: HistoryRecord[]
   stable_frames_required: number
   /** Ambang keyakinan titik pose — sama dengan detektor backend */
@@ -512,6 +513,19 @@ export interface WorkerTemplateQuality {
 
 export interface AddTemplateResponse extends WorkerTemplate {
   quality: WorkerTemplateQuality
+}
+
+/** Mode pendaftaran wajah (T75): POST /api/workers/enrollment (mulai/denyut) */
+export interface EnrollmentHoldResponse {
+  active: boolean
+  /** Jeda selesai sendiri bila tanpa denyut selama ini (detik, dari backend) */
+  hold_s: number
+}
+
+/** Telemetri `enrollment`: gerbang jeda selama admin memotret wajah */
+export interface EnrollmentStatus {
+  active: boolean
+  remaining_s: number | null
 }
 
 export interface WorkerConsent {

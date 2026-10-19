@@ -198,6 +198,26 @@ def add_worker_template(
     return {**template_json(template), "quality": quality}
 
 
+@router.post("/api/workers/enrollment")
+def hold_enrollment(request: Request, user: auth.SessionUser = Depends(require_admin)):
+    """Mode pendaftaran wajah (T75): gerbang jeda selama modal foto terbuka. Dipanggil saat modal
+    dibuka lalu berulang sebagai denyut; tanpa denyut jeda selesai sendiri (ENROLLMENT_HOLD_SECONDS)."""
+    if state_mgr.hold_for_enrollment():
+        security_log.record(
+            security_log.ENROLLMENT_STARTED, actor=user.username, client=client_address(request), ok=True
+        )
+    return {"active": True, "hold_s": cfg.ENROLLMENT_HOLD_SECONDS}
+
+
+@router.delete("/api/workers/enrollment", status_code=204)
+def release_enrollment(request: Request, user: auth.SessionUser = Depends(require_admin)):
+    if state_mgr.release_enrollment():
+        security_log.record(
+            security_log.ENROLLMENT_ENDED, actor=user.username, client=client_address(request), ok=True
+        )
+    return Response(status_code=204)
+
+
 @router.patch("/api/workers/{worker_id}")
 def update_worker(worker_id: int, body: WorkerProfile, request: Request,
                   user: auth.SessionUser = Depends(require_admin)):

@@ -537,6 +537,10 @@ class Config:
     # Audit menunggu hasil FR paling lama ini setelah VLM selesai; lewat = "tidak dikenali"
     # (FR berjalan paralel dengan VLM, jadi biasanya sudah selesai lebih dulu)
     FACE_IDENTIFY_TIMEOUT_SECONDS: float = 2.0
+    # Jeda gerbang selama admin memotret wajah pendaftaran (T75). Modal foto mengirim denyut
+    # lebih sering dari ini (web/src/lib/settings.ts); tanpa denyut, jeda selesai sendiri supaya
+    # browser yang ditutup / jaringan putus tidak membuat gerbang berhenti memeriksa selamanya.
+    ENROLLMENT_HOLD_SECONDS: float = 45.0
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.
