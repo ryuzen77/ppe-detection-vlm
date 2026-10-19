@@ -9,6 +9,13 @@ from . import ppe_rules
 
 logger = logging.getLogger(__name__)
 
+# Suara arahan per jenis posisi dari detektor (clip_type); berkas MP3 dari messages.VOICE_TEXTS
+POSITION_SOUNDS = {
+    "HEAD_CLIPPED": "mundur_kepala",
+    "FEET_CLIPPED": "mundur_kaki",
+    "NOT_STANDING": "berdiri_tegak",
+}
+
 class AudioEngine:
     """Thread-safe, non-blocking audio player using pygame.mixer."""
     def __init__(self):
@@ -120,13 +127,9 @@ class AudioEngine:
         self.queue.put((sound_name, min_interval, urgent))
 
     def play_step_back(self, clip_type: str = "FEET_CLIPPED"):
-        """Audio cue tailored to which part of the body is clipped (head or feet)."""
-        if clip_type == "HEAD_CLIPPED":
-            self.play("mundur_kepala", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
-        elif clip_type == "FEET_CLIPPED":
-            self.play("mundur_kaki", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
-        else:
-            self.play("mundur", min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
+        """Suara arahan posisi sesuai jenis masalah dari detektor; jenis lain = "mundur"."""
+        sound = POSITION_SOUNDS.get(clip_type, "mundur")
+        self.play(sound, min_interval=cfg.AUDIO_STEP_BACK_DEBOUNCE_SECONDS)
 
     def result_sound(self, is_complete: bool, missing_items: Optional[list[str]] = None) -> str:
         """Nama suara untuk hasil inspeksi.

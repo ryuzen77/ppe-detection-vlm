@@ -172,13 +172,36 @@ def _feet_status(kpts, y2: int, h: int, margins: FrameMargins) -> Optional[str]:
     return None
 
 
+def _thigh_shin_ratio(kpts, hip: int, knee: int, ankle: int) -> Optional[float]:
+    """Tinggi tegak paha dibagi tulang kering pada satu sisi tubuh; None bila titiknya kurang.
+    Pergelangan kaki tidak di bawah lutut (kaki terangkat/terlipat) dihitung 0 = belum berdiri."""
+    if not all(_confident(kpts, i) for i in (hip, knee, ankle)):
+        return None
+    shin = float(kpts[ankle][kp.Y] - kpts[knee][kp.Y])
+    return float(kpts[knee][kp.Y] - kpts[hip][kp.Y]) / shin if shin > 0 else 0.0
+
+
+def _not_standing(kpts) -> bool:
+    """Duduk/jongkok (T73): paha mendatar sehingga lutut hampir sejajar pinggul.
+
+    Cukup satu sisi tegak (orang melangkah tetap berdiri). Titik yang kurang di kedua
+    sisi tidak menghalangi: kaki yang tak terlihat sudah ditangani `_feet_status`, dan
+    menolak karena titik hilang akan menahan pekerja patuh yang tertutup rompi.
+    """
+    ratios = [r for r in (_thigh_shin_ratio(kpts, kp.LEFT_HIP, kp.LEFT_KNEE, kp.LEFT_ANKLE),
+                          _thigh_shin_ratio(kpts, kp.RIGHT_HIP, kp.RIGHT_KNEE, kp.RIGHT_ANKLE)) if r is not None]
+    return bool(ratios) and max(ratios) < cfg.STANDING_MIN_THIGH_SHIN_RATIO
+
+
 def _pose_status(kpts, box, h: int, margins: FrameMargins) -> tuple[bool, str, str]:
-    """Verifikasi anatomis adaptif tinggi badan. Masalah kaki menimpa masalah kepala
-    (urutan pemeriksaan lama dipertahankan)."""
+    """Verifikasi anatomis adaptif tinggi badan. Masalah kaki menimpa postur, postur
+    menimpa kepala: orang duduk diminta berdiri dulu sebelum posisi kepala dinilai."""
     _, y1, _, y2 = box
     status = (True, messages.POSE_OK, "OPTIMAL")
     if _head_clipped(kpts, y1, y2 - y1, margins):
         status = (False, messages.POSE_HEAD_CLIPPED, "HEAD_CLIPPED")
+    if _not_standing(kpts):
+        status = (False, messages.POSE_NOT_STANDING, "NOT_STANDING")
     feet = _feet_status(kpts, y2, h, margins)
     return (False, feet, "FEET_CLIPPED") if feet else status
 

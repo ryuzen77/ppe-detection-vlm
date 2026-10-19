@@ -68,6 +68,11 @@ describe('gateView', () => {
     expect(v).toMatchObject({ kind: 'position', tone: 'warn', title: 'Mundur satu langkah', trackId: 42 })
   })
 
+  it('orang duduk diminta berdiri tegak dengan kuning (T73)', () => {
+    const v = gateView(tele({ active_track: track({ is_full_body: false, clip_type: 'NOT_STANDING' }) }), 'connected')
+    expect(v).toMatchObject({ kind: 'position', tone: 'warn', title: 'Berdiri tegak' })
+  })
+
   it('mengumpulkan frame stabil menampilkan kemajuan', () => {
     const v = gateView(tele({ active_track: track({ state: 'STABILIZING', stable_frames: 2 }) }), 'connected')
     expect(v.kind).toBe('analyzing')
