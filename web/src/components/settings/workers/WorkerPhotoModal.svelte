@@ -85,13 +85,13 @@
         <div id="condition-options" class="conditions-grid">
           {#each TEMPLATE_CONDITIONS as cond}
             {@const alreadyHas = hasTemplateCondition(worker, cond)}
-            <label class="condition-card" class:selected={selectedCondition === cond} class:disabled={alreadyHas}>
+            <label class="condition-card" class:selected={selectedCondition === cond}>
               <input
                 type="radio"
                 name="condition"
                 value={cond}
                 bind:group={selectedCondition}
-                disabled={taking || alreadyHas}
+                disabled={taking}
               />
               <span class="condition-title">{getConditionLabel(cond)}</span>
               {#if alreadyHas}
@@ -123,7 +123,7 @@
           type="button"
           class="btn btn-primary"
           onclick={handleTakePhoto}
-          disabled={taking || hasTemplateCondition(worker, selectedCondition)}
+          disabled={taking}
         >
           {#if taking}
             <span class="spin"><LoaderCircle size={14} /></span>
@@ -276,11 +276,6 @@
   .condition-card.selected {
     border-color: var(--primary);
     background: var(--surface);
-  }
-
-  .condition-card.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   .condition-title {

@@ -4,7 +4,6 @@
   import {
     getWorkerBadge,
     formatWorkerSalutation,
-    TEMPLATE_CONDITIONS,
   } from '../../../lib/workers'
   import Trash2 from '@lucide/svelte/icons/trash-2'
   import Edit2 from '@lucide/svelte/icons/edit-2'
@@ -76,8 +75,7 @@
               <div class="templates-cell">
                 <div class="template-header">
                   <span class="template-summary">{WORKERS.photoCount(worker.templates.length)}</span>
-                  <!-- Maksimal foto per pekerja sesuai jumlah kondisi di backend (cfg.FACE_CONDITIONS) -->
-                  {#if worker.active && worker.templates.length < TEMPLATE_CONDITIONS.length}
+                  {#if worker.active}
                     <button
                       type="button"
                       class="btn btn-xs btn-add-photo"
