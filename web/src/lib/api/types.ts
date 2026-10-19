@@ -505,13 +505,9 @@ export interface WorkerTemplate {
 }
 
 export interface WorkerTemplateQuality {
-  width: number
-  height: number
-  sharpness: number
-  brightness: number
-  pitch: number
-  yaw: number
-  roll: number
+  face_width_px: number
+  interocular_px: number
+  det_score: number
 }
 
 export interface AddTemplateResponse extends WorkerTemplate {

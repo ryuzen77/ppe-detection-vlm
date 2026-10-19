@@ -7,6 +7,7 @@
     TEMPLATE_CONDITIONS,
     getConditionLabel,
     hasTemplateCondition,
+    formatTemplateQuality,
   } from '../../../lib/workers'
   import Camera from '@lucide/svelte/icons/camera'
   import LoaderCircle from '@lucide/svelte/icons/loader-circle'
@@ -44,7 +45,7 @@
     taking = true
     try {
       const res = await api.addWorkerTemplate(worker.id, selectedCondition)
-      photoSuccess = `${WORKERS.takePhotoSuccess} (${WORKERS.qualityBadge(res.quality.sharpness)})`
+      photoSuccess = `${WORKERS.takePhotoSuccess} (${formatTemplateQuality(res.quality)})`
       setTimeout(() => {
         onSaved()
       }, 1000)
@@ -141,7 +142,7 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.65);
+    background: var(--backdrop);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -156,7 +157,7 @@
     padding: var(--space-6);
     width: 100%;
     max-width: 540px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 25px var(--backdrop);
   }
 
   .modal-header {
@@ -211,7 +212,7 @@
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    background: #000;
+    background: var(--bg);
     border-radius: var(--radius-md);
     overflow: hidden;
     border: 1px solid var(--border);
@@ -226,7 +227,7 @@
   .target-guide {
     position: absolute;
     inset: 15% 30%;
-    border: 2px dashed rgba(255, 255, 255, 0.4);
+    border: 2px dashed var(--border-strong);
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
   }

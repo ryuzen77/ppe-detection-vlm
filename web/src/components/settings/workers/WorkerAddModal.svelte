@@ -157,7 +157,7 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.65);
+    background: var(--backdrop);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -172,7 +172,7 @@
     padding: var(--space-6);
     width: 100%;
     max-width: 520px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 25px var(--backdrop);
   }
 
   h3 {

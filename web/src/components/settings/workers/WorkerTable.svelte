@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { Worker } from '../../../lib/api/types'
   import { WORKERS } from '../../../lib/messages'
-  import { getWorkerBadge, formatWorkerSalutation } from '../../../lib/workers'
+  import {
+    getWorkerBadge,
+    formatWorkerSalutation,
+    TEMPLATE_CONDITIONS,
+  } from '../../../lib/workers'
   import Trash2 from '@lucide/svelte/icons/trash-2'
   import Edit2 from '@lucide/svelte/icons/edit-2'
   import UserX from '@lucide/svelte/icons/user-x'
@@ -72,7 +76,8 @@
               <div class="templates-cell">
                 <div class="template-header">
                   <span class="template-summary">{WORKERS.photoCount(worker.templates.length)}</span>
-                  {#if worker.active && worker.templates.length < 4}
+                  <!-- Maksimal foto per pekerja sesuai jumlah kondisi di backend (cfg.FACE_CONDITIONS) -->
+                  {#if worker.active && worker.templates.length < TEMPLATE_CONDITIONS.length}
                     <button
                       type="button"
                       class="btn btn-xs btn-add-photo"

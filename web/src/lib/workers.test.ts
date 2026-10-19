@@ -8,8 +8,9 @@ import {
   getConditionLabel,
   hasTemplateCondition,
   formatRecognizedWorker,
+  formatTemplateQuality,
 } from './workers'
-import type { Worker } from './api/types'
+import type { Worker, WorkerTemplateQuality } from './api/types'
 
 describe('validateWorkerForm', () => {
   it('menolak bila persetujuan belum dicentang', () => {
@@ -242,4 +243,16 @@ describe('formatRecognizedWorker', () => {
     expect(formatRecognizedWorker({ status: 'recognized', name: '' })).toBeNull()
   })
 })
+
+describe('formatTemplateQuality', () => {
+  it('memformat kualitas wajah dengan jarak mata dalam px sesuai data dari backend', () => {
+    const quality: WorkerTemplateQuality = {
+      face_width_px: 120,
+      interocular_px: 48.2,
+      det_score: 0.985,
+    }
+    expect(formatTemplateQuality(quality)).toBe('Jarak mata 48 px')
+  })
+})
+
 

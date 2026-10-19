@@ -560,7 +560,7 @@ export const WORKERS = {
   cameraPreviewTitle: 'Pratinjau Kamera Gerbang',
   cameraPreviewHint: 'Pastikan pekerja berdiri tegak menghadap kamera gerbang.',
   takePhotoSuccess: 'Foto wajah berhasil disimpan!',
-  qualityBadge: (sharpness: number) => `Ketajaman: ${Math.round(sharpness)}`,
+  qualityBadge: (interocularPx: number) => `Jarak mata ${interocularPx} px`,
   recognizedLabel: 'Dikenali',
   recognizedName: (name: string) => `Dikenali: ${name}`,
   errLoad: 'Gagal memuat data pekerja',

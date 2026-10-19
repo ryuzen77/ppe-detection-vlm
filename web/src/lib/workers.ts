@@ -99,6 +99,7 @@ export function formatDeleteSchedule(deleteAfterIso: string | null): string {
   }
 }
 
+// Daftar kondisi foto pendaftaran wajah; WAJIB sama persis dengan cfg.FACE_CONDITIONS di backend/config.py
 export const TEMPLATE_CONDITIONS = ['bare', 'glasses', 'helmet', 'helmet_glasses'] as const
 
 export function getConditionLabel(condition: string): string {
@@ -125,4 +126,8 @@ export function formatRecognizedWorker(identity?: { status: string; name?: strin
     return WORKERS.recognizedName(identity.name.trim())
   }
   return null
+}
+
+export function formatTemplateQuality(quality: { interocular_px: number }): string {
+  return WORKERS.qualityBadge(Math.round(quality.interocular_px))
 }
