@@ -377,12 +377,36 @@ class VLMAnalyzer:
         self._release_stale_local_model()
 
     def _release_stale_local_model(self):
-        """Cadangan lokal dimatikan (pilihan dashboard) tetapi .env masih menyebutnya: model sisa sesi lalu
-        tetap di VRAM karena Ollama proses terpisah & keep_alive=-1. Dikeluarkan saat menyala (T70)."""
-        if self._local_engine() is not None or cfg.VLM_BACKUP_PROVIDER == vlm_selection.NO_BACKUP:
+        """Tanpa VLM lokal aktif, model lokal sisa sesi lalu tidak boleh tetap memakai GPU (T70/T71).
+
+        Ollama proses terpisah & model dimuat dengan keep_alive=-1, jadi model sesi lalu tetap di
+        VRAM walau server dimulai ulang. Uji 19-10: `.env` tanpa cadangan (bawaan sejak T71)
+        dulu melewati pembersihan ini sehingga model tertinggal. Diperiksa di latar supaya start
+        tidak menunggu Ollama.
+        """
+        if self._local_engine() is not None:
             return
-        stale = self._new_engine(ROLE_BACKUP, Choice(cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL))
-        stale.close(unload=stale.is_local)
+        stale = self._new_engine(ROLE_BACKUP, self._stale_local_choice())
+        threading.Thread(target=self._unload_if_loaded, args=(stale,), name="VLM_StaleUnload", daemon=True).start()
+
+    @staticmethod
+    def _stale_local_choice() -> Choice:
+        """Model lokal yang mungkin tertinggal: cadangan lokal di .env, selain itu model bawaan Ollama."""
+        if vlm_profiles.is_local(cfg.VLM_BACKUP_PROVIDER):
+            return Choice(cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL)
+        provider = cfg.VLM_LOCAL_BACKUP_PROVIDER
+        return Choice(provider, vlm_profiles.default_model(provider))
+
+    @staticmethod
+    def _unload_if_loaded(engine: VLMEngine):
+        """Dikeluarkan hanya bila memang dimuat (`/api/ps`). Ollama tak terpasang/tak menyala
+        bukan masalah di gerbang tanpa cadangan, jadi cukup dicatat di debug."""
+        try:
+            loaded = engine.provider is not None and bool(engine.provider.gpu_residency())
+        except Exception as e:
+            logger.debug(messages.LOG_VLM_STALE_CHECK_SKIPPED.format(who=engine.who, error=e))
+            loaded = False
+        engine.close(unload=loaded)
 
     @staticmethod
     def _new_engine(role: str, choice: Choice) -> VLMEngine:

@@ -92,6 +92,17 @@ def logged_in_admin(request):
     app.dependency_overrides.pop(require_session, None)
 
 
+@pytest.fixture(autouse=True)
+def no_ollama_cleanup(request, monkeypatch):
+    """`VLMAnalyzer.start()` memeriksa model Ollama sisa sesi lalu lewat HTTP (T71) dan bisa
+    mengeluarkannya; tes tidak boleh menyentuh Ollama sungguhan di mesin pengembang.
+    Tes yang menguji pembersihan itu (dengan penyedia tiruan) memakai penanda `stale_model`."""
+    if request.node.get_closest_marker("stale_model"):
+        return
+    from backend.vlm_analyzer import VLMAnalyzer
+    monkeypatch.setattr(VLMAnalyzer, "_unload_if_loaded", staticmethod(lambda engine: engine.close()))
+
+
 class _SecurityCapture(logging.Handler):
     def __init__(self):
         super().__init__()
@@ -116,3 +127,4 @@ def security_events():
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "real_auth: tes memakai pemeriksaan login sungguhan (tanpa admin tiruan)")
+    config.addinivalue_line("markers", "stale_model: tes pembersihan model lokal sisa sesi lalu (T71)")

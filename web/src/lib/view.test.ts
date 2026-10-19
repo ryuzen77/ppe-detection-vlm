@@ -322,6 +322,15 @@ describe('chip status', () => {
     expect(vlmChip(tele({ api_monitor: { mode: 'CADANGAN' } as Telemetry['api_monitor'] })).tone).toBe('warn')
   })
 
+  it('tanpa cadangan (T71): tetap hijau, operator diberi tahu', () => {
+    const monitor = (configured: boolean) =>
+      ({ mode: 'UTAMA', backup: { configured } }) as unknown as Telemetry['api_monitor']
+    const none = vlmChip(tele({ api_monitor: monitor(false) }))
+    expect(none).toMatchObject({ tone: 'ok', text: 'VLM utama · tanpa cadangan' })
+    expect(none.hint).toMatch(/menunggu/)
+    expect(vlmChip(tele({ api_monitor: monitor(true) })).text).toBe('VLM utama')
+  })
+
   it('iotChip: nada dan teks sesuai status', () => {
     expect(iotChip(null).tone).toBe('neutral')
     expect(iotChip(tele({ iot: { enabled: false, connected: true, last_ack_age_s: null, error: null } })).tone).toBe('neutral')

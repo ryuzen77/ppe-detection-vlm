@@ -129,6 +129,13 @@ def test_pemeriksaan_start_semua_baik(monkeypatch, ada_akun):
     assert startup_checks.check_ollama_version(None) == messages.STARTUP_OLLAMA_UNREACHABLE
 
 
+def test_peringatan_tanpa_cadangan(monkeypatch, ada_akun):
+    """T71: tanpa cadangan (bawaan) admin diberi tahu konsekuensinya saat start."""
+    assert startup_checks.check_backup(True) is None
+    out = startup_checks.run(True, None, "Cam", lambda: ["Cam"], has_backup=False)
+    assert out == [messages.STARTUP_NO_BACKUP]
+
+
 def test_health_menyertakan_peringatan_start(monkeypatch):
     monkeypatch.setattr(startup_checks, "warnings", ["contoh peringatan"])
     assert TestClient(app).get("/api/health").json()["startup_warnings"] == ["contoh peringatan"]

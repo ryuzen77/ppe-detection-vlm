@@ -19,6 +19,8 @@ _PROBE = r"""
 import json
 from backend.config import cfg
 from backend.vlm_analyzer import VLMAnalyzer
+# Proses terpisah tanpa conftest: jangan menyentuh model Ollama sungguhan saat start (T71)
+VLMAnalyzer._unload_if_loaded = staticmethod(lambda engine: engine.close())
 a = VLMAnalyzer()
 a.start()
 p = a.provider
@@ -51,8 +53,13 @@ def test_env_lama_gemini_tetap_berfungsi(tmp_path):
     assert r["label"] == "VLM_LIVE:gemini/gemini-3.8-flash"
     assert r["min_interval"] == 4.0, "Penyedia cloud menjaga kuota free tier"
     assert r["timeout"] == 4.0, "Cloud dipotong cepat supaya pekerja segera dialihkan ke cadangan"
+    assert r["backup"] is None, "T71: bawaan tanpa cadangan (model lokal tidak dimuat ke GPU)"
+
+
+def test_cadangan_lokal_diaktifkan_lewat_env(tmp_path):
+    r = _probe(tmp_path, GEMINI_API_KEY="kunci-lama", VLM_BACKUP_PROVIDER="ollama")
     assert r["backup"]["provider"] == "ollama" and r["backup"]["model"] == "qwen2.5vl:7b", \
-        "Utama cloud otomatis dicadangkan VLM lokal hasil evaluasi T26"
+        "Model bawaan cadangan lokal = hasil evaluasi T26"
     assert r["backup"]["timeout_s"] == 12.0
 
 

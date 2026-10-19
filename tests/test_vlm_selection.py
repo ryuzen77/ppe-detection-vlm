@@ -8,6 +8,7 @@ Rambu rancangan yang disetujui 06-10:
 (e) pilihan dashboard disimpan & menang atas .env, bisa dikembalikan ke .env.
 """
 import json
+import logging
 import threading
 import time
 
@@ -53,9 +54,16 @@ class FakeProvider(VLMProvider):
             raise RuntimeError(self.warm_up_error)
 
     unloads = 0
+    # Porsi model di GPU menurut /api/ps tiruan: 1.0 = dimuat, 0.0 = tidak, Exception = Ollama mati
+    residency: "float | Exception" = 1.0
 
     def unload(self):
         self.unloads += 1
+
+    def gpu_residency(self):
+        if isinstance(self.residency, Exception):
+            raise self.residency
+        return self.residency
 
 
 @pytest.fixture
@@ -370,24 +378,51 @@ def test_ganti_model_lokal_yang_lama_dikeluarkan(analyzer):
     assert _wait_unloaded(old) == 1 and analyzer.backup.provider.unloads == 0
 
 
-def test_saat_menyala_tanpa_cadangan_model_sisa_sesi_lalu_dikeluarkan(env, fakes, monkeypatch):
-    made, _ = fakes
+def _start_without_backup(monkeypatch, made, residency: "float | Exception" = 1.0, env_backup=None):
+    """Server menyala tanpa VLM lokal; model Ollama sisa sesi lalu = `residency` di /api/ps tiruan."""
+    if env_backup is not None:
+        monkeypatch.setattr(cfg, "VLM_BACKUP_PROVIDER", env_backup)
+    monkeypatch.setattr(FakeProvider, "residency", residency)
     monkeypatch.setattr(vlm_selection, "effective_selection", lambda: Selection(
         Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD))
     a = VLMAnalyzer()
     a.start()
     stale = [p for p in made if p.name == "ollama"]
-    assert a.backup is None and len(stale) == 1 and _wait_unloaded(stale[0]) == 1
-    assert a.primary is not None
-    a.primary.close()
+    assert a.backup is None and len(stale) == 1 and a.primary is not None
+    return a, stale[0]
 
 
-def test_saat_menyala_env_tanpa_cadangan_tidak_menyentuh_ollama(env, fakes, monkeypatch):
-    made, _ = fakes
-    monkeypatch.setattr(cfg, "VLM_BACKUP_PROVIDER", "none")
-    monkeypatch.setattr(vlm_selection, "effective_selection", lambda: Selection(
-        Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD))
-    a = VLMAnalyzer()
-    a.start()
-    assert not any(p.name == "ollama" for p in made) and a.primary is not None
-    a.primary.close()
+@pytest.mark.stale_model
+def test_saat_menyala_tanpa_cadangan_model_sisa_sesi_lalu_dikeluarkan(env, fakes, monkeypatch):
+    a, stale = _start_without_backup(monkeypatch, fakes[0])
+    assert _wait_unloaded(stale) == 1 and stale.model == "qwen2.5vl:7b"
+    a.primary.close()  # pyright: ignore[reportOptionalMemberAccess] (dicek di _start_without_backup)
+
+
+@pytest.mark.stale_model
+def test_saat_menyala_env_tanpa_cadangan_model_bawaan_ollama_dikeluarkan(env, fakes, monkeypatch):
+    """Uji nyata 19-10: .env tanpa cadangan (bawaan T71) dulu melewati pembersihan → model tertinggal."""
+    a, stale = _start_without_backup(monkeypatch, fakes[0], env_backup="none")
+    assert _wait_unloaded(stale) == 1 and stale.model == profiles.default_model(cfg.VLM_LOCAL_BACKUP_PROVIDER)
+    a.primary.close()  # pyright: ignore[reportOptionalMemberAccess]
+
+
+@pytest.mark.stale_model
+def test_saat_menyala_model_tidak_dimuat_tidak_dibongkar(env, fakes, monkeypatch):
+    a, stale = _start_without_backup(monkeypatch, fakes[0], residency=0.0, env_backup="none")
+    time.sleep(0.2)
+    assert stale.unloads == 0
+    a.primary.close()  # pyright: ignore[reportOptionalMemberAccess]
+
+
+@pytest.mark.stale_model
+def test_saat_menyala_ollama_mati_diam_tanpa_peringatan(env, fakes, monkeypatch, caplog):
+    """Gerbang tanpa cadangan di mesin tanpa Ollama: bukan masalah, tidak boleh mengotori log."""
+    with caplog.at_level(logging.WARNING):
+        a, stale = _start_without_backup(monkeypatch, fakes[0], residency=ConnectionError("ollama mati"),
+                                         env_backup="none")
+        time.sleep(0.2)
+    stale_logs = [r for r in caplog.records if "Ollama" in r.getMessage() or "GPU" in r.getMessage()]
+    assert stale.unloads == 0 and not stale_logs
+    a.primary.close()  # pyright: ignore[reportOptionalMemberAccess]
+
