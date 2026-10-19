@@ -124,7 +124,7 @@ export interface MonitorStatus {
 
 // --- Telemetri WebSocket (/ws) ---------------------------------------------------------
 
-export type ClipType = 'OPTIMAL' | 'HEAD_CLIPPED' | 'FEET_CLIPPED' | 'TOO_FAR' | 'TOO_CLOSE' | string
+export type ClipType = 'OPTIMAL' | 'HEAD_CLIPPED' | 'FEET_CLIPPED' | 'TOO_FAR' | 'TOO_CLOSE' | 'NOT_STANDING' | string
 
 export interface Detection {
   track_id: number

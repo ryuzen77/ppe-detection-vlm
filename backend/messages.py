@@ -39,6 +39,8 @@ POSE_FEET_CLIPPED = "Kaki/Sepatu terpotong (silakan mundur satu langkah)"
 POSE_FEET_NOT_VISIBLE = "Kaki belum terlihat (silakan mundur satu langkah)"
 POSE_HEAD_CLIPPED_EDGE = "Kepala/Helm terpotong di tepi atas"
 POSE_FEET_CLIPPED_EDGE = "Kaki terpotong di tepi bawah"
+# T73: orang duduk/jongkok tidak dikirim ke VLM
+POSE_NOT_STANDING = "Belum berdiri tegak (silakan berdiri menghadap kamera)"
 
 # --- Status kamera ---
 CAMERA_FALLBACK_NAME = "Kamera {index}"
@@ -152,6 +154,8 @@ VOICE_TEXTS = {
     "mundur": "Mundur sampai seluruh tubuh terlihat.",
     "mundur_kepala": "Mundur sedikit, kepala terpotong.",
     "mundur_kaki": "Mundur satu langkah, kaki belum terlihat.",
+    # T73: orang duduk/jongkok di jalur
+    "berdiri_tegak": "Silakan berdiri tegak menghadap kamera.",
     "posisi_pas": "Posisi tepat. Mohon tunggu.",
     "lengkap": "APD lengkap. Silakan masuk.",
     "tidak_lengkap": "APD tidak lengkap. Akses ditolak.",

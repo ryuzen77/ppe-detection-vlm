@@ -249,6 +249,10 @@ class Config:
     POSE_HEAD_SCALE_FALLBACK_RATIO: float = 0.15
     # Puncak helm diperkirakan sekian kali skala kepala di atas hidung; harus masih di dalam gambar
     POSE_HELMET_HEADROOM_FACTOR: float = 0.65
+    # Postur berdiri (T73): tinggi tegak paha dibagi tulang kering pada sisi tubuh yang
+    # titiknya lengkap. Berdiri ~1 (90 orang berdiri di foto uji: terendah 1,04, median
+    # 1,26); duduk menghadap kamera ~0 karena paha mendatar. Di bawah ambang = belum berdiri.
+    STANDING_MIN_THIGH_SHIN_RATIO: float = 0.6
     # Tepi tambahan potongan orang untuk VLM (konteks helm & sepatu), relatif ukuran kotak
     CROP_MARGIN_Y_RATIO: float = 0.05
     CROP_MARGIN_X_RATIO: float = 0.08

@@ -118,7 +118,7 @@ def test_perilaku_tubuh_utuh_tidak_berubah():
 def test_acuan_mencakup_semua_cabang():
     """Acuan bermakna hanya bila semua jenis hasil benar-benar muncul."""
     kinds = {row[2] for row in json.loads(GOLDEN.read_text(encoding="utf-8"))}
-    assert {"OPTIMAL", "HEAD_CLIPPED", "FEET_CLIPPED", "TOO_FAR", "OUTSIDE_CORRIDOR"} <= kinds, kinds
+    assert {"OPTIMAL", "HEAD_CLIPPED", "FEET_CLIPPED", "TOO_FAR", "OUTSIDE_CORRIDOR", "NOT_STANDING"} <= kinds, kinds
 
 
 if __name__ == "__main__" and "--regenerate" in sys.argv:

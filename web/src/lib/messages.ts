@@ -94,6 +94,7 @@ export const POSITION: Record<string, { title: string; detail: string }> = {
   FEET_CLIPPED: { title: 'Mundur satu langkah', detail: 'Kepala hingga kaki harus terlihat di kamera.' },
   TOO_FAR: { title: 'Silakan mendekat', detail: 'Posisi pekerja terlalu jauh dari kamera.' },
   TOO_CLOSE: { title: 'Silakan mundur', detail: 'Terlalu dekat ke kamera.' },
+  NOT_STANDING: { title: 'Berdiri tegak', detail: 'Silakan berdiri tegak menghadap kamera.' },
 }
 export const POSITION_FALLBACK = { title: 'Silakan mundur', detail: 'Seluruh tubuh harus terlihat di kamera.' }
 
@@ -104,7 +105,7 @@ export const HUD = {
   outsideLane: 'di luar jalur',
   positionOk: 'posisi pas',
   badge: (trackId: number, label: string) => `#${trackId} · ${label}`,
-  clip: { HEAD_CLIPPED: 'mundur sedikit', FEET_CLIPPED: 'mundur 1 langkah', TOO_FAR: 'mendekat' } as Record<string, string>,
+  clip: { HEAD_CLIPPED: 'mundur sedikit', FEET_CLIPPED: 'mundur 1 langkah', TOO_FAR: 'mendekat', NOT_STANDING: 'berdiri tegak' } as Record<string, string>,
   clipFallback: 'mundur',
 } as const
 
