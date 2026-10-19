@@ -11,6 +11,7 @@
   import WorkerAddModal from './workers/WorkerAddModal.svelte'
   import WorkerEditModal from './workers/WorkerEditModal.svelte'
   import WorkerDeleteDialog from './workers/WorkerDeleteDialog.svelte'
+  import WorkerPhotoModal from './workers/WorkerPhotoModal.svelte'
 
   let workers = $state<Worker[]>([])
   let faceReady = $state(true)
@@ -20,6 +21,7 @@
 
   let showAddModal = $state(false)
   let editingWorker = $state<Worker | null>(null)
+  let photoWorker = $state<Worker | null>(null)
   let deleteFaceWorker = $state<Worker | null>(null)
   let deleteTemplateTarget = $state<{ workerId: number; templateId: number } | null>(null)
 
@@ -93,6 +95,7 @@
     {workers}
     {loading}
     onEdit={(w) => editingWorker = w}
+    onAddPhoto={(w) => photoWorker = w}
     onToggleActive={toggleWorkerActive}
     onDeleteFace={(w) => deleteFaceWorker = w}
     onDeleteTemplate={(wId, tId) => deleteTemplateTarget = { workerId: wId, templateId: tId }}
@@ -113,6 +116,15 @@
   onClose={() => editingWorker = null}
   onSaved={async () => {
     editingWorker = null
+    await loadWorkers()
+  }}
+/>
+
+<WorkerPhotoModal
+  worker={photoWorker}
+  onClose={() => photoWorker = null}
+  onSaved={async () => {
+    photoWorker = null
     await loadWorkers()
   }}
 />

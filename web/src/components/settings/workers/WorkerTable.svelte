@@ -1,16 +1,21 @@
 <script lang="ts">
   import type { Worker } from '../../../lib/api/types'
   import { WORKERS } from '../../../lib/messages'
-  import { getWorkerBadge, formatWorkerSalutation } from '../../../lib/workers'
+  import {
+    getWorkerBadge,
+    formatWorkerSalutation,
+  } from '../../../lib/workers'
   import Trash2 from '@lucide/svelte/icons/trash-2'
   import Edit2 from '@lucide/svelte/icons/edit-2'
   import UserX from '@lucide/svelte/icons/user-x'
   import UserCheck from '@lucide/svelte/icons/user-check'
+  import Camera from '@lucide/svelte/icons/camera'
 
   interface Props {
     workers: Worker[]
     loading: boolean
     onEdit: (worker: Worker) => void
+    onAddPhoto: (worker: Worker) => void
     onToggleActive: (worker: Worker) => void
     onDeleteFace: (worker: Worker) => void
     onDeleteTemplate: (workerId: number, templateId: number) => void
@@ -20,6 +25,7 @@
     workers,
     loading,
     onEdit,
+    onAddPhoto,
     onToggleActive,
     onDeleteFace,
     onDeleteTemplate,
@@ -67,7 +73,20 @@
             </td>
             <td>
               <div class="templates-cell">
-                <span class="template-summary">{WORKERS.photoCount(worker.templates.length)}</span>
+                <div class="template-header">
+                  <span class="template-summary">{WORKERS.photoCount(worker.templates.length)}</span>
+                  {#if worker.active}
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-add-photo"
+                      title="{WORKERS.addPhotoBtn}"
+                      aria-label="{WORKERS.addPhotoBtn} {worker.name}"
+                      onclick={() => onAddPhoto(worker)}
+                    >
+                      <Camera size={12} /> {WORKERS.addPhotoBtn}
+                    </button>
+                  {/if}
+                </div>
                 {#if worker.templates.length > 0}
                   <div class="template-chips">
                     {#each worker.templates as t (t.id)}
@@ -216,6 +235,23 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .template-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .btn-add-photo {
+    padding: 2px 6px;
+    font-size: 11px;
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .btn-add-photo:hover {
+    background: var(--surface-2);
   }
 
   .template-summary {

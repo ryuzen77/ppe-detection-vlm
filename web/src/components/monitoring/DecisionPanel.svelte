@@ -10,8 +10,12 @@
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import type { GateView } from '../../lib/gate'
   import { GATE } from '../../lib/messages'
+  import { telemetry } from '../../lib/stores/telemetry.svelte'
+  import { formatRecognizedWorker } from '../../lib/workers'
 
   let { gate }: { gate: GateView } = $props()
+
+  const recognizedText = $derived(formatRecognizedWorker(telemetry.data?.active_track?.identity))
 </script>
 
 <section class="decision tone-{gate.tone}" aria-live="polite" aria-label={GATE.ariaLabel}>
@@ -27,7 +31,12 @@
   </div>
 
   <div class="text">
-    {#if gate.trackId}<span class="subject mono">{GATE.subject(gate.trackId)}</span>{/if}
+    <div class="meta-row">
+      {#if gate.trackId}<span class="subject mono">{GATE.subject(gate.trackId)}</span>{/if}
+      {#if recognizedText}
+        <span class="recognized-badge">{recognizedText}</span>
+      {/if}
+    </div>
     <h2 class:big={gate.kind === 'granted' || gate.kind === 'denied'}>{gate.title}</h2>
     <p>{gate.detail}</p>
     {#if gate.missing.length}
@@ -64,6 +73,22 @@
   .subject {
     font-size: var(--text-xs);
     color: var(--text-muted);
+  }
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+  }
+  .recognized-badge {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--ok);
+    background: var(--ok-soft);
+    border: 1px solid var(--ok-line);
+    padding: 1px 8px;
+    border-radius: var(--radius-full, 9999px);
   }
   h2 {
     margin: 2px 0 6px;
