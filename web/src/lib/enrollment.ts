@@ -133,6 +133,11 @@ export function trackAutoShot(state: AutoShot, preview: EnrollmentPreview | null
   return { ...state, streak: still ? state.streak + 1 : 1, lastPx: px }
 }
 
+/** Jeda sebelum foto berikutnya: lebih lama bila pekerja harus memakai helm dulu. */
+export function autoShotCooldown(next: EnrollmentShot | undefined): number {
+  return next?.switchesCondition ? ENROLLMENT_AUTO.switchCooldownMs : ENROLLMENT_AUTO.cooldownMs
+}
+
 export function autoShotDue(state: AutoShot): boolean {
   return state.streak >= ENROLLMENT_AUTO.stablePolls
 }

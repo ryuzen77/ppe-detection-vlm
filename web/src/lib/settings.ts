@@ -129,4 +129,6 @@ export const ENROLLMENT_AUTO = {
   maxSizeChange: 0.08,
   /** Waktu pekerja mendengar arahan & menoleh setelah foto sebelumnya */
   cooldownMs: 3000,
+  /** Waktu memakai helm sebelum foto kondisi kedua: pekerja bisa mendaftar sendiri tanpa menekan tombol */
+  switchCooldownMs: 10000,
 } as const;

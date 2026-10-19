@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  autoShotCooldown,
   autoShotDue,
   buildShots,
   fitPrompt,
@@ -166,5 +167,15 @@ describe('foto otomatis', () => {
     const paused = pauseAutoShot(1000)
     expect(autoShotDue(run(steady, paused, 1000 + ENROLLMENT_AUTO.cooldownMs - 1))).toBe(false)
     expect(autoShotDue(run(steady, paused, 1000 + ENROLLMENT_AUTO.cooldownMs))).toBe(true)
+  })
+})
+
+describe('autoShotCooldown', () => {
+  it('ganti ke helm: jeda lebih panjang supaya pekerja bisa mendaftar sendiri tanpa tombol', () => {
+    const shots = buildShots(PLAN, false)
+    expect(autoShotCooldown(shots[1])).toBe(ENROLLMENT_AUTO.cooldownMs)
+    expect(autoShotCooldown(shots[5])).toBe(ENROLLMENT_AUTO.switchCooldownMs)
+    expect(ENROLLMENT_AUTO.switchCooldownMs).toBeGreaterThan(ENROLLMENT_AUTO.cooldownMs)
+    expect(autoShotCooldown(undefined)).toBe(ENROLLMENT_AUTO.cooldownMs)
   })
 })

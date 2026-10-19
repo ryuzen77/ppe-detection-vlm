@@ -6,6 +6,7 @@
   import { api } from '../../../lib/api/client'
   import { extractApiError } from '../../../lib/api/error'
   import {
+    autoShotCooldown,
     autoShotDue,
     buildShots,
     fitPrompt,
@@ -20,6 +21,7 @@
   } from '../../../lib/enrollment'
   import { getConditionLabel, formatTemplateQuality } from '../../../lib/workers'
   import { telemetry } from '../../../lib/stores/telemetry.svelte'
+  import { ENROLLMENT_AUTO } from '../../../lib/settings'
   import Camera from '@lucide/svelte/icons/camera'
   import LoaderCircle from '@lucide/svelte/icons/loader-circle'
   import Volume2 from '@lucide/svelte/icons/volume-2'
@@ -46,15 +48,12 @@
   // Foto ditolak (mis. wajah mirip pekerja lain): foto otomatis berhenti supaya tidak mengulang
   // penolakan yang sama terus-menerus; tombol Ambil Foto melanjutkannya
   let autoStopped = $state(false)
-  // Ganti kondisi (pakai helm) butuh waktu tak tentu: pendamping yang memastikan helm terpasang
-  let helmetConfirmed = $state(false)
 
   const shot = $derived(shots[index] ?? null)
   const shooting = $derived(shot !== null)
   const done = $derived(shots.length > 0 && index >= shots.length)
   const asking = $derived(plan !== null && shots.length === 0)
   const distancePrompt = $derived(plan ? fitPrompt(plan, preview?.fit ?? null) : null)
-  const waitingHelmet = $derived(shot?.switchesCondition === true && !helmetConfirmed)
 
   // Modal dibuka: mulai dari pertanyaan kacamata
   $effect(() => {
@@ -69,7 +68,6 @@
     taking = false
     streamKey = Date.now()
     autoStopped = false
-    helmetConfirmed = false
     api.enrollmentPlan().then(
       (p) => (plan = p),
       (e) => (photoError = extractApiError(e, ENROLLMENT_GUIDE.errPlan)),
@@ -92,7 +90,7 @@
     preview = p
     previewChecked = true
     auto = trackAutoShot(auto, p, Date.now())
-    if (autoShotDue(auto) && !autoStopped && !waitingHelmet && !taking) takePhoto()
+    if (autoShotDue(auto) && !autoStopped && !taking) takePhoto()
   }
 
   /** Suara berurutan di speaker gerbang (pakai helm, lalu arah kepala). */
@@ -110,11 +108,6 @@
     speak(shotPrompts(plan, shots[0]))
   }
 
-  function confirmHelmet() {
-    helmetConfirmed = true
-    auto = pauseAutoShot(Date.now())
-  }
-
   async function takePhoto() {
     if (!worker || !shot || !plan) return
     photoError = ''
@@ -124,9 +117,10 @@
       const res = await api.addWorkerTemplate(worker.id, shot.condition)
       photoSuccess = `${ENROLLMENT_GUIDE.saved(shot.number, shots.length)} (${formatTemplateQuality(res.quality)})`
       index += 1
-      auto = pauseAutoShot(Date.now())
-      autoStopped = false
       const next = shots[index]
+      // Pekerja bisa mendaftar sendiri: ganti ke helm memakai jeda lebih panjang, bukan tombol
+      auto = pauseAutoShot(Date.now(), autoShotCooldown(next))
+      autoStopped = false
       speak(next ? shotPrompts(plan, next) : [plan.prompts.done])
     } catch (e) {
       photoError = extractApiError(e, WORKERS.errTakePhoto)
@@ -190,11 +184,10 @@
           <span class="step">{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span>
           {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
           <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
-          {#if waitingHelmet}
-            <span class="preview-hint">{ENROLLMENT_GUIDE.helmetWaiting}</span>
-            <button type="button" class="btn btn-primary confirm" onclick={confirmHelmet}>{ENROLLMENT_GUIDE.helmetConfirm}</button>
-          {:else if autoStopped}
+          {#if autoStopped}
             <span class="preview-hint">{ENROLLMENT_GUIDE.autoStopped}</span>
+          {:else if shot.switchesCondition}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.helmetWaiting(ENROLLMENT_AUTO.switchCooldownMs / 1000)}</span>
           {:else}
             <span class="preview-hint">{ENROLLMENT_GUIDE.autoHint}</span>
           {/if}
@@ -205,7 +198,7 @@
           {:else}
             <span class="fit" class:ok={preview.fit === 'ok'}>
               {ENROLLMENT_GUIDE.fit[preview.fit]}{#if preview.interocular_px != null}
-                · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}{#if auto.streak > 0 && !autoStopped && !waitingHelmet}
+                · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}{#if auto.streak > 0 && !autoStopped}
                 · {ENROLLMENT_GUIDE.holdStill}{/if}
             </span>
           {/if}
@@ -405,10 +398,6 @@
     border-color: var(--ok-line);
     background: var(--ok-soft);
     color: var(--ok);
-  }
-
-  .confirm {
-    align-self: flex-start;
   }
 
   .row {
