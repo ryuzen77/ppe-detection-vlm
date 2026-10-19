@@ -98,3 +98,31 @@ export function formatDeleteSchedule(deleteAfterIso: string | null): string {
     return deleteAfterIso.split('T')[0] || deleteAfterIso
   }
 }
+
+export const TEMPLATE_CONDITIONS = ['bare', 'glasses', 'helmet', 'helmet_glasses'] as const
+
+export function getConditionLabel(condition: string): string {
+  switch (condition) {
+    case 'bare':
+      return WORKERS.conditionBare
+    case 'glasses':
+      return WORKERS.conditionGlasses
+    case 'helmet':
+      return WORKERS.conditionHelmet
+    case 'helmet_glasses':
+      return WORKERS.conditionHelmetGlasses
+    default:
+      return condition
+  }
+}
+
+export function hasTemplateCondition(worker: Worker, condition: string): boolean {
+  return worker.templates.some((t) => t.condition === condition)
+}
+
+export function formatRecognizedWorker(identity?: { status: string; name?: string | null } | null): string | null {
+  if (identity && identity.status === 'recognized' && identity.name && identity.name.trim()) {
+    return WORKERS.recognizedName(identity.name.trim())
+  }
+  return null
+}

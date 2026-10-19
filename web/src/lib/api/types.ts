@@ -148,6 +148,13 @@ export type TrackState =
   | 'ANALYZED'
   | 'WAITING_SYSTEM'
 
+export interface TrackIdentity {
+  status: 'recognized' | 'unknown' | 'disabled'
+  name: string | null
+  employee_no: string | null
+  score: number | null
+}
+
 export interface ActiveTrack {
   track_id: number
   session_id: number
@@ -159,6 +166,7 @@ export interface ActiveTrack {
   /** Detik sampai pemeriksaan diulang; hanya saat WAITING_SYSTEM */
   retry_in_s: number | null
   vlm_result: InspectionResult | null
+  identity?: TrackIdentity | null
 }
 
 export type LightState = 'OFF' | 'GREEN' | 'RED' | 'YELLOW'
@@ -487,11 +495,27 @@ export interface VlmTestResponse {
 
 // --- Pekerja & Identitas Wajah (T34) -------------------------------------------
 
+export type TemplateCondition = 'bare' | 'glasses' | 'helmet' | 'helmet_glasses'
+
 export interface WorkerTemplate {
   id: number
-  condition: string
+  condition: TemplateCondition | string
   model_version: string
   created_at: string
+}
+
+export interface WorkerTemplateQuality {
+  width: number
+  height: number
+  sharpness: number
+  brightness: number
+  pitch: number
+  yaw: number
+  roll: number
+}
+
+export interface AddTemplateResponse extends WorkerTemplate {
+  quality: WorkerTemplateQuality
 }
 
 export interface WorkerConsent {

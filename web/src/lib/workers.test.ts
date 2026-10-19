@@ -5,6 +5,9 @@ import {
   formatWorkerSalutation,
   formatDeleteSchedule,
   isFaceReenrollmentNeeded,
+  getConditionLabel,
+  hasTemplateCondition,
+  formatRecognizedWorker,
 } from './workers'
 import type { Worker } from './api/types'
 
@@ -194,3 +197,49 @@ describe('formatDeleteSchedule', () => {
     expect(formatDeleteSchedule(null)).toBe('')
   })
 })
+
+describe('getConditionLabel', () => {
+  it('mengembalikan label bahasa Indonesia yang ramah untuk tiap kondisi', () => {
+    expect(getConditionLabel('bare').toLowerCase()).toContain('polos')
+    expect(getConditionLabel('glasses').toLowerCase()).toContain('kacamata')
+    expect(getConditionLabel('helmet').toLowerCase()).toContain('helm')
+    expect(getConditionLabel('helmet_glasses').toLowerCase()).toContain('kacamata')
+  })
+
+  it('mengembalikan string apa adanya untuk kondisi tidak dikenal', () => {
+    expect(getConditionLabel('custom_condition')).toBe('custom_condition')
+  })
+})
+
+describe('hasTemplateCondition', () => {
+  const workerWithBare = {
+    templates: [{ condition: 'bare' }],
+  } as unknown as Worker
+
+  it('true bila kondisi sudah ada di templat pekerja', () => {
+    expect(hasTemplateCondition(workerWithBare, 'bare')).toBe(true)
+  })
+
+  it('false bila kondisi belum ada di templat pekerja', () => {
+    expect(hasTemplateCondition(workerWithBare, 'helmet')).toBe(false)
+  })
+})
+
+describe('formatRecognizedWorker', () => {
+  it('mengembalikan string "Dikenali: <nama>" bila status recognized dan nama ada', () => {
+    const text = formatRecognizedWorker({ status: 'recognized', name: 'Muhammad Zen Fikri' })
+    expect(text).toBe('Dikenali: Muhammad Zen Fikri')
+  })
+
+  it('mengembalikan null bila status bukan recognized', () => {
+    expect(formatRecognizedWorker({ status: 'unknown', name: 'Unknown' })).toBeNull()
+    expect(formatRecognizedWorker({ status: 'disabled', name: null })).toBeNull()
+  })
+
+  it('mengembalikan null bila identity null atau undefined atau nama kosong', () => {
+    expect(formatRecognizedWorker(null)).toBeNull()
+    expect(formatRecognizedWorker(undefined)).toBeNull()
+    expect(formatRecognizedWorker({ status: 'recognized', name: '' })).toBeNull()
+  })
+})
+

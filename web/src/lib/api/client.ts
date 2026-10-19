@@ -31,6 +31,8 @@ import type {
   WorkersResponse,
   NewWorkerRequest,
   UpdateWorkerRequest,
+  TemplateCondition,
+  AddTemplateResponse,
 } from './types'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
@@ -188,6 +190,8 @@ export class ApiClient {
     this.request<void>('DELETE', `/api/workers/${workerId}/templates/${templateId}`)
   updateWorker = (id: number, body: UpdateWorkerRequest) =>
     this.request<Worker>('PATCH', `/api/workers/${id}`, body)
+  addWorkerTemplate = (workerId: number, condition: TemplateCondition) =>
+    this.request<AddTemplateResponse>('POST', `/api/workers/${workerId}/templates`, { condition })
 }
 
 export const api = new ApiClient()
