@@ -121,6 +121,11 @@ class Config:
     CAMERA_NAME: str = _env("CAMERA_NAME", "")
     CAMERA_AUTO_MODE: bool = _env("CAMERA_AUTO_MODE", "true").lower() == "true"
     CAMERA_TARGET_FPS: float = 25.0        # Sudah dianggap cukup lancar
+    # Tanpa mode yang mencapai target, laju dalam rentang ini dari yang tercepat dianggap sama
+    # lancarnya, lalu resolusi tertinggi dipilih. Di ruang redup C920 menahan SEMUA mode ±24 fps
+    # (pencahayaan, bukan resolusi): uji 19-10, 1280x720 / 640x480 menang atas 1080p karena
+    # selisih 0,1 fps -> FR gagal (wajah di jalur < FACE_MIN_INTEROCULAR_PX)
+    CAMERA_FPS_TIE_RATIO: float = 0.1
     # Permintaan bawaan saat kamera dibuka tanpa mode tersimpan. Dipilih karena
     # resolusi rendah hampir selalu berjalan penuh di kamera mana pun, dan
     # pengukuran menunjukkan permintaan ini menghasilkan 848x480@30 di webcam
