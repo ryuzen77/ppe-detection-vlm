@@ -182,6 +182,13 @@ def _enrollment_frame():
     return frame
 
 
+def _restore_voice(worker_id: int) -> None:
+    """Hapus data wajah ikut menghapus MP3 nama (T34d); wajah yang didaftarkan ulang harus dipanggil
+    namanya lagi (uji nyata 19-10: dikenali skor 0,85 tetapi suara umum karena MP3 sudah terhapus)."""
+    if not worker_voice.voice_ready(worker_id):
+        worker_voice.request(worker_store.store.get(worker_id))
+
+
 @router.post("/api/workers/{worker_id}/templates", status_code=201)
 def add_worker_template(
     worker_id: int, body: NewTemplate, request: Request, user: auth.SessionUser = Depends(require_admin)
@@ -196,6 +203,7 @@ def add_worker_template(
     template = _call(
         store.add_template, worker_id, body.condition, cfg.FACE_MODEL_VERSION, sample.vector, user.username
     )
+    _restore_voice(worker_id)
     quality = sample.detection.quality()
     _record(
         security_log.WORKER_TEMPLATE_ADDED,

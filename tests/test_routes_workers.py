@@ -5,7 +5,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, face_engine, face_identity, messages, security_log, worker_store
+from backend import face_crypto, face_engine, face_identity, messages, security_log, worker_store, worker_voice
 from backend.audio_engine import audio_player
 from backend.api.deps import require_session
 from backend.app import app
@@ -347,6 +347,20 @@ def test_pratinjau_dan_suara_hanya_selama_jeda(client, store, camera, enrollment
     r = client.post("/api/workers/enrollment/prompt", json={"prompt": "lengkap"})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "invalid_prompt", "hanya suara pendaftaran"
     assert played == ["daftar_kiri"]
+
+
+def test_daftar_ulang_wajah_membuat_ulang_suara_nama(client, store, camera, monkeypatch):
+    """Uji nyata 19-10: hapus data wajah menghapus MP3 nama, daftar ulang tidak membuatnya lagi."""
+    requested = []
+    monkeypatch.setattr(worker_voice, "request", lambda worker: requested.append(worker.id))
+    monkeypatch.setattr(worker_voice, "voice_ready", lambda worker_id: False)
+    wid = _create(client).json()["id"]
+    requested.clear()
+    assert _photo(client, wid).status_code == 201
+    assert requested == [wid], "suara belum ada -> dibuat"
+    monkeypatch.setattr(worker_voice, "voice_ready", lambda worker_id: True)
+    assert _photo(client, wid, "helmet").status_code == 201
+    assert requested == [wid], "suara sudah ada -> tidak dibuat ulang tiap foto"
 
 
 def test_pratinjau_kamera_resolusi_rendah(client, camera, enrollment, monkeypatch):
