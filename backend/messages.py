@@ -175,7 +175,7 @@ STARTUP_OLLAMA_VERSION = ("Versi Ollama {found} berbeda dari versi validasi {exp
 STARTUP_CAMERA_MISSING = "Kamera '{name}' belum terlihat sistem (terlihat: {seen}); gerbang menunggu kamera itu."
 STARTUP_NO_BACKUP = ("Tanpa VLM cadangan (bawaan): bila VLM utama gangguan atau kuota habis, gerbang berhenti "
                      "menerima pekerja (pekerja diminta menunggu). Aktifkan cadangan di Pengaturan bila perlu.")
-STARTUP_ALL_OK ="Pemeriksaan saat start: semua baik."
+STARTUP_ALL_OK = "Pemeriksaan saat start: semua baik."
 CAMERA_AUTOSTART_NO_NAME = ("CAMERA_AUTOSTART aktif tetapi belum ada nama kamera (CAMERA_NAME kosong & belum pernah "
                             "dipilih); menunggu operator memilih kamera.")
 CAMERA_AUTOSTART_OPENED = "Kamera otomatis: '{name}'."
@@ -333,4 +333,4 @@ CSV_FACE_UNKNOWN = "Tidak dikenali"
 # --- VLM cadangan dimatikan (T70) ---
 LOG_VLM_LOCAL_UNLOADED = "Model {who} dikeluarkan dari GPU (tidak dipakai lagi)."
 LOG_VLM_STALE_CHECK_SKIPPED = "Pemeriksaan model {who} sisa sesi lalu dilewati (Ollama tidak terjangkau): {error}"
-LOG_VLM_LOCAL_UNLOAD_FAILED ="Gagal mengeluarkan model {who} dari GPU: {error}. VRAM baru lega setelah Ollama dimulai ulang."
+LOG_VLM_LOCAL_UNLOAD_FAILED = "Gagal mengeluarkan model {who} dari GPU: {error}. VRAM baru lega setelah Ollama dimulai ulang."
