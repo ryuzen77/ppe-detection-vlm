@@ -68,10 +68,12 @@ def parse_detections(raw: Optional[np.ndarray], min_score: float) -> list[FaceDe
     ]
 
 
-def pick_enrollment_face(detections: list[FaceDetection], min_interocular: float) -> FaceDetection:
+def pick_enrollment_face(
+    detections: list[FaceDetection], min_interocular: float, max_interocular: float = float("inf")
+) -> FaceDetection:
     """Foto pendaftaran harus berisi tepat satu wajah yang cukup besar. Wajah kecil di latar
     (orang antre jauh) tidak dihitung, tetapi dua wajah besar ditolak: templat tidak boleh
-    tertukar dengan orang lain."""
+    tertukar dengan orang lain. T76: wajah yang jauh lebih besar dari wajah di jalur juga ditolak."""
     if not detections:
         raise FaceEngineError("no_face", messages.WORKER_NO_FACE)
     usable = [d for d in detections if d.interocular_px >= min_interocular]
@@ -83,7 +85,28 @@ def pick_enrollment_face(detections: list[FaceDetection], min_interocular: float
             "face_too_small",
             messages.WORKER_FACE_TOO_SMALL.format(measured=largest.interocular_px, minimum=min_interocular),
         )
+    if usable[0].interocular_px > max_interocular:
+        raise FaceEngineError(
+            "face_too_close",
+            messages.WORKER_FACE_TOO_CLOSE.format(measured=usable[0].interocular_px, maximum=max_interocular),
+        )
     return usable[0]
+
+
+# Kode galat foto -> arahan untuk pendamping (no_face & multiple_faces tetap)
+_FIT_BY_ERROR = {"face_too_small": "too_far", "face_too_close": "too_close"}
+
+
+def enrollment_fit(detections: list[FaceDetection], min_interocular: float, max_interocular: float) -> dict:
+    """Indikator jarak sebelum memotret (T76), aturan yang sama dengan `pick_enrollment_face`:
+    "ok" | "no_face" | "too_far" | "too_close" | "multiple_faces"."""
+    try:
+        face = pick_enrollment_face(detections, min_interocular, max_interocular)
+        fit, measured = "ok", face.interocular_px
+    except FaceEngineError as e:
+        fit = _FIT_BY_ERROR.get(e.code, e.code)
+        measured = max((d.interocular_px for d in detections), default=None)
+    return {"fit": fit, "faces": len(detections), "interocular_px": None if measured is None else round(measured, 1)}
 
 
 def pick_subject_face(detections: list[FaceDetection], min_interocular: float) -> Optional[FaceDetection]:
@@ -148,7 +171,9 @@ class FaceEngine:
         """Satu templat pendaftaran dari frame kamera; FaceEngineError bila foto tidak layak."""
         with self._lock:
             detector, request = self._models()
-            detection = pick_enrollment_face(self._detect(detector, frame), cfg.FACE_MIN_INTEROCULAR_PX)
+            detection = pick_enrollment_face(
+                self._detect(detector, frame), cfg.FACE_MIN_INTEROCULAR_PX, cfg.ENROLLMENT_MAX_INTEROCULAR_PX
+            )
             return FaceSample(detection, self._embed(request, frame, detection))
 
     def subject_embeddings(self, crops: list[np.ndarray]) -> list[Optional[np.ndarray]]:

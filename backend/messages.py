@@ -327,7 +327,9 @@ WORKER_CAMERA_UNAVAILABLE = "Kamera belum aktif. Pilih kamera di Pengaturan lalu
 FACE_ENGINE_LOAD_FAILED = "Mesin pengenalan wajah gagal dimuat dari {path}: {error}"
 # Pengenalan dalam sesi (T34c1); log memakai nomor pegawai, bukan nama (minimisasi data)
 LOG_FACE_RECOGNIZED = "Sesi #{session}: wajah dikenali, pegawai {employee_no} (skor {score:.2f}, {votes}/{frames} frame)."
-LOG_FACE_UNKNOWN = "Sesi #{session}: wajah tidak dikenali ({faces}/{frames} frame berwajah cukup besar)."
+# T76: skor terbaik ikut dicatat untuk kalibrasi ambang (bukan nama/nomor pegawai)
+LOG_FACE_UNKNOWN = ("Sesi #{session}: wajah tidak dikenali ({faces}/{frames} frame berwajah cukup besar, "
+                    "skor terbaik {best}).")
 LOG_FACE_FAILED = "Pengenalan wajah gagal, sesi dilanjutkan tanpa nama: {error}"
 LOG_FACE_TIMEOUT = "Sesi #{session}: pengenalan wajah melewati {seconds:g} dtk; audit dicatat tanpa nama."
 LOG_FACE_GALLERY_LOADED = "Galeri wajah dimuat: {templates} templat dari {workers} pekerja aktif."
@@ -355,3 +357,29 @@ LIGHT_ENROLLMENT = "MODE PENDAFTARAN WAJAH - Pemeriksaan APD dijeda sementara ol
 LOG_ENROLLMENT_HOLD_START = "Mode pendaftaran wajah dimulai: pemeriksaan APD dijeda."
 LOG_ENROLLMENT_HOLD_END = "Mode pendaftaran wajah selesai: gerbang siaga lagi."
 LOG_ENROLLMENT_HOLD_EXPIRED = "Mode pendaftaran wajah berakhir otomatis (tanpa denyut dari modal foto): gerbang siaga lagi."
+
+# --- Pendaftaran wajah terpandu (T76) ---
+# Petunjuk lewat speaker gerbang untuk pekerja yang berdiri jauh dari layar (teks tetap, tanpa data pekerja)
+ENROLLMENT_VOICE_TEXTS = {
+    "daftar_lurus": "Lihat lurus ke kamera.",
+    "daftar_kiri": "Toleh sedikit ke kiri.",
+    "daftar_kanan": "Toleh sedikit ke kanan.",
+    "daftar_menunduk": "Menunduk sedikit, mata tetap ke kamera.",
+    "daftar_pakai_helm": "Silakan pakai helm, lalu lihat ke kamera.",
+    "daftar_mendekat": "Maju sedikit mendekati kamera.",
+    "daftar_menjauh": "Mundur sedikit dari kamera.",
+    "daftar_selesai": "Pendaftaran wajah selesai. Terima kasih.",
+}
+VOICE_TEXTS.update(ENROLLMENT_VOICE_TEXTS)
+# Peran suara di alur terpandu (dikirim lewat rencana pendaftaran, UI tidak menyalin kuncinya)
+ENROLLMENT_PROMPT_KEYS = {
+    "condition_switch": "daftar_pakai_helm",
+    "fit": {"too_far": "daftar_mendekat", "too_close": "daftar_menjauh"},
+    "done": "daftar_selesai",
+}
+WORKER_FACE_TOO_CLOSE = ("Wajah terlalu dekat ke kamera (jarak antar-mata {measured:.0f} px, maksimal {maximum:.0f} px). "
+                         "Minta pekerja mundur ke posisi pemeriksaan: wajah di jalur jauh lebih kecil.")
+WORKER_FACE_MATCHES_OTHER = ("Wajah ini mirip pekerja {employee_no} (skor {score:.2f}). Satu orang hanya boleh punya satu "
+                             "data pekerja; bila memang orang yang sama, tambahkan foto di data pekerja itu.")
+WORKER_ENROLLMENT_INACTIVE = "Mode pendaftaran wajah tidak aktif. Buka lagi jendela Ambil Foto."
+WORKER_INVALID_PROMPT = "Petunjuk suara tidak dikenal: {prompt}."

@@ -117,4 +117,6 @@ export const HEALTH_POLL = {
 /** Mode pendaftaran wajah (T75): denyut per batas waktu jeda (batasnya dari backend, `hold_s`) */
 export const ENROLLMENT_HOLD = {
   beatsPerHold: 3,
+  /** Indikator jarak (T76): jeda antar-pemeriksaan wajah di kamera gerbang */
+  previewIntervalMs: 1000,
 } as const;

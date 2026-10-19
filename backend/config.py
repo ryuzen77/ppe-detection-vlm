@@ -541,6 +541,16 @@ class Config:
     # lebih sering dari ini (web/src/lib/settings.ts); tanpa denyut, jeda selesai sendiri supaya
     # browser yang ditutup / jaringan putus tidak membuat gerbang berhenti memeriksa selamanya.
     ENROLLMENT_HOLD_SECONDS: float = 45.0
+    # Pendaftaran terpandu (T76, keputusan pengguna 19-10): 10 foto per orang = 5 tanpa helm + 5 dengan helm
+    ENROLLMENT_SHOTS_PER_CONDITION: int = 5
+    # Arah kepala per foto (kunci suara messages.VOICE_TEXTS), diulang bila foto per kondisi lebih banyak:
+    # variasi sudut membuat templat cocok dengan pekerja yang lewat sedikit menoleh / menunduk
+    ENROLLMENT_POSES: tuple = ("daftar_lurus", "daftar_kiri", "daftar_kanan", "daftar_menunduk", "daftar_lurus")
+    # Pertanyaan "memakai kacamata?" di awal menentukan pasangan kondisi (tanpa helm, dengan helm)
+    ENROLLMENT_CONDITION_SETS: dict = {"no_glasses": ("bare", "helmet"), "glasses": ("glasses", "helmet_glasses")}
+    # Jarak antar-mata maksimal foto pendaftaran. Di jalur pemeriksaan ±26-33 px (T34a, 1080p); foto
+    # yang jauh lebih dekat (uji 19-10: 200-246 px) tidak cocok dengan wajah kecil di jalur -> ditolak
+    ENROLLMENT_MAX_INTEROCULAR_PX: float = 60.0
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

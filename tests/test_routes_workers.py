@@ -5,7 +5,8 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, face_engine, security_log, worker_store
+from backend import face_crypto, face_engine, face_identity, messages, security_log, worker_store
+from backend.audio_engine import audio_player
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
@@ -36,6 +37,8 @@ WORKER_KEYS = {
 def store(tmp_path, monkeypatch):
     repository = worker_store.SqliteWorkerStore(tmp_path / "workers.db", key=face_crypto.generate_key())
     monkeypatch.setattr(worker_store, "store", repository)
+    # Galeri FR disimpan per revisi; store baru tiap tes bisa memakai nomor revisi yang sama (T76)
+    monkeypatch.setattr(face_identity.identifier, "_revision", -1)
     return repository
 
 
@@ -183,6 +186,11 @@ class FakeEngine:
         self.frames = []
         self.error = error
 
+    def detect(self, frame):
+        self.frames.append(frame)
+        row = np.array([[100, 100, 80, 100, 120, 120, 160, 120, 140, 140, 125, 160, 155, 160, 0.93]], np.float32)
+        return face_engine.parse_detections(row, 0.6)
+
     def enrollment_sample(self, frame):
         self.frames.append(frame)
         if self.error:
@@ -302,3 +310,47 @@ def test_jeda_pendaftaran_khusus_admin(client, enrollment):
     assert client.post("/api/workers/enrollment").status_code == 403
     assert client.delete("/api/workers/enrollment").status_code == 403
     assert state_mgr.get_telemetry()["enrollment"]["active"] is False
+
+
+# --- Pendaftaran terpandu (T76) ---
+
+
+def test_rencana_pendaftaran_dari_config(client):
+    plan = client.get("/api/workers/enrollment/plan").json()
+    assert plan == {
+        "shots_per_condition": cfg.ENROLLMENT_SHOTS_PER_CONDITION,
+        "poses": list(cfg.ENROLLMENT_POSES),
+        "condition_sets": {"no_glasses": ["bare", "helmet"], "glasses": ["glasses", "helmet_glasses"]},
+        "interocular_px": {"min": cfg.FACE_MIN_INTEROCULAR_PX, "max": cfg.ENROLLMENT_MAX_INTEROCULAR_PX},
+        "prompts": messages.ENROLLMENT_PROMPT_KEYS,
+    }
+    prompts = plan["prompts"]
+    used = {*plan["poses"], prompts["condition_switch"], prompts["done"], *prompts["fit"].values()}
+    assert used <= set(messages.ENROLLMENT_VOICE_TEXTS), "setiap petunjuk punya suara"
+    assert {c for pair in plan["condition_sets"].values() for c in pair} == set(cfg.FACE_CONDITIONS)
+
+
+def test_pratinjau_dan_suara_hanya_selama_jeda(client, store, camera, enrollment, monkeypatch):
+    """Kamera gerbang bukan alat pantau: tanpa jeda pendaftaran keduanya ditolak."""
+    played = []
+    monkeypatch.setattr(audio_player, "play", lambda name, *a, **k: played.append(name))
+    assert client.get("/api/workers/enrollment/preview").json()["detail"]["code"] == "enrollment_inactive"
+    assert client.post("/api/workers/enrollment/prompt", json={"prompt": "daftar_kiri"}).status_code == 409
+    assert camera.frames == [] and played == []
+    client.post("/api/workers/enrollment")
+    assert client.get("/api/workers/enrollment/preview").json() == {"fit": "ok", "faces": 1, "interocular_px": 40.0}
+    assert client.post("/api/workers/enrollment/prompt", json={"prompt": "daftar_kiri"}).status_code == 204
+    r = client.post("/api/workers/enrollment/prompt", json={"prompt": "lengkap"})
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "invalid_prompt", "hanya suara pendaftaran"
+    assert played == ["daftar_kiri"]
+
+
+def test_wajah_pekerja_lain_ditolak_saat_pendaftaran(client, store, camera):
+    """Satu orang dua ID membuat setiap pengenalan ragu (tanpa nama)."""
+    first = _create(client, "P-001").json()["id"]
+    assert _photo(client, first).status_code == 201
+    assert _photo(client, first, "helmet").status_code == 201, "foto tambahan orang yang sama boleh"
+    second = _create(client, "P-002", "Budi Lain").json()["id"]
+    r = _photo(client, second)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "face_matches_other"
+    assert "P-001" in r.json()["detail"]["message"] and store.get(second).templates == ()

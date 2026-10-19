@@ -578,3 +578,37 @@ export const WORKERS = {
   errEnrollmentHold: 'Gerbang gagal dijeda: foto bisa ditolak bila ada orang di jalur pemeriksaan.',
 } as const
 
+
+// --- Pendaftaran wajah terpandu (T76) ---------------------------------------------------
+
+export const ENROLLMENT_GUIDE = {
+  askGlasses: 'Apakah pekerja memakai kacamata sehari-hari?',
+  askGlassesHint: 'Pekerja berdiri di posisi pemeriksaan. Diambil 5 foto tanpa helm, lalu 5 foto dengan helm.',
+  glassesYes: 'Ya, berkacamata',
+  glassesNo: 'Tidak',
+  step: (n: number, total: number) => `Foto ${n} dari ${total}`,
+  poses: {
+    daftar_lurus: 'Lihat lurus ke kamera',
+    daftar_kiri: 'Toleh sedikit ke kiri',
+    daftar_kanan: 'Toleh sedikit ke kanan',
+    daftar_menunduk: 'Menunduk sedikit, mata tetap ke kamera',
+  } as Record<string, string>,
+  conditionSwitch: 'Minta pekerja memakai helm sekarang.',
+  fit: {
+    ok: 'Jarak pas',
+    no_face: 'Wajah belum terlihat',
+    too_far: 'Terlalu jauh, minta pekerja maju sedikit',
+    too_close: 'Terlalu dekat, minta pekerja mundur ke posisi pemeriksaan',
+    multiple_faces: 'Ada lebih dari satu wajah di kamera',
+  },
+  fitMeasured: (px: number) => `jarak antar-mata ${Math.round(px)} px`,
+  speakPose: 'Ucapkan arahan',
+  speakFit: 'Ucapkan arahan jarak',
+  saved: (n: number, total: number) => `Foto ${n} dari ${total} tersimpan.`,
+  doneTitle: 'Pendaftaran wajah selesai',
+  doneDetail: (n: number) => `${n} foto tersimpan untuk pekerja ini.`,
+  finish: 'Selesai',
+  mirrorHint: 'Pratinjau ditampilkan seperti cermin; foto yang disimpan tetap asli.',
+  errPlan: 'Gagal memuat rencana pendaftaran',
+  errPrompt: 'Suara petunjuk gagal diputar di speaker gerbang',
+} as const

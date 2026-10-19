@@ -1,5 +1,13 @@
 {
   "berdiri_tegak": "Silakan berdiri tegak menghadap kamera.",
+  "daftar_kanan": "Toleh sedikit ke kanan.",
+  "daftar_kiri": "Toleh sedikit ke kiri.",
+  "daftar_lurus": "Lihat lurus ke kamera.",
+  "daftar_mendekat": "Maju sedikit mendekati kamera.",
+  "daftar_menjauh": "Mundur sedikit dari kamera.",
+  "daftar_menunduk": "Menunduk sedikit, mata tetap ke kamera.",
+  "daftar_pakai_helm": "Silakan pakai helm, lalu lihat ke kamera.",
+  "daftar_selesai": "Pendaftaran wajah selesai. Terima kasih.",
   "dilarang_rokok": "Dilarang membawa rokok. Akses ditolak.",
   "kamera_terhalang": "Kamera gerbang terhalang atau buram. Mohon singkirkan penghalang dan bersihkan lensa kamera.",
   "kamera_terputus": "Kamera gerbang terputus. Mohon tunggu petugas.",

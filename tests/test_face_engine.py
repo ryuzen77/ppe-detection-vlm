@@ -98,3 +98,33 @@ def test_embedding_model_asli_256_dimensi_ternormalisasi(engine):
     assert vector.shape == (256,) and vector.dtype == np.float32
     assert np.linalg.norm(vector) == pytest.approx(1.0, abs=1e-5)
     assert np.allclose(vector, engine._embed(request, frame, detection)), "deterministik"
+
+
+# --- Pendaftaran terpandu (T76) ---
+
+
+def test_foto_terlalu_dekat_ditolak_dengan_ukurannya():
+    """Uji nyata 19-10: foto daftar 200-246 px tidak cocok dengan wajah ±30 px di jalur."""
+    with pytest.raises(face_engine.FaceEngineError) as e:
+        face_engine.pick_enrollment_face(_detections(_row(eye_gap=200)), 24, 60)
+    assert e.value.code == "face_too_close" and "200" in e.value.message and "60" in e.value.message
+    assert face_engine.pick_enrollment_face(_detections(_row(eye_gap=60)), 24, 60).interocular_px == 60
+
+
+@pytest.mark.parametrize(
+    "rows, fit, measured",
+    [
+        ((), "no_face", None),
+        ((_row(eye_gap=18),), "too_far", 18.0),
+        ((_row(eye_gap=40),), "ok", 40.0),
+        ((_row(eye_gap=120),), "too_close", 120.0),
+        ((_row(eye_gap=40), _row(x=400, eye_gap=35)), "multiple_faces", 40.0),
+    ],
+)
+def test_indikator_jarak_sama_dengan_aturan_foto(rows, fit, measured):
+    detections = _detections(*rows) if rows else []
+    assert face_engine.enrollment_fit(detections, 24, 60) == {
+        "fit": fit,
+        "faces": len(detections),
+        "interocular_px": measured,
+    }

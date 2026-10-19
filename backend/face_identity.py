@@ -124,7 +124,9 @@ class FaceIdentifier:
         winner = vote(matches, cfg.FACE_MATCH_THRESHOLD, cfg.FACE_VOTES_REQUIRED)
         if winner is None or winner[0] not in gallery.workers:
             faces = sum(v is not None for v in vectors)
-            logger.info(messages.LOG_FACE_UNKNOWN.format(session=session_id, faces=faces, frames=len(crops)))
+            best = max((m[1] for m in matches if m is not None), default=None)
+            logger.info(messages.LOG_FACE_UNKNOWN.format(
+                session=session_id, faces=faces, frames=len(crops), best="-" if best is None else f"{best:.2f}"))
             return Identity(UNKNOWN)
         worker_id, score = winner
         name, employee_no = gallery.workers[worker_id]
@@ -135,6 +137,19 @@ class FaceIdentifier:
             )
         )
         return Identity(RECOGNIZED, worker_id, name, employee_no, score)
+
+    def similar_worker(self, vector: np.ndarray, worker_id: int) -> Optional[tuple[str, float]]:
+        """Pekerja LAIN (aktif) yang wajahnya melewati ambang pengenalan: (nomor pegawai, skor).
+
+        T76: satu orang yang terdaftar sebagai dua pekerja membuat setiap pengenalan "ragu"
+        (dua pekerja cocok = tanpa nama), jadi foto seperti itu ditolak saat pendaftaran.
+        """
+        gallery = self.gallery()
+        others = gallery.worker_ids != worker_id
+        match = best_match(vector, GalleryView(gallery.worker_ids[others], gallery.vectors[others], gallery.workers))
+        if match is None or match[1] < cfg.FACE_MATCH_THRESHOLD:
+            return None
+        return gallery.workers.get(match[0], ("", "?"))[1], match[1]
 
 
 identifier = FaceIdentifier()
