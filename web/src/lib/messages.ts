@@ -520,6 +520,8 @@ export const WORKERS = {
   fieldConsent: 'Persetujuan Tertulis (UU PDP)',
   fieldConsentLabel: 'Pekerja telah menandatangani persetujuan tertulis pemrosesan data biometrik wajah.',
   fieldConsentRequired: 'Persetujuan tertulis wajib dicentang sebelum pendaftaran dapat diproses.',
+  fieldRequired: (name: string) => `${name} wajib diisi.`,
+  fieldSelectRequired: (name: string) => `${name} wajib dipilih.`,
   cancelBtn: 'Batal',
   submitBtn: 'Daftarkan',
   saveBtn: 'Simpan',

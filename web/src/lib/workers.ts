@@ -14,16 +14,16 @@ export function validateWorkerForm(data: WorkerFormData): string | null {
     return WORKERS.fieldConsentRequired
   }
   if (!data.employee_no || data.employee_no.trim() === '') {
-    return `${WORKERS.fieldEmployeeNo} wajib diisi.`
+    return WORKERS.fieldRequired(WORKERS.fieldEmployeeNo)
   }
   if (!data.name || data.name.trim() === '') {
-    return `${WORKERS.fieldName} wajib diisi.`
+    return WORKERS.fieldRequired(WORKERS.fieldName)
   }
   if (!data.nickname || data.nickname.trim() === '') {
-    return `${WORKERS.fieldNickname} wajib diisi.`
+    return WORKERS.fieldRequired(WORKERS.fieldNickname)
   }
   if (!data.gender || (data.gender !== 'male' && data.gender !== 'female')) {
-    return `${WORKERS.fieldGender} wajib dipilih.`
+    return WORKERS.fieldSelectRequired(WORKERS.fieldGender)
   }
   return null
 }
@@ -76,13 +76,10 @@ export function formatWorkerSalutation(worker: {
   name: string
   nickname?: string
   gender?: string
-  salutation?: string
+  salutation?: string | null
 }): string {
-  const salutation = worker.salutation || (worker.gender === 'female' ? 'Bu' : 'Pak')
-  if (worker.nickname && worker.nickname.trim()) {
-    return `${salutation} ${worker.nickname.trim()}`
-  }
-  return `${salutation} ${worker.name.trim()}`
+  const displayName = (worker.nickname && worker.nickname.trim()) || worker.name.trim()
+  return worker.salutation ? `${worker.salutation} ${displayName}` : displayName
 }
 
 export function formatDeleteSchedule(deleteAfterIso: string | null): string {

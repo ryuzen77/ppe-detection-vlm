@@ -139,17 +139,16 @@ describe('formatWorkerSalutation', () => {
     const text = formatWorkerSalutation({
       name: 'Muhammad Zen Fikri',
       nickname: 'Zen',
-      gender: 'male',
       salutation: 'Pak',
     })
     expect(text).toBe('Pak Zen')
   })
 
-  it('menggunakan Bu untuk wanita', () => {
+  it('menggunakan sapaan dari backend (mis. Bu)', () => {
     const text = formatWorkerSalutation({
       name: 'Siti Aminah',
       nickname: 'Siti',
-      gender: 'female',
+      salutation: 'Bu',
     })
     expect(text).toBe('Bu Siti')
   })
@@ -157,9 +156,16 @@ describe('formatWorkerSalutation', () => {
   it('menggunakan nama lengkap bila tanpa nickname', () => {
     const text = formatWorkerSalutation({
       name: 'Budi Santoso',
-      gender: 'male',
+      salutation: 'Pak',
     })
     expect(text).toBe('Pak Budi Santoso')
+  })
+
+  it('menggunakan nama saja bila tanpa salutation', () => {
+    const text = formatWorkerSalutation({
+      name: 'Budi Santoso',
+    })
+    expect(text).toBe('Budi Santoso')
   })
 })
 
