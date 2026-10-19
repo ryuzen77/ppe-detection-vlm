@@ -27,6 +27,10 @@ import type {
   ResetPasswordRequest,
   AuthResponse,
   AccountInfo,
+  Worker,
+  WorkersResponse,
+  NewWorkerRequest,
+  UpdateWorkerRequest,
 } from './types'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
@@ -70,7 +74,7 @@ export class ApiClient {
     return `${this.baseUrl}${path}`
   }
 
-  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     const response = await this.fetchImpl(this.url(path), {
@@ -173,6 +177,17 @@ export class ApiClient {
     return this.url(`/api/reports/export${qs ? `?${qs}` : ''}`)
   }
   streamUrl = () => this.url('/api/stream')
+
+  // --- Pekerja & Identitas Wajah (T34)
+  workers = () => this.request<WorkersResponse>('GET', '/api/workers')
+  createWorker = (body: NewWorkerRequest) => this.request<Worker>('POST', '/api/workers', body)
+  deactivateWorker = (id: number) => this.request<Worker>('POST', `/api/workers/${id}/deactivate`)
+  activateWorker = (id: number) => this.request<Worker>('POST', `/api/workers/${id}/activate`)
+  deleteWorkerFace = (id: number) => this.request<void>('DELETE', `/api/workers/${id}/face`)
+  deleteWorkerTemplate = (workerId: number, templateId: number) =>
+    this.request<void>('DELETE', `/api/workers/${workerId}/templates/${templateId}`)
+  updateWorker = (id: number, body: UpdateWorkerRequest) =>
+    this.request<Worker>('PATCH', `/api/workers/${id}`, body)
 }
 
 export const api = new ApiClient()
