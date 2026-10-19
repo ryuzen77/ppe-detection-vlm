@@ -93,15 +93,28 @@ def pick_enrollment_face(
     return usable[0]
 
 
+def enrollment_bounds(frame_height: int) -> tuple[float, float]:
+    """Batas jarak antar-mata foto pendaftaran untuk resolusi kamera saat ini (min, maks piksel).
+
+    Minimal tetap piksel (mutu embedding), maksimal sebanding tinggi frame (meniru jarak di jalur).
+    Kamera di bawah resolusi minimal ditolak: wajah di jalur tidak akan cukup besar untuk dikenali."""
+    if frame_height < cfg.ENROLLMENT_MIN_FRAME_HEIGHT:
+        raise FaceEngineError(
+            "camera_low_resolution",
+            messages.WORKER_CAMERA_LOW_RESOLUTION.format(height=frame_height, minimum=cfg.ENROLLMENT_MIN_FRAME_HEIGHT),
+        )
+    return cfg.FACE_MIN_INTEROCULAR_PX, cfg.ENROLLMENT_MAX_INTEROCULAR_RATIO * frame_height
+
+
 # Kode galat foto -> arahan untuk pendamping (no_face & multiple_faces tetap)
-_FIT_BY_ERROR = {"face_too_small": "too_far", "face_too_close": "too_close"}
+_FIT_BY_ERROR = {"face_too_small": "too_far", "face_too_close": "too_close", "camera_low_resolution": "low_resolution"}
 
 
-def enrollment_fit(detections: list[FaceDetection], min_interocular: float, max_interocular: float) -> dict:
-    """Indikator jarak sebelum memotret (T76), aturan yang sama dengan `pick_enrollment_face`:
-    "ok" | "no_face" | "too_far" | "too_close" | "multiple_faces"."""
+def enrollment_fit(detections: list[FaceDetection], frame_height: int) -> dict:
+    """Indikator jarak sebelum memotret (T76), aturan yang sama dengan foto pendaftaran:
+    "ok" | "no_face" | "too_far" | "too_close" | "multiple_faces" | "low_resolution"."""
     try:
-        face = pick_enrollment_face(detections, min_interocular, max_interocular)
+        face = pick_enrollment_face(detections, *enrollment_bounds(frame_height))
         fit, measured = "ok", face.interocular_px
     except FaceEngineError as e:
         fit = _FIT_BY_ERROR.get(e.code, e.code)
@@ -169,11 +182,10 @@ class FaceEngine:
 
     def enrollment_sample(self, frame: np.ndarray) -> FaceSample:
         """Satu templat pendaftaran dari frame kamera; FaceEngineError bila foto tidak layak."""
+        bounds = enrollment_bounds(frame.shape[0])
         with self._lock:
             detector, request = self._models()
-            detection = pick_enrollment_face(
-                self._detect(detector, frame), cfg.FACE_MIN_INTEROCULAR_PX, cfg.ENROLLMENT_MAX_INTEROCULAR_PX
-            )
+            detection = pick_enrollment_face(self._detect(detector, frame), *bounds)
             return FaceSample(detection, self._embed(request, frame, detection))
 
     def subject_embeddings(self, crops: list[np.ndarray]) -> list[Optional[np.ndarray]]:

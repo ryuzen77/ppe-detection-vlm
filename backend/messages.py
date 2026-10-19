@@ -379,6 +379,8 @@ ENROLLMENT_PROMPT_KEYS = {
 }
 WORKER_FACE_TOO_CLOSE = ("Wajah terlalu dekat ke kamera (jarak antar-mata {measured:.0f} px, maksimal {maximum:.0f} px). "
                          "Minta pekerja mundur ke posisi pemeriksaan: wajah di jalur jauh lebih kecil.")
+WORKER_CAMERA_LOW_RESOLUTION = ("Resolusi kamera {height} px terlalu rendah untuk pendaftaran wajah (minimal {minimum} px): "
+                                "wajah di jalur terlalu kecil untuk dikenali. Buka pemilih kamera, tekan 'Pindai kemampuan', lalu ulangi.")
 WORKER_FACE_MATCHES_OTHER = ("Wajah ini mirip pekerja {employee_no} (skor {score:.2f}). Satu orang hanya boleh punya satu "
                              "data pekerja; bila memang orang yang sama, tambahkan foto di data pekerja itu.")
 WORKER_ENROLLMENT_INACTIVE = "Mode pendaftaran wajah tidak aktif. Buka lagi jendela Ambil Foto."

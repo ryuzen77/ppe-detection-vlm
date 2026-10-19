@@ -548,9 +548,14 @@ class Config:
     ENROLLMENT_POSES: tuple = ("daftar_lurus", "daftar_kiri", "daftar_kanan", "daftar_menunduk", "daftar_lurus")
     # Pertanyaan "memakai kacamata?" di awal menentukan pasangan kondisi (tanpa helm, dengan helm)
     ENROLLMENT_CONDITION_SETS: dict = {"no_glasses": ("bare", "helmet"), "glasses": ("glasses", "helmet_glasses")}
-    # Jarak antar-mata maksimal foto pendaftaran. Di jalur pemeriksaan ±26-33 px (T34a, 1080p); foto
-    # yang jauh lebih dekat (uji 19-10: 200-246 px) tidak cocok dengan wajah kecil di jalur -> ditolak
-    ENROLLMENT_MAX_INTEROCULAR_PX: float = 60.0
+    # Jarak antar-mata maksimal foto pendaftaran, sebagai bagian dari TINGGI FRAME: ukuran wajah di
+    # jalur sebanding dengan resolusi, jadi batas piksel tetap salah di resolusi lain (uji 19-10: kamera
+    # 720p, foto 48-59 px lolos batas 60 px padahal wajah di jalur hanya ±17-22 px). Di jalur ±0,024-0,031
+    # (T34a: 26-33 px di 1080p); foto jauh lebih dekat (uji 19-10: 200-246 px) tidak cocok -> ditolak.
+    ENROLLMENT_MAX_INTEROCULAR_RATIO: float = 0.055
+    # Resolusi minimal kamera untuk pendaftaran: di bawahnya wajah di jalur lebih kecil dari
+    # FACE_MIN_INTEROCULAR_PX (720p ±17-22 px), jadi pekerja yang didaftarkan tetap tidak akan dikenali
+    ENROLLMENT_MIN_FRAME_HEIGHT: int = 1080
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

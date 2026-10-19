@@ -10,7 +10,7 @@ import type {
   EnrollmentPreview,
   TemplateCondition,
 } from './api/types'
-import { ENROLLMENT_HOLD } from './settings'
+import { ENROLLMENT_AUTO, ENROLLMENT_HOLD } from './settings'
 
 export interface EnrollmentClient {
   holdEnrollment: () => Promise<EnrollmentHoldResponse>
@@ -106,6 +106,35 @@ export function pollEnrollmentPreview(
     stopped = true
     clearTimeout(timer)
   }
+}
+
+/**
+ * Foto otomatis: pendamping tidak perlu menekan tombol 10 kali, dan foto selalu diambil saat
+ * jarak terukur pas. "Diam" = jarak antar-mata hampir sama di beberapa pemeriksaan berturut-turut.
+ */
+export interface AutoShot {
+  streak: number
+  lastPx: number | null
+  /** Sebelum waktu ini pemeriksaan diabaikan: pekerja masih mendengar arahan & menoleh */
+  resumeAt: number
+}
+
+/** Mulai (ulang) hitungan setelah jeda: dipakai saat mulai dan setelah setiap foto. */
+export function pauseAutoShot(now: number, ms: number = ENROLLMENT_AUTO.cooldownMs): AutoShot {
+  return { streak: 0, lastPx: null, resumeAt: now + ms }
+}
+
+/** Hasil pemeriksaan jarak berikutnya -> hitungan "diam" yang baru. */
+export function trackAutoShot(state: AutoShot, preview: EnrollmentPreview | null, now: number): AutoShot {
+  const px = preview?.fit === 'ok' ? preview.interocular_px : null
+  if (now < state.resumeAt || px == null) return { ...state, streak: 0, lastPx: null }
+  const still =
+    state.lastPx != null && Math.abs(px - state.lastPx) / state.lastPx <= ENROLLMENT_AUTO.maxSizeChange
+  return { ...state, streak: still ? state.streak + 1 : 1, lastPx: px }
+}
+
+export function autoShotDue(state: AutoShot): boolean {
+  return state.streak >= ENROLLMENT_AUTO.stablePolls
 }
 
 /**

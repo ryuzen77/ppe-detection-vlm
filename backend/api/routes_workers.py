@@ -28,6 +28,7 @@ _STATUS = {
     "inactive": 409,
     "camera_busy": 409,
     "camera_unavailable": 409,
+    "camera_low_resolution": 409,
     "no_face": 422,
     "multiple_faces": 422,
     "face_too_small": 422,
@@ -241,7 +242,8 @@ def enrollment_plan():
         "shots_per_condition": cfg.ENROLLMENT_SHOTS_PER_CONDITION,
         "poses": list(cfg.ENROLLMENT_POSES),
         "condition_sets": {k: list(v) for k, v in cfg.ENROLLMENT_CONDITION_SETS.items()},
-        "interocular_px": {"min": cfg.FACE_MIN_INTEROCULAR_PX, "max": cfg.ENROLLMENT_MAX_INTEROCULAR_PX},
+        "interocular": {"min_px": cfg.FACE_MIN_INTEROCULAR_PX, "max_ratio": cfg.ENROLLMENT_MAX_INTEROCULAR_RATIO},
+        "min_frame_height": cfg.ENROLLMENT_MIN_FRAME_HEIGHT,
         "prompts": messages.ENROLLMENT_PROMPT_KEYS,
     }
 
@@ -254,7 +256,7 @@ def enrollment_preview():
     if frame is None:
         raise _error(worker_store.WorkerError("camera_unavailable", messages.WORKER_CAMERA_UNAVAILABLE))
     detections = face_engine.engine.detect(frame)
-    return face_engine.enrollment_fit(detections, cfg.FACE_MIN_INTEROCULAR_PX, cfg.ENROLLMENT_MAX_INTEROCULAR_PX)
+    return face_engine.enrollment_fit(detections, frame.shape[0])
 
 
 @router.post("/api/workers/enrollment/prompt", status_code=204, dependencies=[Depends(require_admin)])

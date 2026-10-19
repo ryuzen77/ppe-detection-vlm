@@ -83,7 +83,7 @@ def engine():
 
 
 def test_frame_tanpa_wajah_ditolak_model_asli(engine):
-    frame = np.full((480, 640, 3), 128, np.uint8)
+    frame = np.full((cfg.ENROLLMENT_MIN_FRAME_HEIGHT, 1920, 3), 128, np.uint8)
     assert engine.detect(frame) == []
     with pytest.raises(face_engine.FaceEngineError) as e:
         engine.enrollment_sample(frame)
@@ -123,8 +123,33 @@ def test_foto_terlalu_dekat_ditolak_dengan_ukurannya():
 )
 def test_indikator_jarak_sama_dengan_aturan_foto(rows, fit, measured):
     detections = _detections(*rows) if rows else []
-    assert face_engine.enrollment_fit(detections, 24, 60) == {
+    assert face_engine.enrollment_fit(detections, 1080) == {
         "fit": fit,
         "faces": len(detections),
         "interocular_px": measured,
     }
+
+
+def test_batas_maksimal_sebanding_resolusi(monkeypatch):
+    """Wajah di jalur sebanding resolusi: batas piksel tetap lolos foto dekat di resolusi lain."""
+    monkeypatch.setattr(cfg, "ENROLLMENT_MIN_FRAME_HEIGHT", 720)
+    low_min, low_max = face_engine.enrollment_bounds(720)
+    high_min, high_max = face_engine.enrollment_bounds(1440)
+    assert low_min == high_min == cfg.FACE_MIN_INTEROCULAR_PX, "mutu embedding tetap piksel"
+    assert high_max == pytest.approx(2 * low_max)
+
+
+def test_kamera_resolusi_rendah_ditolak():
+    """Uji nyata 19-10: kamera 720p, foto 48-59 px lolos padahal wajah di jalur ±17-22 px."""
+    height = cfg.ENROLLMENT_MIN_FRAME_HEIGHT - 360
+    with pytest.raises(face_engine.FaceEngineError) as e:
+        face_engine.enrollment_bounds(height)
+    assert e.value.code == "camera_low_resolution" and str(height) in e.value.message
+    fit = face_engine.enrollment_fit(_detections(_row(eye_gap=40)), height)
+    assert fit == {"fit": "low_resolution", "faces": 1, "interocular_px": 40.0}
+
+
+def test_foto_dekat_di_1080p_ditolak():
+    """Jarak foto uji 19-10 (48-59 px di 720p ~ 72-88 px di 1080p) melewati batas di 1080p."""
+    _, maximum = face_engine.enrollment_bounds(1080)
+    assert 33 < maximum < 72, "jarak di jalur (26-33 px) lolos, foto dekat tidak"

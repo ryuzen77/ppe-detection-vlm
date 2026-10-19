@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  autoShotDue,
   buildShots,
   fitPrompt,
   keepEnrollmentHold,
   mirrorPreview,
+  pauseAutoShot,
   pollEnrollmentPreview,
   shotPrompts,
+  trackAutoShot,
   type EnrollmentClient,
 } from './enrollment'
 import type { CameraStatus, EnrollmentPlan, EnrollmentPreview } from './api/types'
-import { ENROLLMENT_HOLD } from './settings'
+import { ENROLLMENT_AUTO, ENROLLMENT_HOLD } from './settings'
 
 const HOLD_S = 45
 
@@ -65,7 +68,8 @@ const PLAN: EnrollmentPlan = {
   shots_per_condition: 5,
   poses: ['daftar_lurus', 'daftar_kiri', 'daftar_kanan', 'daftar_menunduk', 'daftar_lurus'],
   condition_sets: { no_glasses: ['bare', 'helmet'], glasses: ['glasses', 'helmet_glasses'] },
-  interocular_px: { min: 24, max: 60 },
+  interocular: { min_px: 24, max_ratio: 0.055 },
+  min_frame_height: 1080,
   prompts: {
     condition_switch: 'daftar_pakai_helm',
     fit: { too_far: 'daftar_mendekat', too_close: 'daftar_menjauh' },
@@ -132,5 +136,35 @@ describe('mirrorPreview', () => {
     expect(mirrorPreview(cam({ is_synthetic: true }))).toBe(false)
     expect(mirrorPreview(cam({ status: 'IDLE' }))).toBe(false)
     expect(mirrorPreview(null)).toBe(false)
+  })
+})
+
+describe('foto otomatis', () => {
+  const at = (px: number | null, fit: EnrollmentPreview['fit'] = 'ok'): EnrollmentPreview => ({
+    fit,
+    faces: px == null ? 0 : 1,
+    interocular_px: px,
+  })
+  const run = (previews: EnrollmentPreview[], start = pauseAutoShot(0, 0), now = 0) =>
+    previews.reduce((s, p) => trackAutoShot(s, p, now), start)
+
+  it('memotret setelah jarak pas & wajah diam beberapa pemeriksaan', () => {
+    const steady = Array(ENROLLMENT_AUTO.stablePolls).fill(at(30))
+    expect(autoShotDue(run(steady.slice(1)))).toBe(false)
+    expect(autoShotDue(run(steady))).toBe(true)
+  })
+
+  it('wajah bergerak (ukuran berubah) atau jarak tidak pas mengulang hitungan', () => {
+    const moving = Array.from({ length: 4 }, (_, i) => at(30 * (1 + 2 * ENROLLMENT_AUTO.maxSizeChange) ** i))
+    expect(autoShotDue(run(moving))).toBe(false)
+    const broken = [...Array(ENROLLMENT_AUTO.stablePolls - 1).fill(at(30)), at(70, 'too_close'), at(30)]
+    expect(autoShotDue(run(broken))).toBe(false)
+  })
+
+  it('setelah foto: menunggu pekerja mendengar arahan & menoleh', () => {
+    const steady = Array(ENROLLMENT_AUTO.stablePolls).fill(at(30))
+    const paused = pauseAutoShot(1000)
+    expect(autoShotDue(run(steady, paused, 1000 + ENROLLMENT_AUTO.cooldownMs - 1))).toBe(false)
+    expect(autoShotDue(run(steady, paused, 1000 + ENROLLMENT_AUTO.cooldownMs))).toBe(true)
   })
 })

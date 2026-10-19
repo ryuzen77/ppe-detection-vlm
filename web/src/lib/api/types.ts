@@ -528,7 +528,10 @@ export interface EnrollmentPlan {
   /** Arah kepala per foto = kunci suara petunjuk */
   poses: string[]
   condition_sets: { no_glasses: TemplateCondition[]; glasses: TemplateCondition[] }
-  interocular_px: { min: number; max: number }
+  /** Minimal piksel (mutu embedding); maksimal sebagai bagian dari tinggi frame kamera */
+  interocular: { min_px: number; max_ratio: number }
+  /** Tinggi frame kamera minimal untuk pendaftaran (di bawahnya fit = 'low_resolution') */
+  min_frame_height: number
   prompts: {
     condition_switch: string
     fit: Partial<Record<EnrollmentFit, string>>
@@ -536,7 +539,7 @@ export interface EnrollmentPlan {
   }
 }
 
-export type EnrollmentFit = 'ok' | 'no_face' | 'too_far' | 'too_close' | 'multiple_faces'
+export type EnrollmentFit = 'ok' | 'no_face' | 'too_far' | 'too_close' | 'multiple_faces' | 'low_resolution'
 
 /** GET /api/workers/enrollment/preview — hanya deteksi wajah, tidak disimpan */
 export interface EnrollmentPreview {

@@ -203,7 +203,7 @@ class FakeEngine:
 @pytest.fixture
 def camera(monkeypatch):
     """Kamera aktif berisi satu frame, jalur inspeksi kosong, mesin FR tiruan."""
-    frame = np.zeros((720, 1280, 3), np.uint8)
+    frame = np.zeros((cfg.ENROLLMENT_MIN_FRAME_HEIGHT, 1920, 3), np.uint8)
     engine = FakeEngine()
     monkeypatch.setattr(video_service, "camera_frame", lambda: frame)
     monkeypatch.setattr(state_mgr, "session", None)
@@ -230,7 +230,10 @@ def test_foto_pendaftaran_menjadi_templat_terenkripsi(client, store, camera, sec
     assert not any(isinstance(v, list) and len(v) > 10 for v in event.values()), "tanpa embedding di log"
 
 
-@pytest.mark.parametrize("code, status", [("no_face", 422), ("multiple_faces", 422), ("face_too_small", 422)])
+@pytest.mark.parametrize(
+    "code, status",
+    [("no_face", 422), ("multiple_faces", 422), ("face_too_small", 422), ("face_too_close", 422), ("camera_low_resolution", 409)],
+)
 def test_foto_tidak_layak_tidak_menyimpan_apa_pun(client, store, camera, code, status):
     wid = _create(client).json()["id"]
     camera.error = code
@@ -321,7 +324,8 @@ def test_rencana_pendaftaran_dari_config(client):
         "shots_per_condition": cfg.ENROLLMENT_SHOTS_PER_CONDITION,
         "poses": list(cfg.ENROLLMENT_POSES),
         "condition_sets": {"no_glasses": ["bare", "helmet"], "glasses": ["glasses", "helmet_glasses"]},
-        "interocular_px": {"min": cfg.FACE_MIN_INTEROCULAR_PX, "max": cfg.ENROLLMENT_MAX_INTEROCULAR_PX},
+        "interocular": {"min_px": cfg.FACE_MIN_INTEROCULAR_PX, "max_ratio": cfg.ENROLLMENT_MAX_INTEROCULAR_RATIO},
+        "min_frame_height": cfg.ENROLLMENT_MIN_FRAME_HEIGHT,
         "prompts": messages.ENROLLMENT_PROMPT_KEYS,
     }
     prompts = plan["prompts"]
@@ -343,6 +347,14 @@ def test_pratinjau_dan_suara_hanya_selama_jeda(client, store, camera, enrollment
     r = client.post("/api/workers/enrollment/prompt", json={"prompt": "lengkap"})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "invalid_prompt", "hanya suara pendaftaran"
     assert played == ["daftar_kiri"]
+
+
+def test_pratinjau_kamera_resolusi_rendah(client, camera, enrollment, monkeypatch):
+    """Uji nyata 19-10: kamera 720p -> pendamping diberi tahu sebelum memotret, bukan setelah gagal dikenali."""
+    low = np.zeros((cfg.ENROLLMENT_MIN_FRAME_HEIGHT - 360, 1280, 3), np.uint8)
+    monkeypatch.setattr(video_service, "camera_frame", lambda: low)
+    client.post("/api/workers/enrollment")
+    assert client.get("/api/workers/enrollment/preview").json()["fit"] == "low_resolution"
 
 
 def test_wajah_pekerja_lain_ditolak_saat_pendaftaran(client, store, camera):

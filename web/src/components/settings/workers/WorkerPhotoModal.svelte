@@ -6,12 +6,16 @@
   import { api } from '../../../lib/api/client'
   import { extractApiError } from '../../../lib/api/error'
   import {
+    autoShotDue,
     buildShots,
     fitPrompt,
     keepEnrollmentHold,
     mirrorPreview,
+    pauseAutoShot,
     pollEnrollmentPreview,
     shotPrompts,
+    trackAutoShot,
+    type AutoShot,
     type EnrollmentShot,
   } from '../../../lib/enrollment'
   import { getConditionLabel, formatTemplateQuality } from '../../../lib/workers'
@@ -38,12 +42,19 @@
   let photoError = $state('')
   let photoSuccess = $state('')
   let streamKey = $state(Date.now())
+  let auto = $state<AutoShot>(pauseAutoShot(0, 0))
+  // Foto ditolak (mis. wajah mirip pekerja lain): foto otomatis berhenti supaya tidak mengulang
+  // penolakan yang sama terus-menerus; tombol Ambil Foto melanjutkannya
+  let autoStopped = $state(false)
+  // Ganti kondisi (pakai helm) butuh waktu tak tentu: pendamping yang memastikan helm terpasang
+  let helmetConfirmed = $state(false)
 
   const shot = $derived(shots[index] ?? null)
   const shooting = $derived(shot !== null)
   const done = $derived(shots.length > 0 && index >= shots.length)
   const asking = $derived(plan !== null && shots.length === 0)
   const distancePrompt = $derived(plan ? fitPrompt(plan, preview?.fit ?? null) : null)
+  const waitingHelmet = $derived(shot?.switchesCondition === true && !helmetConfirmed)
 
   // Modal dibuka: mulai dari pertanyaan kacamata
   $effect(() => {
@@ -57,6 +68,8 @@
     photoSuccess = ''
     taking = false
     streamKey = Date.now()
+    autoStopped = false
+    helmetConfirmed = false
     api.enrollmentPlan().then(
       (p) => (plan = p),
       (e) => (photoError = extractApiError(e, ENROLLMENT_GUIDE.errPlan)),
@@ -72,11 +85,15 @@
   // Indikator jarak hanya selama memotret
   $effect(() => {
     if (!shooting) return
-    return pollEnrollmentPreview(api.enrollmentPreview, (p) => {
-      preview = p
-      previewChecked = true
-    })
+    return pollEnrollmentPreview(api.enrollmentPreview, onPreview)
   })
+
+  function onPreview(p: EnrollmentPreview | null) {
+    preview = p
+    previewChecked = true
+    auto = trackAutoShot(auto, p, Date.now())
+    if (autoShotDue(auto) && !autoStopped && !waitingHelmet && !taking) takePhoto()
+  }
 
   /** Suara berurutan di speaker gerbang (pakai helm, lalu arah kepala). */
   function speak(prompts: string[]) {
@@ -89,7 +106,13 @@
     if (!plan) return
     shots = buildShots(plan, wearsGlasses)
     index = 0
+    auto = pauseAutoShot(Date.now())
     speak(shotPrompts(plan, shots[0]))
+  }
+
+  function confirmHelmet() {
+    helmetConfirmed = true
+    auto = pauseAutoShot(Date.now())
   }
 
   async function takePhoto() {
@@ -101,10 +124,13 @@
       const res = await api.addWorkerTemplate(worker.id, shot.condition)
       photoSuccess = `${ENROLLMENT_GUIDE.saved(shot.number, shots.length)} (${formatTemplateQuality(res.quality)})`
       index += 1
+      auto = pauseAutoShot(Date.now())
+      autoStopped = false
       const next = shots[index]
       speak(next ? shotPrompts(plan, next) : [plan.prompts.done])
     } catch (e) {
       photoError = extractApiError(e, WORKERS.errTakePhoto)
+      autoStopped = true
     } finally {
       taking = false
     }
@@ -164,6 +190,14 @@
           <span class="step">{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span>
           {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
           <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
+          {#if waitingHelmet}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.helmetWaiting}</span>
+            <button type="button" class="btn btn-primary confirm" onclick={confirmHelmet}>{ENROLLMENT_GUIDE.helmetConfirm}</button>
+          {:else if autoStopped}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.autoStopped}</span>
+          {:else}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.autoHint}</span>
+          {/if}
           {#if !previewChecked}
             <span class="fit">{ENROLLMENT_GUIDE.checkingFit}</span>
           {:else if !preview}
@@ -171,7 +205,8 @@
           {:else}
             <span class="fit" class:ok={preview.fit === 'ok'}>
               {ENROLLMENT_GUIDE.fit[preview.fit]}{#if preview.interocular_px != null}
-                · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}
+                · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}{#if auto.streak > 0 && !autoStopped && !waitingHelmet}
+                · {ENROLLMENT_GUIDE.holdStill}{/if}
             </span>
           {/if}
           <div class="row">
@@ -370,6 +405,10 @@
     border-color: var(--ok-line);
     background: var(--ok-soft);
     color: var(--ok);
+  }
+
+  .confirm {
+    align-self: flex-start;
   }
 
   .row {
