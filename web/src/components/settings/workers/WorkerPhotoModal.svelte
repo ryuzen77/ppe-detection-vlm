@@ -3,6 +3,7 @@
   import { WORKERS } from '../../../lib/messages'
   import { api } from '../../../lib/api/client'
   import { extractApiError } from '../../../lib/api/error'
+  import { keepEnrollmentHold } from '../../../lib/enrollment'
   import {
     TEMPLATE_CONDITIONS,
     getConditionLabel,
@@ -36,6 +37,12 @@
       const available = TEMPLATE_CONDITIONS.find((c) => !hasTemplateCondition(worker, c))
       selectedCondition = available || 'bare'
     }
+  })
+
+  // T75: gerbang jeda selama modal terbuka, supaya orang yang difoto tidak langsung diperiksa
+  $effect(() => {
+    if (!worker) return
+    return keepEnrollmentHold(api, () => (photoError = WORKERS.errEnrollmentHold))
   })
 
   async function handleTakePhoto() {
@@ -78,6 +85,7 @@
           <div class="target-guide" aria-hidden="true"></div>
         </div>
         <span class="preview-hint">{WORKERS.cameraPreviewHint}</span>
+        <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
       </div>
 
       <div class="form-group">

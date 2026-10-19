@@ -4,6 +4,7 @@
   import CircleX from '@lucide/svelte/icons/circle-x'
   import Hourglass from '@lucide/svelte/icons/hourglass'
   import LoaderCircle from '@lucide/svelte/icons/loader-circle'
+  import ScanFace from '@lucide/svelte/icons/scan-face'
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert'
   import UserRound from '@lucide/svelte/icons/user-round'
   import VideoOff from '@lucide/svelte/icons/video-off'
@@ -27,6 +28,7 @@
     {:else if gate.kind === 'analyzing'}<span class="spin"><LoaderCircle size={36} strokeWidth={1.75} /></span>
     {:else if gate.kind === 'no-camera'}<VideoOff size={36} strokeWidth={1.75} />
     {:else if gate.kind === 'offline'}<WifiOff size={36} strokeWidth={1.75} />
+    {:else if gate.kind === 'enrollment'}<ScanFace size={36} strokeWidth={1.75} />
     {:else}<UserRound size={36} strokeWidth={1.75} />{/if}
   </div>
 

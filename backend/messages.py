@@ -349,3 +349,9 @@ WORKER_INVALID_NICKNAME = "Nama panggilan wajib diisi (maksimal {max} karakter, 
 LOG_VOICE_CREATED = "Suara nama pekerja #{worker_id} dibuat."
 LOG_VOICE_FAILED = ("Suara nama pekerja #{worker_id} gagal dibuat (layanan suara butuh internet): {error}. "
                     "Saat lolos, suara umum dipakai; ubah data pekerja untuk mencoba lagi.")
+
+# --- Mode pendaftaran wajah (T75): gerbang jeda selama admin memotret, kuning (tidak ada yang lolos) ---
+LIGHT_ENROLLMENT = "MODE PENDAFTARAN WAJAH - Pemeriksaan APD dijeda sementara oleh admin"
+LOG_ENROLLMENT_HOLD_START = "Mode pendaftaran wajah dimulai: pemeriksaan APD dijeda."
+LOG_ENROLLMENT_HOLD_END = "Mode pendaftaran wajah selesai: gerbang siaga lagi."
+LOG_ENROLLMENT_HOLD_EXPIRED = "Mode pendaftaran wajah berakhir otomatis (tanpa denyut dari modal foto): gerbang siaga lagi."

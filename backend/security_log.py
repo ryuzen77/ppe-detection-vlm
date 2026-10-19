@@ -33,6 +33,9 @@ FACE_KEY_ERROR = "face_key_error"
 # Suara nama (T34d): profil diubah & MP3 dibuat lewat layanan suara pihak ketiga (bukti akuntabilitas)
 WORKER_UPDATED = "worker_updated"
 WORKER_VOICE_CREATED = "worker_voice_created"
+# Mode pendaftaran wajah (T75): siapa yang menjeda pemeriksaan gerbang & kapan
+ENROLLMENT_STARTED = "enrollment_started"
+ENROLLMENT_ENDED = "enrollment_ended"
 
 
 def record(event: str, **fields):

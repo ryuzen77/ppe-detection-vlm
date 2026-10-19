@@ -131,6 +131,8 @@ class StateManager:
         self.camera_fault_since = 0.0
         # Kapan tiap suara gangguan terakhir diputar (per jenis suara, T45b)
         self.camera_fault_sound_at: dict[str, float] = {}
+        # Jeda pendaftaran wajah (T75): batas waktu (time.time) dari denyut terakhir; 0 = tidak aktif
+        self.enrollment_until = 0.0
 
     def set_camera_fault(self, fault: Optional[str]):
         """Dipanggil tiap frame oleh thread inferensi; hanya PERUBAHAN keadaan yang bertindak.
@@ -146,15 +148,70 @@ class StateManager:
             now = time.time()
             if fault is None:
                 logger.info(messages.LOG_CAMERA_FAULT_END.format(fault=previous, seconds=now - self.camera_fault_since))
-                notifier.set_idle()
+                self._show_resting_light(now)
                 return
             if previous is None:
                 self.camera_fault_since = now
             logger.warning(messages.LOG_CAMERA_FAULT_START.format(fault=fault))
-            self._announce_camera_fault(fault, previous, now)
+            # T75: wajah yang didekatkan ke kamera saat pendaftaran terbaca "terhalang"; admin ada di
+            # tempat, jadi suara gangguan tidak diputar (lampu kembali ke gangguan saat jeda selesai)
+            if not self._enrolling(now):
+                self._announce_camera_fault(fault, previous, now)
             # Hasil VLM yang tiba belakangan untuk sesi ini diabaikan (cek id sesi)
             self.session = None
-            notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[fault])
+            self._show_resting_light(now)
+
+    def _enrolling(self, now: float) -> bool:
+        return now < self.enrollment_until
+
+    def _show_resting_light(self, now: float):
+        """Lampu saat tidak ada keputusan: jeda pendaftaran > gangguan kamera > siaga."""
+        if self._enrolling(now):
+            notifier.set_waiting(messages.LIGHT_ENROLLMENT)
+        elif self.camera_fault is not None:
+            notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[self.camera_fault])
+        else:
+            notifier.set_idle()
+
+    def hold_for_enrollment(self) -> bool:
+        """Admin memotret wajah pendaftaran (T75): gerbang jeda, dipanggil ulang sebagai denyut.
+
+        Orang yang didaftarkan berdiri di depan kamera gerbang; tanpa jeda ia langsung diperiksa
+        (sesi, arahan posisi, VLM) dan foto ditolak `camera_busy` (uji nyata 19-10). Sesi yang
+        berjalan dibatalkan, termasuk hijau yang menyala: jeda tidak pernah meloloskan orang.
+        True = jeda baru dimulai (bukan denyut).
+        """
+        with self.lock:
+            now = time.time()
+            started = not self._enrolling(now)
+            self.enrollment_until = now + cfg.ENROLLMENT_HOLD_SECONDS
+            if started:
+                logger.info(messages.LOG_ENROLLMENT_HOLD_START)
+                self.session = None     # hasil VLM yang tiba belakangan diabaikan (cek id sesi)
+                self._show_resting_light(now)
+            return started
+
+    def release_enrollment(self) -> bool:
+        """Modal foto ditutup. True = jeda memang sedang berlaku."""
+        with self.lock:
+            if not self._enrolling(time.time()):
+                return False
+            self._finish_enrollment(messages.LOG_ENROLLMENT_HOLD_END)
+            return True
+
+    def _finish_enrollment(self, reason: str):
+        self.enrollment_until = 0.0
+        logger.info(reason)
+        self._show_resting_light(time.time())
+
+    def _enrollment_paused(self, now: float) -> bool:
+        """True selama jeda pendaftaran; jeda yang kehabisan denyut ditutup di sini (per frame)."""
+        if self.enrollment_until == 0.0:
+            return False
+        if self._enrolling(now):
+            return True
+        self._finish_enrollment(messages.LOG_ENROLLMENT_HOLD_EXPIRED)
+        return False
 
     def _announce_camera_fault(self, fault: str, previous: Optional[str], now: float):
         """Suara gangguan: terputus & terhalang dibedakan (uji fisik 06-10).
@@ -214,6 +271,8 @@ class StateManager:
         now = time.time()
         with self.lock:
             self.latest_detections = detections
+            if self._enrollment_paused(now):
+                return          # admin memotret wajah pendaftaran: tidak ada sesi (T75)
             if self.camera_fault is not None:
                 return          # gambar tidak bisa dipercaya: tidak ada sesi baru (T45)
             in_lane = self._people_in_lane(detections, now)
@@ -556,11 +615,9 @@ class StateManager:
             self.recent_decisions.clear()
             self.foot_memory.clear()
             # Gangguan kamera TIDAK dihapus di sini (mis. thread pembaca me-reset gerbang
-            # setelah kamera dibuka ulang): baru selesai bila gambarnya sehat lagi (T45b)
-            if self.camera_fault is not None:
-                notifier.set_waiting(messages.LIGHT_CAMERA_FAULT[self.camera_fault])
-            else:
-                notifier.set_idle()
+            # setelah kamera dibuka ulang): baru selesai bila gambarnya sehat lagi (T45b).
+            # Jeda pendaftaran (T75) juga tetap berlaku.
+            self._show_resting_light(time.time())
 
     def get_telemetry(self) -> dict:
         """Constructs comprehensive real-time payload for WebSocket clients."""
@@ -574,15 +631,10 @@ class StateManager:
                 "has_person": len(dets_data) > 0,
                 "active_track": self._session_payload(self.session),
                 "detections": dets_data,
-                "corridor": {
-                    "enabled": cfg.ENABLE_CORRIDOR_FILTER,
-                    "left_ratio": cfg.CORRIDOR_LEFT_RATIO,
-                    "right_ratio": cfg.CORRIDOR_RIGHT_RATIO
-                },
-                "zone": {"enabled": active_zone.enabled, "y_min": active_zone.y_min,
-                         "y_max": active_zone.y_max},
+                **self._lane_payload(active_zone),
                 "light": notifier.get_status(),
                 "camera_fault": self.camera_fault,
+                "enrollment": self._enrollment_payload(time.time()),
                 "history": self.inspection_history[:cfg.TELEMETRY_HISTORY_RECORDS],
                 # Frontend butuh angka ini untuk indikator "stabil x / y";
                 # dulu ditulis tetap "/ 2" dan akan salah begitu config diubah.
@@ -594,6 +646,22 @@ class StateManager:
                 "vlm": vlm_analyzer.provider_info(),
                 "api_monitor": api_monitor.get_status(),
             }
+
+    @staticmethod
+    def _lane_payload(active_zone) -> dict:
+        """Garis koridor & zona berdiri untuk overlay video."""
+        return {
+            "corridor": {
+                "enabled": cfg.ENABLE_CORRIDOR_FILTER,
+                "left_ratio": cfg.CORRIDOR_LEFT_RATIO,
+                "right_ratio": cfg.CORRIDOR_RIGHT_RATIO
+            },
+            "zone": {"enabled": active_zone.enabled, "y_min": active_zone.y_min, "y_max": active_zone.y_max},
+        }
+
+    def _enrollment_payload(self, now: float) -> dict:
+        active = self._enrolling(now)
+        return {"active": active, "remaining_s": round(self.enrollment_until - now, 1) if active else None}
 
     @staticmethod
     def _detection_payload(d: DetectionResult, active_zone) -> dict:

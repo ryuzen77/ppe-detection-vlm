@@ -63,6 +63,14 @@ describe('gateView', () => {
     expect(gateView(tele(), 'connected')).toMatchObject({ kind: 'standby', tone: 'neutral' })
   })
 
+  it('mode pendaftaran wajah (T75): kuning & menimpa sesi/kamera, tidak pernah hijau', () => {
+    const enrollment = { active: true, remaining_s: 40 }
+    expect(gateView(tele({ enrollment }), 'connected')).toMatchObject({ kind: 'enrollment', tone: 'warn' })
+    const camLost = tele({ enrollment, camera: { ...tele().camera, status: 'LOST' } })
+    expect(gateView(camLost, 'connected').kind).toBe('enrollment')
+    expect(gateView(tele({ enrollment: { active: false, remaining_s: null } }), 'connected').kind).toBe('standby')
+  })
+
   it('arahan posisi memakai kuning, bukan merah (merah khusus APD kurang)', () => {
     const v = gateView(tele({ active_track: track({ is_full_body: false, clip_type: 'FEET_CLIPPED' }) }), 'connected')
     expect(v).toMatchObject({ kind: 'position', tone: 'warn', title: 'Mundur satu langkah', trackId: 42 })

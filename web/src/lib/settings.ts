@@ -113,3 +113,8 @@ export const MIN_PASSWORD_LENGTH = 12;
 export const HEALTH_POLL = {
   intervalMs: 10000,
 } as const;
+
+/** Mode pendaftaran wajah (T75): denyut per batas waktu jeda (batasnya dari backend, `hold_s`) */
+export const ENROLLMENT_HOLD = {
+  beatsPerHold: 3,
+} as const;
