@@ -134,6 +134,15 @@ class WorkerRepository(Protocol):
         company_id: Optional[int] = None,
     ) -> Worker: ...
     def update_profile(self, worker_id: int, nickname: object = None, gender: object = None) -> Worker: ...
+    def update_worker(
+        self,
+        worker_id: int,
+        nickname: object = None,
+        gender: object = None,
+        department_id: object = ...,
+        company_id: object = None,
+        employee_no: object = None,
+    ) -> Worker: ...
     def deactivate(self, worker_id: int) -> Worker: ...
     def activate(self, worker_id: int) -> Worker: ...
     def delete_face(self, worker_id: int) -> int: ...
@@ -272,18 +281,12 @@ def _resolve_comp_update(conn: sqlite3.Connection, cur_id: Optional[int], comp_i
     return _check_comp_exists(conn, comp_id)
 
 
-def _resolve_emp_no_update(
-    conn: sqlite3.Connection, worker_id: int, cur_no: str, emp_no: object
-) -> tuple[str, Optional[str]]:
+def _check_employee_no_lock(cur_no: str, emp_no: object) -> None:
     if emp_no is None:
-        return cur_no, None
-    cand_no = normalize_employee_no(emp_no)
-    if cand_no.lower() == cur_no.lower():
-        return cur_no, None
-    if conn.execute("SELECT 1 FROM workers WHERE employee_no = ? COLLATE NOCASE AND id != ?",
-                    (cand_no, worker_id)).fetchone():
-        raise WorkerError("employee_no_taken", messages.WORKER_EMPLOYEE_NO_TAKEN.format(employee_no=cand_no))
-    return cand_no, cur_no
+        return
+    cand_no = str(emp_no).strip()
+    if cand_no.lower() != cur_no.lower():
+        raise WorkerError("employee_no_locked", messages.WORKER_EMPLOYEE_NO_LOCKED)
 
 
 def _ensure_default_company(conn: sqlite3.Connection) -> int:
@@ -513,8 +516,7 @@ class SqliteWorkerStore:
 
     def update_profile(self, worker_id: int, nickname: object = None, gender: object = None) -> Worker:
         """Ubah nama panggilan / jenis kelamin (T34d); None = tidak diubah. Suara nama dibuat ulang pemanggil."""
-        worker, _ = self.update_worker(worker_id, nickname=nickname, gender=gender)
-        return worker
+        return self.update_worker(worker_id, nickname=nickname, gender=gender)
 
     def update_worker(
         self,
@@ -524,21 +526,20 @@ class SqliteWorkerStore:
         department_id: object = ...,
         company_id: object = None,
         employee_no: object = None,
-    ) -> tuple[Worker, Optional[str]]:
-        """Ubah data pekerja (T79). Mengembalikan (worker, old_employee_no bila nomor diubah)."""
+    ) -> Worker:
+        """Ubah data pekerja (T79, T84). Nomor pegawai terkunci setelah dibuat (T84)."""
         def update(conn: sqlite3.Connection):
             current = self._get(conn, worker_id)
+            _check_employee_no_lock(current.employee_no, employee_no)
             new_nick = current.nickname if nickname is None else normalize_nickname(nickname)
             new_gen = current.gender if gender is None else normalize_gender(gender)
             new_dep = _resolve_dep_update(conn, current.department_id, department_id)
             new_comp = _resolve_comp_update(conn, current.company_id, company_id)
-            new_no, old_no = _resolve_emp_no_update(conn, worker_id, current.employee_no, employee_no)
             conn.execute(
-                "UPDATE workers SET nickname = ?, gender = ?, department_id = ?, company_id = ?, employee_no = ? "
-                "WHERE id = ?",
-                (new_nick, new_gen, new_dep, new_comp, new_no, worker_id),
+                "UPDATE workers SET nickname = ?, gender = ?, department_id = ?, company_id = ? WHERE id = ?",
+                (new_nick, new_gen, new_dep, new_comp, worker_id),
             )
-            return self._get(conn, worker_id), old_no
+            return self._get(conn, worker_id)
 
         return self._run(update, mutates=True)
 

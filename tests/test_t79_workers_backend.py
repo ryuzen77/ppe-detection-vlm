@@ -14,7 +14,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, messages, security_log, worker_store
+from backend import face_crypto, messages, worker_store
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
@@ -211,7 +211,7 @@ def test_patch_gender_saja_meminta_suara_ulang(client, store, monkeypatch):
 
 # --- 3. Nomor Pegawai Otomatis & Relasi Pekerja ---
 
-def test_nomor_pegawai_otomatis_dan_pembaharuan(client, store, security_events):
+def test_nomor_pegawai_otomatis_dan_pembaharuan(client, store):
     # Preview next-employee-no saat awal
     r_next = client.get("/api/workers/next-employee-no").json()
     assert r_next["employee_no"] == "P-0001"
@@ -246,23 +246,25 @@ def test_nomor_pegawai_otomatis_dan_pembaharuan(client, store, security_events):
     )
     assert r_w2.json()["employee_no"] == "P-0002"
 
-    # PATCH employee_no w1 ke nomor lain
-    r_patch_no = client.patch(f"/api/workers/{w1['id']}", json={"employee_no": "P-0088"})
-    assert r_patch_no.status_code == 200
-    assert r_patch_no.json()["employee_no"] == "P-0088"
+    # PATCH employee_no w1 ke nomor berbeda (T84: terkunci) -> 409 employee_no_locked
+    r_patch_no = client.patch(f"/api/workers/{w1['id']}", json={"employee_no": "P-0088", "nickname": "Ahmad Ganti"})
+    assert r_patch_no.status_code == 409
+    assert r_patch_no.json()["detail"]["code"] == "employee_no_locked"
+    # Pastikan data tidak berubah (nickname tetap Ahmad, employee_no tetap P-0001)
+    w1_check = client.get("/api/workers").json()["workers"]
+    assert next(w for w in w1_check if w["id"] == w1["id"])["nickname"] == "Ahmad"
+    assert next(w for w in w1_check if w["id"] == w1["id"])["employee_no"] == "P-0001"
 
-    # Periksa security log mencatat old_employee_no dan new_employee_no
-    update_event = next(
-        e for e in reversed(security_events)
-        if e["event"] == security_log.WORKER_UPDATED and "old_employee_no" in e
-    )
-    assert update_event["old_employee_no"] == "P-0001"
-    assert update_event["new_employee_no"] == "P-0088"
+    # PATCH employee_no dengan nomor yang sama (case insensitive) -> 200 diabaikan
+    r_same_no = client.patch(f"/api/workers/{w1['id']}", json={"employee_no": "p-0001", "nickname": "Ahmad Baru"})
+    assert r_same_no.status_code == 200
+    assert r_same_no.json()["employee_no"] == "P-0001"
+    assert r_same_no.json()["nickname"] == "Ahmad Baru"
 
-    # Coba ubah employee_no w2 ke P-0088 (bentrok) -> 409 employee_no_taken
-    r_clash = client.patch(f"/api/workers/{r_w2.json()['id']}", json={"employee_no": "P-0088"})
-    assert r_clash.status_code == 409
-    assert r_clash.json()["detail"]["code"] == "employee_no_taken"
+    # PATCH tanpa employee_no -> 200 tetap jalan
+    r_no_emp = client.patch(f"/api/workers/{w1['id']}", json={"nickname": "Ahmad Final"})
+    assert r_no_emp.status_code == 200
+    assert r_no_emp.json()["nickname"] == "Ahmad Final"
 
     # Coba daftarkan pekerja dengan id departemen fiktif -> 400 invalid_department
     r_bad_dep = client.post(

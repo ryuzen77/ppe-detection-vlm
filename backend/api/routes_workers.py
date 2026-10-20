@@ -40,6 +40,7 @@ _STATUS = {
     "face_not_ready": 503,
     "invalid_department": 400,
     "invalid_company": 400,
+    "employee_no_locked": 409,
 }
 
 
@@ -330,11 +331,8 @@ def _log_worker_update(
     user: auth.SessionUser,
     worker_id: int,
     fields: set[str],
-    old_no: Optional[str],
-    new_no: str,
 ) -> None:
-    extra = {"old_employee_no": old_no, "new_employee_no": new_no} if old_no is not None else {}
-    _record(security_log.WORKER_UPDATED, request, user, worker_id, fields=list(fields), **extra)
+    _record(security_log.WORKER_UPDATED, request, user, worker_id, fields=list(fields))
 
 
 @router.patch("/api/workers/{worker_id}")
@@ -344,10 +342,10 @@ def update_worker(
     request: Request,
     user: auth.SessionUser = Depends(require_admin),
 ):
-    """Ubah profil, divisi, kontraktor, atau nomor pegawai (T34d, T79)."""
+    """Ubah profil, divisi, kontraktor (T34d, T79, T84)."""
     fs = body.model_fields_set
     dep_arg = body.department_id if "department_id" in fs else ...
-    worker, old_emp_no = _call(
+    worker = _call(
         lambda: worker_store.store.update_worker(
             worker_id,
             nickname=body.nickname if "nickname" in fs else None,
@@ -358,7 +356,7 @@ def update_worker(
         )
     )
     worker_voice.request(worker)
-    _log_worker_update(request, user, worker_id, fs, old_emp_no, worker.employee_no)
+    _log_worker_update(request, user, worker_id, fs)
     return worker_json(worker)
 
 

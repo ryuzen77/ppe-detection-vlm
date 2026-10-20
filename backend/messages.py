@@ -398,4 +398,5 @@ ORG_BUILTIN = "Perusahaan bawaan '{name}' tidak dapat diubah atau dihapus (atur 
 WORKER_INVALID_DEPARTMENT = "Divisi tidak dikenal."
 WORKER_INVALID_COMPANY = "Perusahaan tidak dikenal."
 LOG_WORKER_EMPLOYEE_NO_CHANGED = "Nomor pegawai pekerja #{worker_id} diubah dari '{old}' ke '{new}' oleh {actor}."
+WORKER_EMPLOYEE_NO_LOCKED = "Nomor pegawai tidak bisa diubah setelah tersimpan."
 
