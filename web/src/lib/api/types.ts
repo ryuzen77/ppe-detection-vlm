@@ -621,7 +621,7 @@ export interface NewWorkerRequest {
 export interface UpdateWorkerRequest {
   nickname?: string
   gender?: 'male' | 'female' | string
-  employee_no?: string
+  // employee_no sengaja tidak ada: terkunci setelah dibuat (T84, server membalas 409 employee_no_locked)
   department_id?: number | null
   company_id?: number
 }

@@ -15,7 +15,6 @@
 
   let { worker, departments, companies, onClose, onSaved }: Props = $props()
 
-  let employeeNo = $state('')
   let departmentId = $state<number | null>(null)
   let companyId = $state<number | null>(null)
   let nickname = $state('')
@@ -25,7 +24,6 @@
 
   $effect(() => {
     if (worker) {
-      employeeNo = worker.employee_no
       departmentId = worker.department?.id ?? null
       companyId = worker.company?.id ?? null
       nickname = worker.nickname || ''
@@ -34,11 +32,9 @@
     }
   })
 
-  /** Hanya kolom yang ada di server ini (T79) & nomor yang benar-benar diganti yang dikirim. */
-  function changes(w: Worker): UpdateWorkerRequest {
+  /** Hanya kolom yang ada di server ini (T79); nomor pegawai tidak dikirim karena terkunci (T84). */
+  function changes(): UpdateWorkerRequest {
     const body: UpdateWorkerRequest = { nickname: nickname.trim(), gender }
-    const number = employeeNo.trim()
-    if (number && number !== w.employee_no) body.employee_no = number
     if (departments.length) body.department_id = departmentId
     if (companyId !== null) body.company_id = companyId
     return body
@@ -55,7 +51,7 @@
 
     updating = true
     try {
-      await api.updateWorker(worker.id, changes(worker))
+      await api.updateWorker(worker.id, changes())
       onSaved()
     } catch (e) {
       updateError = extractApiError(e, WORKERS.errUpdate)
@@ -76,7 +72,8 @@
       <form class="form-layout" onsubmit={handleUpdateWorker}>
         <div class="form-group">
           <label for="edit-emp-no">{WORKERS.fieldEmployeeNo}</label>
-          <input id="edit-emp-no" type="text" bind:value={employeeNo} disabled={updating} required />
+          <input id="edit-emp-no" type="text" class="locked mono" value={worker.employee_no} readonly aria-describedby="edit-emp-no-hint" />
+          <span id="edit-emp-no-hint" class="form-hint">{WORKERS.employeeNoLockedHint}</span>
         </div>
 
         <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={updating} idPrefix="edit" />
@@ -184,6 +181,12 @@
   select:focus {
     outline: none;
     border-color: var(--primary);
+  }
+
+  input.locked {
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: default;
   }
 
   .form-hint {
