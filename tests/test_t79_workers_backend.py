@@ -81,12 +81,13 @@ def test_endpoint_baru_403_untuk_non_admin(client, store, rep_mgr):
 # --- 2. Organisasi CRUD & Proteksi ---
 
 def test_organisasi_crud_dan_proteksi(client, store):
-    # GET awal: departments kosong, companies berisi bawaan "Internal"
+    # GET awal: departments kosong, companies berisi bawaan "Internal" dengan builtin=True
     deps = client.get("/api/org/departments").json()
     assert deps == []
     comps = client.get("/api/org/companies").json()
     assert len(comps) == 1
     assert comps[0]["name"] == cfg.WORKER_DEFAULT_COMPANY
+    assert comps[0]["builtin"] is True
 
     # POST departemen baru
     r_dep = client.post("/api/org/departments", json={"name": "Logistik"})
@@ -136,9 +137,14 @@ def test_organisasi_crud_dan_proteksi(client, store):
     assert r_worker.status_code == 201
     worker_id = r_worker.json()["id"]
 
-    # Jumlah worker terhitung di GET /api/org
+    # Jumlah worker dan builtin terhitung di GET /api/org
     deps = client.get("/api/org/departments").json()
     assert deps[0]["workers"] == 1
+    assert deps[0]["builtin"] is False
+
+    comps_after = client.get("/api/org/companies").json()
+    maju_jaya = next(c for c in comps_after if c["id"] == comp_id)
+    assert maju_jaya["builtin"] is False
 
     # DELETE divisi yang sedang dipakai pekerja -> 409 in_use
     r_del_dep = client.delete(f"/api/org/departments/{dep_id}")

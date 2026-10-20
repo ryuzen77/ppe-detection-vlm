@@ -662,7 +662,16 @@ class SqliteWorkerStore:
                 f"GROUP BY o.id "
                 f"ORDER BY o.name COLLATE NOCASE ASC"
             )
-            return [{"id": row[0], "name": row[1], "workers": row[2]} for row in conn.execute(query).fetchall()]
+            rows = conn.execute(query).fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "name": r[1],
+                    "workers": r[2],
+                    "builtin": k == "companies" and r[1].lower() == cfg.WORKER_DEFAULT_COMPANY.lower(),
+                }
+                for r in rows
+            ]
 
         return self._run(fetch)
 
