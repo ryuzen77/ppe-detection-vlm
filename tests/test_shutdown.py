@@ -7,6 +7,7 @@ sinyal berhenti: CTRL_BREAK_EVENT di Windows (jalur yang sama dengan Ctrl+C),
 SIGTERM di Linux/macOS (yang dikirim systemd dan Docker saat menghentikan layanan).
 """
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -18,6 +19,8 @@ from pathlib import Path
 from typing import IO, Any, cast
 
 import pytest
+
+from backend.config import cfg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -122,9 +125,25 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
 
     log = "".join(output)
     assert code == 0
-    assert elapsed < 5, f"Berhenti terlalu lama: {elapsed:.1f} detik"
+    # Endpoint kita wajib berhenti sendiri (penanda SHUTTING_DOWN): tidak ada koneksi/tugas yang ditunggu
+    assert "Waiting for connections to close" not in log, "stream/WebSocket masih terbuka saat shutdown"
+    assert not re.search(r"Cancel [1-9]\d* running task", log), "tugas aplikasi dibatalkan paksa"
+    assert elapsed < _stop_limit(log), f"Berhenti terlalu lama: {elapsed:.1f} detik"
     assert "Traceback" not in log and "CancelledError" not in log
     assert "Shutdown selesai" in log
+
+
+def _stop_limit(log: str) -> float:
+    """Batas waktu berhenti yang diterima.
+
+    T85: di Windows, sesekali (±1 dari 6, diukur 20-10) `Server.wait_closed()` asyncio tertahan
+    walau koneksi & tugas aplikasi sudah nol (bug proactor Python 3.12, lihat tes berikutnya) —
+    terlihat dari "Cancel 0 running task(s)". Batas `SHUTDOWN_TIMEOUT_SECONDS` yang menghentikannya,
+    jadi jalur itu boleh sampai batas tersebut + kelonggaran; di luar itu tetap < 5 dtk.
+    """
+    if "Cancel 0 running task(s), timeout graceful shutdown exceeded" in log:
+        return cfg.SHUTDOWN_TIMEOUT_SECONDS + 3
+    return 5
 
 
 # Python 3.12 di Windows: bila klien me-reset koneksi, asyncio (proactor) bisa
