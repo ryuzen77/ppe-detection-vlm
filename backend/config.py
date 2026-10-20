@@ -381,6 +381,14 @@ class Config:
     SUPERVISOR_STABLE_SECONDS: float = 60.0   # hidup selama ini = bukan crash beruntun
     SUPERVISOR_LOG_FILE: str = "supervisor.log"
     VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
+    # T86: panel perbesaran kepala & tangan di sisi kanan gambar VLM, dipotong dari crop resolusi
+    # asli. Uji nyata 20-10: rokok di mulut hanya ±3-4 px pada tubuh 640 px -> lolos.
+    VLM_ZOOM_ENABLED: bool = _env("VLM_ZOOM_ENABLED", "true").lower() == "true"
+    VLM_ZOOM_PANEL_WIDTH: int = 320          # Lebar kolom panel (kepala PxP, dua tangan P/2 x P/2)
+    VLM_ZOOM_HEAD_RATIO: float = 0.16        # Sisi kotak kepala relatif tinggi crop tubuh
+    VLM_ZOOM_HAND_RATIO: float = 0.14        # Sisi kotak tangan relatif tinggi crop tubuh
+    VLM_ZOOM_HAND_REACH: float = 0.35        # Geser pusat dari pergelangan searah lengan bawah (ke jari)
+    VLM_ZOOM_FILL_BGR: tuple = (96, 96, 96)  # Panel tanpa titik pose yakin: abu-abu polos (tidak menebak)
     VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
     # Jeda minimum antar panggilan ke VLM cloud untuk menjaga kuota (free tier
     # Gemini 15 RPM). Model lokal tidak berkuota, jadi tanpa jeda.

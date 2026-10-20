@@ -13,6 +13,7 @@ from .config import cfg
 from . import zone
 from . import messages
 from . import pose_keypoints as kp
+from . import vlm_image
 
 logger = logging.getLogger(__name__)
 
@@ -229,10 +230,7 @@ def _full_body_status(box, kpts, inside: bool, h: int, margins: FrameMargins) ->
 
 def _crop_for_vlm(frame: np.ndarray, box) -> np.ndarray:
     """Potongan orang untuk VLM, dengan tepi tambahan untuk konteks helm & sepatu."""
-    h, w = frame.shape[:2]
-    x1, y1, x2, y2 = box
-    margin_y = int((y2 - y1) * cfg.CROP_MARGIN_Y_RATIO)
-    margin_x = int((x2 - x1) * cfg.CROP_MARGIN_X_RATIO)
-    return frame[max(0, y1 - margin_y):min(h, y2 + margin_y), max(0, x1 - margin_x):min(w, x2 + margin_x)].copy()
+    x0, y0, x1, y1 = vlm_image.crop_window(frame.shape[0], frame.shape[1], box)
+    return frame[y0:y1, x0:x1].copy()
 
 detector = PersonDetector()
