@@ -90,7 +90,7 @@ def test_persetujuan_dicatat_per_pekerja(store, monkeypatch):
 @pytest.mark.parametrize(
     "number, name, code",
     [
-        ("", "Budi", "invalid_employee_no"),
+        ("P#001", "Budi", "invalid_employee_no"),
         ("P 001", "Budi", "invalid_employee_no"),
         ("P" * 33, "Budi", "invalid_employee_no"),
         ("P-001", "   ", "invalid_name"),
@@ -102,6 +102,11 @@ def test_data_pekerja_divalidasi(store, number, name, code):
     with pytest.raises(worker_store.WorkerError) as e:
         store.create(number, name, consent=True, actor="admin-uji", nickname="Budi", gender="male")
     assert e.value.code == code
+
+
+def test_nomor_pegawai_otomatis_saat_kosong(store):
+    w = store.create("", "Budi", consent=True, actor="admin-uji", nickname="Budi", gender="male")
+    assert w.employee_no == "P-0001"
 
 
 def test_nomor_pegawai_unik_tanpa_peduli_huruf_besar(store):

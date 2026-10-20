@@ -511,6 +511,10 @@ class Config:
     # Suara nama saat lolos (T34d): sapaan dari jenis kelamin (messages.SALUTATIONS) + nama panggilan
     WORKER_GENDERS: tuple = ("male", "female")
     WORKER_NICKNAME_MAX_LENGTH: int = 30
+    # Organisasi & penomoran otomatis pekerja (T79)
+    ORG_NAME_MAX_LENGTH: int = int(_env("ORG_NAME_MAX_LENGTH", "100"))
+    WORKER_DEFAULT_COMPANY: str = _env("WORKER_DEFAULT_COMPANY", "Internal")
+    WORKER_EMPLOYEE_NO_FORMAT: str = _env("WORKER_EMPLOYEE_NO_FORMAT", "P-{:04d}")
     # MP3 nama per pekerja = data pribadi, jadi di DATA_DIR (bukan aset rilis di backend/audio)
     # dan ikut terhapus bersama data wajah
     VOICE_DIR: Path = DATA_DIR / "voices"

@@ -40,7 +40,9 @@ SNAPSHOTS_DIR = cfg.SNAPSHOTS_DIR
 #   2 — identitas pekerja dari pengenalan wajah (T34c1); kolom boleh kosong (audit lama &
 #       gerbang tanpa FR). Nama & nomor pegawai disalin saat inspeksi: audit adalah catatan
 #       siapa yang lewat SAAT ITU, dan tetap terbaca setelah data wajah pekerja dihapus retensi.
-SCHEMA_VERSION = 2
+#   3 — snapshot divisi (department) & kontraktor (company) (T79); riwayat audit tetap benar
+#       walau pekerja berpindah divisi kelak. Baris audit lama tetap NULL.
+SCHEMA_VERSION = 3
 
 _V2_COLUMNS = (
     ("worker_id", "INTEGER"),
@@ -48,6 +50,11 @@ _V2_COLUMNS = (
     ("worker_name", "TEXT"),
     ("fr_status", "TEXT"),
     ("fr_score", "REAL"),
+)
+
+_V3_COLUMNS = (
+    ("department", "TEXT"),
+    ("company", "TEXT"),
 )
 
 _CREATE_TABLE_V1 = """
@@ -72,6 +79,7 @@ _INSPECTION_COLUMNS = (
     "track_id", "timestamp", "date_str", "time_str", "is_complete", "items_json",
     "missing_items", "notes", "inference_source", "inference_time_ms", "snapshot_filename",
     *(name for name, _ in _V2_COLUMNS),
+    *(name for name, _ in _V3_COLUMNS),
 )
 _INSERT_INSPECTION = (
     f"INSERT INTO worker_inspections ({', '.join(_INSPECTION_COLUMNS)}) "
@@ -79,11 +87,18 @@ _INSERT_INSPECTION = (
 )
 
 def _identity_values(identity: Optional[dict]) -> tuple:
-    """Nilai kolom v2 (urutan `_V2_COLUMNS`) dari hasil pengenalan wajah; None = tanpa FR."""
+    """Nilai kolom v2 & v3 dari hasil pengenalan wajah; None = tanpa FR."""
     who = identity or {}
-    keys = {"worker_id": "worker_id", "employee_no": "employee_no", "worker_name": "name",
-            "fr_status": "status", "fr_score": "score"}
-    return tuple(who.get(keys[column]) for column, _ in _V2_COLUMNS)
+    keys = {
+        "worker_id": "worker_id",
+        "employee_no": "employee_no",
+        "worker_name": "name",
+        "fr_status": "status",
+        "fr_score": "score",
+        "department": "department",
+        "company": "company",
+    }
+    return tuple(who.get(keys[column]) for column, _ in (*_V2_COLUMNS, *_V3_COLUMNS))
 
 
 _CREATE_INDEXES = (
@@ -105,6 +120,39 @@ def _range_clause(date_from: Optional[str], date_to: Optional[str]) -> tuple[lis
     if date_to:
         conditions.append("date_str <= ?")
         params.append(date_to)
+    return conditions, params
+
+
+def _filter_clause(
+    status_filter: str = "all",
+    date_filter: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    worker_id: Optional[int] = None,
+    department: Optional[str] = None,
+    company: Optional[str] = None,
+) -> tuple[list[str], list]:
+    """Syarat SQL gabungan untuk filter audit (T79)."""
+    conditions, params = [], []
+    if status_filter == "complete":
+        conditions.append("is_complete = 1")
+    elif status_filter == "incomplete":
+        conditions.append("is_complete = 0")
+    if date_filter:
+        conditions.append("date_str = ?")
+        params.append(date_filter)
+    range_conditions, range_params = _range_clause(date_from, date_to)
+    conditions += range_conditions
+    params += range_params
+    if worker_id is not None:
+        conditions.append("worker_id = ?")
+        params.append(worker_id)
+    if department and department.strip():
+        conditions.append("department = ?")
+        params.append(department.strip())
+    if company and company.strip():
+        conditions.append("company = ?")
+        params.append(company.strip())
     return conditions, params
 
 
@@ -273,9 +321,18 @@ class ReportManager:
         try:
             if not has_table:
                 conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections"))
-            elif version == 0:
-                self._migrate_v0_to_v1(conn)
-            self._migrate_v1_to_v2(conn, existing=has_table)
+                self._migrate_v1_to_v2(conn, existing=False)
+                self._migrate_v2_to_v3(conn, existing=False)
+            else:
+                if version == 0:
+                    self._migrate_v0_to_v1(conn)
+                    self._migrate_v1_to_v2(conn, existing=True)
+                    self._migrate_v2_to_v3(conn, existing=True)
+                elif version == 1:
+                    self._migrate_v1_to_v2(conn, existing=True)
+                    self._migrate_v2_to_v3(conn, existing=True)
+                elif version == 2:
+                    self._migrate_v2_to_v3(conn, existing=True)
             for sql in _CREATE_INDEXES:
                 conn.execute(sql)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -345,6 +402,15 @@ class ReportManager:
             conn.execute(f"ALTER TABLE worker_inspections ADD COLUMN {name} {sql_type}")
         if existing:
             logger.info("Migrasi skema v1 -> v2: kolom identitas pekerja ditambahkan.")
+
+    @staticmethod
+    def _migrate_v2_to_v3(conn: sqlite3.Connection, existing: bool):
+        """Kolom snapshot department & company (T79). Baris lama tetap, kolom barunya kosong.
+        Database baru juga melewati langkah ini (tabel v1 + kolom v2 + kolom v3), tanpa log migrasi."""
+        for name, sql_type in _V3_COLUMNS:
+            conn.execute(f"ALTER TABLE worker_inspections ADD COLUMN {name} {sql_type}")
+        if existing:
+            logger.info("Migrasi skema v2 -> v3: kolom snapshot department & company ditambahkan.")
 
     def save_inspection(
         self,
@@ -435,8 +501,18 @@ class ReportManager:
         rec["items"] = _parse_json(rec.pop("items_json"), {})
         return rec
 
-    def get_reports(self, limit: int = 50, offset: int = 0, status_filter: str = "all", date_filter: Optional[str] = None,
-                    date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
+    def get_reports(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        status_filter: str = "all",
+        date_filter: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        worker_id: Optional[int] = None,
+        department: Optional[str] = None,
+        company: Optional[str] = None,
+    ) -> dict:
         """Retrieves paginated inspection records with summary statistics."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -456,21 +532,16 @@ class ReportManager:
                            (f"{BACKUP_SOURCE_PREFIX}%",))
             backup_count = cursor.fetchone()["n"]
 
-            # Filter query
-            conditions = []
-            params = []
-            if status_filter == "complete":
-                conditions.append("is_complete = 1")
-            elif status_filter == "incomplete":
-                conditions.append("is_complete = 0")
-
-            if date_filter:
-                conditions.append("date_str = ?")
-                params.append(date_filter)
-            range_conditions, range_params = _range_clause(date_from, date_to)
-            conditions += range_conditions
-            params += range_params
-
+            # Filter query (T79)
+            conditions, params = _filter_clause(
+                status_filter=status_filter,
+                date_filter=date_filter,
+                date_from=date_from,
+                date_to=date_to,
+                worker_id=worker_id,
+                department=department,
+                company=company,
+            )
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
             cursor.execute(f"""
@@ -511,16 +582,36 @@ class ReportManager:
             return item.qualifier.fail_label.upper()
         return item.fail_label.upper()
 
-    def get_summary(self, period: str, anchor: Optional[str] = None) -> dict:
-        """Ringkasan harian/mingguan/bulanan untuk grafik Laporan (kontrak T49).
+    def get_summary(
+        self,
+        period: str,
+        anchor: Optional[str] = None,
+        worker_id: Optional[int] = None,
+        department: Optional[str] = None,
+        company: Optional[str] = None,
+    ) -> dict:
+        """Ringkasan harian/mingguan/bulanan untuk grafik Laporan (kontrak T49, filter T79).
 
         ValueError untuk periode/tanggal tidak sah (API membalas 400).
         """
         start, end = report_summary.period_range(period, report_summary.parse_date(anchor, date.today()))
+        conditions = ["date_str BETWEEN ? AND ?"]
+        params: list = [start.isoformat(), end.isoformat()]
+        if worker_id is not None:
+            conditions.append("worker_id = ?")
+            params.append(worker_id)
+        if department and department.strip():
+            conditions.append("department = ?")
+            params.append(department.strip())
+        if company and company.strip():
+            conditions.append("company = ?")
+            params.append(company.strip())
+        where = f"WHERE {' AND '.join(conditions)}"
         with self._get_connection() as conn:
             rows = conn.execute(
-                "SELECT date_str, time_str, is_complete, missing_items FROM worker_inspections "
-                "WHERE date_str BETWEEN ? AND ?", (start.isoformat(), end.isoformat())).fetchall()
+                f"SELECT date_str, time_str, is_complete, missing_items FROM worker_inspections {where}",
+                params,
+            ).fetchall()
         audit = [report_summary.AuditRow(r["date_str"], r["time_str"], bool(r["is_complete"]), r["missing_items"])
                  for r in rows]
         return report_summary.summarize(period, start, end, audit)
@@ -536,7 +627,9 @@ class ReportManager:
         results = _parse_json(row["items_json"], {})
         status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
         return ([number, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str,
-                 self._worker_csv_text(row)]
+                 self._worker_csv_text(row),
+                 row["department"] or messages.CSV_EMPTY,
+                 row["company"] or messages.CSV_EMPTY]
                 + [self._item_csv_text(item, results.get(item.key)) for item in items]
                 + ["; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
                    row["inference_source"], row["inference_time_ms"], row["notes"], row["snapshot_filename"]])
@@ -548,22 +641,36 @@ class ReportManager:
             return messages.CSV_FACE_RECOGNIZED.format(name=row["worker_name"], employee_no=row["employee_no"])
         return messages.CSV_FACE_UNKNOWN if row["fr_status"] == "unknown" else messages.CSV_EMPTY
 
-    def iter_csv_chunks(self, date_from: Optional[str] = None, date_to: Optional[str] = None):
-        """CSV audit HSE/K3 per potongan CSV_EXPORT_BATCH_ROWS baris (T43).
+    def iter_csv_chunks(
+        self,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        worker_id: Optional[int] = None,
+        department: Optional[str] = None,
+        company: Optional[str] = None,
+    ):
+        """CSV audit HSE/K3 per potongan CSV_EXPORT_BATCH_ROWS baris (T43, filter T79).
 
         Dulu seluruh berkas dibangun di RAM (terukur 16,8 MB untuk 100 rb baris);
         kini dikirim bertahap, jadi memori tetap kecil berapa pun rentangnya.
         Kolom per item APD dibangkitkan dari katalog `ppe_rules`.
         """
         items = ppe_rules.get_items()
-        header = messages.CSV_HEADER_LEADING + [messages.CSV_HEADER_WORKER_NAME]
+        header = messages.CSV_HEADER_LEADING + [
+            messages.CSV_HEADER_WORKER_NAME,
+            messages.CSV_HEADER_DEPARTMENT,
+            messages.CSV_HEADER_COMPANY,
+        ]
         yield self._csv_text([header + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
-        conditions, params = _range_clause(date_from, date_to)
+        conditions, params = _filter_clause(
+            date_from=date_from,
+            date_to=date_to,
+            worker_id=worker_id,
+            department=department,
+            company=company,
+        )
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         number = 0
-        # T68: StreamingResponse mengambil tiap potongan lewat pool thread, jadi potongan berikutnya
-        # bisa datang dari thread lain. Koneksi ini hanya dipakai satu pengambil secara berurutan
-        # (tidak pernah bersamaan), maka aman lintas thread; ditutup juga bila unduhan dibatalkan.
         if not self._opened:
             self.open()
         conn = self._connect(check_same_thread=False)
@@ -576,9 +683,75 @@ class ReportManager:
         finally:
             conn.close()
 
-    def export_csv_text(self, date_from: Optional[str] = None, date_to: Optional[str] = None) -> str:
+    def export_csv_text(
+        self,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        worker_id: Optional[int] = None,
+        department: Optional[str] = None,
+        company: Optional[str] = None,
+    ) -> str:
         """Seluruh CSV sebagai satu teks (alat & tes); API memakai iter_csv_chunks."""
-        return "".join(self.iter_csv_chunks(date_from, date_to))
+        return "".join(self.iter_csv_chunks(
+            date_from=date_from,
+            date_to=date_to,
+            worker_id=worker_id,
+            department=department,
+            company=company,
+        ))
+
+    def get_last_seen_batch(self, worker_ids: list[int]) -> dict[int, dict]:
+        """Pemeriksaan terakhir per worker_id (T79). Mengembalikan {worker_id: {"at": timestamp, "is_complete": bool}}."""
+        if not worker_ids:
+            return {}
+        result = {}
+        with self._get_connection() as conn:
+            for wid in worker_ids:
+                row = conn.execute(
+                    "SELECT timestamp, is_complete FROM worker_inspections "
+                    "WHERE worker_id = ? ORDER BY id DESC LIMIT 1",
+                    (wid,),
+                ).fetchone()
+                if row:
+                    result[wid] = {"at": row["timestamp"], "is_complete": bool(row["is_complete"])}
+        return result
+
+    def get_last_seen(self, worker_id: int) -> Optional[dict]:
+        res = self.get_last_seen_batch([worker_id])
+        return res.get(worker_id)
+
+    def get_worker_inspections(self, worker_id: int, limit: int = 50, before: Optional[int] = None) -> dict:
+        """Riwayat inspeksi pekerja berhalaman urut terbaru (T79). Memakai idx_worker_id."""
+        limit = max(1, min(limit, 100))
+        conditions = ["worker_id = ?"]
+        params: list = [worker_id]
+        if before is not None:
+            conditions.append("id < ?")
+            params.append(before)
+        where = f"WHERE {' AND '.join(conditions)}"
+        query = (
+            f"SELECT id, timestamp, is_complete, missing_items, fr_score, snapshot_filename "
+            f"FROM worker_inspections {where} ORDER BY id DESC LIMIT ?"
+        )
+        params.append(limit + 1)
+        with self._get_connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        has_next = len(rows) > limit
+        selected_rows = rows[:limit] if has_next else rows
+        items = [
+            {
+                "id": r["id"],
+                "timestamp": r["timestamp"],
+                "is_complete": bool(r["is_complete"]),
+                "missing_items": _parse_json(r["missing_items"], []),
+                "fr_score": r["fr_score"],
+                "snapshot_filename": r["snapshot_filename"],
+            }
+            for r in selected_rows
+        ]
+        next_before = selected_rows[-1]["id"] if has_next and selected_rows else None
+        return {"items": items, "next_before": next_before}
 
     def get_snapshot_path(self, filename: str) -> Optional[Path]:
         """Resolves snapshot image path safely to avoid path traversal."""

@@ -30,6 +30,8 @@ class Identity:
     name: Optional[str] = None
     employee_no: Optional[str] = None
     score: Optional[float] = None
+    department: Optional[str] = None
+    company: Optional[str] = None
 
     def payload(self) -> dict:
         """Bentuk telemetri (kontrak T34c1); nama hanya bila dikenali."""
@@ -106,7 +108,16 @@ class FaceIdentifier:
         if loaded.unreadable:
             logger.warning(messages.FACE_TEMPLATE_UNREADABLE.format(count=loaded.unreadable))
             security_log.record(security_log.FACE_KEY_ERROR, unreadable=loaded.unreadable, ok=False)
-        workers = {w.id: (w.name, w.employee_no) for w in store.all() if w.active}
+        workers = {
+            w.id: (
+                w.name,
+                w.employee_no,
+                w.department.name if w.department else None,
+                w.company.name if w.company else None,
+            )
+            for w in store.all()
+            if w.active
+        }
         logger.info(messages.LOG_FACE_GALLERY_LOADED.format(templates=len(loaded.worker_ids), workers=len(workers)))
         return GalleryView(loaded.worker_ids, loaded.vectors, workers)
 
@@ -129,14 +140,17 @@ class FaceIdentifier:
                 session=session_id, faces=faces, frames=len(crops), best="-" if best is None else f"{best:.2f}"))
             return Identity(UNKNOWN)
         worker_id, score = winner
-        name, employee_no = gallery.workers[worker_id]
+        w_info = gallery.workers[worker_id]
+        name, employee_no = w_info[0], w_info[1]
+        dep_name = w_info[2] if len(w_info) > 2 else None
+        comp_name = w_info[3] if len(w_info) > 3 else None
         votes = sum(1 for m in matches if m is not None and m[0] == worker_id and m[1] >= cfg.FACE_MATCH_THRESHOLD)
         logger.info(
             messages.LOG_FACE_RECOGNIZED.format(
                 session=session_id, employee_no=employee_no, score=score, votes=votes, frames=len(crops)
             )
         )
-        return Identity(RECOGNIZED, worker_id, name, employee_no, score)
+        return Identity(RECOGNIZED, worker_id, name, employee_no, score, department=dep_name, company=comp_name)
 
     def similar_worker(self, vector: np.ndarray, worker_id: int) -> Optional[tuple[str, float]]:
         """Pekerja LAIN (aktif) yang wajahnya melewati ambang pengenalan: (nomor pegawai, skor).

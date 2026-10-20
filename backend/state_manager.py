@@ -518,7 +518,8 @@ class StateManager:
                     identity: Optional[face_identity.Identity] = None) -> dict:
         extra = {} if identity is None else {"identity": {
             "worker_id": identity.worker_id, "employee_no": identity.employee_no, "name": identity.name,
-            "status": identity.status, "score": identity.score}}
+            "status": identity.status, "score": identity.score,
+            "department": identity.department, "company": identity.company}}
         return report_mgr.save_inspection(
             track_id=track_id,
             is_complete=result.is_complete,

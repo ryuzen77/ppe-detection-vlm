@@ -334,6 +334,8 @@ LOG_FACE_FAILED = "Pengenalan wajah gagal, sesi dilanjutkan tanpa nama: {error}"
 LOG_FACE_TIMEOUT = "Sesi #{session}: pengenalan wajah melewati {seconds:g} dtk; audit dicatat tanpa nama."
 LOG_FACE_GALLERY_LOADED = "Galeri wajah dimuat: {templates} templat dari {workers} pekerja aktif."
 CSV_HEADER_WORKER_NAME = "Nama Pekerja (pengenalan wajah)"
+CSV_HEADER_DEPARTMENT = "Divisi"
+CSV_HEADER_COMPANY = "Perusahaan"
 CSV_FACE_RECOGNIZED = "{name} ({employee_no})"
 CSV_FACE_UNKNOWN = "Tidak dikenali"
 # --- VLM cadangan dimatikan (T70) ---
@@ -385,3 +387,15 @@ WORKER_FACE_MATCHES_OTHER = ("Wajah ini mirip pekerja {employee_no} (skor {score
                              "data pekerja; bila memang orang yang sama, tambahkan foto di data pekerja itu.")
 WORKER_ENROLLMENT_INACTIVE = "Mode pendaftaran wajah tidak aktif. Buka lagi jendela Ambil Foto."
 WORKER_INVALID_PROMPT = "Petunjuk suara tidak dikenal: {prompt}."
+
+# --- Organisasi & penomoran pekerja (T79) ---
+ORG_INVALID_KIND = "Jenis organisasi '{kind}' tidak dikenal (pilihan: departments, companies)."
+ORG_INVALID_NAME = "Nama wajib diisi (maksimal {max} karakter)."
+ORG_NAME_TAKEN = "Nama '{name}' sudah digunakan."
+ORG_NOT_FOUND = "Data organisasi tidak ditemukan."
+ORG_IN_USE = "Tidak bisa dihapus: masih digunakan oleh {count} pekerja."
+ORG_BUILTIN = "Perusahaan bawaan '{name}' tidak dapat dihapus."
+WORKER_INVALID_DEPARTMENT = "Divisi tidak dikenal."
+WORKER_INVALID_COMPANY = "Perusahaan tidak dikenal."
+LOG_WORKER_EMPLOYEE_NO_CHANGED = "Nomor pegawai pekerja #{worker_id} diubah dari '{old}' ke '{new}' oleh {actor}."
+

@@ -172,7 +172,7 @@ def test_migrasi_v1_ke_v2_mempertahankan_baris_dan_mencadangkan(tmp_path, caplog
     db = tmp_path / "audit.db"
     _v1_db(db)
     mgr = ReportManager(db_path=db, snapshots_dir=tmp_path / "snap").open()
-    assert sqlite3.connect(db).execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 2
+    assert sqlite3.connect(db).execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 3
     assert (tmp_path / "audit.v1.bak").exists()
     old = mgr.get_reports(limit=5)["page_records"][0]
     assert old["track_id"] == 3 and old["worker_name"] is None and old["fr_status"] is None

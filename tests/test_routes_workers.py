@@ -30,6 +30,9 @@ WORKER_KEYS = {
     "delete_after",
     "face_deleted_at",
     "templates",
+    "department",  # T79
+    "company",
+    "last_seen",
 }
 
 
@@ -83,7 +86,7 @@ def test_buat_pekerja_sesuai_kontrak_tanpa_data_wajah(client, store, security_ev
     [
         ({"employee_no": "P-1", "name": "Budi", "consent": False}, 400, "consent_required"),
         ({"employee_no": "P-1", "name": "Budi"}, 400, "consent_required"),
-        ({"employee_no": "", "name": "Budi", "consent": True}, 400, "invalid_employee_no"),
+        ({"employee_no": "P#1", "name": "Budi", "consent": True, "nickname": "Budi", "gender": "male"}, 400, "invalid_employee_no"),
         ({"employee_no": "P-1", "name": "", "consent": True}, 400, "invalid_name"),
     ],
 )
