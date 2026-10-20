@@ -522,6 +522,32 @@ export interface EnrollmentHoldResponse {
   hold_s: number
 }
 
+/** Pendaftaran terpandu (T76): GET /api/workers/enrollment/plan — urutan dari config backend */
+export interface EnrollmentPlan {
+  shots_per_condition: number
+  /** Arah kepala per foto = kunci suara petunjuk */
+  poses: string[]
+  condition_sets: { no_glasses: TemplateCondition[]; glasses: TemplateCondition[] }
+  /** Minimal piksel (mutu embedding); maksimal sebagai bagian dari tinggi frame kamera */
+  interocular: { min_px: number; max_ratio: number }
+  /** Tinggi frame kamera minimal untuk pendaftaran (di bawahnya fit = 'low_resolution') */
+  min_frame_height: number
+  prompts: {
+    condition_switch: string
+    fit: Partial<Record<EnrollmentFit, string>>
+    done: string
+  }
+}
+
+export type EnrollmentFit = 'ok' | 'no_face' | 'too_far' | 'too_close' | 'multiple_faces' | 'low_resolution'
+
+/** GET /api/workers/enrollment/preview — hanya deteksi wajah, tidak disimpan */
+export interface EnrollmentPreview {
+  fit: EnrollmentFit
+  faces: number
+  interocular_px: number | null
+}
+
 /** Telemetri `enrollment`: gerbang jeda selama admin memotret wajah */
 export interface EnrollmentStatus {
   active: boolean

@@ -1,6 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { keepEnrollmentHold, type EnrollmentClient } from './enrollment'
-import { ENROLLMENT_HOLD } from './settings'
+import {
+  autoShotCooldown,
+  autoShotDue,
+  buildShots,
+  fitPrompt,
+  keepEnrollmentHold,
+  mirrorPreview,
+  pauseAutoShot,
+  pollEnrollmentPreview,
+  shotPrompts,
+  trackAutoShot,
+  type EnrollmentClient,
+} from './enrollment'
+import type { CameraStatus, EnrollmentPlan, EnrollmentPreview } from './api/types'
+import { ENROLLMENT_AUTO, ENROLLMENT_HOLD } from './settings'
 
 const HOLD_S = 45
 
@@ -48,5 +61,121 @@ describe('keepEnrollmentHold', () => {
     keepEnrollmentHold(client, onError)()
     await vi.advanceTimersByTimeAsync(0)
     expect(onError).toHaveBeenCalledOnce()
+  })
+})
+
+// Bentuk sama dengan GET /api/workers/enrollment/plan (kontrak T76)
+const PLAN: EnrollmentPlan = {
+  shots_per_condition: 5,
+  poses: ['daftar_lurus', 'daftar_kiri', 'daftar_kanan', 'daftar_menunduk', 'daftar_lurus'],
+  condition_sets: { no_glasses: ['bare', 'helmet'], glasses: ['glasses', 'helmet_glasses'] },
+  interocular: { min_px: 24, max_ratio: 0.055 },
+  min_frame_height: 1080,
+  prompts: {
+    condition_switch: 'daftar_pakai_helm',
+    fit: { too_far: 'daftar_mendekat', too_close: 'daftar_menjauh' },
+    done: 'daftar_selesai',
+  },
+}
+
+describe('buildShots', () => {
+  it('10 foto: 5 tanpa helm lalu 5 dengan helm, arah kepala berulang', () => {
+    const shots = buildShots(PLAN, false)
+    expect(shots).toHaveLength(10)
+    expect(shots.map((s) => s.condition)).toEqual([...Array(5).fill('bare'), ...Array(5).fill('helmet')])
+    expect(shots.map((s) => s.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(shots[5]).toMatchObject({ pose: 'daftar_lurus', switchesCondition: true })
+    expect(shots.filter((s) => s.switchesCondition)).toHaveLength(1)
+  })
+
+  it('pekerja berkacamata memakai kondisi kacamata', () => {
+    expect(new Set(buildShots(PLAN, true).map((s) => s.condition))).toEqual(new Set(['glasses', 'helmet_glasses']))
+  })
+})
+
+describe('petunjuk suara', () => {
+  it('pakai helm diucapkan sebelum arah kepala foto pertama kondisi kedua', () => {
+    const shots = buildShots(PLAN, false)
+    expect(shotPrompts(PLAN, shots[1])).toEqual(['daftar_kiri'])
+    expect(shotPrompts(PLAN, shots[5])).toEqual(['daftar_pakai_helm', 'daftar_lurus'])
+  })
+
+  it('arahan jarak hanya untuk terlalu jauh / terlalu dekat', () => {
+    expect(fitPrompt(PLAN, 'too_close')).toBe('daftar_menjauh')
+    expect(fitPrompt(PLAN, 'too_far')).toBe('daftar_mendekat')
+    expect(fitPrompt(PLAN, 'ok')).toBeNull()
+    expect(fitPrompt(PLAN, null)).toBeNull()
+  })
+})
+
+describe('pollEnrollmentPreview', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('tidak bertumpuk, galat = null, berhenti saat dihentikan', async () => {
+    const ok: EnrollmentPreview = { fit: 'ok', faces: 1, interocular_px: 40 }
+    // Janji dibuat saat dipanggil (janji gagal yang dibuat lebih awal = rejection tak tertangani)
+    const replies = [() => Promise.resolve(ok), () => Promise.reject(new Error('409'))]
+    const fetchPreview = vi.fn(() => (replies.shift() ?? (() => Promise.resolve(ok)))())
+    const seen: (EnrollmentPreview | null)[] = []
+    const stop = pollEnrollmentPreview(fetchPreview, (p) => seen.push(p), 1000)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchPreview).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen).toEqual([ok, null])
+    stop()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(fetchPreview).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('mirrorPreview', () => {
+  const cam = (over: Partial<CameraStatus>) => ({ status: 'OK', is_synthetic: false, ...over }) as CameraStatus
+
+  it('hanya kamera sungguhan yang dicerminkan (tulisan layar pesan tetap terbaca)', () => {
+    expect(mirrorPreview(cam({}))).toBe(true)
+    expect(mirrorPreview(cam({ is_synthetic: true }))).toBe(false)
+    expect(mirrorPreview(cam({ status: 'IDLE' }))).toBe(false)
+    expect(mirrorPreview(null)).toBe(false)
+  })
+})
+
+describe('foto otomatis', () => {
+  const at = (px: number | null, fit: EnrollmentPreview['fit'] = 'ok'): EnrollmentPreview => ({
+    fit,
+    faces: px == null ? 0 : 1,
+    interocular_px: px,
+  })
+  const run = (previews: EnrollmentPreview[], start = pauseAutoShot(0, 0), now = 0) =>
+    previews.reduce((s, p) => trackAutoShot(s, p, now), start)
+
+  it('memotret setelah jarak pas & wajah diam beberapa pemeriksaan', () => {
+    const steady = Array(ENROLLMENT_AUTO.stablePolls).fill(at(30))
+    expect(autoShotDue(run(steady.slice(1)))).toBe(false)
+    expect(autoShotDue(run(steady))).toBe(true)
+  })
+
+  it('wajah bergerak (ukuran berubah) atau jarak tidak pas mengulang hitungan', () => {
+    const moving = Array.from({ length: 4 }, (_, i) => at(30 * (1 + 2 * ENROLLMENT_AUTO.maxSizeChange) ** i))
+    expect(autoShotDue(run(moving))).toBe(false)
+    const broken = [...Array(ENROLLMENT_AUTO.stablePolls - 1).fill(at(30)), at(70, 'too_close'), at(30)]
+    expect(autoShotDue(run(broken))).toBe(false)
+  })
+
+  it('setelah foto: menunggu pekerja mendengar arahan & menoleh', () => {
+    const steady = Array(ENROLLMENT_AUTO.stablePolls).fill(at(30))
+    const paused = pauseAutoShot(1000)
+    expect(autoShotDue(run(steady, paused, 1000 + ENROLLMENT_AUTO.cooldownMs - 1))).toBe(false)
+    expect(autoShotDue(run(steady, paused, 1000 + ENROLLMENT_AUTO.cooldownMs))).toBe(true)
+  })
+})
+
+describe('autoShotCooldown', () => {
+  it('ganti ke helm: jeda lebih panjang supaya pekerja bisa mendaftar sendiri tanpa tombol', () => {
+    const shots = buildShots(PLAN, false)
+    expect(autoShotCooldown(shots[1])).toBe(ENROLLMENT_AUTO.cooldownMs)
+    expect(autoShotCooldown(shots[5])).toBe(ENROLLMENT_AUTO.switchCooldownMs)
+    expect(ENROLLMENT_AUTO.switchCooldownMs).toBeGreaterThan(ENROLLMENT_AUTO.cooldownMs)
+    expect(autoShotCooldown(undefined)).toBe(ENROLLMENT_AUTO.cooldownMs)
   })
 })

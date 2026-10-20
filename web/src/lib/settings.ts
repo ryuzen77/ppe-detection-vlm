@@ -117,4 +117,18 @@ export const HEALTH_POLL = {
 /** Mode pendaftaran wajah (T75): denyut per batas waktu jeda (batasnya dari backend, `hold_s`) */
 export const ENROLLMENT_HOLD = {
   beatsPerHold: 3,
+  /** Indikator jarak (T76): jeda antar-pemeriksaan wajah di kamera gerbang */
+  previewIntervalMs: 1000,
+} as const;
+
+/** Foto pendaftaran otomatis (T76): diambil sendiri saat jarak pas & wajah diam */
+export const ENROLLMENT_AUTO = {
+  /** Pemeriksaan jarak "pas" berturut-turut sebelum memotret (× previewIntervalMs) */
+  stablePolls: 2,
+  /** Perubahan jarak antar-mata antar-pemeriksaan yang masih dianggap diam (bagian) */
+  maxSizeChange: 0.08,
+  /** Waktu pekerja mendengar arahan & menoleh setelah foto sebelumnya */
+  cooldownMs: 3000,
+  /** Waktu memakai helm sebelum foto kondisi kedua: pekerja bisa mendaftar sendiri tanpa menekan tombol */
+  switchCooldownMs: 10000,
 } as const;

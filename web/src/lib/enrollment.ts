@@ -2,8 +2,15 @@
  * Mode pendaftaran wajah (T75): selama modal foto terbuka gerbang jeda, supaya orang yang
  * difoto tidak langsung diperiksa (uji nyata 19-10: foto selalu ditolak `camera_busy`).
  */
-import type { EnrollmentHoldResponse } from './api/types'
-import { ENROLLMENT_HOLD } from './settings'
+import type {
+  CameraStatus,
+  EnrollmentFit,
+  EnrollmentHoldResponse,
+  EnrollmentPlan,
+  EnrollmentPreview,
+  TemplateCondition,
+} from './api/types'
+import { ENROLLMENT_AUTO, ENROLLMENT_HOLD } from './settings'
 
 export interface EnrollmentClient {
   holdEnrollment: () => Promise<EnrollmentHoldResponse>
@@ -35,4 +42,110 @@ export function keepEnrollmentHold(client: EnrollmentClient, onError: () => void
     clearInterval(timer)
     release()
   }
+}
+
+// --- Pendaftaran terpandu (T76) ---
+
+export interface EnrollmentShot {
+  /** Nomor foto 1..total */
+  number: number
+  condition: TemplateCondition
+  /** Arah kepala = kunci suara petunjuk */
+  pose: string
+  /** Foto pertama kondisi kedua: pekerja perlu memakai helm dulu */
+  switchesCondition: boolean
+}
+
+/** Urutan foto dari rencana backend: semua foto kondisi pertama, lalu kondisi kedua. */
+export function buildShots(plan: EnrollmentPlan, wearsGlasses: boolean): EnrollmentShot[] {
+  const conditions = plan.condition_sets[wearsGlasses ? 'glasses' : 'no_glasses']
+  const per = plan.shots_per_condition
+  return conditions.flatMap((condition, c) =>
+    Array.from({ length: per }, (_, i) => ({
+      number: c * per + i + 1,
+      condition,
+      pose: plan.poses[i % plan.poses.length],
+      switchesCondition: c > 0 && i === 0,
+    })),
+  )
+}
+
+/** Suara sebelum memotret: ganti kondisi (pakai helm) lebih dulu, lalu arah kepala. */
+export function shotPrompts(plan: EnrollmentPlan, shot: EnrollmentShot): string[] {
+  return shot.switchesCondition ? [plan.prompts.condition_switch, shot.pose] : [shot.pose]
+}
+
+/** Suara arahan jarak (maju/mundur) atau null bila tidak ada yang perlu diucapkan. */
+export function fitPrompt(plan: EnrollmentPlan, fit: EnrollmentFit | null): string | null {
+  return (fit && plan.prompts.fit[fit]) || null
+}
+
+/**
+ * Indikator jarak: periksa kamera berulang tanpa permintaan bertumpuk (berikutnya dijadwalkan
+ * setelah jawaban tiba). Gagal = null (mis. jeda belum aktif). Mengembalikan fungsi penghenti.
+ */
+export function pollEnrollmentPreview(
+  fetchPreview: () => Promise<EnrollmentPreview>,
+  onResult: (preview: EnrollmentPreview | null) => void,
+  intervalMs: number = ENROLLMENT_HOLD.previewIntervalMs,
+): () => void {
+  let stopped = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const tick = () => {
+    fetchPreview()
+      .then(
+        (preview) => !stopped && onResult(preview),
+        () => !stopped && onResult(null),
+      )
+      .finally(() => {
+        if (!stopped) timer = setTimeout(tick, intervalMs)
+      })
+  }
+  tick()
+  return () => {
+    stopped = true
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Foto otomatis: pendamping tidak perlu menekan tombol 10 kali, dan foto selalu diambil saat
+ * jarak terukur pas. "Diam" = jarak antar-mata hampir sama di beberapa pemeriksaan berturut-turut.
+ */
+export interface AutoShot {
+  streak: number
+  lastPx: number | null
+  /** Sebelum waktu ini pemeriksaan diabaikan: pekerja masih mendengar arahan & menoleh */
+  resumeAt: number
+}
+
+/** Mulai (ulang) hitungan setelah jeda: dipakai saat mulai dan setelah setiap foto. */
+export function pauseAutoShot(now: number, ms: number = ENROLLMENT_AUTO.cooldownMs): AutoShot {
+  return { streak: 0, lastPx: null, resumeAt: now + ms }
+}
+
+/** Hasil pemeriksaan jarak berikutnya -> hitungan "diam" yang baru. */
+export function trackAutoShot(state: AutoShot, preview: EnrollmentPreview | null, now: number): AutoShot {
+  const px = preview?.fit === 'ok' ? preview.interocular_px : null
+  if (now < state.resumeAt || px == null) return { ...state, streak: 0, lastPx: null }
+  const still =
+    state.lastPx != null && Math.abs(px - state.lastPx) / state.lastPx <= ENROLLMENT_AUTO.maxSizeChange
+  return { ...state, streak: still ? state.streak + 1 : 1, lastPx: px }
+}
+
+/** Jeda sebelum foto berikutnya: lebih lama bila pekerja harus memakai helm dulu. */
+export function autoShotCooldown(next: EnrollmentShot | undefined): number {
+  return next?.switchesCondition ? ENROLLMENT_AUTO.switchCooldownMs : ENROLLMENT_AUTO.cooldownMs
+}
+
+export function autoShotDue(state: AutoShot): boolean {
+  return state.streak >= ENROLLMENT_AUTO.stablePolls
+}
+
+/**
+ * Pratinjau dibalik seperti cermin hanya untuk gambar kamera sungguhan: layar pesan server
+ * (kamera belum dipilih / terputus) berisi tulisan yang akan terbaca terbalik.
+ */
+export function mirrorPreview(camera: CameraStatus | null | undefined): boolean {
+  return camera?.status === 'OK' && !camera.is_synthetic
 }

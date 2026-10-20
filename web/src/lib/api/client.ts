@@ -34,6 +34,8 @@ import type {
   TemplateCondition,
   AddTemplateResponse,
   EnrollmentHoldResponse,
+  EnrollmentPlan,
+  EnrollmentPreview,
 } from './types'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
@@ -195,6 +197,9 @@ export class ApiClient {
     this.request<AddTemplateResponse>('POST', `/api/workers/${workerId}/templates`, { condition })
   holdEnrollment = () => this.request<EnrollmentHoldResponse>('POST', '/api/workers/enrollment')
   releaseEnrollment = () => this.request<void>('DELETE', '/api/workers/enrollment')
+  enrollmentPlan = () => this.request<EnrollmentPlan>('GET', '/api/workers/enrollment/plan')
+  enrollmentPreview = () => this.request<EnrollmentPreview>('GET', '/api/workers/enrollment/preview')
+  enrollmentPrompt = (prompt: string) => this.request<void>('POST', '/api/workers/enrollment/prompt', { prompt })
 }
 
 export const api = new ApiClient()

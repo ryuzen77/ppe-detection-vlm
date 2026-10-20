@@ -121,6 +121,11 @@ class Config:
     CAMERA_NAME: str = _env("CAMERA_NAME", "")
     CAMERA_AUTO_MODE: bool = _env("CAMERA_AUTO_MODE", "true").lower() == "true"
     CAMERA_TARGET_FPS: float = 25.0        # Sudah dianggap cukup lancar
+    # Tanpa mode yang mencapai target, laju dalam rentang ini dari yang tercepat dianggap sama
+    # lancarnya, lalu resolusi tertinggi dipilih. Di ruang redup C920 menahan SEMUA mode ±24 fps
+    # (pencahayaan, bukan resolusi): uji 19-10, 1280x720 / 640x480 menang atas 1080p karena
+    # selisih 0,1 fps -> FR gagal (wajah di jalur < FACE_MIN_INTEROCULAR_PX)
+    CAMERA_FPS_TIE_RATIO: float = 0.1
     # Permintaan bawaan saat kamera dibuka tanpa mode tersimpan. Dipilih karena
     # resolusi rendah hampir selalu berjalan penuh di kamera mana pun, dan
     # pengukuran menunjukkan permintaan ini menghasilkan 848x480@30 di webcam
@@ -541,6 +546,21 @@ class Config:
     # lebih sering dari ini (web/src/lib/settings.ts); tanpa denyut, jeda selesai sendiri supaya
     # browser yang ditutup / jaringan putus tidak membuat gerbang berhenti memeriksa selamanya.
     ENROLLMENT_HOLD_SECONDS: float = 45.0
+    # Pendaftaran terpandu (T76, keputusan pengguna 19-10): 10 foto per orang = 5 tanpa helm + 5 dengan helm
+    ENROLLMENT_SHOTS_PER_CONDITION: int = 5
+    # Arah kepala per foto (kunci suara messages.VOICE_TEXTS), diulang bila foto per kondisi lebih banyak:
+    # variasi sudut membuat templat cocok dengan pekerja yang lewat sedikit menoleh / menunduk
+    ENROLLMENT_POSES: tuple = ("daftar_lurus", "daftar_kiri", "daftar_kanan", "daftar_menunduk", "daftar_lurus")
+    # Pertanyaan "memakai kacamata?" di awal menentukan pasangan kondisi (tanpa helm, dengan helm)
+    ENROLLMENT_CONDITION_SETS: dict = {"no_glasses": ("bare", "helmet"), "glasses": ("glasses", "helmet_glasses")}
+    # Jarak antar-mata maksimal foto pendaftaran, sebagai bagian dari TINGGI FRAME: ukuran wajah di
+    # jalur sebanding dengan resolusi, jadi batas piksel tetap salah di resolusi lain (uji 19-10: kamera
+    # 720p, foto 48-59 px lolos batas 60 px padahal wajah di jalur hanya ±17-22 px). Di jalur ±0,024-0,031
+    # (T34a: 26-33 px di 1080p); foto jauh lebih dekat (uji 19-10: 200-246 px) tidak cocok -> ditolak.
+    ENROLLMENT_MAX_INTEROCULAR_RATIO: float = 0.055
+    # Resolusi minimal kamera untuk pendaftaran: di bawahnya wajah di jalur lebih kecil dari
+    # FACE_MIN_INTEROCULAR_PX (720p ±17-22 px), jadi pekerja yang didaftarkan tetap tidak akan dikenali
+    ENROLLMENT_MIN_FRAME_HEIGHT: int = 1080
 
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.

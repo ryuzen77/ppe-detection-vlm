@@ -6,7 +6,6 @@ import {
   formatDeleteSchedule,
   isFaceReenrollmentNeeded,
   getConditionLabel,
-  hasTemplateCondition,
   formatRecognizedWorker,
   formatTemplateQuality,
 } from './workers'
@@ -209,20 +208,6 @@ describe('getConditionLabel', () => {
 
   it('mengembalikan string apa adanya untuk kondisi tidak dikenal', () => {
     expect(getConditionLabel('custom_condition')).toBe('custom_condition')
-  })
-})
-
-describe('hasTemplateCondition', () => {
-  const workerWithBare = {
-    templates: [{ condition: 'bare' }],
-  } as unknown as Worker
-
-  it('true bila kondisi sudah ada di templat pekerja', () => {
-    expect(hasTemplateCondition(workerWithBare, 'bare')).toBe(true)
-  })
-
-  it('false bila kondisi belum ada di templat pekerja', () => {
-    expect(hasTemplateCondition(workerWithBare, 'helmet')).toBe(false)
   })
 })
 

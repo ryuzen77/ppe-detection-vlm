@@ -161,6 +161,10 @@ class StateManager:
             self.session = None
             self._show_resting_light(now)
 
+    def enrollment_active(self) -> bool:
+        with self.lock:
+            return self._enrolling(time.time())
+
     def _enrolling(self, now: float) -> bool:
         return now < self.enrollment_until
 

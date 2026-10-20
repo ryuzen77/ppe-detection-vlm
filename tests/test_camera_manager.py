@@ -46,6 +46,17 @@ def test_tanpa_mode_lancar_yang_tercepat_dipilih():
     assert pick_best_mode([a, b]) == b
 
 
+def test_ruang_redup_selisih_laju_kecil_tidak_menurunkan_resolusi():
+    """Uji nyata 19-10 (malam): C920 tertahan ±24 fps di semua mode; 1280x720 / 640x480 menang atas
+    1080p karena selisih 0,1 fps, lalu FR gagal karena wajah di jalur terlalu kecil."""
+    full_hd = mode(1920, 1080, 24.0)
+    hd = mode(1280, 720, 24.1)
+    vga = mode(640, 480, 24.1)
+    assert pick_best_mode([vga, hd, full_hd]) == full_hd
+    jauh_lebih_lambat = mode(1920, 1080, 24.1 * (1 - cfg.CAMERA_FPS_TIE_RATIO) - 1)
+    assert pick_best_mode([vga, hd, jauh_lebih_lambat]) == hd, "kelancaran tetap diutamakan"
+
+
 def test_semua_di_bawah_resolusi_minimum_tetap_memilih_yang_tercepat():
     rendah = cfg.CAMERA_MIN_HEIGHT - 100
     a = mode(320, rendah, 15.0)

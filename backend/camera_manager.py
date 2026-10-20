@@ -293,9 +293,12 @@ def pick_best_mode(modes: list[CameraMode]) -> Optional[CameraMode]:
     if smooth:
         return max(smooth, key=lambda m: (aspect_ok(m), m.height, m.fps))
 
-    # 2. Tidak ada yang mencapai target: ambil yang tercepat, rasio dikesampingkan
+    # 2. Tidak ada yang mencapai target: yang (hampir) tercepat, lalu resolusi tertinggi. Selisih
+    #    laju kecil tidak boleh mengorbankan resolusi (ruang redup menahan semua mode di laju sama).
     if usable:
-        return max(usable, key=lambda m: (m.fps, aspect_ok(m), m.height))
+        fastest = max(m.fps for m in usable)
+        near = [m for m in usable if m.fps >= fastest * (1 - cfg.CAMERA_FPS_TIE_RATIO)]
+        return max(near, key=lambda m: (m.height, aspect_ok(m), m.fps))
 
     # 3. Semua di bawah resolusi minimum: tetap pilih yang tercepat daripada gagal
     return max(modes, key=lambda m: (m.fps, m.height))

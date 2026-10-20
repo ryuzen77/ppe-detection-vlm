@@ -1,17 +1,30 @@
 <script lang="ts">
-  import type { Worker, TemplateCondition } from '../../../lib/api/types'
-  import { WORKERS } from '../../../lib/messages'
+  // Pendaftaran wajah terpandu (T76): pendamping memegang layar, pekerja berdiri di posisi
+  // pemeriksaan. Urutan foto, arah kepala, dan kunci suara datang dari rencana backend.
+  import type { EnrollmentPlan, EnrollmentPreview, Worker } from '../../../lib/api/types'
+  import { ENROLLMENT_GUIDE, WORKERS } from '../../../lib/messages'
   import { api } from '../../../lib/api/client'
   import { extractApiError } from '../../../lib/api/error'
-  import { keepEnrollmentHold } from '../../../lib/enrollment'
   import {
-    TEMPLATE_CONDITIONS,
-    getConditionLabel,
-    hasTemplateCondition,
-    formatTemplateQuality,
-  } from '../../../lib/workers'
+    autoShotCooldown,
+    autoShotDue,
+    buildShots,
+    fitPrompt,
+    keepEnrollmentHold,
+    mirrorPreview,
+    pauseAutoShot,
+    pollEnrollmentPreview,
+    shotPrompts,
+    trackAutoShot,
+    type AutoShot,
+    type EnrollmentShot,
+  } from '../../../lib/enrollment'
+  import { getConditionLabel, formatTemplateQuality } from '../../../lib/workers'
+  import { telemetry } from '../../../lib/stores/telemetry.svelte'
+  import { ENROLLMENT_AUTO } from '../../../lib/settings'
   import Camera from '@lucide/svelte/icons/camera'
   import LoaderCircle from '@lucide/svelte/icons/loader-circle'
+  import Volume2 from '@lucide/svelte/icons/volume-2'
 
   interface Props {
     worker: Worker | null
@@ -21,22 +34,44 @@
 
   let { worker, onClose, onSaved }: Props = $props()
 
-  let selectedCondition = $state<TemplateCondition>('bare')
+  let plan = $state<EnrollmentPlan | null>(null)
+  let shots = $state<EnrollmentShot[]>([])
+  let index = $state(0)
+  let preview = $state<EnrollmentPreview | null>(null)
+  // Belum ada jawaban pratinjau sama sekali = "memeriksa", bukan "gagal"
+  let previewChecked = $state(false)
   let taking = $state(false)
   let photoError = $state('')
   let photoSuccess = $state('')
   let streamKey = $state(Date.now())
+  let auto = $state<AutoShot>(pauseAutoShot(0, 0))
+  // Foto ditolak (mis. wajah mirip pekerja lain): foto otomatis berhenti supaya tidak mengulang
+  // penolakan yang sama terus-menerus; tombol Ambil Foto melanjutkannya
+  let autoStopped = $state(false)
 
+  const shot = $derived(shots[index] ?? null)
+  const shooting = $derived(shot !== null)
+  const done = $derived(shots.length > 0 && index >= shots.length)
+  const asking = $derived(plan !== null && shots.length === 0)
+  const distancePrompt = $derived(plan ? fitPrompt(plan, preview?.fit ?? null) : null)
+
+  // Modal dibuka: mulai dari pertanyaan kacamata
   $effect(() => {
-    if (worker) {
-      photoError = ''
-      photoSuccess = ''
-      taking = false
-      streamKey = Date.now()
-      // Pilih kondisi pertama yang belum ada
-      const available = TEMPLATE_CONDITIONS.find((c) => !hasTemplateCondition(worker, c))
-      selectedCondition = available || 'bare'
-    }
+    if (!worker) return
+    plan = null
+    shots = []
+    index = 0
+    preview = null
+    previewChecked = false
+    photoError = ''
+    photoSuccess = ''
+    taking = false
+    streamKey = Date.now()
+    autoStopped = false
+    api.enrollmentPlan().then(
+      (p) => (plan = p),
+      (e) => (photoError = extractApiError(e, ENROLLMENT_GUIDE.errPlan)),
+    )
   })
 
   // T75: gerbang jeda selama modal terbuka, supaya orang yang difoto tidak langsung diperiksa
@@ -45,24 +80,70 @@
     return keepEnrollmentHold(api, () => (photoError = WORKERS.errEnrollmentHold))
   })
 
-  async function handleTakePhoto() {
-    if (!worker) return
+  // Indikator jarak hanya selama memotret
+  $effect(() => {
+    if (!shooting) return
+    return pollEnrollmentPreview(api.enrollmentPreview, onPreview)
+  })
+
+  function onPreview(p: EnrollmentPreview | null) {
+    preview = p
+    previewChecked = true
+    auto = trackAutoShot(auto, p, Date.now())
+    if (autoShotDue(auto) && !autoStopped && !taking) takePhoto()
+  }
+
+  /** Suara berurutan di speaker gerbang (pakai helm, lalu arah kepala). */
+  function speak(prompts: string[]) {
+    prompts
+      .reduce((chain, key) => chain.then(() => api.enrollmentPrompt(key)), Promise.resolve())
+      .catch(() => (photoError = ENROLLMENT_GUIDE.errPrompt))
+  }
+
+  function start(wearsGlasses: boolean) {
+    if (!plan) return
+    shots = buildShots(plan, wearsGlasses)
+    index = 0
+    auto = pauseAutoShot(Date.now())
+    speak(shotPrompts(plan, shots[0]))
+  }
+
+  async function takePhoto() {
+    if (!worker || !shot || !plan) return
     photoError = ''
     photoSuccess = ''
     taking = true
     try {
-      const res = await api.addWorkerTemplate(worker.id, selectedCondition)
-      photoSuccess = `${WORKERS.takePhotoSuccess} (${formatTemplateQuality(res.quality)})`
-      setTimeout(() => {
-        onSaved()
-      }, 1000)
+      const res = await api.addWorkerTemplate(worker.id, shot.condition)
+      photoSuccess = `${ENROLLMENT_GUIDE.saved(shot.number, shots.length)} (${formatTemplateQuality(res.quality)})`
+      index += 1
+      const next = shots[index]
+      // Pekerja bisa mendaftar sendiri: ganti ke helm memakai jeda lebih panjang, bukan tombol
+      auto = pauseAutoShot(Date.now(), autoShotCooldown(next))
+      autoStopped = false
+      speak(next ? shotPrompts(plan, next) : [plan.prompts.done])
     } catch (e) {
       photoError = extractApiError(e, WORKERS.errTakePhoto)
+      autoStopped = true
     } finally {
       taking = false
     }
   }
+
+  /** Foto yang sudah tersimpan tetap tersimpan: tabel dimuat ulang walau pendaftaran dibatalkan. */
+  function close() {
+    if (index > 0) onSaved()
+    else onClose()
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || !worker || taking) return
+    if (done) onSaved()
+    else close()
+  }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 {#if worker}
   <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-photo-title">
@@ -75,72 +156,102 @@
       </div>
       <p class="subtitle">{WORKERS.modalPhotoSubtitle}</p>
 
-      <div class="camera-preview-box">
-        <div class="preview-header">
-          <Camera size={14} />
-          <span>{WORKERS.cameraPreviewTitle}</span>
+      {#if !done}
+        <div class="camera-preview-box">
+          <div class="preview-header">
+            <Camera size={14} />
+            <span>{WORKERS.cameraPreviewTitle}</span>
+          </div>
+          <div class="video-container">
+            <img src="{api.streamUrl()}?t={streamKey}" alt={WORKERS.cameraPreviewTitle} class="stream-img" class:mirror={mirrorPreview(telemetry.data?.camera)} />
+          </div>
+          {#if mirrorPreview(telemetry.data?.camera)}<span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span>{/if}
+          <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
         </div>
-        <div class="video-container">
-          <img src="{api.streamUrl()}?t={streamKey}" alt="{WORKERS.cameraPreviewTitle}" class="stream-img" />
-          <div class="target-guide" aria-hidden="true"></div>
-        </div>
-        <span class="preview-hint">{WORKERS.cameraPreviewHint}</span>
-        <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
-      </div>
+      {/if}
 
-      <div class="form-group">
-        <label for="condition-options">{WORKERS.conditionLabel}</label>
-        <div id="condition-options" class="conditions-grid">
-          {#each TEMPLATE_CONDITIONS as cond}
-            {@const alreadyHas = hasTemplateCondition(worker, cond)}
-            <label class="condition-card" class:selected={selectedCondition === cond}>
-              <input
-                type="radio"
-                name="condition"
-                value={cond}
-                bind:group={selectedCondition}
-                disabled={taking}
-              />
-              <span class="condition-title">{getConditionLabel(cond)}</span>
-              {#if alreadyHas}
-                <span class="already-badge">{WORKERS.conditionAlreadyAdded}</span>
-              {/if}
-            </label>
-          {/each}
+      {#if asking}
+        <div class="question">
+          <p>{ENROLLMENT_GUIDE.askGlasses}</p>
+          <span class="preview-hint">{ENROLLMENT_GUIDE.askGlassesHint}</span>
+          <div class="row">
+            <button type="button" class="btn btn-primary" onclick={() => start(true)}>{ENROLLMENT_GUIDE.glassesYes}</button>
+            <button type="button" class="btn btn-primary" onclick={() => start(false)}>{ENROLLMENT_GUIDE.glassesNo}</button>
+          </div>
         </div>
-      </div>
+      {:else if shot && plan}
+        <div class="shot" aria-live="polite">
+          <span class="step">{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span>
+          {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
+          <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
+          {#if autoStopped}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.autoStopped}</span>
+          {:else if shot.switchesCondition}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.helmetWaiting(ENROLLMENT_AUTO.switchCooldownMs / 1000)}</span>
+          {:else}
+            <span class="preview-hint">{ENROLLMENT_GUIDE.autoHint}</span>
+          {/if}
+          {#if !previewChecked}
+            <span class="fit">{ENROLLMENT_GUIDE.checkingFit}</span>
+          {:else if !preview}
+            <span class="fit">{ENROLLMENT_GUIDE.fitUnavailable}</span>
+          {:else}
+            <span class="fit" class:ok={preview.fit === 'ok'}>
+              {ENROLLMENT_GUIDE.fit[preview.fit]}{#if preview.interocular_px != null}
+                · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}{#if auto.streak > 0 && !autoStopped}
+                · {ENROLLMENT_GUIDE.holdStill}{/if}
+            </span>
+          {/if}
+          <div class="row">
+            <button type="button" class="btn" onclick={() => speak(shotPrompts(plan!, shot!))}>
+              <Volume2 size={14} />
+              {ENROLLMENT_GUIDE.speakPose}
+            </button>
+            {#if distancePrompt}
+              <button type="button" class="btn" onclick={() => speak([distancePrompt!])}>
+                <Volume2 size={14} />
+                {ENROLLMENT_GUIDE.speakFit}
+              </button>
+            {/if}
+          </div>
+        </div>
+      {:else if done}
+        <div class="shot" role="status">
+          <span class="pose">{ENROLLMENT_GUIDE.doneTitle}</span>
+          <p>{ENROLLMENT_GUIDE.doneDetail(shots.length)}</p>
+        </div>
+      {/if}
 
       {#if photoError}
         <div class="error-box" role="alert">{photoError}</div>
       {/if}
 
-      {#if photoSuccess}
+      {#if photoSuccess && !done}
         <div class="success-box" role="status">{photoSuccess}</div>
       {/if}
 
       <div class="modal-actions">
-        <button
-          type="button"
-          class="btn"
-          onclick={onClose}
-          disabled={taking}
-        >
-          {WORKERS.cancelBtn}
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={handleTakePhoto}
-          disabled={taking}
-        >
-          {#if taking}
-            <span class="spin"><LoaderCircle size={14} /></span>
-            {WORKERS.takingPhoto}
-          {:else}
-            <Camera size={14} />
-            {WORKERS.takePhotoBtn}
+        {#if done}
+          <button type="button" class="btn btn-primary" onclick={onSaved}>{ENROLLMENT_GUIDE.finish}</button>
+        {:else}
+          <button type="button" class="btn" onclick={close} disabled={taking}>{WORKERS.cancelBtn}</button>
+          {#if shot}
+            <button
+              type="button"
+              class="btn btn-primary"
+              onclick={takePhoto}
+              disabled={taking || preview?.fit !== 'ok'}
+            >
+              {#if taking}
+                <span class="spin"><LoaderCircle size={14} /></span>
+                {WORKERS.takingPhoto}
+              {:else}
+                <Camera size={14} />
+                {WORKERS.takePhotoBtn}
+              {/if}
+            </button>
           {/if}
-        </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -165,6 +276,9 @@
     padding: var(--space-6);
     width: 100%;
     max-width: 540px;
+    /* Layar laptop 768 px: tombol Ambil Foto tidak boleh terdorong keluar layar */
+    max-height: calc(100dvh - 2 * var(--space-4));
+    overflow-y: auto;
     box-shadow: 0 10px 25px var(--backdrop);
   }
 
@@ -232,67 +346,68 @@
     object-fit: cover;
   }
 
-  .target-guide {
-    position: absolute;
-    inset: 15% 30%;
-    border: 2px dashed var(--border-strong);
-    border-radius: var(--radius-full, 9999px);
-    pointer-events: none;
+  /* Pratinjau seperti cermin (keputusan pengguna 19-10): hanya tampilan, foto tetap asli */
+  .mirror {
+    transform: scaleX(-1);
   }
 
-  .preview-hint {
-    font-size: var(--text-xs);
-    color: var(--text-muted);
-  }
-
-  .form-group {
+  .question,
+  .shot {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
     margin-bottom: var(--space-4);
   }
 
-  label {
+  .question p,
+  .shot p {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text);
+  }
+
+  .step {
     font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text-muted);
   }
 
-  .conditions-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-2);
-  }
-
-  .condition-card {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    cursor: pointer;
-    font-size: var(--text-xs);
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .condition-card input[type="radio"] {
-    display: none;
-  }
-
-  .condition-card.selected {
-    border-color: var(--primary);
-    background: var(--surface);
-  }
-
-  .condition-title {
-    font-weight: 500;
+  .pose {
+    font-size: var(--text-lg);
+    font-weight: 600;
     color: var(--text);
   }
 
-  .already-badge {
-    font-size: 10px;
+  .switch {
+    color: var(--warn);
+    font-weight: 600;
+  }
+
+  .fit {
+    align-self: flex-start;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--warn-line);
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+
+  .fit.ok {
+    border-color: var(--ok-line);
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .preview-hint {
+    font-size: var(--text-xs);
     color: var(--text-muted);
   }
 

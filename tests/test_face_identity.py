@@ -119,3 +119,26 @@ def test_templat_tak_terbaca_dicatat(store, security_events):
     who = face_identity.FaceIdentifier(other_key, FakeEngine([_unit(1)] * 3)).identify(CROPS)
     assert who.status == "unknown"
     assert security_events[-1]["event"] == security_log.FACE_KEY_ERROR and security_events[-1]["unreadable"] == 1
+
+
+# --- Pendaftaran terpandu (T76) ---
+
+
+def test_skor_terbaik_tercatat_saat_tidak_dikenali(store, caplog):
+    _enroll(store, "P-1", "Budi", _unit(1))
+    near = _unit(1) * 0.5 + _unit(7) * 0.5
+    engine = FakeEngine([near / np.linalg.norm(near), None, None])
+    with caplog.at_level("INFO"):
+        face_identity.FaceIdentifier(store, engine).identify(CROPS, session_id=9)
+    line = next(r.getMessage() for r in caplog.records if "tidak dikenali" in r.getMessage())
+    score = float(near / np.linalg.norm(near) @ _unit(1))
+    assert f"skor terbaik {score:.2f}" in line and "Budi" not in line and "P-1" not in line
+
+
+def test_wajah_mirip_pekerja_lain_terdeteksi_tetapi_bukan_diri_sendiri(store):
+    budi = _enroll(store, "P-1", "Budi", _unit(1))
+    ani = _enroll(store, "P-2", "Ani", _unit(2))
+    identifier = face_identity.FaceIdentifier(store, FakeEngine([]))
+    assert identifier.similar_worker(_unit(1), ani.id) == ("P-1", pytest.approx(1.0))
+    assert identifier.similar_worker(_unit(1), budi.id) is None, "foto tambahan untuk orang yang sama boleh"
+    assert identifier.similar_worker(_unit(9), ani.id) is None, "orang berbeda tidak ditolak"

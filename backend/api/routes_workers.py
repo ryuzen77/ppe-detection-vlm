@@ -11,7 +11,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from .. import auth, face_engine, messages, security_log, worker_store, worker_voice
+from .. import auth, face_engine, face_identity, messages, security_log, worker_store, worker_voice
+from ..audio_engine import audio_player
 from ..config import cfg
 from ..state_manager import state_mgr
 from ..video.capture import video_service
@@ -27,9 +28,14 @@ _STATUS = {
     "inactive": 409,
     "camera_busy": 409,
     "camera_unavailable": 409,
+    "camera_low_resolution": 409,
     "no_face": 422,
     "multiple_faces": 422,
     "face_too_small": 422,
+    "face_too_close": 422,
+    "face_matches_other": 409,
+    "enrollment_inactive": 409,
+    "invalid_prompt": 400,
     "face_not_ready": 503,
 }
 
@@ -51,6 +57,10 @@ class WorkerProfile(BaseModel):
 
 class NewTemplate(BaseModel):
     condition: str = ""
+
+
+class EnrollmentPrompt(BaseModel):
+    prompt: str = ""
 
 
 def _error(error: worker_store.WorkerError | face_engine.FaceEngineError) -> HTTPException:
@@ -172,6 +182,13 @@ def _enrollment_frame():
     return frame
 
 
+def _restore_voice(worker_id: int) -> None:
+    """Hapus data wajah ikut menghapus MP3 nama (T34d); wajah yang didaftarkan ulang harus dipanggil
+    namanya lagi (uji nyata 19-10: dikenali skor 0,85 tetapi suara umum karena MP3 sudah terhapus)."""
+    if not worker_voice.voice_ready(worker_id):
+        worker_voice.request(worker_store.store.get(worker_id))
+
+
 @router.post("/api/workers/{worker_id}/templates", status_code=201)
 def add_worker_template(
     worker_id: int, body: NewTemplate, request: Request, user: auth.SessionUser = Depends(require_admin)
@@ -182,9 +199,11 @@ def add_worker_template(
         raise _error(worker_store.WorkerError("face_not_ready", messages.WORKER_FACE_NOT_READY))
     _call(store.check_template_target, worker_id, body.condition)
     sample = _call(lambda: face_engine.engine.enrollment_sample(_enrollment_frame()))
+    _call(_reject_other_workers_face, worker_id, sample.vector)
     template = _call(
         store.add_template, worker_id, body.condition, cfg.FACE_MODEL_VERSION, sample.vector, user.username
     )
+    _restore_voice(worker_id)
     quality = sample.detection.quality()
     _record(
         security_log.WORKER_TEMPLATE_ADDED,
@@ -207,6 +226,56 @@ def hold_enrollment(request: Request, user: auth.SessionUser = Depends(require_a
             security_log.ENROLLMENT_STARTED, actor=user.username, client=client_address(request), ok=True
         )
     return {"active": True, "hold_s": cfg.ENROLLMENT_HOLD_SECONDS}
+
+
+def _reject_other_workers_face(worker_id: int, vector) -> None:
+    similar = face_identity.identifier.similar_worker(vector, worker_id)
+    if similar is not None:
+        employee_no, score = similar
+        raise worker_store.WorkerError(
+            "face_matches_other", messages.WORKER_FACE_MATCHES_OTHER.format(employee_no=employee_no, score=score)
+        )
+
+
+def _require_enrollment() -> None:
+    """Pratinjau & suara pendaftaran hanya selama gerbang jeda (kamera gerbang bukan alat pantau)."""
+    if not state_mgr.enrollment_active():
+        raise worker_store.WorkerError("enrollment_inactive", messages.WORKER_ENROLLMENT_INACTIVE)
+
+
+@router.get("/api/workers/enrollment/plan", dependencies=[Depends(require_admin)])
+def enrollment_plan():
+    """Rencana pendaftaran terpandu (T76): urutan kondisi & arah kepala dari config, bukan salinan di UI."""
+    return {
+        "shots_per_condition": cfg.ENROLLMENT_SHOTS_PER_CONDITION,
+        "poses": list(cfg.ENROLLMENT_POSES),
+        "condition_sets": {k: list(v) for k, v in cfg.ENROLLMENT_CONDITION_SETS.items()},
+        "interocular": {"min_px": cfg.FACE_MIN_INTEROCULAR_PX, "max_ratio": cfg.ENROLLMENT_MAX_INTEROCULAR_RATIO},
+        "min_frame_height": cfg.ENROLLMENT_MIN_FRAME_HEIGHT,
+        "prompts": messages.ENROLLMENT_PROMPT_KEYS,
+    }
+
+
+@router.get("/api/workers/enrollment/preview", dependencies=[Depends(require_admin)])
+def enrollment_preview():
+    """Indikator jarak sebelum memotret: hanya deteksi wajah, tanpa embedding & tanpa disimpan."""
+    _call(_require_enrollment)
+    frame = video_service.camera_frame()
+    if frame is None:
+        raise _error(worker_store.WorkerError("camera_unavailable", messages.WORKER_CAMERA_UNAVAILABLE))
+    detections = face_engine.engine.detect(frame)
+    return face_engine.enrollment_fit(detections, frame.shape[0])
+
+
+@router.post("/api/workers/enrollment/prompt", status_code=204, dependencies=[Depends(require_admin)])
+def enrollment_prompt(body: EnrollmentPrompt):
+    """Petunjuk suara lewat speaker gerbang untuk pekerja yang berdiri jauh dari layar."""
+    _call(_require_enrollment)
+    if body.prompt not in messages.ENROLLMENT_VOICE_TEXTS:
+        raise _error(worker_store.WorkerError("invalid_prompt", messages.WORKER_INVALID_PROMPT.format(prompt=body.prompt)))
+    # Tidak `urgent`: petunjuk berurutan (pakai helm, lalu arah kepala) diantrekan, bukan saling memotong
+    audio_player.play(body.prompt)
+    return Response(status_code=204)
 
 
 @router.delete("/api/workers/enrollment", status_code=204)
