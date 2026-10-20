@@ -171,6 +171,9 @@ export interface ActiveTrack {
 
 export type LightState = 'OFF' | 'GREEN' | 'RED' | 'YELLOW'
 
+/** Satu lampu fisik gerbang (kontrak T88). */
+export type GateLamp = 'green' | 'red' | 'yellow'
+
 export interface LightStatus {
   light_state: LightState
   message: string
@@ -225,7 +228,16 @@ export interface Telemetry {
   corridor: { enabled: boolean; left_ratio: number; right_ratio: number }
   zone: Omit<Zone, 'source'>
   light: LightStatus
-  iot: { enabled: boolean; connected: boolean; last_ack_age_s: number | null; error: string | null }
+  iot: {
+    enabled: boolean
+    connected: boolean
+    last_ack_age_s: number | null
+    error: string | null
+    // Kontrak T88: lampu yang BENAR-BENAR menyala (baca balik relay / balasan ESP32);
+    // null = tidak diketahui. Opsional: server sebelum T88a tidak mengirimnya.
+    lamps_on?: GateLamp[] | null
+    lamps_available?: GateLamp[] | null
+  }
   camera_fault: 'lost' | 'blocked' | 'frozen' | 'system' | null   // 'system' = pengolah gambar galat (T77b)
   enrollment?: EnrollmentStatus
   history: HistoryRecord[]
