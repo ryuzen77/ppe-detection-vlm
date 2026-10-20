@@ -375,7 +375,6 @@ export const SETTINGS_TAB = {
   testYellowBtn: 'Tes kuning',
   latencyTestBtn: 'Uji kecepatan VLM',
   // T78: kelompok & daftar isi
-  tocLabel: 'Bagian pengaturan',
   groups: { gerbang: 'Gerbang', vlm: 'VLM', akun: 'Akun', diagnostik: 'Diagnostik' },
   groupHints: {
     gerbang: 'Kamera, titik berdiri, APD yang diperiksa, dan lampu.',
