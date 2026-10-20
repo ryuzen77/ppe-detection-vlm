@@ -248,6 +248,13 @@ LOCAL_MODEL_WARMUP_IMAGE = "Pemanasan gambar VLM {who} selesai dalam {seconds:.1
 VLM_NOT_CONFIGURED = "VLM belum dikonfigurasi (utama & cadangan tidak aktif)"
 VLM_NO_DECISION_NOTES = ("[SISTEM GANGGUAN] Tidak ada VLM yang menjawab ({reason}). Belum ada keputusan; "
                          "pekerja diminta menunggu dan diperiksa ulang otomatis.")
+# --- Pemutus sirkuit VLM utama (T27 / T87) ---
+LOG_VLM_PRIMARY_DOWN_BACKUP = ("VLM {who} dianggap terputus setelah {count} kegagalan berturut-turut; "
+                               "inspeksi langsung ke cadangan, utama dicoba lagi setiap {retry:g} dtk.")
+LOG_VLM_PRIMARY_DOWN_NO_BACKUP = ("VLM {who} dianggap terputus setelah {count} kegagalan berturut-turut; "
+                                  "cadangan tidak aktif, setiap inspeksi tetap mencoba utama.")
+LOG_VLM_PRIMARY_RECOVERED = "VLM {who} pulih setelah {seconds:.0f} dtk."
+
 
 # --- Kesiapan pemotretan (T46) ---
 LOG_SESSION_READY = ("Sesi #{session}: pekerja siap setelah diam {held:.1f} dtk "

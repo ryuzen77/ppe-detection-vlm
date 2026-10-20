@@ -609,9 +609,15 @@ class VLMAnalyzer:
                 "message": message, "engines": results}
 
     # --- Pemutus sirkuit utama
+    def _has_backup(self) -> bool:
+        return self.backup is not None and self.backup.provider is not None
+
     def _primary_allowed(self, now: float) -> bool:
         if self.primary is None or self.primary.provider is None:
             return False
+        # T87: pemutus sirkuit hanya melewati utama bila ada cadangan aktif
+        if not self._has_backup():
+            return True
         if self.primary_failures < cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN:
             return True
         return now - self.primary_last_attempt >= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
@@ -621,16 +627,26 @@ class VLMAnalyzer:
         assert primary is not None, "hanya dipanggil setelah utama dicoba"
         if ok:
             if self.primary_down_since is not None:
-                logger.info(f"VLM {primary.who} pulih setelah {now - self.primary_down_since:.0f} dtk.")
+                logger.info(messages.LOG_VLM_PRIMARY_RECOVERED.format(
+                    who=primary.who, seconds=now - self.primary_down_since
+                ))
             self.primary_failures = 0
             self.primary_down_since = None
             return
         self.primary_failures += 1
         if self.primary_failures >= cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN and self.primary_down_since is None:
             self.primary_down_since = now
-            logger.warning(f"VLM {primary.who} dianggap terputus setelah {self.primary_failures} kegagalan berturut-turut; "
-                           f"inspeksi langsung ke cadangan, utama dicoba lagi setiap "
-                           f"{cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS:g} dtk.")
+            if self._has_backup():
+                logger.warning(messages.LOG_VLM_PRIMARY_DOWN_BACKUP.format(
+                    who=primary.who,
+                    count=self.primary_failures,
+                    retry=cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS,
+                ))
+            else:
+                logger.warning(messages.LOG_VLM_PRIMARY_DOWN_NO_BACKUP.format(
+                    who=primary.who,
+                    count=self.primary_failures,
+                ))
 
     def _publish_status(self):
         api_monitor.set_engines(
