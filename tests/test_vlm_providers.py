@@ -254,6 +254,77 @@ def test_utama_dianggap_terputus_setelah_n_gagal_lalu_dicoba_lagi(analyzer, monk
     assert analyzer.provider_info()["primary_down"] is False
 
 
+def test_tanpa_cadangan_utama_tidak_dilewati_meski_gagal_beruntun(analyzer, monkeypatch):
+    """T87: tanpa cadangan aktif, pemutus sirkuit tidak melewati utama."""
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_FAILURES_BEFORE_DOWN", 2)
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_RETRY_AFTER_SECONDS", 60.0)
+    utama = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    analyzer.pasang(utama=utama, cadangan=None)
+
+    for _ in range(2):
+        _assert_tanpa_keputusan(analyzer.analyze_person(person_crop()))
+    assert len(utama.calls) == 2
+    assert analyzer.provider_info()["primary_down"] is True
+
+    # Tanpa cadangan: inspeksi ke-3 tetap memanggil utama (tidak dilewati 60 dtk)
+    # dan berhasil jika utama sudah pulih
+    utama.error, utama.reply = None, _lengkap()
+    hasil = analyzer.analyze_person(person_crop())
+    assert hasil.decided_by == "utama"
+    assert len(utama.calls) == 3
+    assert analyzer.provider_info()["primary_down"] is False
+
+
+def test_cadangan_tanpa_provider_dianggap_tidak_aktif(analyzer, monkeypatch):
+    """T87: engine cadangan ada tetapi provider None (mis. gagal start) = tidak dilewati."""
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_FAILURES_BEFORE_DOWN", 2)
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_RETRY_AFTER_SECONDS", 60.0)
+    utama = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    analyzer.pasang(utama=utama, cadangan=None)
+    cadangan_mati = VLMEngine("cadangan", "ollama", "model-palsu")
+    cadangan_mati.provider = None
+    analyzer.backup = cadangan_mati
+
+    for _ in range(2):
+        _assert_tanpa_keputusan(analyzer.analyze_person(person_crop()))
+    assert len(utama.calls) == 2
+    assert analyzer.provider_info()["primary_down"] is True
+
+    utama.error, utama.reply = None, _lengkap()
+    hasil = analyzer.analyze_person(person_crop())
+    assert hasil.decided_by == "utama"
+    assert len(utama.calls) == 3
+    assert analyzer.provider_info()["primary_down"] is False
+    cadangan_mati.executor.shutdown(wait=False)
+
+
+def test_pesan_log_pemutus_sirkuit_dengan_dan_tanpa_cadangan(analyzer, monkeypatch, caplog):
+    """T87: log pemutus sirkuit membedakan apakah ada cadangan atau tidak."""
+    import logging
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_FAILURES_BEFORE_DOWN", 1)
+
+    # 1. Tanpa cadangan: log mencatat setiap inspeksi tetap mencoba utama
+    utama1 = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    analyzer.pasang(utama=utama1, cadangan=None)
+    with caplog.at_level(logging.WARNING):
+        analyzer.analyze_person(person_crop())
+    assert "cadangan tidak aktif, setiap inspeksi tetap mencoba utama" in caplog.text
+
+    # 2. Dengan cadangan: log mencatat beralih langsung ke cadangan
+    caplog.clear()
+    a2 = VLMAnalyzer()
+    utama2 = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    cadangan2 = FakeProvider(reply=_lengkap())
+    a2.primary = _engine("utama", utama2)
+    a2.backup = _engine("cadangan", cadangan2)
+    with caplog.at_level(logging.WARNING):
+        a2.analyze_person(person_crop())
+    assert "inspeksi langsung ke cadangan" in caplog.text
+    for e in (a2.primary, a2.backup):
+        if e:
+            e.executor.shutdown(wait=False)
+
+
 def test_jeda_kuota_hanya_untuk_vlm_cloud(analyzer):
     analyzer.pasang(utama=FakeProvider(reply=_lengkap()))
     analyzer.primary.min_interval = 0.4
