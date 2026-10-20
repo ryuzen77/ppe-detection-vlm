@@ -14,6 +14,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T84a — nomor pegawai terkunci setelah dibuat (backend; kontrak "Kontrak T84") | Gemini | `gemini/t84a-employee-no-lock` (dari `master` `92fc540`) | antre | `backend/worker_store.py` (`update_worker`), `backend/api/routes_workers.py` (PATCH + `_STATUS`), `backend/messages.py` (tambah), `tests/` | Keputusan pengguna 20-10 setelah uji nyata T79. Risiko Sedang: nomor yang berubah setelah ada audit membuat riwayat tercatat dengan nomor berbeda untuk orang yang sama. |
+| T84b — form Ubah pekerja: nomor pegawai hanya baca (UI) | Claude | `claude/t84b-employee-no-readonly` (dari `master` `92fc540`) | antre | `web/src/components/workers/WorkerEditModal.svelte`, `web/src/lib/api/types.ts` (`UpdateWorkerRequest`), `web/src/lib/messages.ts` (tambah) | Bersamaan dengan T84a. |
 | Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | selesai | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 Commit `39f5c1e` diverifikasi Claude 05-10 (pytest 259 & ruff di salinan terpisah). **Temuan:** pemetaan `legacyGemini` di `web/src/lib/format.ts` + tesnya ikut dihapus padahal untuk DATA audit lama (10 baris `GEMINI_LIVE`, 23–24 Sep) → wajib dikembalikan. Penghapusan pengalihan `/app` di luar lingkup tetapi tidak dirujuk lagi (diterima) Perbaikan `legacyGemini` (`701d096`) terverifikasi (vitest 75); digabung 06-10 (`e7c7d89`), T18 tertutup. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
@@ -292,6 +294,16 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
+
+### Kontrak T84 — nomor pegawai terkunci setelah dibuat (keputusan pengguna 20-10)
+
+Keputusan pengguna 20-10 (uji nyata T79): nomor pegawai **otomatis saat Tambah, boleh diganti nomor HR sebelum disimpan, lalu terkunci**. Menggantikan butir T79 "`employee_no` juga boleh diubah".
+
+- `POST /api/workers` — tidak berubah (kosong → otomatis, diisi → divalidasi).
+- `PATCH /api/workers/{id}` dengan `employee_no` yang **berbeda** dari nomor tersimpan (tanpa beda huruf besar) → **409 `employee_no_locked`** (`messages.WORKER_EMPLOYEE_NO_LOCKED`, mis. "Nomor pegawai tidak bisa diubah setelah tersimpan."); tidak ada kolom lain yang ikut tersimpan. Nomor yang sama → diabaikan (200). Catatan nomor lama/baru di security log `WORKER_UPDATED` tidak dipakai lagi.
+- UI: form Ubah menampilkan nomor sebagai teks hanya baca dan tidak mengirim `employee_no`.
+
+Tes wajib: PATCH nomor berbeda → 409 dan data tidak berubah; PATCH nomor sama → 200; PATCH tanpa nomor tetap jalan.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
