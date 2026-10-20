@@ -1,10 +1,10 @@
 <script lang="ts">
   // Pendaftaran wajah terpandu (T76): pendamping memegang layar, pekerja berdiri di posisi
   // pemeriksaan. Urutan foto, arah kepala, dan kunci suara datang dari rencana backend.
-  import type { EnrollmentPlan, EnrollmentPreview, Worker } from '../../../lib/api/types'
-  import { ENROLLMENT_GUIDE, WORKERS } from '../../../lib/messages'
-  import { api } from '../../../lib/api/client'
-  import { extractApiError } from '../../../lib/api/error'
+  import type { EnrollmentPlan, EnrollmentPreview, Worker } from '../../lib/api/types'
+  import { ENROLLMENT_GUIDE, WORKERS } from '../../lib/messages'
+  import { api } from '../../lib/api/client'
+  import { extractApiError } from '../../lib/api/error'
   import {
     autoShotCooldown,
     autoShotDue,
@@ -18,10 +18,10 @@
     trackAutoShot,
     type AutoShot,
     type EnrollmentShot,
-  } from '../../../lib/enrollment'
-  import { getConditionLabel, formatTemplateQuality } from '../../../lib/workers'
-  import { telemetry } from '../../../lib/stores/telemetry.svelte'
-  import { ENROLLMENT_AUTO } from '../../../lib/settings'
+  } from '../../lib/enrollment'
+  import { getConditionLabel, formatTemplateQuality } from '../../lib/workers'
+  import { telemetry } from '../../lib/stores/telemetry.svelte'
+  import { ENROLLMENT_AUTO } from '../../lib/settings'
   import Camera from '@lucide/svelte/icons/camera'
   import LoaderCircle from '@lucide/svelte/icons/loader-circle'
   import Volume2 from '@lucide/svelte/icons/volume-2'

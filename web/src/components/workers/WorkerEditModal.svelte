@@ -1,17 +1,23 @@
 <script lang="ts">
-  import type { Worker } from '../../../lib/api/types'
-  import { WORKERS } from '../../../lib/messages'
-  import { api } from '../../../lib/api/client'
-  import { extractApiError } from '../../../lib/api/error'
+  import type { OrgEntry, UpdateWorkerRequest, Worker } from '../../lib/api/types'
+  import { WORKERS } from '../../lib/messages'
+  import { api } from '../../lib/api/client'
+  import { extractApiError } from '../../lib/api/error'
+  import OrgFields from './OrgFields.svelte'
 
   interface Props {
     worker: Worker | null
+    departments: OrgEntry[]
+    companies: OrgEntry[]
     onClose: () => void
     onSaved: () => void
   }
 
-  let { worker, onClose, onSaved }: Props = $props()
+  let { worker, departments, companies, onClose, onSaved }: Props = $props()
 
+  let employeeNo = $state('')
+  let departmentId = $state<number | null>(null)
+  let companyId = $state<number | null>(null)
   let nickname = $state('')
   let gender = $state<'male' | 'female'>('male')
   let updating = $state(false)
@@ -19,11 +25,24 @@
 
   $effect(() => {
     if (worker) {
+      employeeNo = worker.employee_no
+      departmentId = worker.department?.id ?? null
+      companyId = worker.company?.id ?? null
       nickname = worker.nickname || ''
       gender = worker.gender === 'female' ? 'female' : 'male'
       updateError = ''
     }
   })
+
+  /** Hanya kolom yang ada di server ini (T79) & nomor yang benar-benar diganti yang dikirim. */
+  function changes(w: Worker): UpdateWorkerRequest {
+    const body: UpdateWorkerRequest = { nickname: nickname.trim(), gender }
+    const number = employeeNo.trim()
+    if (number && number !== w.employee_no) body.employee_no = number
+    if (departments.length) body.department_id = departmentId
+    if (companyId !== null) body.company_id = companyId
+    return body
+  }
 
   async function handleUpdateWorker(e: Event) {
     e.preventDefault()
@@ -36,10 +55,7 @@
 
     updating = true
     try {
-      await api.updateWorker(worker.id, {
-        nickname: nickname.trim(),
-        gender,
-      })
+      await api.updateWorker(worker.id, changes(worker))
       onSaved()
     } catch (e) {
       updateError = extractApiError(e, WORKERS.errUpdate)
@@ -52,12 +68,19 @@
 {#if worker}
   <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-edit-title">
     <div class="modal-card">
-      <h3 id="modal-edit-title">{WORKERS.modalEditTitle} - {worker.employee_no}</h3>
+      <h3 id="modal-edit-title">{WORKERS.modalEditTitle} — {worker.name}</h3>
       {#if updateError}
         <div class="error-box" role="alert">{updateError}</div>
       {/if}
 
       <form class="form-layout" onsubmit={handleUpdateWorker}>
+        <div class="form-group">
+          <label for="edit-emp-no">{WORKERS.fieldEmployeeNo}</label>
+          <input id="edit-emp-no" type="text" bind:value={employeeNo} disabled={updating} required />
+        </div>
+
+        <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={updating} idPrefix="edit" />
+
         <div class="form-group">
           <label for="edit-nickname">{WORKERS.fieldNickname}</label>
           <input

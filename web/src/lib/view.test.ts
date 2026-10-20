@@ -10,7 +10,7 @@ import { CAMERA_CHIP, CAMERA_NOT_READY, VIDEO, chipTitle, seconds } from './mess
 import { detectEvents, initialWatch } from './notify'
 import { assessItem } from './ppe'
 import { parseRoute } from './router.svelte'
-import { cameraChip, vlmChip, iotChip } from './status'
+import { cameraChip, vlmChip, iotChip, systemSummary } from './status'
 import { readItem, writeItem } from './storage'
 
 // --- data tiruan ---------------------------------------------------------------
@@ -200,7 +200,7 @@ describe('detectEvents', () => {
 
 describe('parseRoute', () => {
   it.each([
-    ['#/laporan', 'laporan'], ['#/pengaturan', 'pengaturan'], ['#/monitoring', 'monitoring'],
+    ['#/laporan', 'laporan'], ['#/pekerja', 'pekerja'], ['#/pengaturan', 'pengaturan'], ['#/monitoring', 'monitoring'],
     ['', 'monitoring'], ['#/tidak-ada', 'monitoring'], ['#/laporan?status=all', 'laporan'],
   ])('%s → %s', (hash, route) => {
     expect(parseRoute(hash)).toBe(route)
@@ -386,5 +386,18 @@ describe('chipTitle', () => {
   it('menggabungkan teks & keterangan; tanpa keterangan cukup teks', () => {
     expect(chipTitle('Kamera siap', 'USB Cam')).toBe('Kamera siap · USB Cam')
     expect(chipTitle('Kamera siap', '')).toBe('Kamera siap')
+  })
+})
+
+describe('systemSummary (T78)', () => {
+  const chip = (tone: 'ok' | 'warn' | 'danger' | 'neutral', text: string = tone) => ({ tone, text, hint: '' })
+  it('semua sehat / netral = Sistem siap', () => {
+    expect(systemSummary([chip('ok'), chip('neutral')])).toMatchObject({ tone: 'ok', text: 'Sistem siap', problems: [] })
+  })
+  it('satu masalah = teks masalah itu; beberapa = jumlahnya, nada terburuk', () => {
+    expect(systemSummary([chip('ok'), chip('warn', 'Kamera belum dipilih')])).toMatchObject({ tone: 'warn', text: 'Kamera belum dipilih' })
+    const s = systemSummary([chip('warn'), chip('danger'), chip('ok')])
+    expect(s.tone).toBe('danger')
+    expect(s.text).toBe('2 perlu perhatian')
   })
 })

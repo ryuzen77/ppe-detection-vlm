@@ -11,7 +11,7 @@
   import type { PpeItem, ReportRecord } from '../../lib/api/types'
   import { REPORTS as TEXT, seconds, shortDate } from '../../lib/messages'
   import { assessItem } from '../../lib/ppe'
-  import { RESULT_TONE, resultKind, sourceText, type ResultKind } from '../../lib/reports'
+  import { RESULT_TONE, resultKind, sourceText, workerCell, type ResultKind } from '../../lib/reports'
   import { REPORTS } from '../../lib/settings'
   import PpeIcon from '../PpeIcon.svelte'
 
@@ -49,6 +49,7 @@
         {@const kind = resultKind(rec)}
         {@const Icon = RESULT_ICON[kind]}
         {@const src = sourceText(rec.inference_source)}
+        {@const who = workerCell(rec)}
         <tr>
           <td>
             {#if rec.snapshot_filename}
@@ -66,7 +67,10 @@
             <span>{shortDate(rec.date_str)}</span>
             <span class="mono sub">{rec.time_str}</span>
           </td>
-          <td class="mono">{TEXT.table.worker_id(rec.track_id)}</td>
+          <td class="who">
+            <span class:unknown={!who.known} title={who.known ? undefined : TEXT.table.unknownHint}>{who.primary}</span>
+            {#if who.secondary}<span class="mono sub">{who.secondary}</span>{/if}
+          </td>
           <td>
             <span class="result tone-{RESULT_TONE[kind]}">
               <Icon size={16} strokeWidth={2.25} aria-hidden="true" />{TEXT.result[kind]}
@@ -97,6 +101,14 @@
 </div>
 
 <style>
+  .who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .who .unknown {
+    color: var(--text-muted);
+  }
   .scroll {
     overflow-x: auto;
   }

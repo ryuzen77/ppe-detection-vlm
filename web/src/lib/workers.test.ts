@@ -4,8 +4,12 @@ import {
   getWorkerBadge,
   formatWorkerSalutation,
   formatDeleteSchedule,
-  isFaceReenrollmentNeeded,
   getConditionLabel,
+  filterWorkers,
+  faceStatus,
+  templateGroups,
+  orgSummary,
+  defaultCompanyId,
   formatRecognizedWorker,
   formatTemplateQuality,
 } from './workers'
@@ -23,7 +27,7 @@ describe('validateWorkerForm', () => {
     expect(err?.toLowerCase()).toContain('persetujuan')
   })
 
-  it('menolak bila nomor pegawai kosong', () => {
+  it('nomor pegawai boleh kosong: backend mengisi nomor otomatis (T79)', () => {
     const err = validateWorkerForm({
       employee_no: '   ',
       name: 'Muhammad Zen Fikri',
@@ -31,7 +35,7 @@ describe('validateWorkerForm', () => {
       gender: 'male',
       consent: true,
     })
-    expect(err?.toLowerCase()).toContain('nomor pegawai')
+    expect(err).toBeNull()
   })
 
   it('menolak bila nama lengkap kosong', () => {
@@ -98,17 +102,9 @@ describe('getWorkerBadge', () => {
     ],
   }
 
-  it('memberikan status aktif dan jumlah foto bila aktif dan punya templat', () => {
-    const badge = getWorkerBadge(baseWorker)
-    expect(badge.label).toBe('Aktif')
-    expect(badge.variant).toBe('ok')
-    expect(badge.hint).toBe('1 foto')
-  })
-
-  it('memberikan status perlu foto ulang bila aktif tapi templat kosong', () => {
-    const badge = getWorkerBadge({ ...baseWorker, templates: [] })
-    expect(badge.label).toBe('Perlu Foto Ulang')
-    expect(badge.variant).toBe('warn')
+  it('aktif = Aktif; status foto ada di kolom sendiri (faceStatus)', () => {
+    expect(getWorkerBadge(baseWorker)).toEqual({ label: 'Aktif', variant: 'ok' })
+    expect(getWorkerBadge({ ...baseWorker, templates: [] })).toEqual({ label: 'Aktif', variant: 'ok' })
   })
 
   it('memberikan status nonaktif dan jadwal hapus bila dinonaktifkan', () => {
@@ -172,20 +168,6 @@ describe('formatWorkerSalutation', () => {
   })
 })
 
-describe('isFaceReenrollmentNeeded', () => {
-  it('true bila aktif dan templat kosong', () => {
-    expect(isFaceReenrollmentNeeded({ active: true, templates: [] } as unknown as Worker)).toBe(true)
-  })
-
-  it('false bila aktif dan ada templat', () => {
-    expect(isFaceReenrollmentNeeded({ active: true, templates: [{ id: 1 }] } as unknown as Worker)).toBe(false)
-  })
-
-  it('false bila nonaktif', () => {
-    expect(isFaceReenrollmentNeeded({ active: false, templates: [] } as unknown as Worker)).toBe(false)
-  })
-})
-
 describe('formatDeleteSchedule', () => {
   it('memformat tanggal ISO menjadi bentuk lokal ringkas', () => {
     const text = formatDeleteSchedule('2026-11-17T12:00:00')
@@ -241,3 +223,77 @@ describe('formatTemplateQuality', () => {
 })
 
 
+
+// --- Halaman Pekerja (T79) ---
+
+const worker = (over: Partial<Worker>): Worker => ({
+  id: 1,
+  employee_no: 'P-0001',
+  name: 'Muhammad Zen Fikri',
+  nickname: 'Zen',
+  active: true,
+  consent: { at: '2026-10-18T10:00:00', by: 'admin', version: '1' },
+  created_at: '2026-10-18T10:00:00',
+  deactivated_at: null,
+  delete_after: null,
+  face_deleted_at: null,
+  templates: [],
+  ...over,
+})
+
+describe('faceStatus', () => {
+  it('pekerja baru tanpa foto = "Belum ada foto", bukan "Perlu foto ulang" (analisa UI 19-10)', () => {
+    expect(faceStatus(worker({}))).toEqual({ label: 'Belum ada foto', tone: 'warn' })
+  })
+  it('data wajah pernah dihapus = perlu foto ulang', () => {
+    expect(faceStatus(worker({ face_deleted_at: '2026-10-19T19:19:07' })).label).toBe('Perlu foto ulang')
+  })
+  it('punya foto = jumlah foto; nonaktif tanpa foto tidak diberi peringatan', () => {
+    const t = { id: 1, condition: 'bare', model_version: 'x', created_at: '' }
+    expect(faceStatus(worker({ templates: [t, t] }))).toEqual({ label: '2 foto', tone: 'ok' })
+    expect(faceStatus(worker({ active: false })).tone).toBe('muted')
+  })
+})
+
+describe('filterWorkers', () => {
+  const list = [
+    worker({ id: 1, employee_no: 'P-0001', name: 'Budi', department: { id: 1, name: 'Produksi' }, company: { id: 1, name: 'Internal' } }),
+    worker({ id: 2, employee_no: 'K-77', name: 'Siti', nickname: 'Ti', active: false, company: { id: 2, name: 'PT Maju' } }),
+  ]
+  const all = { q: '', status: 'all' as const, departmentId: null, companyId: null }
+
+  it('cari nomor, nama, atau panggilan tanpa beda huruf besar', () => {
+    expect(filterWorkers(list, { ...all, q: 'p-00' }).map((w) => w.id)).toEqual([1])
+    expect(filterWorkers(list, { ...all, q: 'ti' }).map((w) => w.id)).toEqual([2])
+  })
+  it('status, divisi, perusahaan', () => {
+    expect(filterWorkers(list, { ...all, status: 'active' }).map((w) => w.id)).toEqual([1])
+    expect(filterWorkers(list, { ...all, status: 'inactive' }).map((w) => w.id)).toEqual([2])
+    expect(filterWorkers(list, { ...all, departmentId: 1 }).map((w) => w.id)).toEqual([1])
+    expect(filterWorkers(list, { ...all, companyId: 2 }).map((w) => w.id)).toEqual([2])
+  })
+})
+
+describe('defaultCompanyId', () => {
+  it('perusahaan bawaan terpilih; tanpa daftar = null (backend lama)', () => {
+    const c = (id: number, builtin = false) => ({ id, name: `c${id}`, workers: 0, builtin })
+    expect(defaultCompanyId([c(3), c(1, true)])).toBe(1)
+    expect(defaultCompanyId([c(3), c(4)])).toBe(3)
+    expect(defaultCompanyId([])).toBeNull()
+  })
+})
+
+describe('templateGroups & orgSummary', () => {
+  it('foto dikelompokkan tanpa helm / dengan helm', () => {
+    const c = (condition: string) => ({ condition })
+    expect(templateGroups([c('bare'), c('glasses'), c('helmet'), c('helmet_glasses')])).toEqual([
+      { label: 'Tanpa helm', count: 2 },
+      { label: 'Dengan helm', count: 2 },
+    ])
+  })
+  it('divisi · perusahaan; kosong = tanda pisah (backend lama tanpa kolom T79)', () => {
+    expect(orgSummary({ department: { id: 1, name: 'Produksi' }, company: { id: 2, name: 'PT Maju' } })).toBe('Produksi · PT Maju')
+    expect(orgSummary({ department: null, company: { id: 1, name: 'Internal' } })).toBe('Internal')
+    expect(orgSummary({})).toBe('—')
+  })
+})

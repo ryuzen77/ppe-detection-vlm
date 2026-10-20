@@ -1,22 +1,30 @@
 <script lang="ts">
-  import { WORKERS } from '../../../lib/messages'
-  import { validateWorkerForm } from '../../../lib/workers'
-  import { api } from '../../../lib/api/client'
-  import { extractApiError } from '../../../lib/api/error'
+  import type { OrgEntry } from '../../lib/api/types'
+  import { WORKERS, WORKERS_PAGE } from '../../lib/messages'
+  import { defaultCompanyId, validateWorkerForm } from '../../lib/workers'
+  import { api } from '../../lib/api/client'
+  import { extractApiError } from '../../lib/api/error'
+  import OrgFields from './OrgFields.svelte'
 
   interface Props {
     show: boolean
+    departments: OrgEntry[]
+    companies: OrgEntry[]
     onClose: () => void
     onSaved: () => void
   }
 
-  let { show, onClose, onSaved }: Props = $props()
+  let { show, departments, companies, onClose, onSaved }: Props = $props()
 
   let employeeNo = $state('')
   let name = $state('')
   let nickname = $state('')
   let gender = $state<'male' | 'female'>('male')
   let consent = $state(false)
+  let departmentId = $state<number | null>(null)
+  let companyId = $state<number | null>(null)
+  // Nomor berikutnya dari server (T79); gagal (server lama) = kosong, backend tetap mengisi otomatis
+  let autoNo = $state(false)
   let adding = $state(false)
   let addError = $state('')
 
@@ -28,6 +36,16 @@
       gender = 'male'
       consent = false
       addError = ''
+      departmentId = null
+      companyId = defaultCompanyId(companies)
+      autoNo = false
+      api.nextEmployeeNo().then(
+        (r) => {
+          employeeNo = r.employee_no
+          autoNo = true
+        },
+        () => {},
+      )
     }
   })
 
@@ -54,6 +72,8 @@
         nickname: nickname.trim(),
         gender,
         consent,
+        ...(departments.length ? { department_id: departmentId } : {}),
+        ...(companyId !== null ? { company_id: companyId } : {}),
       })
       onSaved()
     } catch (e) {
@@ -81,8 +101,8 @@
             placeholder={WORKERS.fieldEmployeeNoPlaceholder}
             bind:value={employeeNo}
             disabled={adding}
-            required
           />
+          <span class="form-hint">{autoNo ? WORKERS_PAGE.employeeNoAutoHint : WORKERS_PAGE.employeeNoAutoEmpty}</span>
         </div>
 
         <div class="form-group">
@@ -119,6 +139,8 @@
             </select>
           </div>
         </div>
+
+        <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={adding} idPrefix="new" />
 
         <div class="consent-box">
           <label class="consent-label">

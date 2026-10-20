@@ -17,6 +17,7 @@ export const NAV = {
   label: 'Navigasi utama',
   monitoring: 'Monitoring',
   laporan: 'Laporan',
+  pekerja: 'Pekerja',
   pengaturan: 'Pengaturan',
 } as const
 
@@ -56,6 +57,13 @@ export const IOT_CHIP = {
   connected: 'Lampu gerbang: tersambung',
   disconnected: 'Lampu gerbang: terputus',
   disabled: 'Lampu gerbang: nonaktif'
+} as const
+
+export const SYSTEM_STATUS = {
+  ready: 'Sistem siap',
+  issues: (n: number) => `${n} perlu perhatian`,
+  title: 'Status sistem',
+  open: 'Lihat status sistem',
 } as const
 
 export const GATE_CHIP = {
@@ -269,6 +277,12 @@ export const REPORTS = {
     status: { all: 'Semua', complete: 'Lolos', incomplete: 'Ditolak' } as Record<'all' | 'complete' | 'incomplete', string>,
     date: 'Tanggal',
     clearDate: 'Semua tanggal',
+    worker: 'Pekerja',
+    allWorkers: 'Semua pekerja',
+    department: 'Divisi',
+    allDepartments: 'Semua divisi',
+    company: 'Perusahaan',
+    allCompanies: 'Semua perusahaan',
   },
   table: {
     ariaLabel: 'Riwayat pemeriksaan',
@@ -280,6 +294,8 @@ export const REPORTS = {
     source: 'Dinilai oleh',
     duration: 'Durasi',
     worker_id: (id: number) => `#${id}`,
+    unknownWorker: 'Tidak dikenali',
+    unknownHint: 'Wajah tidak cocok dengan pekerja terdaftar',
     noPhoto: 'Tanpa foto',
     openPhoto: (id: number) => `Perbesar foto pekerja #${id}`,
     missing: (items: string[]) => (items.length ? `Kurang: ${items.join(', ')}` : ''),
@@ -332,7 +348,8 @@ export const SETTINGS_TAB = {
   lightOffFailed: 'Gagal mematikan lampu',
   pingFailed: 'Gagal ping VLM',
   ppeUpdateFailed: 'Gagal mengubah aturan APD',
-  pingResult: (status: string, ms: number, msg: string) => `Status: ${status}. Latensi: ${ms}ms. ${msg}`,
+  pingResult: (status: string, ms: number, msg: string) =>
+    `${status === 'ONLINE' ? 'VLM menjawab' : 'VLM tidak menjawab'} dalam ${seconds(ms)}${msg ? ` — ${msg}` : ''}`,
   zoneSaveFailed: 'Gagal mengubah zona',
   zoneRangeFailed: 'Gagal mengubah batas zona',
   zoneCalibrateFailed: 'Gagal kalibrasi',
@@ -353,10 +370,21 @@ export const SETTINGS_TAB = {
   mainModel: 'Model Utama',
   backupModel: 'Model Cadangan',
   lightTest: 'Lampu & Tes',
-  testLightBtn: 'Tes Hijau',
-  testRedBtn: 'Tes Merah',
-  testYellowBtn: 'Tes Kuning',
-  latencyTestBtn: 'Uji Latensi VLM',
+  testLightBtn: 'Tes hijau',
+  testRedBtn: 'Tes merah',
+  testYellowBtn: 'Tes kuning',
+  latencyTestBtn: 'Uji kecepatan VLM',
+  // T78: kelompok & daftar isi
+  tocLabel: 'Bagian pengaturan',
+  groups: { gerbang: 'Gerbang', vlm: 'VLM', akun: 'Akun', diagnostik: 'Diagnostik' },
+  groupHints: {
+    gerbang: 'Kamera, titik berdiri, APD yang diperiksa, dan lampu.',
+    vlm: 'Model yang menilai APD.',
+    akun: 'Siapa yang bisa masuk ke dashboard.',
+    diagnostik: 'Pemeriksaan sambungan server dan VLM.',
+  },
+  cameraNone: 'Belum ada kamera dipilih.',
+  lightTestHint: 'Lampu menyala sebentar lalu padam kembali.',
 } as const
 
 // --- Halaman yang belum dipindahkan (T33 langkah 3) ---------------------------------------
@@ -391,6 +419,8 @@ export const AUTH = {
   actions: 'Aksi',
   addAccount: 'Tambah Akun',
   password: 'Kata Sandi',
+  showPassword: 'Tampilkan sandi',
+  hidePassword: 'Sembunyikan sandi',
   passwordMin: `Sandi (min. ${MIN_PASSWORD_LENGTH})`,
   addBtn: 'Tambah',
   resetPassword: 'Reset Sandi',
@@ -427,11 +457,11 @@ export const APP = {
 
 export const VLM_SETTINGS = {
   loading: 'Memuat...',
-  activeSource: 'Sumber aktif',
+  activeSource: 'Diatur dari',
   sourceDashboard: 'Dashboard',
-  sourceEnv: '.env',
-  resetToEnvBtn: 'Kembali ke .env',
-  resetConfirmTitle: 'Kembali ke konfigurasi .env?',
+  sourceEnv: 'berkas konfigurasi server',
+  resetToEnvBtn: 'Kembali ke berkas konfigurasi',
+  resetConfirmTitle: 'Kembali ke pengaturan di berkas konfigurasi server?',
   
   primaryTitle: 'VLM Utama',
   backupTitle: 'VLM Cadangan',
@@ -445,12 +475,12 @@ export const VLM_SETTINGS = {
     'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
   applyingLocalBackup:
     'Menyiapkan model cadangan di GPU (bisa sampai sekitar 1 menit). Gerbang tetap memakai pilihan lama sampai model siap...',
-  missingKey: '(isi key di .env)',
-  missingBaseUrl: '(isi VLM_BASE_URL di .env)',
+  missingKey: '(API key belum diisi di berkas konfigurasi server)',
+  missingBaseUrl: '(alamat VLM_BASE_URL belum diisi di berkas konfigurasi server)',
   
   dataLocation: 'Lokasi Data',
   stats: (photos: number | null, missed: number | null, falseRejects: number | null, medianSeconds: number | null) => 
-    `${photos ?? 0} foto, meleset ${missed ?? 0}, salah tolak ${falseRejects ?? 0}, ~${medianSeconds ?? 0}s`,
+    `Diuji ${photos ?? 0} foto: APD kurang lolos ${missed ?? 0}, patuh salah ditolak ${falseRejects ?? 0}, ±${medianSeconds ?? 0} dtk per pemeriksaan`,
   
   testBtn: 'Uji Penyedia',
   testingBtn: 'Menguji...',
@@ -518,7 +548,7 @@ export const WORKERS = {
   modalAddTitle: 'Daftarkan Pekerja Baru',
   modalEditTitle: 'Ubah Profil Pekerja',
   fieldEmployeeNo: 'Nomor Pegawai',
-  fieldEmployeeNoPlaceholder: 'mis. P-001',
+  fieldEmployeeNoPlaceholder: 'mis. P-0001',
   fieldName: 'Nama Lengkap',
   fieldNamePlaceholder: 'mis. Muhammad Zen Fikri',
   fieldNickname: 'Nama Panggilan',
@@ -546,7 +576,11 @@ export const WORKERS = {
   confirmDeleteTemplateMsg: 'Hapus templat foto wajah ini?',
   statusActive: 'Aktif',
   statusInactive: 'Nonaktif',
-  statusReenroll: 'Perlu Foto Ulang',
+  statusReenroll: 'Perlu foto ulang',
+  faceNone: 'Belum ada foto',
+  groupNoHelmet: 'Tanpa helm',
+  groupHelmet: 'Dengan helm',
+  orgNone: '—',
   statusFaceDeleted: 'Data wajah terhapus',
   deleteSchedule: (dateStr: string) => `Dihapus pada ${dateStr}`,
   photoCount: (n: number) => `${n} foto`,
@@ -563,6 +597,7 @@ export const WORKERS = {
   qualityBadge: (interocularPx: number) => `Jarak mata ${interocularPx} px`,
   recognizedLabel: 'Dikenali',
   recognizedName: (name: string) => `Dikenali: ${name}`,
+  loading: 'Memuat data pekerja…',
   errLoad: 'Gagal memuat data pekerja',
   errAdd: 'Gagal mendaftarkan pekerja',
   errStatus: 'Gagal mengubah status pekerja',
@@ -574,6 +609,72 @@ export const WORKERS = {
   errEnrollmentHold: 'Gerbang gagal dijeda: foto bisa ditolak bila ada orang di jalur pemeriksaan.',
 } as const
 
+
+// --- Halaman Pekerja (T79) --------------------------------------------------------------
+
+export const WORKERS_PAGE = {
+  title: 'Pekerja',
+  subtitle: 'Data pekerja, pendaftaran wajah, dan riwayat pemeriksaan APD per orang.',
+  searchLabel: 'Cari pekerja',
+  searchPlaceholder: 'Cari nomor atau nama…',
+  statusLabel: 'Status',
+  statusOptions: { active: 'Aktif', inactive: 'Nonaktif', all: 'Semua status' },
+  departmentLabel: 'Divisi',
+  companyLabel: 'Perusahaan',
+  allDepartments: 'Semua divisi',
+  allCompanies: 'Semua perusahaan',
+  manageOrg: 'Kelola divisi & perusahaan',
+  shown: (n: number, total: number) => (n === total ? `${total} pekerja` : `${n} dari ${total} pekerja`),
+  noMatch: 'Tidak ada pekerja yang cocok dengan pencarian ini.',
+  colNo: 'Nomor',
+  colName: 'Nama',
+  colOrg: 'Divisi · Perusahaan',
+  colFace: 'Foto wajah',
+  colLastSeen: 'Terakhir lewat',
+  colStatus: 'Status',
+  lastSeenNever: 'Belum pernah',
+  lastSeenPass: 'lolos',
+  lastSeenFail: 'APD kurang',
+  pickHint: 'Pilih pekerja di daftar untuk melihat data, foto wajah, dan riwayatnya.',
+  closeDetail: 'Tutup detail',
+  sectionProfile: 'Data diri',
+  sectionFace: 'Foto wajah',
+  sectionHistory: 'Riwayat pemeriksaan',
+  profileNickname: 'Nama panggilan',
+  profileSalutation: 'Sapaan',
+  profileConsent: 'Persetujuan',
+  consentText: (date: string, by: string) => `${date} oleh ${by}`,
+  enrollBtn: 'Daftarkan wajah',
+  historyEmpty: 'Belum ada pemeriksaan tercatat untuk pekerja ini.',
+  historyUnavailable: 'Riwayat belum tersedia di server ini.',
+  historyMore: 'Muat lebih lama',
+  historyPass: 'Lolos',
+  historyFail: 'APD kurang',
+  historyScore: (score: number) => `wajah ${score.toFixed(2)}`,
+  historyPhoto: 'Foto bukti',
+  fieldDepartmentNone: 'Tanpa divisi',
+  employeeNoAutoHint: 'Terisi otomatis; boleh diganti dengan nomor dari HR.',
+  employeeNoAutoEmpty: 'Kosongkan untuk nomor otomatis.',
+  errOrgLoad: 'Gagal memuat daftar divisi & perusahaan',
+} as const
+
+export const ORG_MANAGER = {
+  title: 'Divisi & perusahaan',
+  subtitle: 'Daftar pilihan saat menambah atau mengubah pekerja. Nama dipakai di laporan.',
+  departments: 'Divisi',
+  companies: 'Perusahaan',
+  addPlaceholder: { departments: 'Nama divisi baru', companies: 'Nama perusahaan / kontraktor baru' },
+  addBtn: 'Tambah',
+  renameBtn: 'Ubah nama',
+  saveBtn: 'Simpan',
+  deleteBtn: 'Hapus',
+  close: 'Tutup',
+  workers: (n: number) => `${n} pekerja aktif`,
+  builtin: 'bawaan',
+  empty: 'Belum ada.',
+  errSave: 'Gagal menyimpan',
+  errDelete: 'Gagal menghapus',
+} as const
 
 // --- Pendaftaran wajah terpandu (T76) ---------------------------------------------------
 

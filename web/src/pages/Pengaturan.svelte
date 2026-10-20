@@ -1,13 +1,12 @@
 <script lang="ts">
-    import CameraPicker from '../components/monitoring/CameraPicker.svelte'
+  import CameraPicker from '../components/monitoring/CameraPicker.svelte'
   import ZoneSettings from '../components/settings/ZoneSettings.svelte'
   import Accounts from '../components/settings/Accounts.svelte'
-  import WorkerSettings from '../components/settings/WorkerSettings.svelte'
   import VlmProviders from '../components/settings/VlmProviders.svelte'
   import LocalVlmCard from '../components/settings/LocalVlmCard.svelte'
   import { api } from '../lib/api/client'
   import type { LightTestAction, VlmInfo } from '../lib/api/types'
-  import { SETTINGS_TAB } from '../lib/messages'
+  import { CAMERA_CHIP, SETTINGS_TAB, modeLabel } from '../lib/messages'
   import { LIGHT_TEST } from '../lib/settings'
   import { telemetry } from '../lib/stores/telemetry.svelte'
   import { catalog } from '../lib/stores/catalog.svelte'
@@ -25,6 +24,15 @@
   let pingStatus = $state('')
 
   const gateIot = $derived(iotChip(telemetry.data))
+  const camera = $derived(telemetry.data?.camera ?? null)
+  // T78: kesehatan VLM cadangan hanya berarti bila cadangan memang dipakai
+  const backupActive = $derived(telemetry.data?.api_monitor?.backup?.configured === true)
+  const GROUPS = ['gerbang', 'vlm', 'akun', 'diagnostik'] as const
+  const LIGHTS = [
+    { color: 'green', label: SETTINGS_TAB.testLightBtn },
+    { color: 'red', label: SETTINGS_TAB.testRedBtn },
+    { color: 'yellow', label: SETTINGS_TAB.testYellowBtn },
+  ] as const
 
   const lostSince = $derived.by(() => formatLostSince(
     telemetry.lastMessageAt,
@@ -76,138 +84,225 @@
 </script>
 
 <div class="wrap">
+  <nav class="toc" aria-label={SETTINGS_TAB.tocLabel}>
+    {#each GROUPS as g (g)}<a href="#/pengaturan" onclick={(e) => { e.preventDefault(); document.getElementById(`grup-${g}`)?.scrollIntoView({ behavior: 'smooth' }) }}>{SETTINGS_TAB.groups[g]}</a>{/each}
+  </nav>
+
   <div class="content">
-    <ZoneSettings />
+    <section class="group" id="grup-gerbang" aria-labelledby="h-gerbang">
+      <header><h2 id="h-gerbang">{SETTINGS_TAB.groups.gerbang}</h2><p>{SETTINGS_TAB.groupHints.gerbang}</p></header>
 
-    <section class="card">
-      <h2>{SETTINGS_TAB.camera}</h2>
-      <button class="btn btn-primary" onclick={() => pickerOpen = true}><Camera size={16} /> {SETTINGS_TAB.pickCamera}</button>
-      <CameraPicker bind:open={pickerOpen} />
-    </section>
-
-    <section class="card">
-      <h2>{SETTINGS_TAB.ppeRequired}</h2>
-      {#if ppeError}<p class="error" role="alert">{ppeError}</p>{/if}
-      <div class="ppe-list">
-        {#if catalog.items}
-          {#each catalog.items as item (item.key)}
-            <label class="ppe-item">
-              <input type="checkbox" checked={item.required} onchange={(e) => togglePpe(item.key, e.currentTarget.checked)} />
-              {item.label}
-            </label>
-          {/each}
-        {/if}
-      </div>
-    </section>
-
-    <Accounts />
-
-    <WorkerSettings />
-
-    <VlmProviders />
-
-    <LocalVlmCard />
-
-    <section class="card">
-      <h2>{SETTINGS_TAB.lightTest}</h2>
-      <p class="status-msg" style="margin-bottom: var(--space-2); margin-top: 0">Status: {gateIot.text} {#if gateIot.hint}({gateIot.hint}){/if}</p>
-      <button class="btn btn-primary" onclick={() => testLight('green')}>{SETTINGS_TAB.testLightBtn}</button>
-      <button class="btn btn-primary" onclick={() => testLight('red')}>{SETTINGS_TAB.testRedBtn}</button>
-      <button class="btn btn-primary" onclick={() => testLight('yellow')}>{SETTINGS_TAB.testYellowBtn}</button>
-      {#if lightStatus}<p class="status-msg">{lightStatus}</p>{/if}
-    </section>
-
-    <section class="card">
-      <h2>{SETTINGS_TAB.diagnostics}</h2>
-      <div class="diagnostic-status">
-        {#if telemetry.status !== 'connected'}
-          <div class="disconnected">
-            <WifiOff size={24} />
-            <p>{lostSince}</p>
-          </div>
+      <section class="card">
+        <div class="card-head">
+          <h3>{SETTINGS_TAB.camera}</h3>
+          <button class="btn btn-primary" onclick={() => pickerOpen = true}><Camera size={16} /> {SETTINGS_TAB.pickCamera}</button>
+        </div>
+        {#if camera?.selected}
+          <p class="line"><strong>{camera.name}</strong>
+            {#if camera.status === 'OK'}<span class="mono muted">{modeLabel(camera)}</span>{:else}<span class="warn">{CAMERA_CHIP[camera.status]}</span>{/if}</p>
         {:else}
-          <div class="connected">
-            <ShieldCheck size={24} />
-            <p>{SETTINGS_TAB.serverConnected}</p>
-          </div>
+          <p class="line muted">{SETTINGS_TAB.cameraNone}</p>
         {/if}
-      </div>
-      <button class="btn btn-primary mt-4" onclick={pingVlm}>{SETTINGS_TAB.latencyTestBtn}</button>
-      {#if pingStatus}<p class="status-msg">{pingStatus}</p>{/if}
+        <CameraPicker bind:open={pickerOpen} />
+      </section>
+
+      <ZoneSettings />
+
+      <section class="card">
+        <h3>{SETTINGS_TAB.ppeRequired}</h3>
+        {#if ppeError}<p class="error" role="alert">{ppeError}</p>{/if}
+        <div class="ppe-list">
+          {#if catalog.items}
+            {#each catalog.items as item (item.key)}
+              <label class="ppe-item">
+                <input type="checkbox" checked={item.required} onchange={(e) => togglePpe(item.key, e.currentTarget.checked)} />
+                {item.label}
+              </label>
+            {/each}
+          {/if}
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>{SETTINGS_TAB.lightTest}</h3>
+        <p class="line muted">{gateIot.text}{#if gateIot.hint} ({gateIot.hint}){/if}</p>
+        <div class="row">
+          {#each LIGHTS as light (light.color)}
+            <button class="btn" onclick={() => testLight(light.color)}><span class="lamp lamp-{light.color}" aria-hidden="true"></span>{light.label}</button>
+          {/each}
+        </div>
+        <p class="hint">{lightStatus || SETTINGS_TAB.lightTestHint}</p>
+      </section>
+    </section>
+
+    <section class="group" id="grup-vlm" aria-labelledby="h-vlm">
+      <header><h2 id="h-vlm">{SETTINGS_TAB.groups.vlm}</h2><p>{SETTINGS_TAB.groupHints.vlm}</p></header>
+      <VlmProviders />
+      {#if backupActive}<LocalVlmCard />{/if}
+    </section>
+
+    <section class="group" id="grup-akun" aria-labelledby="h-akun">
+      <header><h2 id="h-akun">{SETTINGS_TAB.groups.akun}</h2><p>{SETTINGS_TAB.groupHints.akun}</p></header>
+      <Accounts />
+    </section>
+
+    <section class="group" id="grup-diagnostik" aria-labelledby="h-diagnostik">
+      <header><h2 id="h-diagnostik">{SETTINGS_TAB.groups.diagnostik}</h2><p>{SETTINGS_TAB.groupHints.diagnostik}</p></header>
+      <section class="card">
+        <div class="card-head">
+          {#if telemetry.status !== 'connected'}
+            <p class="status warn"><WifiOff size={20} /> {lostSince}</p>
+          {:else}
+            <p class="status ok"><ShieldCheck size={20} /> {SETTINGS_TAB.serverConnected}</p>
+          {/if}
+          <button class="btn" onclick={pingVlm}>{SETTINGS_TAB.latencyTestBtn}</button>
+        </div>
+        {#if pingStatus}<p class="hint">{pingStatus}</p>{/if}
+      </section>
     </section>
   </div>
 </div>
 
 <style>
   .wrap {
-    padding: var(--space-8) var(--space-4);
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .content {
-    width: 100%;
-    max-width: 600px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-6);
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-5) var(--space-8);
   }
-  @media (min-width: 1280px) {
-    .content {
-      max-width: 1360px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-6);
-      align-items: start;
+  .toc {
+    display: none;
+  }
+  @media (min-width: 1100px) {
+    .wrap {
+      grid-template-columns: 180px minmax(0, 1fr);
+    }
+    .toc {
+      position: sticky;
+      top: var(--space-6);
+      align-self: start;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
     }
   }
+  .toc a {
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+  }
+  .toc a:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-width: 0;
+  }
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    scroll-margin-top: var(--space-6);
+  }
+  .group > header h2 {
+    margin: 0;
+    font-size: var(--text-xl);
+  }
+  .group > header p {
+    margin: var(--space-1) 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
   .card {
-    padding: var(--space-6);
+    padding: var(--space-5) var(--space-6);
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
     color: var(--text);
   }
-  h2 {
-    margin: 0 0 var(--space-4);
+  h3 {
+    margin: 0 0 var(--space-3);
     font-size: var(--text-lg);
   }
-  .ppe-list {
+  .card-head {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+  .card-head h3 {
+    margin: 0;
+  }
+  .line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-sm);
+  }
+  .muted {
+    color: var(--text-muted);
+  }
+  .warn {
+    color: var(--warn);
+  }
+  .ppe-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-2) var(--space-4);
   }
   .ppe-item {
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    font-size: var(--text-sm);
   }
-  .diagnostic-status {
-    margin-top: var(--space-2);
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
   }
-  .disconnected, .connected {
+  .lamp {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .lamp-green {
+    background: var(--ok);
+  }
+  .lamp-red {
+    background: var(--danger);
+  }
+  .lamp-yellow {
+    background: var(--warn);
+  }
+  .status {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
+    margin: 0;
+    font-size: var(--text-sm);
   }
-  .disconnected {
-    color: var(--warn);
-  }
-  .connected {
+  .status.ok {
     color: var(--ok);
+  }
+  .hint {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
   }
   .error {
     color: var(--danger);
     font-size: var(--text-sm);
-    margin-bottom: var(--space-2);
-  }
-  .status-msg {
-    margin-top: var(--space-2);
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-  }
-  .mt-4 {
-    margin-top: var(--space-4);
+    margin: 0 0 var(--space-2);
   }
 </style>

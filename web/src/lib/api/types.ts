@@ -291,6 +291,21 @@ export interface ReportRecord {
   inference_source: string
   inference_time_ms: number
   snapshot_filename: string
+  /** Identitas wajah (T34c1) + snapshot divisi/perusahaan saat pemeriksaan (T79) */
+  worker_id?: number | null
+  employee_no?: string | null
+  worker_name?: string | null
+  fr_status?: 'recognized' | 'unknown' | 'disabled' | string | null
+  fr_score?: number | null
+  department?: string | null
+  company?: string | null
+}
+
+/** Saringan identitas laporan (T79); kosong = semua */
+export interface ReportWhoFilter {
+  worker_id?: number
+  department?: string
+  company?: string
 }
 
 export interface ReportsPage {
@@ -575,6 +590,11 @@ export interface Worker {
   salutation?: string
   voice_ready?: boolean
   templates: WorkerTemplate[]
+  /** T79: opsional sampai backend T79a digabung */
+  department?: OrgRef | null
+  company?: OrgRef
+  /** Pemeriksaan terakhir di audit (T79) */
+  last_seen?: { at: string; is_complete: boolean } | null
 }
 
 export interface WorkersResponse {
@@ -588,15 +608,52 @@ export interface WorkersResponse {
 }
 
 export interface NewWorkerRequest {
+  /** T79: kosong = nomor otomatis dari backend (format config) */
   employee_no: string
   name: string
   consent: boolean
   nickname?: string
   gender?: 'male' | 'female' | string
+  department_id?: number | null
+  company_id?: number
 }
 
 export interface UpdateWorkerRequest {
   nickname?: string
   gender?: 'male' | 'female' | string
+  employee_no?: string
+  department_id?: number | null
+  company_id?: number
+}
+
+// --- Halaman Pekerja (kontrak T79) ------------------------------------------------------
+
+export interface OrgRef {
+  id: number
+  name: string
+}
+
+export type OrgKind = 'departments' | 'companies'
+
+/** GET /api/org/{kind}: `workers` = jumlah pekerja aktif */
+export interface OrgEntry extends OrgRef {
+  workers: number
+  /** Perusahaan bawaan ("Internal"): tidak bisa dihapus, terpilih otomatis di form */
+  builtin: boolean
+}
+
+/** GET /api/workers/{id}/inspections */
+export interface WorkerInspection {
+  id: number
+  timestamp: string
+  is_complete: boolean
+  missing_items: string[]
+  fr_score: number | null
+  snapshot_filename: string
+}
+
+export interface WorkerInspectionsPage {
+  items: WorkerInspection[]
+  next_before: number | null
 }
 

@@ -4,7 +4,7 @@
   // riwayat, bukan hanya hasil saringan.
   import Download from '@lucide/svelte/icons/download'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
-  import { onDestroy } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import ReportTable from '../components/reports/ReportTable.svelte'
   import SnapshotDialog from '../components/reports/SnapshotDialog.svelte'
   import StatTile from '../components/reports/StatTile.svelte'
@@ -12,7 +12,7 @@
   import ReportChart from '../components/reports/ReportChart.svelte'
   import MissingItemsChart from '../components/reports/MissingItemsChart.svelte'
   import { api } from '../lib/api/client'
-  import type { ReportRecord, ReportsPage, ReportStatusFilter, ReportPeriod, ReportSummary } from '../lib/api/types'
+  import type { OrgEntry, ReportRecord, ReportsPage, ReportStatusFilter, ReportPeriod, ReportSummary, ReportWhoFilter, Worker } from '../lib/api/types'
   import { REPORTS as TEXT, count, percent, withError } from '../lib/messages'
   import { complianceTone, historyHead, pageInfo } from '../lib/reports'
   import { REPORTS } from '../lib/settings'
@@ -34,6 +34,25 @@
   let error = $state('')
   let photo = $state<ReportRecord | null>(null)
 
+  // Saringan identitas (T79). Daftar diambil sekali; server tanpa T79a = daftar kosong, saringan disembunyikan
+  let workerId = $state<number | null>(null)
+  let department = $state('')
+  let company = $state('')
+  let workerOptions = $state<Worker[]>([])
+  let departments = $state<OrgEntry[]>([])
+  let companies = $state<OrgEntry[]>([])
+  const who = $derived<ReportWhoFilter>({
+    worker_id: workerId ?? undefined,
+    department: department || undefined,
+    company: company || undefined,
+  })
+
+  onMount(() => {
+    api.workers().then((r) => (workerOptions = r.workers), () => {})
+    api.orgList('departments').then((d) => (departments = d), () => {})
+    api.orgList('companies').then((c) => (companies = c), () => {})
+  })
+
   // Hanya balasan permintaan terakhir yang dipakai (saringan bisa berganti cepat)
   let requestSeq = 0
 
@@ -42,7 +61,7 @@
     const seq = ++requestSeq
     loading = true
     try {
-      const sumData = await api.reportsSummary({ period, date: date || undefined })
+      const sumData = await api.reportsSummary({ period, date: date || undefined, ...who })
       if (seq !== requestSeq) return
       summary = sumData
 
@@ -51,8 +70,9 @@
         limit: REPORTS.pageSize, 
         offset, 
         status, 
-        from: summary.range.from, 
-        to: summary.range.to 
+        from: summary.range.from,
+        to: summary.range.to,
+        ...who,
       })
       if (seq !== requestSeq) return
       page = pageData
@@ -68,7 +88,7 @@
 
   // Muat ulang setiap saringan atau halaman berubah
   $effect(() => {
-    void [period, date, status, offset]
+    void [period, date, status, offset, who]
     load()
   })
 
@@ -97,7 +117,7 @@
 
   const records = $derived(page?.page_records ?? [])
   const info = $derived(pageInfo(offset, records.length, page?.filtered_total ?? 0))
-  const filtered = $derived(status !== 'all' || date !== '')
+  const filtered = $derived(status !== 'all' || date !== '' || workerId !== null || department !== '' || company !== '')
 </script>
 
 <div class="laporan">
@@ -110,7 +130,7 @@
       <button class="btn" onclick={load} disabled={loading}>
         <RefreshCw size={16} aria-hidden="true" />{TEXT.refresh}
       </button>
-      <a class="btn" href={api.exportCsvUrl(summary?.range.from, summary?.range.to)} download title={TEXT.exportHint}>
+      <a class="btn" href={api.exportCsvUrl({ from: summary?.range.from, to: summary?.range.to, ...who })} download title={TEXT.exportHint}>
         <Download size={16} aria-hidden="true" />{TEXT.exportCsv}
       </a>
     </div>
@@ -155,6 +175,27 @@
                   onclick={() => setFilter(() => (status = s))}>{TEXT.filters.status[s]}</button>
         {/each}
       </div>
+      {#if workerOptions.length}
+        <select class="input who" aria-label={TEXT.filters.worker} value={workerId ?? ""}
+                onchange={(e) => setFilter(() => (workerId = e.currentTarget.value ? Number(e.currentTarget.value) : null))}>
+          <option value="">{TEXT.filters.allWorkers}</option>
+          {#each workerOptions as w (w.id)}<option value={w.id}>{w.name} · {w.employee_no}</option>{/each}
+        </select>
+      {/if}
+      {#if departments.length}
+        <select class="input who" aria-label={TEXT.filters.department} value={department}
+                onchange={(e) => setFilter(() => (department = e.currentTarget.value))}>
+          <option value="">{TEXT.filters.allDepartments}</option>
+          {#each departments as d (d.id)}<option value={d.name}>{d.name}</option>{/each}
+        </select>
+      {/if}
+      {#if companies.length}
+        <select class="input who" aria-label={TEXT.filters.company} value={company}
+                onchange={(e) => setFilter(() => (company = e.currentTarget.value))}>
+          <option value="">{TEXT.filters.allCompanies}</option>
+          {#each companies as c (c.id)}<option value={c.name}>{c.name}</option>{/each}
+        </select>
+      {/if}
     </div>
 
     {#if error}
@@ -182,6 +223,10 @@
 <SnapshotDialog bind:record={photo} />
 
 <style>
+  .who {
+    width: auto;
+    max-width: 240px;
+  }
 
   .chart-row {
     display: flex;
