@@ -51,6 +51,9 @@ CAMERA_DISCONNECTED = "Kamera terputus atau dicabut"
 CAMERA_STALLED = "Kamera berhenti mengirim frame wajar"
 CAMERA_FROZEN = "Gambar kamera membeku (frame identik); menyambung ulang"
 LOG_CAMERA_RECONNECT = "{reason}. Menunggu untuk disambung ulang."
+# T77: galat tak terduga di thread pembaca kamera; pembaca tetap hidup & menyambung ulang
+CAMERA_READER_ERROR = "Galat membaca kamera ({error}); menyambung ulang"
+LOG_CAMERA_READER_ERROR = "Galat di pembaca kamera (ke-{count} beruntun): {error}. Dicoba lagi dalam {delay:g} dtk."
 # T67: tombol Pindai tanpa kamera aktif hanya memindai daftar kamera, tidak mengoptimasi apa pun
 LOG_CAMERA_OPTIMIZE_NO_CAMERA = "Optimasi kamera dilewati: belum ada kamera aktif."
 LOG_CAMERA_WAITING = "Masih menunggu kamera '{name}' ({seconds:.0f} dtk); perangkat yang terlihat sistem: {seen}"

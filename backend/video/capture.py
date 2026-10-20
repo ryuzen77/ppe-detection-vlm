@@ -32,6 +32,8 @@ class _ReaderState:
     window_frames: int = 0
     baseline_fps: float = 0.0
     stall_since: float | None = None
+    # Galat tak terduga beruntun (T77): menentukan jeda sebelum putaran berikutnya
+    error_streak: int = 0
 
     def reset_rate(self, now: float):
         self.window_start, self.window_frames, self.baseline_fps, self.stall_since = now, 0, 0.0, None
@@ -434,19 +436,41 @@ class VideoCaptureService:
         self._reader = _ReaderState(lost_mode=self._start_reader(), window_start=time.time())
         try:
             while self.is_running:
-                if self._handle_requests():
-                    continue
-                raw = self._next_raw_frame()
-                if raw is not None:
-                    self._publish_raw(raw)
-        except Exception as e:
-            # Tanpa penjaga ini, galat apa pun mematikan thread pembaca diam-diam
-            # dan aliran video berhenti tanpa pesan sama sekali.
-            logger.exception(f"Reader loop berhenti karena galat: {e}")
-            self.camera_status = "LOST"
-            self.camera_error = str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+                try:
+                    self._reader_step()
+                    self._reader.error_streak = 0
+                except Exception as e:
+                    self._recover_reader(e)
         finally:
             self._release_camera()
+
+    def _reader_step(self):
+        """Satu putaran: permintaan operator / vonis lepas, atau satu frame."""
+        if self._handle_requests():
+            return
+        raw = self._next_raw_frame()
+        if raw is not None:
+            self._publish_raw(raw)
+
+    def _recover_reader(self, error: Exception):
+        """Galat tak terduga (T77, mis. RAM habis saat `cap.read()`): thread pembaca tidak boleh mati.
+
+        Dulu galat apa pun mengakhiri thread ini selamanya: gerbang buta (kuning) sampai operator
+        memilih ulang kamera, dan proses tetap hidup sehingga supervisor tidak me-restart. Kini kamera
+        divonis lepas dan disambung ulang lewat jalur LOST biasa, setelah jeda yang berlipat.
+        """
+        r = self._reader
+        r.error_streak += 1
+        delay = min(cfg.CAMERA_ERROR_BACKOFF_SECONDS * 2 ** (r.error_streak - 1), cfg.CAMERA_ERROR_BACKOFF_MAX_SECONDS)
+        text = str(error)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+        logger.exception(messages.LOG_CAMERA_READER_ERROR.format(count=r.error_streak, error=text, delay=delay))
+        if self.camera_index is not None:
+            try:
+                self._mark_lost(messages.CAMERA_READER_ERROR.format(error=text))
+            except Exception:
+                # Melepas kamera pun bisa gagal saat RAM habis; status tetap LOST agar disambung ulang
+                self.cap, self.camera_status = None, "LOST"
+        time.sleep(delay)
 
     def _start_reader(self) -> dict | None:
         """Kamera awal; mengembalikan mode untuk sambung ulang bila kamera autostart belum terlihat.
