@@ -45,6 +45,7 @@ button {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   padding: 6px 12px;
   border: 1px solid var(--border-strong);
@@ -56,10 +57,6 @@ button {
 .btn:hover:not(:disabled) {
   background: var(--surface-3);
 }
-.btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -68,6 +65,14 @@ button {
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+/* Nonaktif = abu datar, bukan warna aksen yang diredupkan (analisa UI 19-10: tombol biru
+   nonaktif nyaris sama dengan yang aktif). Setelah .btn-primary supaya menimpanya. */
+.btn:disabled {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-faint);
+  cursor: not-allowed;
 }
 
 /* Kolom isian dasar (T79) — label di atas, teks bantuan di bawah */

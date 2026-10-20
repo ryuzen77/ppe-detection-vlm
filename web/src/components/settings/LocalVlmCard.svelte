@@ -44,10 +44,13 @@
       <span class="info-label">{LOCAL_VLM.slowStreakLabel}</span>
       <span class="info-value mono">{slowStreak}</span>
     </div>
-    <div class="info-row">
-      <span class="info-label">{LOCAL_VLM.otherAppsLabel}</span>
-      <span class="info-value">{otherAppsText}</span>
-    </div>
+    <!-- T78: daftar aplikasi lain hanya saat perlu ditindaklanjuti (VLM lokal lambat/terbagi) -->
+    {#if showWarning}
+      <div class="info-row">
+        <span class="info-label">{LOCAL_VLM.otherAppsLabel}</span>
+        <span class="info-value">{otherAppsText}</span>
+      </div>
+    {/if}
   </div>
 
   {#if showWarning}

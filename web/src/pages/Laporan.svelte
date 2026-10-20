@@ -176,7 +176,7 @@
         {/each}
       </div>
       {#if workerOptions.length}
-        <select class="input who" aria-label={TEXT.filters.worker} value={workerId}
+        <select class="input who" aria-label={TEXT.filters.worker} value={workerId ?? ""}
                 onchange={(e) => setFilter(() => (workerId = e.currentTarget.value ? Number(e.currentTarget.value) : null))}>
           <option value="">{TEXT.filters.allWorkers}</option>
           {#each workerOptions as w (w.id)}<option value={w.id}>{w.name} · {w.employee_no}</option>{/each}

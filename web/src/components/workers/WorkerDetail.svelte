@@ -40,7 +40,7 @@
     <div>
       <p class="number mono">{worker.employee_no}</p>
       <h2 id="worker-detail-title">{worker.name}</h2>
-      <p class="org">{orgSummary(worker)}</p>
+      {#if worker.department || worker.company}<p class="org">{orgSummary(worker)}</p>{/if}
     </div>
     <button type="button" class="icon" onclick={onClose} aria-label={TEXT.closeDetail} title={TEXT.closeDetail}><X size={18} /></button>
   </header>

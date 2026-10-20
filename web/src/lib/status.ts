@@ -1,7 +1,7 @@
 /** Status kamera & VLM → nada warna + teks chip (logika murni, teruji). */
 import type { Telemetry } from './api/types'
 import type { Tone } from './gate'
-import { CAMERA_CHIP, VLM_CHIP, VLM_CHIP_NO_BACKUP, IOT_CHIP, cameraChipOk } from './messages'
+import { CAMERA_CHIP, VLM_CHIP, VLM_CHIP_NO_BACKUP, IOT_CHIP, SYSTEM_STATUS, cameraChipOk } from './messages'
 
 export interface Chip {
   tone: Tone
@@ -39,4 +39,17 @@ export function iotChip(t: Telemetry | null): Chip {
     text: iot.connected ? IOT_CHIP.connected : IOT_CHIP.disconnected,
     hint: iot.error || ''
   }
+}
+
+const TONE_RANK: Record<Tone, number> = { neutral: 0, ok: 1, warn: 2, danger: 3 }
+
+/**
+ * Satu ringkasan untuk bilah atas (T78): 6 chip berdampingan melebihi layar 1366 px (1464 px
+ * terukur). Nada = yang terburuk; teks = masalah satu-satunya, atau jumlah masalahnya.
+ */
+export function systemSummary(chips: Chip[]): { tone: Tone; text: string; problems: Chip[] } {
+  const problems = chips.filter((c) => c.tone === 'warn' || c.tone === 'danger')
+  const tone = chips.reduce<Tone>((worst, c) => (TONE_RANK[c.tone] > TONE_RANK[worst] ? c.tone : worst), 'neutral')
+  const text = problems.length === 0 ? SYSTEM_STATUS.ready : problems.length === 1 ? problems[0].text : SYSTEM_STATUS.issues(problems.length)
+  return { tone: problems.length ? tone : 'ok', text, problems }
 }

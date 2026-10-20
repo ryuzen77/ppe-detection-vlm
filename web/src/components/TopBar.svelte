@@ -4,15 +4,16 @@
   import Lightbulb from '@lucide/svelte/icons/lightbulb'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
+  import ChevronDown from '@lucide/svelte/icons/chevron-down'
   import LogIn from '@lucide/svelte/icons/log-in'
   import LogOut from '@lucide/svelte/icons/log-out'
   import User from '@lucide/svelte/icons/user'
   import { onDestroy } from 'svelte'
   import { gateView } from '../lib/gate'
-  import { BRAND, CONNECTION, GATE_CHIP, NAV, chipTitle, AUTH } from '../lib/messages'
+  import { BRAND, CONNECTION, GATE_CHIP, NAV, SYSTEM_STATUS, AUTH, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
-  import { cameraChip, vlmChip, iotChip } from '../lib/status'
+  import { cameraChip, vlmChip, iotChip, systemSummary } from '../lib/status'
   import { connectionView } from '../lib/connection'
   import { session } from '../lib/stores/session.svelte'
   import { LOGIN } from '../lib/messages'
@@ -31,7 +32,27 @@
   const iot = $derived(iotChip(t))
   const connection = $derived(connectionView(session.authenticated, telemetry.status))
   const localVlm = $derived(localVlmChipView(health.localVlm))
+  // T78: satu ringkasan menggantikan chip kamera/VLM/lampu/VLM lokal yang berdampingan
+  const items = $derived([
+    { icon: Camera, ...camera },
+    { icon: Cpu, ...vlm },
+    ...(t?.iot ? [{ icon: Lightbulb, ...iot }] : []),
+    ...(localVlm ? [{ icon: Cpu, ...localVlm }] : []),
+  ])
+  const summary = $derived(systemSummary(items))
+  // Chip gerbang "kamera belum siap" sama dengan masalah kamera di ringkasan: tidak ditampilkan dua kali
+  const showGate = $derived(router.current !== 'monitoring' && gate.kind !== 'offline' && gate.kind !== 'no-camera')
+  let open = $state(false)
+
+  function onWindowClick(e: MouseEvent) {
+    if (open && !(e.target as Element).closest('.system')) open = false
+  }
+  function onKeydown(e: KeyboardEvent) {
+    if (open && e.key === 'Escape') open = false
+  }
 </script>
+
+<svelte:window onclick={onWindowClick} onkeydown={onKeydown} />
 
 <header class="topbar">
   <div class="brand" title={BRAND.full}>
@@ -51,7 +72,7 @@
   {/if}
 
   <div class="status">
-    {#if router.current !== 'monitoring' && gate.kind !== 'offline'}
+    {#if showGate}
       <a class="gate tone-{gate.tone}" href={href('monitoring')} title={GATE_CHIP.title}>
         <span class="dot"></span>
         <span class="label">{GATE_CHIP.text(gate.title, gate.trackId)}</span>
@@ -63,15 +84,26 @@
     {:else if connection === 'disconnected'}
       <span class="chip tone-danger" title={CONNECTION.lost}><WifiOff size={14} aria-hidden="true" /> <span class="label">{CONNECTION.lost}</span></span>
     {:else}
-      {#if t?.iot}
-        <span class="chip tone-{iot.tone}" title={chipTitle(iot.text, iot.hint)}><Lightbulb size={14} aria-hidden="true" /> <span class="label">{iot.text}</span></span>
-      {/if}
-
-      <span class="chip tone-{camera.tone}" title={chipTitle(camera.text, camera.hint)}><Camera size={14} aria-hidden="true" /> <span class="label">{camera.text}</span></span>
-      <span class="chip tone-{vlm.tone}" title={chipTitle(vlm.text, vlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{vlm.text}</span></span>
-      {#if localVlm}
-        <span class="chip tone-{localVlm.tone}" title={chipTitle(localVlm.text, localVlm.hint)}><Cpu size={14} aria-hidden="true" /> <span class="label">{localVlm.text}</span></span>
-      {/if}
+      <div class="system">
+        <button type="button" class="chip summary tone-{summary.tone}" aria-expanded={open} aria-haspopup="true"
+                title={chipTitle(summary.text, SYSTEM_STATUS.open)} onclick={() => (open = !open)}>
+          <span class="dot"></span><span class="label">{summary.text}</span><ChevronDown size={14} aria-hidden="true" />
+        </button>
+        {#if open}
+          <div class="panel" role="dialog" aria-label={SYSTEM_STATUS.title}>
+            <p class="panel-title">{SYSTEM_STATUS.title}</p>
+            <ul>
+              {#each items as item, i (i)}
+                {@const Icon = item.icon}
+                <li class="tone-{item.tone}">
+                  <Icon size={16} aria-hidden="true" />
+                  <span><span class="item-text">{item.text}</span>{#if item.hint}<span class="item-hint">{item.hint}</span>{/if}</span>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
     {/if}
     {#if session.authenticated}
       <span class="chip tone-ok" title={AUTH.accounts}>
@@ -191,6 +223,79 @@
   .tone-danger {
     color: var(--danger);
     border-color: var(--danger-line);
+  }
+  .system {
+    position: relative;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .summary {
+    max-width: 100%;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .summary:hover {
+    background: var(--surface-2);
+  }
+  .summary.tone-ok .dot {
+    background: var(--ok);
+  }
+  .summary.tone-warn .dot {
+    background: var(--warn);
+  }
+  .summary.tone-danger .dot {
+    background: var(--danger);
+  }
+  .panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 40;
+    width: 320px;
+    padding: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px var(--backdrop);
+  }
+  .panel-title {
+    margin: 0 0 var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .panel ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .panel li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .panel li :global(svg) {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .item-text {
+    display: block;
+    color: var(--text);
+  }
+  .panel li.tone-warn .item-text {
+    color: var(--warn);
+  }
+  .panel li.tone-danger .item-text {
+    color: var(--danger);
+  }
+  .item-hint {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
   }
   .gate.tone-ok .dot {
     background: var(--ok);

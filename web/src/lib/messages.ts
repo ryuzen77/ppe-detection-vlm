@@ -59,6 +59,13 @@ export const IOT_CHIP = {
   disabled: 'Lampu gerbang: nonaktif'
 } as const
 
+export const SYSTEM_STATUS = {
+  ready: 'Sistem siap',
+  issues: (n: number) => `${n} perlu perhatian`,
+  title: 'Status sistem',
+  open: 'Lihat status sistem',
+} as const
+
 export const GATE_CHIP = {
   title: 'Buka Monitoring',
   text: (title: string, trackId: number | null) => `Gerbang: ${title}${trackId ? ` · #${trackId}` : ''}`,
@@ -341,7 +348,8 @@ export const SETTINGS_TAB = {
   lightOffFailed: 'Gagal mematikan lampu',
   pingFailed: 'Gagal ping VLM',
   ppeUpdateFailed: 'Gagal mengubah aturan APD',
-  pingResult: (status: string, ms: number, msg: string) => `Status: ${status}. Latensi: ${ms}ms. ${msg}`,
+  pingResult: (status: string, ms: number, msg: string) =>
+    `${status === 'ONLINE' ? 'VLM menjawab' : 'VLM tidak menjawab'} dalam ${seconds(ms)}${msg ? ` — ${msg}` : ''}`,
   zoneSaveFailed: 'Gagal mengubah zona',
   zoneRangeFailed: 'Gagal mengubah batas zona',
   zoneCalibrateFailed: 'Gagal kalibrasi',
@@ -362,10 +370,21 @@ export const SETTINGS_TAB = {
   mainModel: 'Model Utama',
   backupModel: 'Model Cadangan',
   lightTest: 'Lampu & Tes',
-  testLightBtn: 'Tes Hijau',
-  testRedBtn: 'Tes Merah',
-  testYellowBtn: 'Tes Kuning',
-  latencyTestBtn: 'Uji Latensi VLM',
+  testLightBtn: 'Tes hijau',
+  testRedBtn: 'Tes merah',
+  testYellowBtn: 'Tes kuning',
+  latencyTestBtn: 'Uji kecepatan VLM',
+  // T78: kelompok & daftar isi
+  tocLabel: 'Bagian pengaturan',
+  groups: { gerbang: 'Gerbang', vlm: 'VLM', akun: 'Akun', diagnostik: 'Diagnostik' },
+  groupHints: {
+    gerbang: 'Kamera, titik berdiri, APD yang diperiksa, dan lampu.',
+    vlm: 'Model yang menilai APD.',
+    akun: 'Siapa yang bisa masuk ke dashboard.',
+    diagnostik: 'Pemeriksaan sambungan server dan VLM.',
+  },
+  cameraNone: 'Belum ada kamera dipilih.',
+  lightTestHint: 'Lampu menyala sebentar lalu padam kembali.',
 } as const
 
 // --- Halaman yang belum dipindahkan (T33 langkah 3) ---------------------------------------
@@ -436,11 +455,11 @@ export const APP = {
 
 export const VLM_SETTINGS = {
   loading: 'Memuat...',
-  activeSource: 'Sumber aktif',
+  activeSource: 'Diatur dari',
   sourceDashboard: 'Dashboard',
-  sourceEnv: '.env',
-  resetToEnvBtn: 'Kembali ke .env',
-  resetConfirmTitle: 'Kembali ke konfigurasi .env?',
+  sourceEnv: 'berkas konfigurasi server',
+  resetToEnvBtn: 'Kembali ke berkas konfigurasi',
+  resetConfirmTitle: 'Kembali ke pengaturan di berkas konfigurasi server?',
   
   primaryTitle: 'VLM Utama',
   backupTitle: 'VLM Cadangan',
@@ -454,12 +473,12 @@ export const VLM_SETTINGS = {
     'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
   applyingLocalBackup:
     'Menyiapkan model cadangan di GPU (bisa sampai sekitar 1 menit). Gerbang tetap memakai pilihan lama sampai model siap...',
-  missingKey: '(isi key di .env)',
-  missingBaseUrl: '(isi VLM_BASE_URL di .env)',
+  missingKey: '(API key belum diisi di berkas konfigurasi server)',
+  missingBaseUrl: '(alamat VLM_BASE_URL belum diisi di berkas konfigurasi server)',
   
   dataLocation: 'Lokasi Data',
   stats: (photos: number | null, missed: number | null, falseRejects: number | null, medianSeconds: number | null) => 
-    `${photos ?? 0} foto, meleset ${missed ?? 0}, salah tolak ${falseRejects ?? 0}, ~${medianSeconds ?? 0}s`,
+    `Diuji ${photos ?? 0} foto: APD kurang lolos ${missed ?? 0}, patuh salah ditolak ${falseRejects ?? 0}, ±${medianSeconds ?? 0} dtk per pemeriksaan`,
   
   testBtn: 'Uji Penyedia',
   testingBtn: 'Menguji...',
@@ -527,7 +546,7 @@ export const WORKERS = {
   modalAddTitle: 'Daftarkan Pekerja Baru',
   modalEditTitle: 'Ubah Profil Pekerja',
   fieldEmployeeNo: 'Nomor Pegawai',
-  fieldEmployeeNoPlaceholder: 'mis. P-001',
+  fieldEmployeeNoPlaceholder: 'mis. P-0001',
   fieldName: 'Nama Lengkap',
   fieldNamePlaceholder: 'mis. Muhammad Zen Fikri',
   fieldNickname: 'Nama Panggilan',

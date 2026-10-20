@@ -151,76 +151,86 @@
 
 </script>
 
+<!-- T78: daftar akun selebar kartu, form berlabel; ganti sandi sendiri di kartu terpisah -->
 <section class="card">
-  <h2>{AUTH.accounts}</h2>
-
-  <div class="split-layout">
-    <div class="accounts-list-container">
-      <h3>{AUTH.listAccounts}</h3>
-      {#if errorMsg}
-        <div class="error-box" role="alert">{errorMsg}</div>
-      {/if}
-      {#if loading}
-        <p>{AUTH.loadingAccounts}</p>
-      {:else}
-        <table class="accounts-table">
-          <thead>
+  <h3>{AUTH.listAccounts}</h3>
+  {#if errorMsg}
+    <div class="error-box" role="alert">{errorMsg}</div>
+  {/if}
+  {#if loading}
+    <p>{AUTH.loadingAccounts}</p>
+  {:else}
+    <div class="table-wrap">
+      <table class="accounts-table">
+        <thead>
+          <tr>
+            <th>{AUTH.username}</th>
+            <th>{AUTH.role}</th>
+            <th>{AUTH.createdAt}</th>
+            <th>{AUTH.lastLogin}</th>
+            <th>{AUTH.actions}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each accounts as acc (acc.username)}
             <tr>
-              <th>{AUTH.username}</th>
-              <th>{AUTH.role}</th>
-              <th>{AUTH.createdAt}</th>
-              <th>{AUTH.lastLogin}</th>
-              <th>{AUTH.actions}</th>
+              <td>{acc.username} {acc.username === session.user?.username ? AUTH.you : ''}</td>
+              <td>{acc.role}</td>
+              <td>{formatServerDate(acc.created_at)}</td>
+              <td>{formatServerDate(acc.last_login_at)}</td>
+              <td>
+                {#if acc.username !== session.user?.username}
+                  <button class="btn btn-small" onclick={() => startReset(acc.username)}>{AUTH.resetPassword}</button>
+                  <button class="btn btn-small tone-danger" onclick={() => confirmDelete(acc.username)}>{AUTH.deleteBtn}</button>
+                {/if}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {#each accounts as acc (acc.username)}
-              <tr>
-                <td>{acc.username} {acc.username === session.user?.username ? AUTH.you : ''}</td>
-                <td>{acc.role}</td>
-                <td>{formatServerDate(acc.created_at)}</td>
-                <td>{formatServerDate(acc.last_login_at)}</td>
-                <td>
-                  {#if acc.username !== session.user?.username}
-                    <button class="btn btn-small" onclick={() => startReset(acc.username)}>{AUTH.resetPassword}</button>
-                    <button class="btn btn-small tone-danger" onclick={() => confirmDelete(acc.username)}>{AUTH.deleteBtn}</button>
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      {/if}
-
-      <div class="add-account-box">
-        <h3>{AUTH.addAccount}</h3>
-        {#if addError}
-          <div class="error-box" role="alert">{addError}</div>
-        {/if}
-        <form class="inline-form" onsubmit={handleAddAccount}>
-          <input type="text" placeholder={AUTH.username} bind:value={newUsername} disabled={adding} required />
-          <input type="password" placeholder={AUTH.passwordMin} bind:value={newPassword} disabled={adding} required />
-          <button type="submit" class="btn btn-primary" disabled={adding || !newUsername || !newPassword}>{AUTH.addBtn}</button>
-        </form>
-      </div>
+          {/each}
+        </tbody>
+      </table>
     </div>
+  {/if}
 
-    <div class="change-password-box">
-      <h3>{AUTH.changeOwnPassword}</h3>
-      {#if changePasswordError}
-        <div class="error-box" role="alert">{changePasswordError}</div>
-      {/if}
-      {#if changePasswordSuccess}
-        <div class="success-box" role="alert">{changePasswordSuccess}</div>
-      {/if}
-      <form class="vertical-form" onsubmit={handleChangePassword}>
-        <input type="password" placeholder={AUTH.currentPassword} bind:value={currentPassword} disabled={changingPassword} required />
-        <input type="password" placeholder={AUTH.newPassword} bind:value={changePasswordNew} disabled={changingPassword} required />
-        <input type="password" placeholder={AUTH.repeatNewPassword} bind:value={changePasswordConfirm} disabled={changingPassword} required />
-        <button type="submit" class="btn btn-primary" disabled={changingPassword || !currentPassword || !changePasswordNew}>{AUTH.saveNewPassword}</button>
-      </form>
+  <h3 class="sub-title">{AUTH.addAccount}</h3>
+  {#if addError}
+    <div class="error-box" role="alert">{addError}</div>
+  {/if}
+  <form class="grid-form" onsubmit={handleAddAccount}>
+    <div class="field">
+      <label for="acc-new-user">{AUTH.username}</label>
+      <input id="acc-new-user" class="input" type="text" autocomplete="off" bind:value={newUsername} disabled={adding} required />
     </div>
-  </div>
+    <div class="field">
+      <label for="acc-new-pass">{AUTH.passwordMin}</label>
+      <input id="acc-new-pass" class="input" type="password" autocomplete="new-password" bind:value={newPassword} disabled={adding} required />
+    </div>
+    <button type="submit" class="btn btn-primary" disabled={adding || !newUsername || !newPassword}>{AUTH.addBtn}</button>
+  </form>
+</section>
+
+<section class="card">
+  <h3>{AUTH.changeOwnPassword}</h3>
+  {#if changePasswordError}
+    <div class="error-box" role="alert">{changePasswordError}</div>
+  {/if}
+  {#if changePasswordSuccess}
+    <div class="success-box" role="alert">{changePasswordSuccess}</div>
+  {/if}
+  <form class="grid-form" onsubmit={handleChangePassword}>
+    <div class="field">
+      <label for="acc-cur-pass">{AUTH.currentPassword}</label>
+      <input id="acc-cur-pass" class="input" type="password" autocomplete="current-password" bind:value={currentPassword} disabled={changingPassword} required />
+    </div>
+    <div class="field">
+      <label for="acc-new-pass2">{AUTH.newPassword}</label>
+      <input id="acc-new-pass2" class="input" type="password" autocomplete="new-password" bind:value={changePasswordNew} disabled={changingPassword} required />
+    </div>
+    <div class="field">
+      <label for="acc-rep-pass">{AUTH.repeatNewPassword}</label>
+      <input id="acc-rep-pass" class="input" type="password" autocomplete="new-password" bind:value={changePasswordConfirm} disabled={changingPassword} required />
+    </div>
+    <button type="submit" class="btn btn-primary" disabled={changingPassword || !currentPassword || !changePasswordNew}>{AUTH.saveNewPassword}</button>
+  </form>
 </section>
 
 {#if resetUser}
@@ -266,18 +276,16 @@
     border-radius: var(--radius-lg);
     color: var(--text);
   }
-  h2 { margin: 0 0 var(--space-4); font-size: var(--text-lg); }
-  h3 { margin: 0 0 var(--space-3); font-size: var(--text-md); }
-  .split-layout { display: flex; gap: var(--space-6); flex-wrap: wrap; }
-  .accounts-list-container { flex: 2; min-width: 300px; display: flex; flex-direction: column; gap: var(--space-4); }
-  .change-password-box { flex: 1; min-width: 250px; background: var(--surface-2); padding: var(--space-4); border-radius: var(--radius-md); }
+  h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
+  .sub-title { margin-top: var(--space-6); font-size: var(--text-md); }
+  .table-wrap { overflow-x: auto; }
   .accounts-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
-  .accounts-table th, .accounts-table td { padding: var(--space-2); text-align: left; border-bottom: 1px solid var(--border); }
-  .accounts-table th { font-weight: 600; color: var(--text-muted); }
-  .add-account-box { background: var(--surface-2); padding: var(--space-4); border-radius: var(--radius-md); }
-  .inline-form { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  .accounts-table th, .accounts-table td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .accounts-table th { font-weight: 600; color: var(--text-muted); font-size: var(--text-xs); }
+  .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); align-items: end; }
+  .grid-form .btn { justify-self: start; }
   .vertical-form { display: flex; flex-direction: column; gap: var(--space-3); }
-  input { padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+  .vertical-form input { padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
   .btn-small { padding: 2px 8px; font-size: var(--text-xs); margin-right: 4px; }
   .tone-danger { color: var(--danger); border-color: var(--danger-line); }
   .tone-danger:hover { background: var(--danger-line); }
