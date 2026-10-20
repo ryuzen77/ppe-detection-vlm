@@ -1,6 +1,6 @@
 <script lang="ts">
   // Kelola daftar divisi & perusahaan (T79). Hapus ditolak server bila masih dipakai pekerja
-  // (409 in_use) atau perusahaan bawaan (409 builtin); pesannya ditampilkan apa adanya.
+  // (409 in_use); perusahaan bawaan tidak bisa diubah/dihapus (409 builtin, namanya dari config server).
   import { api } from '../../lib/api/client'
   import type { OrgEntry, OrgKind } from '../../lib/api/types'
   import { extractApiError } from '../../lib/api/error'
@@ -79,8 +79,8 @@
                   {:else}
                     <span class="name">{entry.name}{#if entry.builtin}<span class="meta"> · {TEXT.builtin}</span>{/if}</span>
                     <span class="meta">{TEXT.workers(entry.workers)}</span>
-                    <button type="button" class="btn" disabled={busy} onclick={() => (editing = { kind, id: entry.id, name: entry.name })}>{TEXT.renameBtn}</button>
                     {#if !entry.builtin}
+                      <button type="button" class="btn" disabled={busy} onclick={() => (editing = { kind, id: entry.id, name: entry.name })}>{TEXT.renameBtn}</button>
                       <button type="button" class="btn" disabled={busy} onclick={() => run(() => api.deleteOrg(kind, entry.id), TEXT.errDelete)}>{TEXT.deleteBtn}</button>
                     {/if}
                   {/if}
