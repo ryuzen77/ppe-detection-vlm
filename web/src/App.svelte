@@ -16,6 +16,7 @@
   import { toasts } from './lib/stores/toasts.svelte'
   import Laporan from './pages/Laporan.svelte'
   import Monitoring from './pages/Monitoring.svelte'
+  import Pekerja from './pages/Pekerja.svelte'
   import Pengaturan from './pages/Pengaturan.svelte'
 
   let view = $derived(getViewState(session))
@@ -84,6 +85,8 @@
     <Monitoring />
   {:else if router.current === 'laporan'}
     <Laporan />
+  {:else if router.current === 'pekerja'}
+    <Pekerja />
   {:else}
     <Pengaturan />
   {/if}

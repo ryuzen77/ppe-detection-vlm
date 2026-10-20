@@ -1,9 +1,9 @@
 /**
  * Router berbasis hash: tiap bagian punya URL sendiri (#/monitoring, #/laporan,
- * #/pengaturan) sehingga refresh, tombol Back, dan bookmark berfungsi.
+ * #/pekerja, #/pengaturan) sehingga refresh, tombol Back, dan bookmark berfungsi.
  * Hash dipilih agar FastAPI tidak perlu aturan fallback untuk setiap path.
  */
-export const ROUTES = ['monitoring', 'laporan', 'pengaturan'] as const
+export const ROUTES = ['monitoring', 'laporan', 'pekerja', 'pengaturan'] as const
 export type Route = (typeof ROUTES)[number]
 
 export const DEFAULT_ROUTE: Route = 'monitoring'

@@ -36,7 +36,12 @@ import type {
   EnrollmentHoldResponse,
   EnrollmentPlan,
   EnrollmentPreview,
+  OrgEntry,
+  OrgKind,
+  ReportWhoFilter,
+  WorkerInspectionsPage,
 } from './types'
+import { withQuery } from '../url'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
 
@@ -156,35 +161,25 @@ export class ApiClient {
   calibrateZone = () => this.request<Zone>('POST', '/api/config/zone/calibrate')
 
   // --- Laporan
-  reportsSummary = (params: { period?: ReportPeriod; date?: string } = {}) => {
-    const q = new URLSearchParams()
-    if (params.period) q.set('period', params.period)
-    if (params.date) q.set('date', params.date)
-    const qs = q.toString()
-    return this.request<ReportSummary>('GET', `/api/reports/summary${qs ? `?${qs}` : ''}`)
-  }
-  reports = (params: { limit?: number; offset?: number; status?: ReportStatusFilter; from?: string; to?: string } = {}) => {
-    const q = new URLSearchParams()
-    if (params.limit !== undefined) q.set('limit', String(params.limit))
-    if (params.offset !== undefined) q.set('offset', String(params.offset))
-    if (params.status) q.set('status', params.status)
-    if (params.from) q.set('from', params.from)
-    if (params.to) q.set('to', params.to)
-    const qs = q.toString()
-    return this.request<ReportsPage>('GET', `/api/reports${qs ? `?${qs}` : ''}`)
-  }
+  reportsSummary = (params: { period?: ReportPeriod; date?: string } & ReportWhoFilter = {}) =>
+    this.request<ReportSummary>('GET', withQuery('/api/reports/summary', params))
+  reports = (params: { limit?: number; offset?: number; status?: ReportStatusFilter; from?: string; to?: string } & ReportWhoFilter = {}) =>
+    this.request<ReportsPage>('GET', withQuery('/api/reports', params))
   snapshotUrl = (filename: string) => this.url(`/api/reports/snapshots/${encodeURIComponent(filename)}`)
-  exportCsvUrl = (from?: string, to?: string) => {
-    const q = new URLSearchParams()
-    if (from) q.set('from', from)
-    if (to) q.set('to', to)
-    const qs = q.toString()
-    return this.url(`/api/reports/export${qs ? `?${qs}` : ''}`)
-  }
+  exportCsvUrl = (params: { from?: string; to?: string } & ReportWhoFilter = {}) =>
+    this.url(withQuery('/api/reports/export', params))
   streamUrl = () => this.url('/api/stream')
 
   // --- Pekerja & Identitas Wajah (T34)
   workers = () => this.request<WorkersResponse>('GET', '/api/workers')
+  nextEmployeeNo = () => this.request<{ employee_no: string }>('GET', '/api/workers/next-employee-no')
+  workerInspections = (id: number, params: { limit?: number; before?: number } = {}) =>
+    this.request<WorkerInspectionsPage>('GET', withQuery(`/api/workers/${id}/inspections`, params))
+  orgList = (kind: OrgKind) => this.request<OrgEntry[]>('GET', `/api/org/${kind}`)
+  createOrg = (kind: OrgKind, name: string) => this.request<OrgEntry>('POST', `/api/org/${kind}`, { name })
+  renameOrg = (kind: OrgKind, id: number, name: string) =>
+    this.request<OrgEntry>('PATCH', `/api/org/${kind}/${id}`, { name })
+  deleteOrg = (kind: OrgKind, id: number) => this.request<void>('DELETE', `/api/org/${kind}/${id}`)
   createWorker = (body: NewWorkerRequest) => this.request<Worker>('POST', '/api/workers', body)
   deactivateWorker = (id: number) => this.request<Worker>('POST', `/api/workers/${id}/deactivate`)
   activateWorker = (id: number) => this.request<Worker>('POST', `/api/workers/${id}/activate`)

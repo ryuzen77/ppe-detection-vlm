@@ -110,7 +110,7 @@
       <button class="btn" onclick={load} disabled={loading}>
         <RefreshCw size={16} aria-hidden="true" />{TEXT.refresh}
       </button>
-      <a class="btn" href={api.exportCsvUrl(summary?.range.from, summary?.range.to)} download title={TEXT.exportHint}>
+      <a class="btn" href={api.exportCsvUrl({ from: summary?.range.from, to: summary?.range.to })} download title={TEXT.exportHint}>
         <Download size={16} aria-hidden="true" />{TEXT.exportCsv}
       </a>
     </div>

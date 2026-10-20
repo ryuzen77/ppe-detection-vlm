@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { Worker } from '../../../lib/api/types'
-  import { WORKERS } from '../../../lib/messages'
-  import { api } from '../../../lib/api/client'
-  import { extractApiError } from '../../../lib/api/error'
+  import type { Worker } from '../../lib/api/types'
+  import { WORKERS } from '../../lib/messages'
+  import { api } from '../../lib/api/client'
+  import { extractApiError } from '../../lib/api/error'
 
   interface Props {
     deleteFaceWorker: Worker | null

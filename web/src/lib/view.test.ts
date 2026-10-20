@@ -200,7 +200,7 @@ describe('detectEvents', () => {
 
 describe('parseRoute', () => {
   it.each([
-    ['#/laporan', 'laporan'], ['#/pengaturan', 'pengaturan'], ['#/monitoring', 'monitoring'],
+    ['#/laporan', 'laporan'], ['#/pekerja', 'pekerja'], ['#/pengaturan', 'pengaturan'], ['#/monitoring', 'monitoring'],
     ['', 'monitoring'], ['#/tidak-ada', 'monitoring'], ['#/laporan?status=all', 'laporan'],
   ])('%s → %s', (hash, route) => {
     expect(parseRoute(hash)).toBe(route)

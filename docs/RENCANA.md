@@ -303,7 +303,7 @@ Keputusan pengguna 20-10: **divisi** ditambah (dari daftar admin), **ada kontrak
 
 | Rute | Isi | Galat |
 | :-- | :-- | :-- |
-| `GET /api/org/{kind}` (`kind` = `departments` \| `companies`) | `[{"id", "name", "workers": int}]` urut nama (`workers` = pekerja aktif) | 404 `invalid_kind` |
+| `GET /api/org/{kind}` (`kind` = `departments` \| `companies`) | `[{"id", "name", "workers": int, "builtin": bool}]` urut nama (`workers` = pekerja aktif; `builtin` = perusahaan bawaan, dipilih otomatis di form — tambahan 20-10 dari T79b) | 404 `invalid_kind` |
 | `POST /api/org/{kind}` `{"name"}` | 201 `{"id", "name", "workers": 0}` | 400 `invalid_name` (kosong / > `cfg.ORG_NAME_MAX_LENGTH`), 409 `name_taken` |
 | `PATCH /api/org/{kind}/{id}` `{"name"}` | 200 sama | 400/409 sama, 404 `not_found` |
 | `DELETE /api/org/{kind}/{id}` | 204 | 409 `in_use` (masih dipakai pekerja mana pun), 409 `builtin` (perusahaan bawaan), 404 |

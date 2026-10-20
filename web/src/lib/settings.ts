@@ -132,3 +132,9 @@ export const ENROLLMENT_AUTO = {
   /** Waktu memakai helm sebelum foto kondisi kedua: pekerja bisa mendaftar sendiri tanpa menekan tombol */
   switchCooldownMs: 10000,
 } as const;
+
+/** Halaman Pekerja (T79) */
+export const WORKERS_PAGE = {
+  /** Baris riwayat pemeriksaan per muatan ("Muat lebih lama" untuk berikutnya) */
+  historyPageSize: 20,
+} as const;
