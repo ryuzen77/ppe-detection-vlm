@@ -139,14 +139,15 @@ def _det():
                            is_inside_corridor=True, crop_img=person_crop(), conf=0.9, keypoints=[[0, 0, 0.9]] * 17)
 
 
-def test_gangguan_membatalkan_hijau_dan_menyalakan_kuning(gate):
-    """Risiko utama: hijau tertahan untuk pekerja berikutnya saat kamera bermasalah."""
+@pytest.mark.parametrize("fault", ["blocked", "system"])   # system = pengolah gambar galat (T77b)
+def test_gangguan_membatalkan_hijau_dan_menyalakan_kuning(gate, fault):
+    """Risiko utama: hijau tertahan untuk pekerja berikutnya saat kamera / pengolah gambar bermasalah."""
     notifier.set_complete()
     state_mgr.update_frame_detections([_det()])
     assert state_mgr.session is not None
-    state_mgr.set_camera_fault("blocked")
+    state_mgr.set_camera_fault(fault)
     assert state_mgr.session is None
-    assert notifier.current_state == "YELLOW" and notifier.message == messages.LIGHT_CAMERA_FAULT["blocked"]
+    assert notifier.current_state == "YELLOW" and notifier.message == messages.LIGHT_CAMERA_FAULT[fault]
 
 
 def test_suara_gangguan_hanya_sekali_saat_mulai(gate):

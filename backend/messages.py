@@ -19,11 +19,14 @@ LIGHT_POSITION_WARNING = "Peringatan: {reason}"
 LIGHT_SYSTEM_WAIT = "SISTEM GANGGUAN - Mohon tunggu, pemeriksaan dilanjutkan otomatis"
 # Gangguan kamera (T45): kuning, bukan merah — tidak ada pekerja yang ditolak
 # Suara per jenis gangguan (kunci VOICE_TEXTS); membeku ditangani seperti terputus
-CAMERA_FAULT_SOUND = {"lost": "kamera_terputus", "frozen": "kamera_terputus", "blocked": "kamera_terhalang"}
+CAMERA_FAULT_SOUND = {"lost": "kamera_terputus", "frozen": "kamera_terputus", "blocked": "kamera_terhalang",
+                      "system": "sistem_gangguan"}
 LIGHT_CAMERA_FAULT = {
     "lost": "KAMERA TERPUTUS - Gerbang berhenti memeriksa, mohon tunggu petugas",
     "blocked": "KAMERA TERHALANG / BURAM / TERLALU GELAP - Gerbang berhenti memeriksa, mohon tunggu petugas",
     "frozen": "GAMBAR KAMERA MEMBEKU - Menyambung ulang, mohon tunggu",
+    # T77b: pengolah gambar galat; dicoba lagi otomatis
+    "system": "SISTEM GANGGUAN - Gerbang berhenti memeriksa, dicoba lagi otomatis",
 }
 LIGHT_TEST_GREEN = "Uji Coba Manual - Lampu Hijau"
 LIGHT_TEST_RED = "Uji Coba Manual - Lampu Merah"
@@ -54,6 +57,9 @@ LOG_CAMERA_RECONNECT = "{reason}. Menunggu untuk disambung ulang."
 # T77: galat tak terduga di thread pembaca kamera; pembaca tetap hidup & menyambung ulang
 CAMERA_READER_ERROR = "Galat membaca kamera ({error}); menyambung ulang"
 LOG_CAMERA_READER_ERROR = "Galat di pembaca kamera (ke-{count} beruntun): {error}. Dicoba lagi dalam {delay:g} dtk."
+# T77b: galat di thread inferensi; gerbang kuning (gangguan "system") sampai satu frame berhasil diolah
+LOG_INFERENCE_ERROR = "Galat di pengolah gambar (ke-{count} beruntun): {error}. Gerbang kuning; dicoba lagi dalam {delay:g} dtk."
+LOG_INFERENCE_FAULT_FAILED = "Gangguan sistem gagal dipasang di gerbang (mesin keadaan galat)."
 # T67: tombol Pindai tanpa kamera aktif hanya memindai daftar kamera, tidak mengoptimasi apa pun
 LOG_CAMERA_OPTIMIZE_NO_CAMERA = "Optimasi kamera dilewati: belum ada kamera aktif."
 LOG_CAMERA_WAITING = "Masih menunggu kamera '{name}' ({seconds:.0f} dtk); perangkat yang terlihat sistem: {seen}"

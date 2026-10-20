@@ -226,7 +226,7 @@ export interface Telemetry {
   zone: Omit<Zone, 'source'>
   light: LightStatus
   iot: { enabled: boolean; connected: boolean; last_ack_age_s: number | null; error: string | null }
-  camera_fault: 'lost' | 'blocked' | 'frozen' | null
+  camera_fault: 'lost' | 'blocked' | 'frozen' | 'system' | null   // 'system' = pengolah gambar galat (T77b)
   enrollment?: EnrollmentStatus
   history: HistoryRecord[]
   stable_frames_required: number

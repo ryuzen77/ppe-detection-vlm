@@ -33,7 +33,6 @@ LONG_FUNCTIONS_DEBT = {
     "backend/app.py::run",
     "backend/vlm_analyzer.py::analyze_person",
     "backend/api/routes_cameras.py::list_cameras",
-    "backend/video/capture.py::_capture_loop",
     "backend/camera_manager.py::_scan_worker",
     "backend/vlm_analyzer.py::_parse_vlm_payload",
     "backend/report_manager.py::_migrate_v0_to_v1",
