@@ -357,7 +357,7 @@ def update_worker(
             employee_no=body.employee_no if "employee_no" in fs else None,
         )
     )
-    if "nickname" in fs and body.nickname is not None:
+    if "nickname" in fs or "gender" in fs:
         worker_voice.request(worker)
     _log_worker_update(request, user, worker_id, fs, old_emp_no, worker.employee_no)
     return worker_json(worker)

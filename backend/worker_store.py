@@ -32,7 +32,8 @@ _SCHEMA = (
     "CREATE TABLE IF NOT EXISTS departments (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at TEXT NOT NULL)",
+    "name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at TEXT NOT NULL, "
+    "builtin INTEGER NOT NULL DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS workers (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "employee_no TEXT NOT NULL UNIQUE COLLATE NOCASE, name TEXT NOT NULL, active INTEGER NOT NULL, "
     "consent_at TEXT NOT NULL, consent_by TEXT NOT NULL, consent_version TEXT NOT NULL, "
@@ -246,10 +247,10 @@ def _check_dep_exists(conn: sqlite3.Connection, dep_id: Optional[object]) -> Opt
 
 def _check_comp_exists(conn: sqlite3.Connection, comp_id: Optional[object]) -> int:
     if comp_id is None:
-        row = conn.execute(
-            "SELECT id FROM companies WHERE name = ? COLLATE NOCASE", (cfg.WORKER_DEFAULT_COMPANY,)
-        ).fetchone()
-        return int(row[0]) if row else 1
+        row = conn.execute("SELECT id FROM companies WHERE builtin = 1").fetchone()
+        if row:
+            return int(row[0])
+        raise WorkerError("invalid_company", messages.WORKER_INVALID_COMPANY)
     try:
         val = int(str(comp_id))
     except (ValueError, TypeError):
@@ -283,6 +284,42 @@ def _resolve_emp_no_update(
                     (cand_no, worker_id)).fetchone():
         raise WorkerError("employee_no_taken", messages.WORKER_EMPLOYEE_NO_TAKEN.format(employee_no=cand_no))
     return cand_no, cur_no
+
+
+def _ensure_default_company(conn: sqlite3.Connection) -> int:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(companies)")}
+    if "builtin" not in existing:
+        conn.execute("ALTER TABLE companies ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0")
+        conn.execute(
+            "UPDATE companies SET builtin = 1 WHERE name = ? COLLATE NOCASE",
+            (cfg.WORKER_DEFAULT_COMPANY,),
+        )
+    row = conn.execute("SELECT id FROM companies WHERE builtin = 1").fetchone()
+    if row:
+        return int(row[0])
+    by_name = conn.execute(
+        "SELECT id FROM companies WHERE name = ? COLLATE NOCASE", (cfg.WORKER_DEFAULT_COMPANY,)
+    ).fetchone()
+    if by_name:
+        conn.execute("UPDATE companies SET builtin = 1 WHERE id = ?", (by_name[0],))
+        return int(by_name[0])
+    cur = conn.execute(
+        "INSERT INTO companies (name, created_at, builtin) VALUES (?, ?, 1)",
+        (cfg.WORKER_DEFAULT_COMPANY, _now()),
+    )
+    return int(cur.lastrowid or 1)
+
+
+def _migrate_workers_columns(conn: sqlite3.Connection, default_comp_id: int) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(workers)")}
+    for column in _PROFILE_COLUMNS:
+        if column not in existing:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} TEXT")
+    if "department_id" not in existing:
+        conn.execute("ALTER TABLE workers ADD COLUMN department_id INTEGER REFERENCES departments(id)")
+    if "company_id" not in existing:
+        conn.execute("ALTER TABLE workers ADD COLUMN company_id INTEGER REFERENCES companies(id)")
+        conn.execute("UPDATE workers SET company_id = ? WHERE company_id IS NULL", (default_comp_id,))
 
 
 class SqliteWorkerStore:
@@ -327,24 +364,8 @@ class SqliteWorkerStore:
         conn.execute("PRAGMA secure_delete = ON;")
         for statement in _SCHEMA:
             conn.execute(statement)
-        conn.execute(
-            "INSERT OR IGNORE INTO companies (name, created_at) VALUES (?, ?)",
-            (cfg.WORKER_DEFAULT_COMPANY, _now()),
-        )
-        default_company = conn.execute(
-            "SELECT id FROM companies WHERE name = ? COLLATE NOCASE", (cfg.WORKER_DEFAULT_COMPANY,)
-        ).fetchone()
-        default_company_id = int(default_company[0]) if default_company else 1
-
-        existing = {row[1] for row in conn.execute("PRAGMA table_info(workers)")}
-        for column in _PROFILE_COLUMNS:
-            if column not in existing:
-                conn.execute(f"ALTER TABLE workers ADD COLUMN {column} TEXT")
-        if "department_id" not in existing:
-            conn.execute("ALTER TABLE workers ADD COLUMN department_id INTEGER REFERENCES departments(id)")
-        if "company_id" not in existing:
-            conn.execute("ALTER TABLE workers ADD COLUMN company_id INTEGER REFERENCES companies(id)")
-            conn.execute("UPDATE workers SET company_id = ? WHERE company_id IS NULL", (default_company_id,))
+        default_company_id = _ensure_default_company(conn)
+        _migrate_workers_columns(conn, default_company_id)
         return conn
 
     def _run(self, fn, checkpoint: bool = False, mutates: bool = False):
@@ -655,8 +676,9 @@ class SqliteWorkerStore:
         col = "department_id" if k == "departments" else "company_id"
 
         def fetch(conn: sqlite3.Connection):
+            builtin_col = ", o.builtin" if k == "companies" else ", 0 AS builtin"
             query = (
-                f"SELECT o.id, o.name, COUNT(w.id) AS workers "
+                f"SELECT o.id, o.name, COUNT(w.id) AS workers{builtin_col} "
                 f"FROM {k} o "
                 f"LEFT JOIN workers w ON w.{col} = o.id AND w.active = 1 "
                 f"GROUP BY o.id "
@@ -668,7 +690,7 @@ class SqliteWorkerStore:
                     "id": r[0],
                     "name": r[1],
                     "workers": r[2],
-                    "builtin": k == "companies" and r[1].lower() == cfg.WORKER_DEFAULT_COMPANY.lower(),
+                    "builtin": bool(r[3]),
                 }
                 for r in rows
             ]
@@ -683,7 +705,7 @@ class SqliteWorkerStore:
             if conn.execute(f"SELECT 1 FROM {k} WHERE name = ? COLLATE NOCASE", (clean_name,)).fetchone():
                 raise WorkerError("name_taken", messages.ORG_NAME_TAKEN.format(name=clean_name))
             cursor = conn.execute(f"INSERT INTO {k} (name, created_at) VALUES (?, ?)", (clean_name, _now()))
-            return {"id": int(cursor.lastrowid or 0), "name": clean_name, "workers": 0}
+            return {"id": int(cursor.lastrowid or 0), "name": clean_name, "workers": 0, "builtin": False}
 
         return self._run(insert, mutates=True)
 
@@ -693,16 +715,20 @@ class SqliteWorkerStore:
         col = "department_id" if k == "departments" else "company_id"
 
         def update(conn: sqlite3.Connection):
-            current = conn.execute(f"SELECT name FROM {k} WHERE id = ?", (org_id,)).fetchone()
+            current = conn.execute(
+                f"SELECT name{', builtin' if k == 'companies' else ''} FROM {k} WHERE id = ?", (org_id,)
+            ).fetchone()
             if not current:
                 raise WorkerError("not_found", messages.ORG_NOT_FOUND)
+            if k == "companies" and bool(current[1]):
+                raise WorkerError("builtin", messages.ORG_BUILTIN.format(name=current[0]))
             if conn.execute(f"SELECT 1 FROM {k} WHERE name = ? COLLATE NOCASE AND id != ?", (clean_name, org_id)).fetchone():
                 raise WorkerError("name_taken", messages.ORG_NAME_TAKEN.format(name=clean_name))
             conn.execute(f"UPDATE {k} SET name = ? WHERE id = ?", (clean_name, org_id))
             active_workers = conn.execute(
                 f"SELECT COUNT(*) FROM workers WHERE {col} = ? AND active = 1", (org_id,)
             ).fetchone()[0]
-            return {"id": org_id, "name": clean_name, "workers": active_workers}
+            return {"id": org_id, "name": clean_name, "workers": active_workers, "builtin": False}
 
         return self._run(update, mutates=True)
 
@@ -711,11 +737,13 @@ class SqliteWorkerStore:
         col = "department_id" if k == "departments" else "company_id"
 
         def remove(conn: sqlite3.Connection):
-            row = conn.execute(f"SELECT name FROM {k} WHERE id = ?", (org_id,)).fetchone()
+            row = conn.execute(
+                f"SELECT name{', builtin' if k == 'companies' else ''} FROM {k} WHERE id = ?", (org_id,)
+            ).fetchone()
             if not row:
                 raise WorkerError("not_found", messages.ORG_NOT_FOUND)
             name = row[0]
-            if k == "companies" and name.lower() == cfg.WORKER_DEFAULT_COMPANY.lower():
+            if k == "companies" and bool(row[1]):
                 raise WorkerError("builtin", messages.ORG_BUILTIN.format(name=name))
             used = conn.execute(f"SELECT COUNT(*) FROM workers WHERE {col} = ?", (org_id,)).fetchone()[0]
             if used > 0:

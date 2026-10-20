@@ -151,8 +151,13 @@ def test_organisasi_crud_dan_proteksi(client, store):
     assert r_del_dep.status_code == 409
     assert r_del_dep.json()["detail"]["code"] == "in_use"
 
-    # DELETE perusahaan bawaan "Internal" -> 409 builtin
+    # PATCH perusahaan bawaan "Internal" -> 409 builtin
     internal_id = comps[0]["id"]
+    r_patch_builtin = client.patch(f"/api/org/companies/{internal_id}", json={"name": "Nama Baru"})
+    assert r_patch_builtin.status_code == 409
+    assert r_patch_builtin.json()["detail"]["code"] == "builtin"
+
+    # DELETE perusahaan bawaan "Internal" -> 409 builtin
     r_del_internal = client.delete(f"/api/org/companies/{internal_id}")
     assert r_del_internal.status_code == 409
     assert r_del_internal.json()["detail"]["code"] == "builtin"
@@ -164,6 +169,44 @@ def test_organisasi_crud_dan_proteksi(client, store):
 
     # Divisi sudah terhapus -> 404
     assert client.patch(f"/api/org/departments/{dep_id}", json={"name": "Baru"}).status_code == 404
+
+
+def test_buka_ulang_store_tidak_duplikasi_perusahaan_bawaan(tmp_path):
+    db_file = tmp_path / "workers_reopen.db"
+    key = face_crypto.generate_key()
+    s1 = worker_store.SqliteWorkerStore(path=db_file, key=key)
+    comps1 = s1.list_org("companies")
+    assert len(comps1) == 1
+    assert comps1[0]["builtin"] is True
+    assert comps1[0]["name"] == cfg.WORKER_DEFAULT_COMPANY
+
+    # Buka store kedua kali pada berkas database yang sama
+    s2 = worker_store.SqliteWorkerStore(path=db_file, key=key)
+    comps2 = s2.list_org("companies")
+    assert len(comps2) == 1
+    assert comps2[0]["builtin"] is True
+    assert comps2[0]["id"] == comps1[0]["id"]
+
+
+def test_patch_gender_saja_meminta_suara_ulang(client, store, monkeypatch):
+    suara_diminta = []
+    monkeypatch.setattr("backend.worker_voice.request", lambda w: suara_diminta.append(w))
+    r = client.post(
+        "/api/workers",
+        json={"name": "Joko", "consent": True, "nickname": "Joko", "gender": "male"},
+    )
+    assert r.status_code == 201
+    wid = r.json()["id"]
+    assert len(suara_diminta) == 1
+    assert suara_diminta[-1].salutation == "Pak"
+
+    # PATCH gender saja dari male ke female
+    r_patch = client.patch(f"/api/workers/{wid}", json={"gender": "female"})
+    assert r_patch.status_code == 200
+    assert r_patch.json()["gender"] == "female"
+    assert r_patch.json()["salutation"] == "Bu"
+    assert len(suara_diminta) == 2
+    assert suara_diminta[-1].salutation == "Bu"
 
 
 # --- 3. Nomor Pegawai Otomatis & Relasi Pekerja ---

@@ -140,10 +140,7 @@ class FaceIdentifier:
                 session=session_id, faces=faces, frames=len(crops), best="-" if best is None else f"{best:.2f}"))
             return Identity(UNKNOWN)
         worker_id, score = winner
-        w_info = gallery.workers[worker_id]
-        name, employee_no = w_info[0], w_info[1]
-        dep_name = w_info[2] if len(w_info) > 2 else None
-        comp_name = w_info[3] if len(w_info) > 3 else None
+        name, employee_no, dep_name, comp_name = gallery.workers[worker_id]
         votes = sum(1 for m in matches if m is not None and m[0] == worker_id and m[1] >= cfg.FACE_MATCH_THRESHOLD)
         logger.info(
             messages.LOG_FACE_RECOGNIZED.format(
@@ -163,7 +160,7 @@ class FaceIdentifier:
         match = best_match(vector, GalleryView(gallery.worker_ids[others], gallery.vectors[others], gallery.workers))
         if match is None or match[1] < cfg.FACE_MATCH_THRESHOLD:
             return None
-        return gallery.workers.get(match[0], ("", "?"))[1], match[1]
+        return gallery.workers.get(match[0], ("", "?", None, None))[1], match[1]
 
 
 identifier = FaceIdentifier()

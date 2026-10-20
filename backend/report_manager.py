@@ -704,17 +704,14 @@ class ReportManager:
         """Pemeriksaan terakhir per worker_id (T79). Mengembalikan {worker_id: {"at": timestamp, "is_complete": bool}}."""
         if not worker_ids:
             return {}
-        result = {}
+        marks = ",".join("?" * len(worker_ids))
+        query = (
+            f"SELECT worker_id, timestamp, is_complete FROM worker_inspections "
+            f"WHERE id IN (SELECT MAX(id) FROM worker_inspections WHERE worker_id IN ({marks}) GROUP BY worker_id)"
+        )
         with self._get_connection() as conn:
-            for wid in worker_ids:
-                row = conn.execute(
-                    "SELECT timestamp, is_complete FROM worker_inspections "
-                    "WHERE worker_id = ? ORDER BY id DESC LIMIT 1",
-                    (wid,),
-                ).fetchone()
-                if row:
-                    result[wid] = {"at": row["timestamp"], "is_complete": bool(row["is_complete"])}
-        return result
+            rows = conn.execute(query, worker_ids).fetchall()
+        return {r["worker_id"]: {"at": r["timestamp"], "is_complete": bool(r["is_complete"])} for r in rows}
 
     def get_last_seen(self, worker_id: int) -> Optional[dict]:
         res = self.get_last_seen_batch([worker_id])
