@@ -7,7 +7,8 @@
   import { MIN_PASSWORD_LENGTH } from '../../lib/settings'
   import { formatServerDate } from '../../lib/formatters'
   import { extractApiError } from '../../lib/api/error'
-  
+  import PasswordInput from '../PasswordInput.svelte'
+
   let accounts = $state<AccountInfo[]>([])
   let loading = $state(false)
   let errorMsg = $state('')
@@ -202,7 +203,7 @@
     </div>
     <div class="field">
       <label for="acc-new-pass">{AUTH.passwordMin}</label>
-      <input id="acc-new-pass" class="input" type="password" autocomplete="new-password" bind:value={newPassword} disabled={adding} required />
+      <PasswordInput id="acc-new-pass" autocomplete="new-password" bind:value={newPassword} disabled={adding} required />
     </div>
     <button type="submit" class="btn btn-primary" disabled={adding || !newUsername || !newPassword}>{AUTH.addBtn}</button>
   </form>
@@ -219,15 +220,15 @@
   <form class="grid-form" onsubmit={handleChangePassword}>
     <div class="field">
       <label for="acc-cur-pass">{AUTH.currentPassword}</label>
-      <input id="acc-cur-pass" class="input" type="password" autocomplete="current-password" bind:value={currentPassword} disabled={changingPassword} required />
+      <PasswordInput id="acc-cur-pass" autocomplete="current-password" bind:value={currentPassword} disabled={changingPassword} required />
     </div>
     <div class="field">
       <label for="acc-new-pass2">{AUTH.newPassword}</label>
-      <input id="acc-new-pass2" class="input" type="password" autocomplete="new-password" bind:value={changePasswordNew} disabled={changingPassword} required />
+      <PasswordInput id="acc-new-pass2" autocomplete="new-password" bind:value={changePasswordNew} disabled={changingPassword} required />
     </div>
     <div class="field">
       <label for="acc-rep-pass">{AUTH.repeatNewPassword}</label>
-      <input id="acc-rep-pass" class="input" type="password" autocomplete="new-password" bind:value={changePasswordConfirm} disabled={changingPassword} required />
+      <PasswordInput id="acc-rep-pass" autocomplete="new-password" bind:value={changePasswordConfirm} disabled={changingPassword} required />
     </div>
     <button type="submit" class="btn btn-primary" disabled={changingPassword || !currentPassword || !changePasswordNew}>{AUTH.saveNewPassword}</button>
   </form>
@@ -241,7 +242,7 @@
     {#if resetSuccess}<div class="success-box">{resetSuccess}</div>{/if}
     {#if !resetSuccess}
     <form class="vertical-form" onsubmit={executeReset}>
-      <input type="password" placeholder={AUTH.newPassword} bind:value={resetPasswordNew} disabled={resetting} required />
+      <PasswordInput placeholder={AUTH.newPassword} autocomplete="new-password" bind:value={resetPasswordNew} disabled={resetting} required />
       <div class="modal-actions">
         <button type="button" class="btn" onclick={() => resetUser = null} disabled={resetting}>{AUTH.cancelBtn}</button>
         <button type="submit" class="btn btn-primary" disabled={resetting || !resetPasswordNew}>{AUTH.resetPassword}</button>
@@ -285,7 +286,6 @@
   .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); align-items: end; }
   .grid-form .btn { justify-self: start; }
   .vertical-form { display: flex; flex-direction: column; gap: var(--space-3); }
-  .vertical-form input { padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
   .btn-small { padding: 2px 8px; font-size: var(--text-xs); margin-right: 4px; }
   .tone-danger { color: var(--danger); border-color: var(--danger-line); }
   .tone-danger:hover { background: var(--danger-line); }

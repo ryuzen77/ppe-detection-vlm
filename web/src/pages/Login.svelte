@@ -4,7 +4,8 @@
   import { tickCountdown } from '../lib/sessionLogic'
   import { LOGIN } from '../lib/messages'
   import { extractApiError, extractRetryAfter } from '../lib/api/error'
-  
+  import PasswordInput from '../components/PasswordInput.svelte'
+
   let username = $state('')
   let password = $state('')
   let loading = $state(false)
@@ -79,7 +80,7 @@
 
     <div class="input-group">
       <label for="password">{LOGIN.password}</label>
-      <input type="password" id="password" bind:value={password} disabled={loading || waitSecs !== null} />
+      <PasswordInput id="password" bind:value={password} autocomplete="current-password" disabled={loading || waitSecs !== null} />
     </div>
     
     <button type="submit" class="btn btn-primary" disabled={!username || !password || loading || waitSecs !== null}>

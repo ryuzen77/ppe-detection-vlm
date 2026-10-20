@@ -419,6 +419,8 @@ export const AUTH = {
   actions: 'Aksi',
   addAccount: 'Tambah Akun',
   password: 'Kata Sandi',
+  showPassword: 'Tampilkan sandi',
+  hidePassword: 'Sembunyikan sandi',
   passwordMin: `Sandi (min. ${MIN_PASSWORD_LENGTH})`,
   addBtn: 'Tambah',
   resetPassword: 'Reset Sandi',

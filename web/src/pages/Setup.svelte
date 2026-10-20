@@ -5,7 +5,8 @@
   import { getSetupUrl } from '../lib/url'
   import { extractApiError } from '../lib/api/error'
   import { ApiError } from '../lib/api/client'
-  
+  import PasswordInput from '../components/PasswordInput.svelte'
+
   let username = $state('')
   let password = $state('')
   let confirmPassword = $state('')
@@ -67,12 +68,12 @@
 
         <div class="input-group">
           <label for="password">{AUTH.passwordMin}</label>
-          <input type="password" id="password" bind:value={password} disabled={loading} />
+          <PasswordInput id="password" bind:value={password} autocomplete="new-password" disabled={loading} />
         </div>
 
         <div class="input-group">
           <label for="confirm">{AUTH.repeatPassword}</label>
-          <input type="password" id="confirm" bind:value={confirmPassword} disabled={loading} />
+          <PasswordInput id="confirm" bind:value={confirmPassword} autocomplete="new-password" disabled={loading} />
         </div>
         
         <button type="submit" class="btn btn-primary" disabled={!username || !password || !confirmPassword || loading}>
