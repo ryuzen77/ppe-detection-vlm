@@ -29,21 +29,23 @@ SECONDS_PER_DAY = 24 * 60 * 60
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"  # waktu lokal gerbang, sama dengan audit (kontrak T51)
 _EMPLOYEE_NO_CHARS = re.compile(r"[A-Za-z0-9._/-]+")
 _SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS departments (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at TEXT NOT NULL, "
+    "builtin INTEGER NOT NULL DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS workers (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "employee_no TEXT NOT NULL UNIQUE COLLATE NOCASE, name TEXT NOT NULL, active INTEGER NOT NULL, "
     "consent_at TEXT NOT NULL, consent_by TEXT NOT NULL, consent_version TEXT NOT NULL, "
-    "created_at TEXT NOT NULL, created_by TEXT NOT NULL, deactivated_at TEXT, face_deleted_at TEXT)",
+    "created_at TEXT NOT NULL, created_by TEXT NOT NULL, deactivated_at TEXT, face_deleted_at TEXT, "
+    "nickname TEXT, gender TEXT, department_id INTEGER REFERENCES departments(id), "
+    "company_id INTEGER REFERENCES companies(id))",
     "CREATE TABLE IF NOT EXISTS face_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "worker_id INTEGER NOT NULL REFERENCES workers(id), condition TEXT NOT NULL, model_version TEXT NOT NULL, "
     "dim INTEGER NOT NULL, nonce BLOB NOT NULL, ciphertext BLOB NOT NULL, created_at TEXT NOT NULL, "
     "created_by TEXT NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_face_templates_worker ON face_templates(worker_id)",
 )
-_WORKER_COLUMNS = (
-    "id, employee_no, name, active, consent_at, consent_by, consent_version, created_at, "
-    "deactivated_at, face_deleted_at, nickname, gender"
-)
-# Kolom profil suara (T34d); workers.db dari T34b1 belum punya, ditambahkan saat dibuka
 _PROFILE_COLUMNS = ("nickname", "gender")
 
 
@@ -54,6 +56,12 @@ class WorkerError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+@dataclass(frozen=True)
+class OrgUnit:
+    id: int
+    name: str
 
 
 @dataclass(frozen=True)
@@ -76,8 +84,12 @@ class Worker:
     created_at: str
     deactivated_at: Optional[str]
     face_deleted_at: Optional[str]
-    nickname: str = ""
+    nickname: Optional[str] = None
     gender: Optional[str] = None
+    department_id: Optional[int] = None
+    company_id: Optional[int] = None
+    department: Optional[OrgUnit] = None
+    company: Optional[OrgUnit] = None
     templates: tuple[Template, ...] = ()
 
     @property
@@ -107,10 +119,20 @@ class WorkerRepository(Protocol):
     """Antarmuka penyimpanan pekerja; SQLite sekarang, PostgreSQL + pgvector kelak."""
 
     def face_ready(self) -> bool: ...
-    def all(self) -> list[Worker]: ...
+    def all(self, q: Optional[str] = None, active: Optional[bool] = None) -> list[Worker]: ...
     def get(self, worker_id: int) -> Worker: ...
-    def create(self, employee_no: object, name: object, consent: bool, actor: str, nickname: object = "",
-               gender: object = None) -> Worker: ...
+    def next_employee_no(self) -> str: ...
+    def create(
+        self,
+        employee_no: object,
+        name: object,
+        consent: bool,
+        actor: str,
+        nickname: object = "",
+        gender: object = None,
+        department_id: Optional[int] = None,
+        company_id: Optional[int] = None,
+    ) -> Worker: ...
     def update_profile(self, worker_id: int, nickname: object = None, gender: object = None) -> Worker: ...
     def deactivate(self, worker_id: int) -> Worker: ...
     def activate(self, worker_id: int) -> Worker: ...
@@ -175,8 +197,129 @@ def normalize_nickname(raw: object) -> str:
     return nickname
 
 
+def normalize_org_name(raw: object) -> str:
+    name = " ".join(str(raw or "").split())
+    if not (1 <= len(name) <= cfg.ORG_NAME_MAX_LENGTH and name.isprintable()):
+        raise WorkerError("invalid_name", messages.ORG_INVALID_NAME.format(max=cfg.ORG_NAME_MAX_LENGTH))
+    return name
+
+
 def _not_found(worker_id: int) -> WorkerError:
     return WorkerError("not_found", messages.WORKER_NOT_FOUND.format(worker_id=worker_id))
+
+
+def _row_to_worker(row: tuple, templates_map: dict[int, tuple[Template, ...]]) -> Worker:
+    wid, dep_id, comp_id, dep_name, comp_name = row[0], row[12], row[13], row[14], row[15]
+    dep = OrgUnit(dep_id, dep_name) if dep_id is not None and dep_name is not None else None
+    comp = OrgUnit(comp_id, comp_name) if comp_id is not None and comp_name is not None else None
+    return Worker(
+        id=wid,
+        employee_no=row[1],
+        name=row[2],
+        active=bool(row[3]),
+        consent_at=row[4],
+        consent_by=row[5],
+        consent_version=row[6],
+        created_at=row[7],
+        deactivated_at=row[8],
+        face_deleted_at=row[9],
+        nickname=row[10],
+        gender=row[11],
+        department_id=dep_id,
+        company_id=comp_id,
+        department=dep,
+        company=comp,
+        templates=templates_map.get(wid, ()),
+    )
+
+
+def _check_dep_exists(conn: sqlite3.Connection, dep_id: Optional[object]) -> Optional[int]:
+    if dep_id is None:
+        return None
+    try:
+        val = int(str(dep_id))
+    except (ValueError, TypeError):
+        raise WorkerError("invalid_department", messages.WORKER_INVALID_DEPARTMENT)
+    if not conn.execute("SELECT 1 FROM departments WHERE id = ?", (val,)).fetchone():
+        raise WorkerError("invalid_department", messages.WORKER_INVALID_DEPARTMENT)
+    return val
+
+
+def _check_comp_exists(conn: sqlite3.Connection, comp_id: Optional[object]) -> int:
+    if comp_id is None:
+        row = conn.execute("SELECT id FROM companies WHERE builtin = 1").fetchone()
+        if row:
+            return int(row[0])
+        raise WorkerError("invalid_company", messages.WORKER_INVALID_COMPANY)
+    try:
+        val = int(str(comp_id))
+    except (ValueError, TypeError):
+        raise WorkerError("invalid_company", messages.WORKER_INVALID_COMPANY)
+    if not conn.execute("SELECT 1 FROM companies WHERE id = ?", (val,)).fetchone():
+        raise WorkerError("invalid_company", messages.WORKER_INVALID_COMPANY)
+    return val
+
+
+def _resolve_dep_update(conn: sqlite3.Connection, cur_id: Optional[int], dep_id: object) -> Optional[int]:
+    if dep_id is ...:
+        return cur_id
+    return _check_dep_exists(conn, dep_id)
+
+
+def _resolve_comp_update(conn: sqlite3.Connection, cur_id: Optional[int], comp_id: object) -> Optional[int]:
+    if comp_id is None:
+        return cur_id
+    return _check_comp_exists(conn, comp_id)
+
+
+def _resolve_emp_no_update(
+    conn: sqlite3.Connection, worker_id: int, cur_no: str, emp_no: object
+) -> tuple[str, Optional[str]]:
+    if emp_no is None:
+        return cur_no, None
+    cand_no = normalize_employee_no(emp_no)
+    if cand_no.lower() == cur_no.lower():
+        return cur_no, None
+    if conn.execute("SELECT 1 FROM workers WHERE employee_no = ? COLLATE NOCASE AND id != ?",
+                    (cand_no, worker_id)).fetchone():
+        raise WorkerError("employee_no_taken", messages.WORKER_EMPLOYEE_NO_TAKEN.format(employee_no=cand_no))
+    return cand_no, cur_no
+
+
+def _ensure_default_company(conn: sqlite3.Connection) -> int:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(companies)")}
+    if "builtin" not in existing:
+        conn.execute("ALTER TABLE companies ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0")
+        conn.execute(
+            "UPDATE companies SET builtin = 1 WHERE name = ? COLLATE NOCASE",
+            (cfg.WORKER_DEFAULT_COMPANY,),
+        )
+    row = conn.execute("SELECT id FROM companies WHERE builtin = 1").fetchone()
+    if row:
+        return int(row[0])
+    by_name = conn.execute(
+        "SELECT id FROM companies WHERE name = ? COLLATE NOCASE", (cfg.WORKER_DEFAULT_COMPANY,)
+    ).fetchone()
+    if by_name:
+        conn.execute("UPDATE companies SET builtin = 1 WHERE id = ?", (by_name[0],))
+        return int(by_name[0])
+    cur = conn.execute(
+        "INSERT INTO companies (name, created_at, builtin) VALUES (?, ?, 1)",
+        (cfg.WORKER_DEFAULT_COMPANY, _now()),
+    )
+    return int(cur.lastrowid or 1)
+
+
+def _migrate_workers_columns(conn: sqlite3.Connection, default_comp_id: int) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(workers)")}
+    for column in _PROFILE_COLUMNS:
+        if column not in existing:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} TEXT")
+    if "department_id" not in existing:
+        conn.execute("ALTER TABLE workers ADD COLUMN department_id INTEGER REFERENCES departments(id)")
+    if "company_id" not in existing:
+        conn.execute("ALTER TABLE workers ADD COLUMN company_id INTEGER REFERENCES companies(id)")
+        conn.execute("UPDATE workers SET company_id = ? WHERE company_id IS NULL", (default_comp_id,))
 
 
 class SqliteWorkerStore:
@@ -221,10 +364,8 @@ class SqliteWorkerStore:
         conn.execute("PRAGMA secure_delete = ON;")
         for statement in _SCHEMA:
             conn.execute(statement)
-        existing = {row[1] for row in conn.execute("PRAGMA table_info(workers)")}
-        for column in _PROFILE_COLUMNS:
-            if column not in existing:
-                conn.execute(f"ALTER TABLE workers ADD COLUMN {column} TEXT")
+        default_company_id = _ensure_default_company(conn)
+        _migrate_workers_columns(conn, default_company_id)
         return conn
 
     def _run(self, fn, checkpoint: bool = False, mutates: bool = False):
@@ -268,18 +409,37 @@ class SqliteWorkerStore:
         return {wid: tuple(items) for wid, items in found.items()}
 
     def _fetch(self, conn: sqlite3.Connection, where: str = "", params: tuple = ()) -> list[Worker]:
-        rows = conn.execute(f"SELECT {_WORKER_COLUMNS} FROM workers {where} ORDER BY name, id", params).fetchall()
+        query = (
+            "SELECT w.id, w.employee_no, w.name, w.active, w.consent_at, w.consent_by, w.consent_version, "
+            "w.created_at, w.deactivated_at, w.face_deleted_at, w.nickname, w.gender, "
+            "w.department_id, w.company_id, d.name, c.name "
+            "FROM workers w "
+            "LEFT JOIN departments d ON d.id = w.department_id "
+            "LEFT JOIN companies c ON c.id = w.company_id "
+            f"{where} ORDER BY w.name, w.id"
+        )
+        rows = conn.execute(query, params).fetchall()
         templates = self._templates(conn, [row[0] for row in rows])
-        return [Worker(row[0], row[1], row[2], bool(row[3]), *row[4:], templates=templates[row[0]]) for row in rows]
+        return [_row_to_worker(row, templates) for row in rows]
 
     def _get(self, conn: sqlite3.Connection, worker_id: int) -> Worker:
-        found = self._fetch(conn, "WHERE id = ?", (worker_id,))
+        found = self._fetch(conn, "WHERE w.id = ?", (worker_id,))
         if not found:
             raise _not_found(worker_id)
         return found[0]
 
-    def all(self) -> list[Worker]:
-        return self._run(self._fetch)
+    def all(self, q: Optional[str] = None, active: Optional[bool] = None) -> list[Worker]:
+        conditions = []
+        params = []
+        if active is not None:
+            conditions.append("w.active = ?")
+            params.append(1 if active else 0)
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            conditions.append("(w.employee_no LIKE ? OR w.name LIKE ?)")
+            params.extend([term, term])
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        return self._run(lambda c: self._fetch(c, where=where, params=tuple(params)))
 
     def get(self, worker_id: int) -> Worker:
         return self._run(lambda c: self._get(c, worker_id))
@@ -287,26 +447,65 @@ class SqliteWorkerStore:
     def active_count(self) -> int:
         return self._run(lambda c: c.execute("SELECT COUNT(*) FROM workers WHERE active = 1").fetchone()[0])
 
+    def next_employee_no(self) -> str:
+        return self._run(self._next_employee_no)
+
+    @staticmethod
+    def _next_employee_no(conn: sqlite3.Connection) -> str:
+        fmt = cfg.WORKER_EMPLOYEE_NO_FORMAT
+        pattern_match = re.search(r"^(.*?)\{.*?\}(.*)$", fmt)
+        if pattern_match:
+            prefix, suffix = pattern_match.group(1), pattern_match.group(2)
+        else:
+            prefix, suffix = "P-", ""
+        pattern = re.compile(rf"^{re.escape(prefix)}(\d+){re.escape(suffix)}$")
+        rows = conn.execute("SELECT employee_no FROM workers").fetchall()
+        numbers = []
+        for (eno,) in rows:
+            m = pattern.match(eno or "")
+            if m:
+                try:
+                    numbers.append(int(m.group(1)))
+                except ValueError:
+                    pass
+        max_num = max(numbers, default=0)
+        return fmt.format(max_num + 1)
+
     # --- Ubah ---
 
-    def create(self, employee_no: object, name: object, consent: bool, actor: str, nickname: object = "",
-               gender: object = None) -> Worker:
+    def create(
+        self,
+        employee_no: object,
+        name: object,
+        consent: bool,
+        actor: str,
+        nickname: object = "",
+        gender: object = None,
+        department_id: Optional[int] = None,
+        company_id: Optional[int] = None,
+    ) -> Worker:
         """Pekerja baru; persetujuan tertulis wajib dicentang admin (keputusan pengguna 18-10).
-        Nama panggilan & jenis kelamin wajib (suara nama "Pak/Bu <nama panggilan>", T34d)."""
+        Nama panggilan & jenis kelamin wajib (suara nama "Pak/Bu <nama panggilan>", T34d).
+        Nomor pegawai opsional (T79): kosong -> otomatis dari cfg.WORKER_EMPLOYEE_NO_FORMAT."""
         if consent is not True:
             raise WorkerError("consent_required", messages.WORKER_CONSENT_REQUIRED)
-        number, clean_name = normalize_employee_no(employee_no), normalize_name(name)
+        clean_name = normalize_name(name)
         profile = (normalize_nickname(nickname), normalize_gender(gender))
         self._cipher()  # tanpa kunci, pekerja tidak bisa diberi wajah: tolak sejak awal
 
-        def insert(conn):
-            if conn.execute("SELECT 1 FROM workers WHERE employee_no = ?", (number,)).fetchone():
-                raise WorkerError("employee_no_taken", messages.WORKER_EMPLOYEE_NO_TAKEN.format(employee_no=number))
+        def insert(conn: sqlite3.Connection):
+            raw_no = str(employee_no or "").strip()
+            num = self._next_employee_no(conn) if not raw_no else normalize_employee_no(raw_no)
+            if conn.execute("SELECT 1 FROM workers WHERE employee_no = ? COLLATE NOCASE", (num,)).fetchone():
+                raise WorkerError("employee_no_taken", messages.WORKER_EMPLOYEE_NO_TAKEN.format(employee_no=num))
+            dep_id = _check_dep_exists(conn, department_id)
+            comp_id = _check_comp_exists(conn, company_id)
             now = _now()
             cursor = conn.execute(
                 "INSERT INTO workers (employee_no, name, active, consent_at, consent_by, consent_version, "
-                "created_at, created_by, nickname, gender) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?)",
-                (number, clean_name, now, actor, cfg.FACE_CONSENT_VERSION, now, actor, *profile),
+                "created_at, created_by, nickname, gender, department_id, company_id) "
+                "VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (num, clean_name, now, actor, cfg.FACE_CONSENT_VERSION, now, actor, *profile, dep_id, comp_id),
             )
             return self._get(conn, int(cursor.lastrowid or 0))
 
@@ -314,12 +513,32 @@ class SqliteWorkerStore:
 
     def update_profile(self, worker_id: int, nickname: object = None, gender: object = None) -> Worker:
         """Ubah nama panggilan / jenis kelamin (T34d); None = tidak diubah. Suara nama dibuat ulang pemanggil."""
-        def update(conn):
+        worker, _ = self.update_worker(worker_id, nickname=nickname, gender=gender)
+        return worker
+
+    def update_worker(
+        self,
+        worker_id: int,
+        nickname: object = None,
+        gender: object = None,
+        department_id: object = ...,
+        company_id: object = None,
+        employee_no: object = None,
+    ) -> tuple[Worker, Optional[str]]:
+        """Ubah data pekerja (T79). Mengembalikan (worker, old_employee_no bila nomor diubah)."""
+        def update(conn: sqlite3.Connection):
             current = self._get(conn, worker_id)
-            new_nickname = current.nickname if nickname is None else normalize_nickname(nickname)
-            new_gender = current.gender if gender is None else normalize_gender(gender)
-            conn.execute("UPDATE workers SET nickname = ?, gender = ? WHERE id = ?", (new_nickname, new_gender, worker_id))
-            return self._get(conn, worker_id)
+            new_nick = current.nickname if nickname is None else normalize_nickname(nickname)
+            new_gen = current.gender if gender is None else normalize_gender(gender)
+            new_dep = _resolve_dep_update(conn, current.department_id, department_id)
+            new_comp = _resolve_comp_update(conn, current.company_id, company_id)
+            new_no, old_no = _resolve_emp_no_update(conn, worker_id, current.employee_no, employee_no)
+            conn.execute(
+                "UPDATE workers SET nickname = ?, gender = ?, department_id = ?, company_id = ?, employee_no = ? "
+                "WHERE id = ?",
+                (new_nick, new_gen, new_dep, new_comp, new_no, worker_id),
+            )
+            return self._get(conn, worker_id), old_no
 
         return self._run(update, mutates=True)
 
@@ -442,6 +661,96 @@ class SqliteWorkerStore:
             return ids
 
         return self._run(purge, checkpoint=True, mutates=True)
+
+    # --- Organisasi (T79: departments & companies) ---
+
+    @staticmethod
+    def _check_org_kind(kind: str) -> str:
+        k = str(kind or "").strip().lower()
+        if k not in ("departments", "companies"):
+            raise WorkerError("invalid_kind", messages.ORG_INVALID_KIND.format(kind=kind))
+        return k
+
+    def list_org(self, kind: str) -> list[dict]:
+        k = self._check_org_kind(kind)
+        col = "department_id" if k == "departments" else "company_id"
+
+        def fetch(conn: sqlite3.Connection):
+            builtin_col = ", o.builtin" if k == "companies" else ", 0 AS builtin"
+            query = (
+                f"SELECT o.id, o.name, COUNT(w.id) AS workers{builtin_col} "
+                f"FROM {k} o "
+                f"LEFT JOIN workers w ON w.{col} = o.id AND w.active = 1 "
+                f"GROUP BY o.id "
+                f"ORDER BY o.name COLLATE NOCASE ASC"
+            )
+            rows = conn.execute(query).fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "name": r[1],
+                    "workers": r[2],
+                    "builtin": bool(r[3]),
+                }
+                for r in rows
+            ]
+
+        return self._run(fetch)
+
+    def create_org(self, kind: str, name: object) -> dict:
+        k = self._check_org_kind(kind)
+        clean_name = normalize_org_name(name)
+
+        def insert(conn: sqlite3.Connection):
+            if conn.execute(f"SELECT 1 FROM {k} WHERE name = ? COLLATE NOCASE", (clean_name,)).fetchone():
+                raise WorkerError("name_taken", messages.ORG_NAME_TAKEN.format(name=clean_name))
+            cursor = conn.execute(f"INSERT INTO {k} (name, created_at) VALUES (?, ?)", (clean_name, _now()))
+            return {"id": int(cursor.lastrowid or 0), "name": clean_name, "workers": 0, "builtin": False}
+
+        return self._run(insert, mutates=True)
+
+    def update_org(self, kind: str, org_id: int, name: object) -> dict:
+        k = self._check_org_kind(kind)
+        clean_name = normalize_org_name(name)
+        col = "department_id" if k == "departments" else "company_id"
+
+        def update(conn: sqlite3.Connection):
+            current = conn.execute(
+                f"SELECT name{', builtin' if k == 'companies' else ''} FROM {k} WHERE id = ?", (org_id,)
+            ).fetchone()
+            if not current:
+                raise WorkerError("not_found", messages.ORG_NOT_FOUND)
+            if k == "companies" and bool(current[1]):
+                raise WorkerError("builtin", messages.ORG_BUILTIN.format(name=current[0]))
+            if conn.execute(f"SELECT 1 FROM {k} WHERE name = ? COLLATE NOCASE AND id != ?", (clean_name, org_id)).fetchone():
+                raise WorkerError("name_taken", messages.ORG_NAME_TAKEN.format(name=clean_name))
+            conn.execute(f"UPDATE {k} SET name = ? WHERE id = ?", (clean_name, org_id))
+            active_workers = conn.execute(
+                f"SELECT COUNT(*) FROM workers WHERE {col} = ? AND active = 1", (org_id,)
+            ).fetchone()[0]
+            return {"id": org_id, "name": clean_name, "workers": active_workers, "builtin": False}
+
+        return self._run(update, mutates=True)
+
+    def delete_org(self, kind: str, org_id: int) -> None:
+        k = self._check_org_kind(kind)
+        col = "department_id" if k == "departments" else "company_id"
+
+        def remove(conn: sqlite3.Connection):
+            row = conn.execute(
+                f"SELECT name{', builtin' if k == 'companies' else ''} FROM {k} WHERE id = ?", (org_id,)
+            ).fetchone()
+            if not row:
+                raise WorkerError("not_found", messages.ORG_NOT_FOUND)
+            name = row[0]
+            if k == "companies" and bool(row[1]):
+                raise WorkerError("builtin", messages.ORG_BUILTIN.format(name=name))
+            used = conn.execute(f"SELECT COUNT(*) FROM workers WHERE {col} = ?", (org_id,)).fetchone()[0]
+            if used > 0:
+                raise WorkerError("in_use", messages.ORG_IN_USE.format(count=used))
+            conn.execute(f"DELETE FROM {k} WHERE id = ?", (org_id,))
+
+        self._run(remove, mutates=True)
 
 
 store = SqliteWorkerStore()

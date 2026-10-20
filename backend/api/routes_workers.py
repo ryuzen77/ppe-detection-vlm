@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from .. import auth, face_engine, face_identity, messages, security_log, worker_store, worker_voice
 from ..audio_engine import audio_player
 from ..config import cfg
+from ..report_manager import report_mgr
 from ..state_manager import state_mgr
 from ..video.capture import video_service
 from .deps import client_address, require_admin
@@ -37,22 +38,29 @@ _STATUS = {
     "enrollment_inactive": 409,
     "invalid_prompt": 400,
     "face_not_ready": 503,
+    "invalid_department": 400,
+    "invalid_company": 400,
 }
 
 
 class NewWorker(BaseModel):
-    employee_no: str = ""
+    employee_no: Optional[str] = ""
     name: str = ""
     consent: bool = False
     nickname: str = ""   # T34d: wajib (nama yang diucapkan)
     gender: str = ""     # T34d: "male" | "female", wajib (sapaan Pak/Bu)
+    department_id: Optional[int] = None
+    company_id: Optional[int] = None
 
 
-class WorkerProfile(BaseModel):
-    """PATCH: hanya kolom yang dikirim yang diubah (T34d)."""
+class WorkerUpdate(BaseModel):
+    """PATCH: hanya kolom yang dikirim yang diubah (T34d, T79)."""
 
     nickname: Optional[str] = None
     gender: Optional[str] = None
+    department_id: Optional[int] = None
+    company_id: Optional[int] = None
+    employee_no: Optional[str] = None
 
 
 class NewTemplate(BaseModel):
@@ -69,7 +77,9 @@ def _error(error: worker_store.WorkerError | face_engine.FaceEngineError) -> HTT
     )
 
 
-def worker_json(worker: worker_store.Worker) -> dict:
+def worker_json(worker: worker_store.Worker, last_seen: object = ...) -> dict:
+    if last_seen is ...:
+        last_seen = report_mgr.get_last_seen(worker.id)
     return {
         "id": worker.id,
         "employee_no": worker.employee_no,
@@ -84,6 +94,11 @@ def worker_json(worker: worker_store.Worker) -> dict:
         "gender": worker.gender,
         "salutation": worker.salutation,
         "voice_ready": worker_voice.voice_ready(worker.id),
+        "department": {"id": worker.department.id, "name": worker.department.name} if worker.department else None,
+        "company": {"id": worker.company.id, "name": worker.company.name} if worker.company else {
+            "id": 0, "name": cfg.WORKER_DEFAULT_COMPANY
+        },
+        "last_seen": last_seen,
         "templates": [template_json(t) for t in worker.templates],
     }
 
@@ -111,20 +126,43 @@ def _call(fn, *args):
 
 
 @router.get("/api/workers", dependencies=[Depends(require_admin)])
-def list_workers():
+def list_workers(q: Optional[str] = None, active: Optional[str] = None):
     store = worker_store.store
-    workers = store.all()
+    active_filter: Optional[bool] = None
+    if active is not None and active.strip() != "":
+        val = active.strip().lower()
+        if val in ("true", "1"):
+            active_filter = True
+        elif val in ("false", "0"):
+            active_filter = False
+    workers = store.all(q=q, active=active_filter)
+    last_seens = report_mgr.get_last_seen_batch([w.id for w in workers])
     return {
         "face_ready": store.face_ready(),
-        "limit": worker_store.gallery_limit(sum(1 for w in workers if w.active)),
-        "workers": [worker_json(w) for w in workers],
+        "limit": worker_store.gallery_limit(store.active_count()),
+        "workers": [worker_json(w, last_seen=last_seens.get(w.id)) for w in workers],
     }
+
+
+@router.get("/api/workers/next-employee-no", dependencies=[Depends(require_admin)])
+def next_employee_no():
+    return {"employee_no": worker_store.store.next_employee_no()}
 
 
 @router.post("/api/workers", status_code=201)
 def create_worker(body: NewWorker, request: Request, user: auth.SessionUser = Depends(require_admin)):
-    worker = _call(lambda: worker_store.store.create(body.employee_no, body.name, body.consent, user.username,
-                                                     nickname=body.nickname, gender=body.gender))
+    worker = _call(
+        lambda: worker_store.store.create(
+            body.employee_no or "",
+            body.name,
+            body.consent,
+            user.username,
+            nickname=body.nickname,
+            gender=body.gender,
+            department_id=body.department_id,
+            company_id=body.company_id,
+        )
+    )
     worker_voice.request(worker)
     _record(
         security_log.WORKER_CREATED,
@@ -287,12 +325,50 @@ def release_enrollment(request: Request, user: auth.SessionUser = Depends(requir
     return Response(status_code=204)
 
 
+def _log_worker_update(
+    request: Request,
+    user: auth.SessionUser,
+    worker_id: int,
+    fields: set[str],
+    old_no: Optional[str],
+    new_no: str,
+) -> None:
+    extra = {"old_employee_no": old_no, "new_employee_no": new_no} if old_no is not None else {}
+    _record(security_log.WORKER_UPDATED, request, user, worker_id, fields=list(fields), **extra)
+
+
 @router.patch("/api/workers/{worker_id}")
-def update_worker(worker_id: int, body: WorkerProfile, request: Request,
-                  user: auth.SessionUser = Depends(require_admin)):
-    """Ubah nama panggilan / jenis kelamin (T34d); suara nama dibuat ulang di latar."""
-    worker = _call(lambda: worker_store.store.update_profile(worker_id, nickname=body.nickname, gender=body.gender))
+def update_worker(
+    worker_id: int,
+    body: WorkerUpdate,
+    request: Request,
+    user: auth.SessionUser = Depends(require_admin),
+):
+    """Ubah profil, divisi, kontraktor, atau nomor pegawai (T34d, T79)."""
+    fs = body.model_fields_set
+    dep_arg = body.department_id if "department_id" in fs else ...
+    worker, old_emp_no = _call(
+        lambda: worker_store.store.update_worker(
+            worker_id,
+            nickname=body.nickname if "nickname" in fs else None,
+            gender=body.gender if "gender" in fs else None,
+            department_id=dep_arg,
+            company_id=body.company_id if "company_id" in fs else None,
+            employee_no=body.employee_no if "employee_no" in fs else None,
+        )
+    )
     worker_voice.request(worker)
-    _record(security_log.WORKER_UPDATED, request, user, worker_id,
-            fields=[k for k in ("nickname", "gender") if getattr(body, k) is not None])
+    _log_worker_update(request, user, worker_id, fs, old_emp_no, worker.employee_no)
     return worker_json(worker)
+
+
+@router.get("/api/workers/{worker_id}/inspections", dependencies=[Depends(require_admin)])
+def worker_inspections(
+    worker_id: int,
+    limit: int = 50,
+    before: Optional[int] = None,
+):
+    """Riwayat pemeriksaan pekerja berhalaman urut terbaru (T79)."""
+    _call(lambda: worker_store.store.get(worker_id))
+    return report_mgr.get_worker_inspections(worker_id, limit=limit, before=before)
+

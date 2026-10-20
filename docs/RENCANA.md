@@ -14,8 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T79a — backend halaman Pekerja: divisi & perusahaan, nomor pegawai otomatis, riwayat per pekerja, filter laporan (kontrak "Kontrak T79") | Gemini | `gemini/t79a-workers-backend` (dari `master` `2b11eb0`) | dikerjakan | `backend/worker_store.py`, `backend/api/routes_workers.py`, `backend/api/routes_org.py` (baru), `backend/report_manager.py` & `backend/api/routes_reports.py` (filter + kolom snapshot), `backend/state_manager.py` (hanya isi snapshot audit), `backend/config.py`/`messages.py` (tambah), `tests/` | Klaim dicatat integrator 20-10. Gemini rebase ke `master` dulu (T76 baru digabung). Risiko Sedang (data pribadi: semua rute baru khusus admin + tes 403). |
-| T79b — UI halaman Pekerja (daftar, cari, detail + riwayat), pindah dari Pengaturan, nama/divisi/perusahaan & filter di Laporan **+ T78 rapikan Pengaturan & bilah atas** (permintaan pengguna 20-10; sketsa disetujui 20-10) | Claude | `claude/t79b-workers-page` (dari `master` `2b11eb0`) | dikerjakan | `web/src/pages/Pekerja.svelte` (baru), `web/src/components/workers/` (pindahan `settings/workers/` + baru), `web/src/pages/Pengaturan.svelte` (hapus bagian pekerja), `web/src/pages/Laporan.svelte` & komponen laporan, `web/src/lib/` (`workers.ts`, `reports.ts`, `api/*`, `messages.ts`, `settings.ts`), navigasi, bilah atas (`web/src/components/layout/` / chip status), `web/src/components/settings/` (Accounts, LocalVlmCard, VlmProviders, ZoneSettings), halaman login | Mulai dari tipe kontrak; data tiruan sampai T79a digabung. T78 (temuan analisa 19-10, 1366×768): bilah atas 1 ringkasan status (bukan 6 chip, chip kamera kembar dibuang); Pengaturan satu kolom berkelompok Gerbang / VLM / Akun / Diagnostik + daftar isi lengket; kesehatan VLM cadangan hanya bila aktif & tanpa daftar aplikasi laptop; tombol nonaktif jelas; tes lampu bertitik warna; form Akun berlabel & ganti sandi terpisah; bahasa biasa (".env", metrik VLM); tombol Masuk rata tengah. Gugur dari T78: tabel pekerja & "Belum ada foto" (pindah ke halaman Pekerja). |
 | Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | selesai | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 Commit `39f5c1e` diverifikasi Claude 05-10 (pytest 259 & ruff di salinan terpisah). **Temuan:** pemetaan `legacyGemini` di `web/src/lib/format.ts` + tesnya ikut dihapus padahal untuk DATA audit lama (10 baris `GEMINI_LIVE`, 23–24 Sep) → wajib dikembalikan. Penghapusan pengalihan `/app` di luar lingkup tetapi tidak dirujuk lagi (diterima) Perbaikan `legacyGemini` (`701d096`) terverifikasi (vitest 75); digabung 06-10 (`e7c7d89`), T18 tertutup. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
@@ -294,33 +292,6 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
-
-### Kontrak T79 — halaman Pekerja (disetujui pengguna 20-10)
-
-Keputusan pengguna 20-10: **divisi** ditambah (dari daftar admin), **ada kontraktor** (kolom perusahaan), **nomor pegawai otomatis tetapi boleh diganti nomor HR**, kontrak disetujui. Data diri lain tidak ditambah (minimisasi: tanpa NIK KTP, tgl lahir, alamat, HP). Semua rute baru **khusus admin** (`require_admin`), kecuali filter laporan (ikut aturan `/api/reports` yang ada).
-
-**Daftar organisasi** (`workers.db`, tabel baru `departments` & `companies`: `id`, `name` unik NOCASE, `created_at`). `companies` berisi satu entri bawaan `cfg.WORKER_DEFAULT_COMPANY` ("Internal") yang tidak bisa dihapus.
-
-| Rute | Isi | Galat |
-| :-- | :-- | :-- |
-| `GET /api/org/{kind}` (`kind` = `departments` \| `companies`) | `[{"id", "name", "workers": int, "builtin": bool}]` urut nama (`workers` = pekerja aktif; `builtin` = perusahaan bawaan, dipilih otomatis di form — tambahan 20-10 dari T79b) | 404 `invalid_kind` |
-| `POST /api/org/{kind}` `{"name"}` | 201 `{"id", "name", "workers": 0}` | 400 `invalid_name` (kosong / > `cfg.ORG_NAME_MAX_LENGTH`), 409 `name_taken` |
-| `PATCH /api/org/{kind}/{id}` `{"name"}` | 200 sama | 400/409 sama, 404 `not_found` |
-| `DELETE /api/org/{kind}/{id}` | 204 | 409 `in_use` (masih dipakai pekerja mana pun), 409 `builtin` (perusahaan bawaan), 404 |
-
-**Pekerja** (`workers` + kolom `department_id` NULL, `company_id` NOT NULL bawaan = "Internal"; migrasi untuk baris lama):
-- `worker_json` + `"department": {"id", "name"} | null`, `"company": {"id", "name"}`, `"last_seen": {"at": ISO, "is_complete": bool} | null` (pemeriksaan terakhir di audit, dari indeks `worker_id`).
-- `GET /api/workers?q=&active=` — `q` cocok sebagian nomor/nama (tanpa beda huruf besar), `active` = `true` \| `false` \| kosong (semua). Tanpa parameter = perilaku sekarang.
-- `POST /api/workers` — `employee_no` **opsional**: kosong → nomor berikutnya `cfg.WORKER_EMPLOYEE_NO_FORMAT` (bawaan `"P-{:04d}"`, angka = terbesar yang cocok format + 1; nomor lama di luar format diabaikan); diisi → divalidasi seperti sekarang (`employee_no_taken` dst.). Tambah `department_id` (opsional) & `company_id` (opsional, bawaan Internal); id tidak dikenal → 400 `invalid_department` / `invalid_company`.
-- `GET /api/workers/next-employee-no` → `{"employee_no": "P-0004"}` (pratinjau di form; bukan reservasi — dua admin bersamaan → yang kedua mendapat `employee_no_taken` dan form memuat ulang).
-- `PATCH /api/workers/{id}` + `department_id` (null = kosongkan) & `company_id`; `employee_no` juga boleh diubah (unik) — security log mencatat nomor lama & baru.
-- `GET /api/workers/{id}/inspections?limit=50&before=<id>` → `{"items": [{"id", "timestamp", "is_complete", "missing_items": [..], "fr_score", "snapshot_filename"}], "next_before": id | null}` urut terbaru; memakai `idx_worker_id` (EXPLAIN QUERY PLAN di laporan task).
-
-**Laporan** (`audit.db` skema v3: kolom snapshot `department`, `company` TEXT diisi saat pemeriksaan dari data pekerja yang dikenali — riwayat tetap benar walau pekerja pindah divisi; baris lama NULL):
-- item `GET /api/reports` + `worker_id`, `employee_no`, `worker_name`, `fr_status`, `fr_score` (sudah tersimpan) + `department`, `company`.
-- filter baru `GET /api/reports?worker_id=&department=&company=` (nama persis snapshot); `summary` & `export` menerima filter yang sama; CSV + kolom `CSV_HEADER_DEPARTMENT`, `CSV_HEADER_COMPANY`.
-
-Tes wajib: rute baru 403 untuk non-admin; migrasi `workers.db` & `audit.db` dari salinan skema lama; nomor otomatis (kosong, format lain di DB, bentrok); hapus divisi terpakai; riwayat berhalaman; filter laporan + snapshot.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
