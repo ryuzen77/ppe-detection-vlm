@@ -10,7 +10,7 @@ import numpy as np
 from ..config import cfg
 from .. import messages
 from .. import camera_manager
-from ..camera_health import FAULT_FROZEN, CameraHealth
+from ..camera_health import FAULT_FROZEN, FAULT_SYSTEM, CameraHealth
 from ..camera_manager import camera_mgr
 from ..detector import detector
 from ..state_manager import state_mgr
@@ -32,9 +32,26 @@ class _ReaderState:
     window_frames: int = 0
     baseline_fps: float = 0.0
     stall_since: float | None = None
+    # Galat tak terduga beruntun (T77): menentukan jeda sebelum putaran berikutnya
+    error_streak: int = 0
 
     def reset_rate(self, now: float):
         self.window_start, self.window_frames, self.baseline_fps, self.stall_since = now, 0, 0.0, None
+
+
+@dataclass
+class _InferenceState:
+    """Keadaan thread inferensi di antara frame (hanya disentuh thread inferensi)."""
+    prev_time: float
+    last_seq: int = -1
+    seen_first_frame: bool = False
+    # Galat beruntun (T77b): menentukan jeda sebelum frame berikutnya dicoba
+    error_streak: int = 0
+
+
+def _error_backoff(streak: int) -> float:
+    """Jeda setelah galat ke-`streak` beruntun: berlipat dari CAMERA_ERROR_BACKOFF_SECONDS, dibatasi."""
+    return min(cfg.CAMERA_ERROR_BACKOFF_SECONDS * 2 ** (streak - 1), cfg.CAMERA_ERROR_BACKOFF_MAX_SECONDS)
 
 
 class VideoCaptureService:
@@ -434,19 +451,41 @@ class VideoCaptureService:
         self._reader = _ReaderState(lost_mode=self._start_reader(), window_start=time.time())
         try:
             while self.is_running:
-                if self._handle_requests():
-                    continue
-                raw = self._next_raw_frame()
-                if raw is not None:
-                    self._publish_raw(raw)
-        except Exception as e:
-            # Tanpa penjaga ini, galat apa pun mematikan thread pembaca diam-diam
-            # dan aliran video berhenti tanpa pesan sama sekali.
-            logger.exception(f"Reader loop berhenti karena galat: {e}")
-            self.camera_status = "LOST"
-            self.camera_error = str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+                try:
+                    self._reader_step()
+                    self._reader.error_streak = 0
+                except Exception as e:
+                    self._recover_reader(e)
         finally:
             self._release_camera()
+
+    def _reader_step(self):
+        """Satu putaran: permintaan operator / vonis lepas, atau satu frame."""
+        if self._handle_requests():
+            return
+        raw = self._next_raw_frame()
+        if raw is not None:
+            self._publish_raw(raw)
+
+    def _recover_reader(self, error: Exception):
+        """Galat tak terduga (T77, mis. RAM habis saat `cap.read()`): thread pembaca tidak boleh mati.
+
+        Dulu galat apa pun mengakhiri thread ini selamanya: gerbang buta (kuning) sampai operator
+        memilih ulang kamera, dan proses tetap hidup sehingga supervisor tidak me-restart. Kini kamera
+        divonis lepas dan disambung ulang lewat jalur LOST biasa, setelah jeda yang berlipat.
+        """
+        r = self._reader
+        r.error_streak += 1
+        delay = _error_backoff(r.error_streak)
+        text = str(error)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+        logger.exception(messages.LOG_CAMERA_READER_ERROR.format(count=r.error_streak, error=text, delay=delay))
+        if self.camera_index is not None:
+            try:
+                self._mark_lost(messages.CAMERA_READER_ERROR.format(error=text))
+            except Exception:
+                # Melepas kamera pun bisa gagal saat RAM habis; status tetap LOST agar disambung ulang
+                self.cap, self.camera_status = None, "LOST"
+        time.sleep(delay)
 
     def _start_reader(self) -> dict | None:
         """Kamera awal; mengembalikan mode untuk sambung ulang bila kamera autostart belum terlihat.
@@ -633,51 +672,64 @@ class VideoCaptureService:
             self.raw_seq += 1
 
     def _capture_loop(self):
-        prev_time = time.time()
-        last_seq = -1
-        seen_first_frame = False
-
-        try:
-            while self.is_running:
-                with self.raw_lock:
-                    if self.latest_raw is None or self.raw_seq == last_seq:
-                        frame = None
-                    else:
-                        frame = self.latest_raw
-                        last_seq = self.raw_seq
-
+        st = _InferenceState(prev_time=time.time())
+        while self.is_running:
+            try:
+                frame = self._take_new_frame(st)
                 if frame is None:
                     # Belum ada frame baru sejak inferensi terakhir
                     time.sleep(cfg.INFERENCE_POLL_SECONDS)
                     continue
+                self._process_frame(frame, st)
+                st.error_streak = 0
+            except Exception as e:
+                self._recover_inference(e, st)
 
-                # Compute FPS antar frame yang benar-benar diproses.
-                # Frame pertama dilewati karena jedanya termasuk waktu buka kamera.
-                now = time.time()
-                dt = now - prev_time
-                prev_time = now
-                if dt > 0 and seen_first_frame:
-                    self.fps = (1 - cfg.FPS_SMOOTHING) * self.fps + cfg.FPS_SMOOTHING * (1.0 / dt)
-                seen_first_frame = True
+    def _take_new_frame(self, st: _InferenceState) -> np.ndarray | None:
+        with self.raw_lock:
+            if self.latest_raw is None or self.raw_seq == st.last_seq:
+                return None
+            st.last_seq = self.raw_seq
+            return self.latest_raw
 
-                # Kamera terputus/tertutup/membeku: gerbang berhenti memeriksa (T45)
-                state_mgr.set_camera_fault(self._camera_fault(frame, now))
+    def _process_frame(self, frame: np.ndarray, st: _InferenceState):
+        """Satu frame: FPS, gangguan kamera, YOLO, mesin keadaan gerbang, HUD, JPEG aliran."""
+        # FPS antar frame yang benar-benar diproses; frame pertama dilewati (termasuk waktu buka kamera)
+        now = time.time()
+        dt, st.prev_time = now - st.prev_time, now
+        if dt > 0 and st.seen_first_frame:
+            self.fps = (1 - cfg.FPS_SMOOTHING) * self.fps + cfg.FPS_SMOOTHING * (1.0 / dt)
+        st.seen_first_frame = True
+        # Kamera terputus/tertutup/membeku: gerbang berhenti memeriksa (T45). Gangguan "system"
+        # (T77b) bertahan sampai frame ini selesai diolah, supaya tidak naik-turun tiap frame.
+        fault = self._camera_fault(frame, now)
+        state_mgr.set_camera_fault(fault or (FAULT_SYSTEM if st.error_streak else None))
+        detections = detector.detect_and_track(frame)
+        state_mgr.update_frame_detections(detections)
+        annotated_frame = hud.draw_hud(frame, detections, self.fps)
+        _, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.STREAM_JPEG_QUALITY])
+        with self.lock:
+            self.current_frame_bytes = buffer.tobytes()
+        if st.error_streak:
+            state_mgr.set_camera_fault(fault)
 
-                # Run YOLO Person & Pose Detection
-                detections = detector.detect_and_track(frame)
+    def _recover_inference(self, error: Exception, st: _InferenceState):
+        """Galat di pengolah gambar (T77b, mis. VRAM habis saat YOLO): thread ini tidak boleh mati.
 
-                # Update State Machine & Anti-spam logic
-                state_mgr.update_frame_detections(detections)
-
-                # Draw HUD on frame for low-latency visual stream
-                annotated_frame = hud.draw_hud(frame, detections, self.fps)
-
-                # Encode to JPEG
-                _, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.STREAM_JPEG_QUALITY])
-                with self.lock:
-                    self.current_frame_bytes = buffer.tobytes()
-        except Exception as e:
-            logger.exception(f"Inference loop stopped: {e}")
+        Dulu satu galat menghentikannya selamanya; bila lampu hijau sedang menyala, sesi tidak
+        pernah berakhir (jalur kosong tak lagi terdeteksi) sehingga hijau bisa bertahan tanpa
+        pemeriksaan. Kini gerbang masuk gangguan "system" (sesi & keputusan dibatalkan, kuning)
+        sampai satu frame kembali berhasil diolah.
+        """
+        st.error_streak += 1
+        delay = _error_backoff(st.error_streak)
+        text = str(error)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+        logger.exception(messages.LOG_INFERENCE_ERROR.format(count=st.error_streak, error=text, delay=delay))
+        try:
+            state_mgr.set_camera_fault(FAULT_SYSTEM)
+        except Exception:
+            logger.exception(messages.LOG_INFERENCE_FAULT_FAILED)
+        time.sleep(delay)
 
     def get_latest_jpeg(self):
         with self.lock:

@@ -198,9 +198,11 @@ def test_acuan_mencakup_semua_jalur():
     for expected in (messages.CAMERA_STALLED, messages.CAMERA_DISCONNECTED, messages.CAMERA_FROZEN,
                      messages.CAMERA_UNPLUGGED):
         assert expected in errors, expected
+    # T77: galat tak terduga tidak lagi menghentikan pembaca; kamera divonis lepas lalu disambung ulang
+    reader_error = messages.CAMERA_READER_ERROR.format(error="galat driver tiruan")
+    assert reader_error in errors, "jalur galat tak terduga"
     finals = [s[-1] for s in scenarios]
-    assert any(f[7] == "galat driver tiruan" for f in finals), "jalur galat tak terduga"
-    assert all(f[5] > 100 for f in finals), "skenario tidak boleh berhenti terlalu dini (kecuali jalur galat)"
+    assert all(f[5] > STEPS for f in finals), "pembaca tidak boleh berhenti sebelum diminta (termasuk jalur galat)"
 
 
 if __name__ == "__main__" and "--regenerate" in sys.argv:

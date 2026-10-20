@@ -25,6 +25,8 @@ from .config import cfg
 
 FAULT_BLOCKED = "blocked"
 FAULT_FROZEN = "frozen"
+# T77b: inferensi (YOLO/keputusan) galat — bukan dari gambar, tetapi gerbang sama-sama tidak boleh memutuskan
+FAULT_SYSTEM = "system"
 
 
 def detail_gray(frame: np.ndarray) -> np.ndarray:

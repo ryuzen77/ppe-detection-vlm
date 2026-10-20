@@ -165,6 +165,11 @@ class Config:
     CAMERA_PRESENCE_CHECK_SECONDS: float = 2.0
     # Jeda antar upaya menyambung ulang kamera yang lepas
     CAMERA_RECONNECT_INTERVAL_SECONDS: float = 2.0
+    # T77: galat tak terduga di thread pembaca (mis. RAM habis saat cap.read) -> kamera divonis
+    # lepas lalu disambung ulang; jeda berlipat per galat beruntun supaya galat berulang
+    # tidak memutar CPU & membanjiri log, dengan batas atas.
+    CAMERA_ERROR_BACKOFF_SECONDS: float = 1.0
+    CAMERA_ERROR_BACKOFF_MAX_SECONDS: float = 30.0
     # Kesehatan gambar (T45). Tertutup = rata-rata kecerahan di luar rentang atau
     # nyaris seragam (simpangan baku kecil) pada gambar kecil skala abu-abu (0-255).
     CAMERA_HEALTH_SAMPLE_WIDTH: int = 64
