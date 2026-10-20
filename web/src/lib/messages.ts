@@ -375,7 +375,6 @@ export const SETTINGS_TAB = {
   testYellowBtn: 'Tes kuning',
   latencyTestBtn: 'Uji kecepatan VLM',
   // T78: kelompok & daftar isi
-  tocLabel: 'Bagian pengaturan',
   groups: { gerbang: 'Gerbang', vlm: 'VLM', akun: 'Akun', diagnostik: 'Diagnostik' },
   groupHints: {
     gerbang: 'Kamera, titik berdiri, APD yang diperiksa, dan lampu.',
@@ -549,6 +548,8 @@ export const WORKERS = {
   modalEditTitle: 'Ubah Profil Pekerja',
   fieldEmployeeNo: 'Nomor Pegawai',
   fieldEmployeeNoPlaceholder: 'mis. P-0001',
+  // T84: nomor terkunci setelah tersimpan (keputusan pengguna 20-10)
+  employeeNoLockedHint: 'Nomor pegawai tidak bisa diubah setelah tersimpan.',
   fieldName: 'Nama Lengkap',
   fieldNamePlaceholder: 'mis. Muhammad Zen Fikri',
   fieldNickname: 'Nama Panggilan',
@@ -653,8 +654,8 @@ export const WORKERS_PAGE = {
   historyScore: (score: number) => `wajah ${score.toFixed(2)}`,
   historyPhoto: 'Foto bukti',
   fieldDepartmentNone: 'Tanpa divisi',
-  employeeNoAutoHint: 'Terisi otomatis; boleh diganti dengan nomor dari HR.',
-  employeeNoAutoEmpty: 'Kosongkan untuk nomor otomatis.',
+  employeeNoAutoHint: 'Terisi otomatis; boleh diganti nomor dari HR. Tidak bisa diubah setelah disimpan.',
+  employeeNoAutoEmpty: 'Kosongkan untuk nomor otomatis. Tidak bisa diubah setelah disimpan.',
   errOrgLoad: 'Gagal memuat daftar divisi & perusahaan',
 } as const
 

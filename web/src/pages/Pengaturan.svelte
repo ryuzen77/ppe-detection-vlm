@@ -27,7 +27,6 @@
   const camera = $derived(telemetry.data?.camera ?? null)
   // T78: kesehatan VLM cadangan hanya berarti bila cadangan memang dipakai
   const backupActive = $derived(telemetry.data?.api_monitor?.backup?.configured === true)
-  const GROUPS = ['gerbang', 'vlm', 'akun', 'diagnostik'] as const
   const LIGHTS = [
     { color: 'green', label: SETTINGS_TAB.testLightBtn },
     { color: 'red', label: SETTINGS_TAB.testRedBtn },
@@ -84,10 +83,6 @@
 </script>
 
 <div class="wrap">
-  <nav class="toc" aria-label={SETTINGS_TAB.tocLabel}>
-    {#each GROUPS as g (g)}<a href="#/pengaturan" onclick={(e) => { e.preventDefault(); document.getElementById(`grup-${g}`)?.scrollIntoView({ behavior: 'smooth' }) }}>{SETTINGS_TAB.groups[g]}</a>{/each}
-  </nav>
-
   <div class="content">
     <section class="group" id="grup-gerbang" aria-labelledby="h-gerbang">
       <header><h2 id="h-gerbang">{SETTINGS_TAB.groups.gerbang}</h2><p>{SETTINGS_TAB.groupHints.gerbang}</p></header>
@@ -165,39 +160,9 @@
 
 <style>
   .wrap {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-6);
-    max-width: 1120px;
+    max-width: 960px;
     margin: 0 auto;
     padding: var(--space-6) var(--space-5) var(--space-8);
-  }
-  .toc {
-    display: none;
-  }
-  @media (min-width: 1100px) {
-    .wrap {
-      grid-template-columns: 180px minmax(0, 1fr);
-    }
-    .toc {
-      position: sticky;
-      top: var(--space-6);
-      align-self: start;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-1);
-    }
-  }
-  .toc a {
-    padding: 6px 10px;
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: var(--text-sm);
-  }
-  .toc a:hover {
-    color: var(--text);
-    background: var(--surface-2);
   }
   .content {
     display: flex;
@@ -209,7 +174,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    scroll-margin-top: var(--space-6);
   }
   .group > header h2 {
     margin: 0;
