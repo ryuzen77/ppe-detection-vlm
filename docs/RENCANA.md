@@ -364,6 +364,11 @@ Pemutus sirkuit lama (T27/T87) tetap berlaku untuk "API bermasalah" saat interne
 - `internet.state: null` = pemantau mati (tidak ada VLM lokal yang bisa dialihkan — susunan C).
 - UI operator: chip "Internet: normal / lambat / putus" dan "VLM lokal: siaga / memuat / siap / gagal" — **tanpa nama penyedia/model** (AGENTS §5).
 
+**Tambahan kontrak (disetujui pengguna 21-10, temuan saat T72b):**
+1. Keputusan VLM lokal darurat dicatat di audit `inference_source = "VLM_DARURAT:<penyedia>/<model>"` (utama `VLM_LIVE:`, cadangan `VLM_CADANGAN:` tetap) dan **dihitung terpisah** di laporan (bukan digabung ke cadangan): `GET /api/reports` tambah `local_fallback_count` (di samping `backup_count`); telemetri `api_monitor` tambah `decisions_local` (di samping `decisions_backup`).
+2. `POST /api/config/vlm/apply` dengan VLM lokal (cadangan B atau darurat A) **tidak memuat model** — siaga dingin; model baru dimuat saat dibutuhkan (§4).
+3. `POST /api/config/vlm/test` untuk penyedia lokal (UI mengirim `role: "backup"` untuk darurat, karena kontrak uji T28 hanya utama/cadangan): bila model berstatus `unloaded` sebelum diuji, model **dikeluarkan lagi** setelah uji selesai.
+
 #### 6. Pembagian & tes
 
 - **T72a — backend** (Codex): `backend/internet_monitor.py` (baru, logika murni + I/O soket terpisah), `backend/vlm_analyzer.py` (rute, muat/bongkar), `backend/local_model_guard.py` (patuh state), `backend/vlm_selection.py` & `api/routes_vlm.py` (`local_fallback`), `backend/api_monitor.py`, `config.py`/`messages.py`/`.env.example` (tambah), `tests/`.
