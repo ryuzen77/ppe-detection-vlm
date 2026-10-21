@@ -1,6 +1,8 @@
 <script lang="ts">
   import Camera from '@lucide/svelte/icons/camera'
   import Cpu from '@lucide/svelte/icons/cpu'
+  import Globe from '@lucide/svelte/icons/globe'
+  import HardDrive from '@lucide/svelte/icons/hard-drive'
   import Lightbulb from '@lucide/svelte/icons/lightbulb'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
@@ -13,7 +15,7 @@
   import { BRAND, CONNECTION, GATE_CHIP, NAV, SYSTEM_STATUS, AUTH, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
-  import { cameraChip, vlmChip, iotChip, systemSummary } from '../lib/status'
+  import { cameraChip, vlmChip, iotChip, internetChip, localStandbyChip, systemSummary } from '../lib/status'
   import { connectionView } from '../lib/connection'
   import { session } from '../lib/stores/session.svelte'
   import { LOGIN } from '../lib/messages'
@@ -30,12 +32,16 @@
   const camera = $derived(cameraChip(t))
   const vlm = $derived(vlmChip(t))
   const iot = $derived(iotChip(t))
+  const internet = $derived(internetChip(t))
+  const localStandby = $derived(localStandbyChip(t))
   const connection = $derived(connectionView(session.authenticated, telemetry.status))
   const localVlm = $derived(localVlmChipView(health.localVlm))
   // T78: satu ringkasan menggantikan chip kamera/VLM/lampu/VLM lokal yang berdampingan
   const items = $derived([
     { icon: Camera, ...camera },
     { icon: Cpu, ...vlm },
+    ...(internet ? [{ icon: Globe, ...internet }] : []),
+    ...(localStandby ? [{ icon: HardDrive, ...localStandby }] : []),
     ...(t?.iot ? [{ icon: Lightbulb, ...iot }] : []),
     ...(localVlm ? [{ icon: Cpu, ...localVlm }] : []),
   ])

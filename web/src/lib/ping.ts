@@ -20,6 +20,11 @@ export function pingRows(res: PingResult): PingRow[] {
   const rows: PingRow[] = engines.map((e) => {
     const kind = e.is_local === undefined ? '' : ` (${e.is_local ? TEXT.local : TEXT.online})`
     const label = (TEXT.roles[e.role] ?? e.role) + kind
+    // T72: VLM lokal siaga dingin sengaja tidak diuji server (supaya tidak memuat ±6 GB) — penanda
+    // dari jawaban ping itu sendiri, bukan tebakan dari telemetri WebSocket yang bisa basi
+    if (e.standby) {
+      return { label, tone: 'muted', text: TEXT.standby, hint: TEXT.standbyHint }
+    }
     if (!e.ok) {
       return { label, tone: 'danger', text: TEXT.failed(e.error ?? ''), hint: e.is_local ? TEXT.localLoading : undefined }
     }

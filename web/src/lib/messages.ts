@@ -43,6 +43,7 @@ export const cameraChipOk = (fps: number) => `${CAMERA_CHIP.OK} · ${Math.round(
 export const VLM_CHIP: Record<VlmMode | 'UNKNOWN', { text: string; hint: string }> = {
   UTAMA: { text: 'VLM utama', hint: 'Penilaian APD oleh VLM utama' },
   CADANGAN: { text: 'VLM cadangan', hint: 'VLM utama tidak menjawab; penilaian oleh VLM cadangan' },
+  LOKAL: { text: 'VLM lokal', hint: 'Internet atau VLM API bermasalah; penilaian oleh VLM lokal di gerbang' },
   GANGGUAN: { text: 'VLM gangguan', hint: 'VLM utama & cadangan tidak menjawab' },
   UNKNOWN: { text: 'VLM', hint: '' },
 }
@@ -52,6 +53,20 @@ export const VLM_CHIP_NO_BACKUP = {
   hint: 'Tanpa VLM cadangan: bila VLM utama gangguan atau kuota habis, pekerja diminta menunggu',
 }
 
+
+// T72: koneksi internet gerbang (bukan kesehatan API VLM) & VLM lokal siaga dingin
+export const INTERNET_CHIP = {
+  normal: { text: 'Internet: normal', hint: '' },
+  lambat: { text: 'Internet: lambat', hint: 'Tersambung tetapi lambat; VLM lokal disiapkan bila VLM utama tidak menjawab' },
+  putus: { text: 'Internet: putus', hint: 'Kabel/Wi-Fi/router terputus; penilaian dialihkan ke VLM lokal' },
+} as const
+
+export const LOCAL_STANDBY_CHIP = {
+  unloaded: { text: 'VLM lokal: siaga', hint: 'Belum dimuat di GPU; dimuat otomatis bila internet atau VLM API bermasalah' },
+  loading: { text: 'VLM lokal: memuat', hint: 'Menyiapkan model di GPU; pekerja diminta menunggu sebentar' },
+  ready: { text: 'VLM lokal: siap', hint: 'Model sudah di GPU dan siap menilai' },
+  failed: { text: 'VLM lokal: gagal dimuat', hint: 'Dicoba lagi otomatis; bila internet putus, pekerja diminta menunggu. Hubungi admin' },
+} as const
 
 export const IOT_CHIP = {
   connected: 'Lampu gerbang: tersambung',
@@ -149,6 +164,9 @@ export const CHECKLIST = {
   loading: 'Memuat daftar APD…',
   backupBadge: 'Dinilai VLM cadangan',
   backupHint: 'VLM utama tidak menjawab; penilaian oleh VLM cadangan',
+  // T72: susunan A — internet atau VLM API bermasalah
+  localBadge: 'Dinilai VLM lokal',
+  localHint: 'Internet atau VLM API bermasalah; penilaian oleh VLM lokal di gerbang',
 } as const
 
 export const HISTORY = {
@@ -161,6 +179,7 @@ export const HISTORY = {
   complete: 'APD lengkap',
   incomplete: 'APD belum lengkap',
   backup: 'cadangan',
+  local: 'lokal',
 } as const
 
 /** Detik → "3,2 dtk" (format Indonesia) */
@@ -241,6 +260,8 @@ export const chipTitle = (text: string, hint: string): string => (hint ? `${text
 
 // --- Notifikasi ----------------------------------------------------------------------------------
 
+const VLM_MODE_WORD: Record<VlmMode, string> = { UTAMA: 'utama', CADANGAN: 'cadangan', LOKAL: 'lokal', GANGGUAN: 'gangguan' }
+
 export const NOTIFY = {
   close: 'Tutup notifikasi',
   denied: (id: number) => `Pekerja #${id} ditolak`,
@@ -248,7 +269,7 @@ export const NOTIFY = {
   outageTitle: 'Sistem gangguan',
   outageDetail: 'VLM utama & cadangan tidak menjawab; pekerja diminta menunggu.',
   recoveredTitle: 'Sistem pulih',
-  recoveredDetail: (mode: VlmMode) => `VLM ${mode === 'UTAMA' ? 'utama' : 'cadangan'} kembali menilai.`,
+  recoveredDetail: (mode: VlmMode) => `VLM ${VLM_MODE_WORD[mode]} kembali menilai.`,
 } as const
 
 // --- Laporan (T33 langkah 2) --------------------------------------------------------------------
@@ -320,6 +341,7 @@ export const REPORTS = {
     denied: 'Ditolak',
     compliance: 'Tingkat kepatuhan',
     backup: 'Dinilai VLM cadangan',
+    localFallback: 'Dinilai VLM lokal darurat',
     outages: 'Gangguan sistem',
     outagesHint: 'Pemeriksaan tanpa keputusan karena VLM utama & cadangan tidak menjawab',
   },
@@ -352,7 +374,7 @@ export const REPORTS = {
     missing: (items: string[]) => (items.length ? `Kurang: ${items.join(', ')}` : ''),
   },
   result: { passed: 'Lolos', denied: 'Ditolak', unverified: 'Tidak terverifikasi' },
-  source: { utama: 'VLM utama', cadangan: 'VLM cadangan', gangguan: 'Tanpa keputusan', lama: 'Data lama' },
+  source: { utama: 'VLM utama', cadangan: 'VLM cadangan', darurat: 'VLM lokal darurat', gangguan: 'Tanpa keputusan', lama: 'Data lama' },
   loading: 'Memuat riwayat…',
   empty: 'Belum ada pemeriksaan.',
   emptyFiltered: 'Tidak ada pemeriksaan yang cocok dengan saringan.',
@@ -400,7 +422,10 @@ export const SETTINGS_TAB = {
   pingFailed: 'Gagal ping VLM',
   // T86: uji latensi per VLM aktif, diukur dengan gambar contoh seukuran pemeriksaan
   ping: {
-    roles: { utama: 'VLM utama', cadangan: 'VLM cadangan' } as Record<string, string>,
+    roles: { utama: 'VLM utama', cadangan: 'VLM cadangan', darurat: 'VLM lokal darurat' } as Record<string, string>,
+    // T72: VLM lokal siaga dingin sengaja tidak dimuat hanya untuk uji latensi (VRAM ±6 GB)
+    standby: 'siaga, belum dimuat — tidak diuji supaya GPU tetap kosong',
+    standbyHint: 'Dimuat otomatis saat internet atau VLM API bermasalah. Untuk menguji modelnya, pakai tombol "Uji Penyedia" di bagian Penyedia VLM.',
     local: 'lokal',
     online: 'online',
     answered: (ms: number) => `menjawab dalam ${seconds(ms)}`,
@@ -533,8 +558,19 @@ export const VLM_SETTINGS = {
     'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa). Model cadangan dikeluarkan dari GPU.',
   disableBackupConfirm:
     'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
+  // T72: VLM lokal siaga dingin — menerapkan tidak memuat model; disiapkan otomatis saat dibutuhkan
   applyingLocalBackup:
-    'Menyiapkan model cadangan di GPU (bisa sampai sekitar 1 menit). Gerbang tetap memakai pilihan lama sampai model siap...',
+    'Menerapkan... VLM lokal tidak dimuat sekarang (siaga dingin); model disiapkan otomatis di GPU saat VLM utama gangguan atau internet bermasalah.',
+  // T72: VLM lokal darurat (susunan A) — siaga dingin, tidak memakan GPU selama internet & API sehat
+  localFallbackTitle: 'VLM Lokal Darurat',
+  noLocalFallback: '(Tanpa VLM lokal darurat)',
+  localFallbackHint:
+    'Tidak dimuat saat server menyala. Dimuat otomatis bila internet putus/lambat atau VLM utama & cadangan gagal; pekerja pertama diminta menunggu selama model disiapkan (lamanya tergantung model & perangkat; uji dengan tombol "Uji Penyedia"). Dikeluarkan lagi dari GPU setelah internet & VLM utama normal kembali.',
+  noLocalFallbackHint: 'Tanpa VLM lokal darurat: bila internet putus atau VLM utama & cadangan gagal, pekerja diminta menunggu.',
+  localFallbackBackupIsLocal: 'Cadangan sudah VLM lokal (siaga dingin: dimuat saat VLM utama gangguan atau internet bermasalah), jadi VLM lokal darurat tidak diperlukan.',
+  noBackupWithLocalHint: 'Tanpa VLM cadangan API: bila VLM utama gangguan atau internet bermasalah, penilaian dialihkan ke VLM lokal darurat.',
+  noLocalProvider: 'Belum ada penyedia VLM lokal (mis. Ollama) yang tersedia di server.',
+  testResultLocal: 'Hasil Uji VLM Lokal Darurat',
   missingKey: '(API key belum diisi di berkas konfigurasi server)',
   missingBaseUrl: '(alamat VLM_BASE_URL belum diisi di berkas konfigurasi server)',
   

@@ -172,6 +172,9 @@
       <StatTile label={TEXT.stats.compliance} value={summary?.totals.compliance_rate === null ? '–' : percent(summary?.totals.compliance_rate)}
                 meter={summary?.totals.compliance_rate ?? null} tone={complianceTone(summary?.totals.compliance_rate ?? null)} />
       <StatTile label={TEXT.stats.backup} value={count(page?.backup_count)} />
+      {#if page?.local_fallback_count !== undefined}
+        <StatTile label={TEXT.stats.localFallback} value={count(page.local_fallback_count)} />
+      {/if}
       <StatTile label={TEXT.stats.outages} value={count(page?.system_outages)} 
                 note={TEXT.stats.scopeSinceStart} hint={TEXT.stats.outagesHint} />
     </div>
