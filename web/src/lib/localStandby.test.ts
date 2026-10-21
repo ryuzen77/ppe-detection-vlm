@@ -1,7 +1,9 @@
 // T72: VLM lokal siaga dingin + pemantau internet — chip operator, pilihan admin, notifikasi.
 import { describe, expect, it } from 'vitest'
 import type { InternetStatus, LocalStandby, MonitorStatus, Telemetry } from './api/types'
+import { describeSource } from './format'
 import { detectEvents } from './notify'
+import { sourceText } from './reports'
 import { internetChip, localStandbyChip, systemSummary, vlmChip } from './status'
 import { localFallbackAvailability, localFallbackChoice, providerOptionLabel } from './vlmSelection'
 
@@ -58,6 +60,15 @@ describe('chip VLM lokal (T72)', () => {
 
   it('mode LOKAL: chip VLM kuning dengan teks umum', () => {
     expect(vlmChip(tele({ mode: 'LOKAL' }))).toMatchObject({ tone: 'warn', text: 'VLM lokal' })
+  })
+})
+
+describe('sumber keputusan VLM lokal darurat (T72)', () => {
+  it('VLM_DARURAT: terbaca sebagai darurat, teks laporan tanpa nama model', () => {
+    expect(describeSource('VLM_DARURAT:ollama/qwen2.5vl:7b')).toEqual({ role: 'darurat', label: 'ollama/qwen2.5vl:7b' })
+    expect(sourceText('VLM_DARURAT:ollama/qwen2.5vl:7b')).toEqual({ role: 'darurat', text: 'VLM lokal darurat' })
+    // awalan lama tidak berubah
+    expect(describeSource('VLM_CADANGAN:gemini/x').role).toBe('cadangan')
   })
 })
 

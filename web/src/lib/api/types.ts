@@ -53,7 +53,8 @@ export interface ItemResult {
   [qualifier: string]: boolean | string | undefined
 }
 
-export type DecidedBy = 'utama' | 'cadangan' | ''
+// darurat (T72): VLM lokal darurat susunan A (`decided_by` = peran engine)
+export type DecidedBy = 'utama' | 'cadangan' | 'darurat' | ''
 
 export interface InspectionResult {
   items: Record<string, ItemResult>
@@ -135,6 +136,8 @@ export interface MonitorStatus {
   backup: VlmEngineStats
   decisions_primary: number
   decisions_backup: number
+  /** T72; tidak ada pada server sebelum T72a */
+  decisions_local?: number
   no_decisions: number
   last_no_decision_reason: string
   is_locked: boolean
@@ -382,6 +385,8 @@ export interface ReportsPage {
   violation_count: number
   compliance_rate: number
   backup_count: number
+  /** T72: keputusan VLM lokal darurat; tidak ada pada server sebelum T72a */
+  local_fallback_count?: number
   system_outages: number
   filtered_total: number
   page_records: ReportRecord[]

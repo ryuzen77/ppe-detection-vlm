@@ -28,7 +28,8 @@
             {r.is_complete ? HISTORY.complete : r.missing_items.join(', ') || HISTORY.incomplete}
           </span>
           <span class="meta">
-            {#if src.role === 'cadangan'}<span class="backup">{HISTORY.backup}</span>{/if}
+            {#if src.role === 'cadangan'}<span class="backup">{HISTORY.backup}</span>
+            {:else if src.role === 'darurat'}<span class="backup">{HISTORY.local}</span>{/if}
             <span class="mono">{seconds(r.inference_time_ms)}</span>
           </span>
         </li>

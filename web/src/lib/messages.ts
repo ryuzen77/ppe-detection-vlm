@@ -164,6 +164,9 @@ export const CHECKLIST = {
   loading: 'Memuat daftar APD…',
   backupBadge: 'Dinilai VLM cadangan',
   backupHint: 'VLM utama tidak menjawab; penilaian oleh VLM cadangan',
+  // T72: susunan A — internet atau VLM API bermasalah
+  localBadge: 'Dinilai VLM lokal',
+  localHint: 'Internet atau VLM API bermasalah; penilaian oleh VLM lokal di gerbang',
 } as const
 
 export const HISTORY = {
@@ -176,6 +179,7 @@ export const HISTORY = {
   complete: 'APD lengkap',
   incomplete: 'APD belum lengkap',
   backup: 'cadangan',
+  local: 'lokal',
 } as const
 
 /** Detik → "3,2 dtk" (format Indonesia) */
@@ -337,6 +341,7 @@ export const REPORTS = {
     denied: 'Ditolak',
     compliance: 'Tingkat kepatuhan',
     backup: 'Dinilai VLM cadangan',
+    localFallback: 'Dinilai VLM lokal darurat',
     outages: 'Gangguan sistem',
     outagesHint: 'Pemeriksaan tanpa keputusan karena VLM utama & cadangan tidak menjawab',
   },
@@ -369,7 +374,7 @@ export const REPORTS = {
     missing: (items: string[]) => (items.length ? `Kurang: ${items.join(', ')}` : ''),
   },
   result: { passed: 'Lolos', denied: 'Ditolak', unverified: 'Tidak terverifikasi' },
-  source: { utama: 'VLM utama', cadangan: 'VLM cadangan', gangguan: 'Tanpa keputusan', lama: 'Data lama' },
+  source: { utama: 'VLM utama', cadangan: 'VLM cadangan', darurat: 'VLM lokal darurat', gangguan: 'Tanpa keputusan', lama: 'Data lama' },
   loading: 'Memuat riwayat…',
   empty: 'Belum ada pemeriksaan.',
   emptyFiltered: 'Tidak ada pemeriksaan yang cocok dengan saringan.',
@@ -550,8 +555,9 @@ export const VLM_SETTINGS = {
     'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa). Model cadangan dikeluarkan dari GPU.',
   disableBackupConfirm:
     'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
+  // T72: VLM lokal siaga dingin — menerapkan tidak memuat model; disiapkan otomatis saat dibutuhkan
   applyingLocalBackup:
-    'Menyiapkan model cadangan di GPU (bisa sampai sekitar 1 menit). Gerbang tetap memakai pilihan lama sampai model siap...',
+    'Menerapkan... VLM lokal tidak dimuat sekarang (siaga dingin); model disiapkan otomatis di GPU saat VLM utama gangguan atau internet bermasalah.',
   // T72: VLM lokal darurat (susunan A) — siaga dingin, tidak memakan GPU selama internet & API sehat
   localFallbackTitle: 'VLM Lokal Darurat',
   noLocalFallback: '(Tanpa VLM lokal darurat)',

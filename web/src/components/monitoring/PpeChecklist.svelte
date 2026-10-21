@@ -23,6 +23,8 @@
     <h3>{CHECKLIST.title}</h3>
     {#if decidedBy === 'cadangan'}
       <span class="backup" title={CHECKLIST.backupHint}>{CHECKLIST.backupBadge}</span>
+    {:else if decidedBy === 'darurat'}
+      <span class="backup" title={CHECKLIST.localHint}>{CHECKLIST.localBadge}</span>
     {/if}
   </header>
   <ul>
