@@ -71,19 +71,27 @@
     }
   }
 
-  async function togglePpe(key: string, checked: boolean) {
-    if (!catalog.items) return
+  // T89: satu perubahan pada satu waktu, supaya pesan galat & status centang jelas milik perubahan mana
+  let ppeSaving = $state(false)
+
+  async function togglePpe(input: HTMLInputElement, key: string) {
     ppeError = ''
-    const active: Record<string, boolean> = {}
-    for (const item of catalog.items) {
-      active[item.key] = item.key === key ? checked : item.required
-    }
+    ppeSaving = true
     try {
-      await api.setPpeActive(active)
-      catalog.load()
+      await catalog.setRequired(key, input.checked)
     } catch (e) {
       ppeError = withError(SETTINGS_TAB.ppeUpdateFailed, e)
+    } finally {
+      // Centang mengikuti status server terakhir yang diketahui (ditolak, atau ternyata tersimpan)
+      input.checked = catalog.items.find((i) => i.key === key)?.required ?? input.checked
+      ppeSaving = false
     }
+  }
+
+  async function refreshPpe() {
+    ppeSaving = true
+    if (await catalog.refresh()) ppeError = ''
+    ppeSaving = false
   }
 </script>
 
@@ -111,11 +119,16 @@
       <section class="card">
         <h3>{SETTINGS_TAB.ppeRequired}</h3>
         {#if ppeError}<p class="error" role="alert">{ppeError}</p>{/if}
+        {#if catalog.unconfirmed}
+          <p class="warn" role="alert">{SETTINGS_TAB.ppeUnconfirmed}
+            <button class="btn" onclick={refreshPpe} disabled={ppeSaving}>{SETTINGS_TAB.ppeRefresh}</button></p>
+        {/if}
         <div class="ppe-list">
           {#if catalog.items}
             {#each catalog.items as item (item.key)}
               <label class="ppe-item">
-                <input type="checkbox" checked={item.required} onchange={(e) => togglePpe(item.key, e.currentTarget.checked)} />
+                <input type="checkbox" checked={item.required} disabled={ppeSaving || catalog.unconfirmed}
+                       onchange={(e) => togglePpe(e.currentTarget, item.key)} />
                 {item.label}
               </label>
             {/each}
