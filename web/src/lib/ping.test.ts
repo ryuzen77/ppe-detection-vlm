@@ -9,6 +9,22 @@ function result(engines: PingResult['engines']): PingResult {
   return { status: 'ONLINE', latency_ms: 0, message: '', engines }
 }
 
+describe('pingRows — VLM lokal siaga (T72)', () => {
+  const standby = (state: 'unloaded' | 'loading' | 'ready' | 'failed') => ({ role: 'darurat' as const, state, since: null })
+  const darurat = [{ role: 'darurat' as const, ok: false, latency_ms: 0, error: 'Siaga (belum dimuat).', is_local: true, timeout_ms: 12000 }]
+
+  it('siaga dingin = baris netral, bukan "tidak menjawab"', () => {
+    const [row] = pingRows(result(darurat), standby('unloaded'))
+    expect(row).toMatchObject({ label: 'VLM lokal darurat (lokal)', tone: 'muted', text: TEXT.standby })
+  })
+
+  it('gagal sungguhan (sedang dimuat / gagal) tetap merah', () => {
+    expect(pingRows(result(darurat), standby('failed'))[0].tone).toBe('danger')
+    expect(pingRows(result(darurat), standby('loading'))[0].tone).toBe('danger')
+    expect(pingRows(result(darurat))[0].tone).toBe('danger')
+  })
+})
+
 describe('pingRows (T86)', () => {
   it('satu baris per VLM aktif, dengan jenis online/lokal', () => {
     const rows = pingRows(result([

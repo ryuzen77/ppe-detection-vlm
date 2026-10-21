@@ -422,7 +422,10 @@ export const SETTINGS_TAB = {
   pingFailed: 'Gagal ping VLM',
   // T86: uji latensi per VLM aktif, diukur dengan gambar contoh seukuran pemeriksaan
   ping: {
-    roles: { utama: 'VLM utama', cadangan: 'VLM cadangan' } as Record<string, string>,
+    roles: { utama: 'VLM utama', cadangan: 'VLM cadangan', darurat: 'VLM lokal darurat' } as Record<string, string>,
+    // T72: VLM lokal siaga dingin sengaja tidak dimuat hanya untuk uji latensi (VRAM ±6 GB)
+    standby: 'siaga, belum dimuat — tidak diuji supaya GPU tetap kosong',
+    standbyHint: 'Dimuat otomatis saat internet atau VLM API bermasalah. Untuk menguji modelnya, pakai tombol "Uji Penyedia" di bagian Penyedia VLM.',
     local: 'lokal',
     online: 'online',
     answered: (ms: number) => `menjawab dalam ${seconds(ms)}`,

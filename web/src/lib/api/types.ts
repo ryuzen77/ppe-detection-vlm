@@ -503,7 +503,7 @@ export interface Health {
 }
 
 export interface PingEngineResult {
-  role: 'utama' | 'cadangan'
+  role: 'utama' | 'cadangan' | 'darurat'
   ok: boolean
   latency_ms: number
   error?: string
