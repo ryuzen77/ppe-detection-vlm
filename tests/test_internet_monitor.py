@@ -18,14 +18,28 @@ from backend.config import cfg
     [
         ((20, 40, 60), True, net.NORMAL, 40),
         ((600, 800), True, net.SLOW, 700),
-        ((500, 500), True, net.NORMAL, 500),
+        ((200, 200), True, net.NORMAL, 200),
+        ((200.01, 200.01), True, net.SLOW, 200.01),
+        ((500, 500), True, net.SLOW, 500),
         ((20, None, 40), True, net.SLOW, 30),
         ((None, None), True, net.DISCONNECTED, None),
         ((20, 30), False, net.DISCONNECTED, 25),
     ],
 )
 def test_classification_is_pure(samples, route, expected, latency):
-    assert net.classify(net.ProbeResult(samples, route), 500) == (expected, latency)
+    assert net.classify(net.ProbeResult(samples, route), 200) == (expected, latency)
+
+
+def test_monitor_uses_configured_200_ms_threshold_without_network(monkeypatch):
+    monkeypatch.setattr(cfg, "INTERNET_SLOW_MS", 200)
+    monitor = net.InternetMonitor(probe=lambda: net.ProbeResult((200, 200)))
+    monitor.configure(True)
+    monitor.check_once()
+    assert monitor.status()["state"] == net.NORMAL
+    monitor._probe = lambda: net.ProbeResult((201, 201))
+    for _ in range(cfg.INTERNET_CONFIRM_CHECKS):
+        monitor.check_once()
+    assert monitor.status()["state"] == net.SLOW and monitor.status()["median_ms"] == 201
 
 
 def test_two_consecutive_checks_and_recovery():

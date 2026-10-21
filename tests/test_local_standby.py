@@ -109,9 +109,9 @@ def _clear_calls(analyzer):
         engine.provider.calls.clear()
 
 
-def _internet(analyzer, state):
+def _internet(analyzer, state, median_ms=None):
     with analyzer.internet._condition:
-        analyzer.internet._status["state"] = state
+        analyzer.internet._status.update(state=state, median_ms=median_ms)
     analyzer._internet_changed(analyzer.internet.status())
 
 
@@ -166,6 +166,63 @@ def test_inspection_routing_table(make_analyzer, layout, state, primary_error, b
         assert analyzer.backup.provider.calls == []
     if role == ROLE_EMERGENCY or (role == "cadangan" and layout == "B"):
         assert "GAMBAR BERPANEL" not in analyzer.standby.engine.provider.calls[-1][1]
+
+
+@pytest.mark.parametrize("layout", ["A", "B"])
+@pytest.mark.parametrize("median_ms", [200, 350, 500, 500.01, 600, None])
+def test_slow_route_uses_cached_median_without_changing_telemetry_state(make_analyzer, monkeypatch, layout, median_ms):
+    monkeypatch.setattr(cfg, "INTERNET_VERY_SLOW_MS", 500)
+    analyzer = make_analyzer(layout, warm=True)
+    _internet(analyzer, SLOW, median_ms)
+    direct_local = median_ms is not None and median_ms > cfg.INTERNET_VERY_SLOW_MS
+    route = vlm_selection.inspection_route(SLOW, analyzer.primary, analyzer.backup,
+                                           analyzer.local_fallback, median_ms=median_ms)
+    result = analyzer.analyze_person(person_crop())
+    assert result.is_complete
+    assert result.decided_by == (analyzer.standby.engine.role if direct_local else "utama")
+    assert len(analyzer.primary.provider.calls) == (0 if direct_local else 1)
+    if layout == "A":
+        assert analyzer.backup.provider.calls == []
+    assert route[0] is (analyzer.standby.engine if direct_local else analyzer.primary)
+    assert analyzer.internet.status()["state"] == SLOW
+
+
+@pytest.mark.parametrize("layout", ["A", "B"])
+def test_slow_route_keeps_primary_circuit_breaker_and_retries_after_interval(make_analyzer, monkeypatch, layout):
+    analyzer = make_analyzer(layout, warm=True)
+    _internet(analyzer, SLOW, 350)
+    analyzer.primary.provider.error = RuntimeError("429 tiruan")
+    monkeypatch.setattr(cfg, "VLM_PRIMARY_FAILURES_BEFORE_DOWN", 2)
+    for _ in range(cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN):
+        assert analyzer.analyze_person(person_crop()).decided_by == analyzer.standby.engine.role
+    assert len(analyzer.primary.provider.calls) == 2
+    assert analyzer.primary_down_since is not None
+    assert analyzer.analyze_person(person_crop()).decided_by == analyzer.standby.engine.role
+    assert len(analyzer.primary.provider.calls) == 2
+    if layout == "A":
+        assert analyzer.backup.provider.calls == []
+    analyzer.primary.provider.error = None
+    analyzer.primary_last_attempt -= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
+    assert analyzer.analyze_person(person_crop()).decided_by == "utama"
+    assert len(analyzer.primary.provider.calls) == 3 and analyzer.primary_down_since is None
+
+
+@pytest.mark.parametrize("layout", ["A", "B"])
+def test_very_slow_internet_waits_for_loading_local_without_calling_online(make_analyzer, layout):
+    analyzer = make_analyzer(layout)
+    provider = analyzer.standby.engine.provider
+    provider.release.clear()
+    try:
+        _internet(analyzer, SLOW, cfg.INTERNET_VERY_SLOW_MS + 1)
+        assert provider.warm_started.wait(1)
+        result = analyzer.analyze_person(person_crop())
+        assert result.is_system_unavailable and not result.is_complete
+        assert analyzer.primary.provider.calls == [] and provider.calls == []
+        if layout == "A":
+            assert analyzer.backup.provider.calls == []
+    finally:
+        provider.release.set()
+        analyzer.standby._loader.join(2)
 
 
 def test_many_load_triggers_start_only_one_warmup_and_loading_is_not_failure(make_analyzer):
@@ -313,16 +370,19 @@ def test_monitor_exposes_exact_internet_local_shapes_and_local_mode():
 
 
 def test_route_has_no_io_and_benchmark_1_vs_20_inspections(make_analyzer, monkeypatch):
-    analyzer = make_analyzer("A")
+    analyzer = make_analyzer("A", warm=True)
     monkeypatch.setattr(analyzer.internet, "_probe", lambda: pytest.fail("rute tidak boleh melakukan I/O"))
-    for people in (1, 20):
-        start = perf_counter()
-        for _ in range(10_000):
-            for _ in range(people):
-                vlm_selection.inspection_route(
-                    analyzer.internet.status()["state"], analyzer.primary, analyzer.backup, analyzer.local_fallback
-                )
-        print(f"ROUTE {people} inspections: {(perf_counter() - start) / 10000 * 1e6:.3f} us/batch")
+    for state, median_ms in ((NORMAL, None), (SLOW, 350), (SLOW, 600)):
+        _internet(analyzer, state, median_ms)
+        for people in (1, 20):
+            start = perf_counter()
+            for _ in range(10_000):
+                for _ in range(people):
+                    internet = analyzer.internet.status()
+                    vlm_selection.inspection_route(internet["state"], analyzer.primary, analyzer.backup,
+                                                   analyzer.local_fallback, median_ms=internet["median_ms"])
+            elapsed_us = (perf_counter() - start) / 10000 * 1e6
+            print(f"ROUTE {state} median={median_ms} people={people}: {elapsed_us:.3f} us/batch")
 
 
 def test_recovered_internet_returns_to_primary_before_breaker_retry(make_analyzer):

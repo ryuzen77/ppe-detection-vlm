@@ -937,7 +937,8 @@ class VLMAnalyzer:
         start_t = time.time()
         if not self._engines():
             return self._no_decision(start_t, messages.VLM_NOT_CONFIGURED)
-        if self.standby.state == LOADING and (self.internet.status()["state"] == DISCONNECTED
+        internet = self.internet.status()
+        if self.standby.state == LOADING and (vlm_selection.requires_local_route(internet["state"], internet["median_ms"])
                                              or not self._online_available()):
             return self._no_decision(start_t, messages.VLM_LOCAL_NOT_READY)
 
@@ -970,13 +971,17 @@ class VLMAnalyzer:
         if self._internet_recovered.is_set():
             self._internet_recovered.clear()
             self._reset_breaker()
-        state = self.internet.status()["state"]
+        internet = self.internet.status()
+        state = internet["state"]
         if state in (SLOW, DISCONNECTED):
             self.standby.request()
-        route = vlm_selection.inspection_route(state, self.primary, self.backup, self.local_fallback)
+        route = vlm_selection.inspection_route(state, self.primary, self.backup, self.local_fallback,
+                                               median_ms=internet["median_ms"])
         for engine in route:
-            state = self.internet.status()["state"]
-            if not engine.is_local and (state == DISCONNECTED or (state == SLOW and engine is not self.primary)):
+            internet = self.internet.status()
+            state = internet["state"]
+            if not engine.is_local and (vlm_selection.requires_local_route(state, internet["median_ms"])
+                                       or (state == SLOW and engine is not self.primary)):
                 continue
             if engine is self.primary:
                 result = self._attempt_primary(crop, keypoints, items, reasons)
@@ -994,7 +999,7 @@ class VLMAnalyzer:
         now, primary = time.time(), self.primary
         if primary is None or primary.provider is None:
             return None
-        if self.internet.status()["state"] != SLOW and not self._primary_allowed(now):
+        if not self._primary_allowed(now):
             reasons.append("utama: dianggap terputus")
             return None
         self.primary_last_attempt = now

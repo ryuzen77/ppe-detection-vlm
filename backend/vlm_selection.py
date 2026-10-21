@@ -144,12 +144,17 @@ def prompt_version_for(provider_name: str) -> str:
     return messages.PROMPT_VERSION if uses_zoom(provider_name) else messages.PROMPT_VERSION_NO_ZOOM
 
 
-def inspection_route(internet_state, primary, backup, local_fallback) -> tuple:
+def requires_local_route(internet_state, median_ms=None) -> bool:
+    return internet_state == DISCONNECTED or (internet_state == SLOW and median_ms is not None
+                                             and median_ms > cfg.INTERNET_VERY_SLOW_MS)
+
+
+def inspection_route(internet_state, primary, backup, local_fallback, median_ms=None) -> tuple:
     """Tabel T72, O(1): hanya status tersimpan & referensi engine, tanpa I/O."""
     local = local_fallback or (backup if backup is not None and backup.is_local else None)
     if primary is not None and primary.is_local:
         candidates = (primary, backup)
-    elif internet_state == DISCONNECTED:
+    elif requires_local_route(internet_state, median_ms):
         candidates = (local,)
     elif internet_state == SLOW:
         candidates = (primary, local)
