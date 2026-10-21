@@ -475,6 +475,33 @@ def test_cold_ping_does_not_load_or_record_engine_failure(make_analyzer, monkeyp
     assert api_monitor.get_status()["backup"]["failures"] == failures
 
 
+@pytest.mark.parametrize("layout", ["A", "B"])
+@pytest.mark.parametrize("state,error", [
+    (UNLOADED, None), (LOADING, None), (FAILED, None),
+    (READY, None), (READY, TimeoutError("batas waktu uji")),
+])
+def test_ping_response_marks_only_cold_local_as_standby(make_analyzer, monkeypatch, layout, state, error):
+    from backend.api import routes_vlm
+    from backend.app import app
+
+    analyzer = make_analyzer(layout)
+    local = analyzer.standby.engine
+    with analyzer.standby._lock:
+        analyzer.standby.state = state
+    local.provider.error = error
+    monkeypatch.setattr(routes_vlm, "vlm_analyzer", analyzer)
+    monkeypatch.setattr(analyzer.standby, "request", lambda: pytest.fail("ping tidak boleh memuat"))
+    response = TestClient(app).post("/api/monitoring/ping")
+    assert response.status_code == 200
+    rows = response.json()["engines"]
+    assert all(row["standby"] is False for row in rows if not row["is_local"])
+    row = next(row for row in rows if row["role"] == local.role)
+    assert row["standby"] is (state == UNLOADED)
+    assert row["ok"] is (state == READY and error is None)
+    assert len(local.provider.calls) == int(state == READY)
+    assert local.provider.warms == 0
+
+
 def test_emergency_audit_label_and_telemetry_are_separate(make_analyzer):
     from backend.api_monitor import api_monitor
 
@@ -551,12 +578,13 @@ def test_selection_local_fallback_saved_loaded_and_validation_codes(monkeypatch,
     selection = Selection(Choice("gemini", "gemini-3.5-flash-lite"), None, "dashboard", fallback)
     assert vlm_selection.save(selection)
     stored = vlm_selection.stored_selection()
-    assert stored is not None and stored.local_fallback == fallback
+    assert stored is not None and stored.local_fallback == fallback and stored.backup is None
     monkeypatch.setattr(routes_vlm, "_apply", lambda value, request: value.stored_form())
     client = TestClient(app)
     body = selection.stored_form()
     response = client.post("/api/config/vlm/apply", json=body)
     assert response.status_code == 200 and response.json()["local_fallback"] == body["local_fallback"]
+    assert response.json()["backup"] is None
     for backup, provider, code in [
         (None, "gemini", "local_fallback_not_local"),
         ({"provider": "ollama", "model": fallback.model}, "ollama", "local_fallback_with_local_backup"),

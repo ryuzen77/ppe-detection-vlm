@@ -775,14 +775,15 @@ class VLMAnalyzer:
             return {"role": engine.role, "ok": False, "latency_ms": 0,
                     "error": (messages.VLM_LOCAL_STANDBY_UNLOADED if self.standby.state == UNLOADED
                               else messages.VLM_LOCAL_NOT_READY), "is_local": True,
-                    "timeout_ms": round(engine.timeout * 1000)}
+                    "timeout_ms": round(engine.timeout * 1000), "standby": self.standby.state == UNLOADED}
         wait = engine.min_interval - (time.time() - engine.last_call_time)
         if wait > 0:
             time.sleep(wait)
         start = time.time()
         error = self._attempt(engine, lambda: self._call_answered(engine))
         return {"role": engine.role, "ok": not error, "latency_ms": round((time.time() - start) * 1000, 1),
-                "error": error, "is_local": engine.is_local, "timeout_ms": round(engine.timeout * 1000)}
+                "error": error, "is_local": engine.is_local, "timeout_ms": round(engine.timeout * 1000),
+                "standby": False}
 
     @staticmethod
     def _call_answered(engine: VLMEngine):
