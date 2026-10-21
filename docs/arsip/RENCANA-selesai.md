@@ -82,6 +82,9 @@ Isi tidak diubah; urutan per kelompok. Riwayat lengkap tetap di `git log`.
 | T88b — menara lampu gerbang di Monitoring (mengikuti lampu fisik) | Claude | `claude/t88b-light-tower` (dari `master` terbaru) | selesai | `web/src/components/monitoring/` (komponen baru), `web/src/pages/Monitoring.svelte`, `web/src/lib/` (logika murni + tes), `web/src/lib/api/types.ts`, `web/src/lib/messages.ts` | Mulai dari tipe kontrak; server tanpa `lamps_on` = ikut perintah server dengan label. Selesai 20-10 (`acbcebf`): menara lampu Monitoring, merah/hijau = lampu fisik, kuning = perintah server bila perangkat tanpa kuning (keputusan pengguna 20-10); diuji layar dengan uji lampu; digabung 21-10. |
 | T80a — laporan kehadiran (backend; kontrak "Kontrak T80") | Codex | `codex/t80a-attendance` (dari `master` terbaru) | selesai | `backend/report_manager.py` (kueri baru), `backend/api/routes_reports.py` (2 rute baru), `backend/worker_store.py` (hanya baca daftar pekerja aktif), `backend/messages.py` / `config.py` (tambah), `tests/` | Risiko Sedang (data pribadi; bisa disalahartikan absensi). Keputusan pengguna 21-10: per hari, angka + daftar nama belum terlihat, admin saja, CSV. Commit `fc80e19`, `cfe556a` (tingkat pengenalan & `unknown` selalu seluruh gerbang, tak terpengaruh saringan), `97c4ed4` (BOM UTF-8 pada kedua CSV). Ditinjau Claude; digabung 21-10. |
 | T80b — laporan kehadiran (UI) | Claude | `claude/t80b-attendance-ui` (dari `master` terbaru) | selesai | `web/src/pages/Laporan.svelte` (tab/bagian Kehadiran), `web/src/components/reports/` (komponen baru), `web/src/lib/` (logika murni + tes, `api/*`, `messages.ts`) | Label wajib "Informasi lewat gerbang — bukan absensi resmi". Commit `bf3d7bd`, `00a350a` (label "(seluruh gerbang)"), `6f91773` (tombol ekspor). Diuji nyata pada audit 20-10 (3 terlihat, 1 belum, 8 tak dikenali, 60%). Digabung 21-10. |
+| T89 — checklist APD Wajib di Pengaturan menimpa pilihan sebelumnya (bug sejak T33) | Claude | `claude/t89-ppe-checklist-sync` (dari `master` terbaru) | selesai | `web/src/lib/stores/catalog.svelte.ts`, `web/src/pages/Pengaturan.svelte` (bagian APD saja), `web/src/lib/` (logika murni baru + tes) | **Risiko Tinggi**: `catalog.load()` tidak mengambil ulang setelah muat pertama (terbukti tes 21-10) → tiap centang mengirim status semua item dari data basi → pilihan sebelumnya ditimpa diam-diam (item yang baru diwajibkan bisa mati lagi → APD kurang lolos). Tidak beririsan dengan T72a/T72b. **Tinjau 21-10:** `catalog.load()` mengambil ulang (janji dikosongkan setelah selesai); perubahan centang lewat `catalog.setRequired` (item lain dari katalog terkini, katalog diganti jawaban server); centang dikunci selama menyimpan; server menolak → centang kembali. Vitest +6 (3 di antaranya gagal pada kode lama). Uji browser server uji :8002 (data uji): centang sarung tangan lalu kacamata → server & layar keduanya wajib; dibalik → keduanya mati. Cara uji: Pengaturan → APD Wajib, ubah 2 centang berturut-turut, F5, cocokkan. **Tinjauan Codex 22-10 (3 temuan) → v2:** kirim hanya `{item: wajib}` (backend menggabung di bawah gembok; dua tab tidak saling menimpa); GET yang dimulai sebelum penyimpanan dibuang; galat → status dibaca ulang dari server, gagal dibaca → checklist dikunci + tombol "Baca ulang status". Vitest 9 (3 skenario Codex gagal di v1), pytest +1 (perubahan sebagian tidak mengubah item lain). **Selesai 22-10** (v3 `d5a2f3d`; tinjauan Codex 2 putaran: dua tab, GET terlambat, galat ambigu, GET lama setelah pemulihan). Digabung `49455ac`. |
+| T72a — VLM lokal siaga dingin + pemantau internet (backend; "Rancangan T72") | Codex | `codex/t72a-local-standby` (dari `master` terbaru) | selesai | `backend/internet_monitor.py` (baru), `backend/vlm_analyzer.py` (rute, muat/bongkar), `backend/local_model_guard.py` (patuh state), `backend/vlm_selection.py`, `backend/api/routes_vlm.py` (`local_fallback`), `backend/api_monitor.py` (`internet`, `local`, mode `LOKAL`), `backend/config.py` / `messages.py` / `.env.example` (tambah), `tests/` | Risiko Tinggi (kuota habis / internet putus = gerbang berhenti; salah rute = pekerja menunggu). Kontrak JSON di Rancangan T72 §5 — perubahan bentuk lewat pengguna dulu. **Selesai 22-10** (`103d853`, `3d897f2`, `1f458b9` ambang 200/500 ms + pemutus sirkuit saat lambat, `63c1c2e` ping `standby`). Ditinjau Claude 2 putaran (env konflik, muat tanpa gembok inspeksi, kontrak tambahan). Digabung `494957b`. |
+| T72b — Pengaturan susunan VLM lokal darurat + chip internet/VLM lokal di Monitoring (UI) | Claude | `claude/t72b-local-standby-ui` (dari `master` terbaru) | selesai | `web/src/pages/Pengaturan.svelte` & komponen VLM di `web/src/components/settings/`, komponen bilah status Monitoring, `web/src/lib/` (logika murni + tes, `api/*`, `messages.ts`) | Tanpa nama penyedia/model di UI operator (AGENTS §5). Menunggu bentuk JSON T72a stabil. **Selesai 22-10** (`67670d2`; tinjauan Codex: darurat tanpa cadangan, ping `standby`, tanpa janji lama muat). Uji integrasi browser (data uji, tanpa API key): chip internet/VLM lokal, kotak darurat, ubin laporan, ping siaga. Digabung `5cd7c99`. |
 
 ## Catatan lanjut 28-09
 
@@ -530,3 +533,99 @@ Keputusan pengguna 21-10: **per hari**, tampilkan **angka + daftar nama** pekerj
 Tes wajib: 403 untuk non-admin (kedua rute); tanggal tidak sah 400; agregasi `seen` (beberapa lintasan, jam pertama/terakhir, lolos/ditolak, snapshot nama lama tetap dipakai); `not_seen` tidak memuat pekerja nonaktif & yang sudah terlihat; `unknown` + `recognition_rate` (termasuk `null`); filter divisi/perusahaan; CSV (catatan, header, isi); hari tanpa data.
 
 Catatan saat digabung (21-10): `unknown` & `recognition_rate` selalu dihitung atas **seluruh gerbang** (saringan divisi/perusahaan hanya menyaring daftar nama & `seen_workers`); kedua ekspor CSV (kehadiran & laporan APD) diawali BOM UTF-8 supaya Excel membaca huruf dengan benar.
+
+### Rancangan T72 — VLM lokal siaga dingin + pemantau internet (disetujui pengguna 21-10)
+
+Diskusi pengguna 21-10. **Risiko Tinggi**: kuota API habis atau internet putus = gerbang berhenti memutuskan (pekerja menunggu terus); salah rute bisa membuat pekerja menunggu lama tanpa alasan. Keputusan APD tetap 100% oleh VLM (AGENTS §5): selama tidak ada VLM yang siap, pekerja **diminta menunggu (kuning)**, tidak diloloskan dan tidak ditolak.
+
+**Ukuran nyata (21-10, RTX 4060 Laptop 8 GB, `qwen2.5vl:7b`, jalur `VLMEngine.warm_up`):** muat dari dingin + 1 gambar **22,0 dtk** (pertama) / **13,4 dtk** (berkas sudah di cache OS); inspeksi berikutnya 1,5–4,3 dtk; VRAM model ±5,5–6 GB (100% GPU). Selama memuat, pekerja menunggu ±13–22 dtk.
+
+#### 1. Susunan VLM (dipilih admin di Pengaturan)
+
+| Susunan | Utama | Cadangan | VLM lokal |
+| :-- | :-- | :-- | :-- |
+| **A** | API | API (mis. Gemini akun kedua) | **Darurat**: dipakai bila utama **dan** cadangan gagal, atau langsung bila internet putus/bermasalah |
+| **B** | API | Lokal | Cadangan biasa (T71), kini **dingin** |
+| **C** | API | API / tidak ada | Tidak ada — internet putus = pekerja menunggu (perilaku sekarang) |
+
+Lokasi tanpa internet tetap memakai VLM lokal sebagai **utama** (dimuat saat start, tidak berubah).
+
+#### 2. Pemantau internet (bukan pemantau API)
+
+"Internet" = koneksi komputer gerbang ke internet. API yang bermasalah (kuota 429, 5xx, jawaban rusak, lambat) **bukan** masalah internet.
+
+Dicek di latar tiap `INTERNET_CHECK_INTERVAL_SECONDS` (usul 30) dan **segera** saat panggilan API gagal karena galat sambungan. Tanpa kuota VLM: hanya membuka koneksi TCP ke 2–3 alamat publik yang **bukan** penyedia VLM (`INTERNET_CHECK_TARGETS`, usul DNS publik `1.1.1.1:443`, `8.8.8.8:443`, `9.9.9.9:443`), paralel, batas `INTERNET_CHECK_TIMEOUT_SECONDS` (usul 2).
+
+| Status | Cara mengenali | Contoh |
+| :-- | :-- | :-- |
+| `normal` | ≥ 1 alamat tersambung dan median waktu sambung ≤ `INTERNET_SLOW_MS` (**200 ms**, lihat "Ambang internet" di §5) | — |
+| `lambat` (internet bermasalah) | Tersambung tetapi median > `INTERNET_SLOW_MS`, **atau** sebagian alamat gagal/habis waktu | Wi-Fi tersambung tapi browsing lama, sinyal lemah, jaringan padat |
+| `putus` | Tidak ada rute keluar (OS langsung menolak: `ENETUNREACH`/`EHOSTUNREACH`, cek tanpa kirim paket lewat soket UDP), **atau** semua alamat gagal | Kabel LAN lepas, Wi-Fi mati, router/ISP mati |
+
+- Status baru berlaku setelah **`INTERNET_CONFIRM_CHECKS` (usul 2) cek berturut-turut** sama — internet berkedip sebentar tidak memuat model ±6 GB. Pengecualian: galat sambungan saat inspeksi + cek ulang `putus` → langsung berlaku (pekerja sedang menunggu).
+- Netral OS (soket Python saja, tanpa `ping`/perintah OS) — produksi Linux/Docker.
+
+#### 3. Rute inspeksi
+
+| Keadaan | Susunan A | Susunan B |
+| :-- | :-- | :-- |
+| Internet `normal`, API sehat | Utama | Utama |
+| Internet `normal`, utama gagal | Cadangan API → bila gagal, lokal | Lokal |
+| Internet `lambat` | Utama dicoba (bisa saja masih di bawah batas 5 dtk) dengan **pemutus sirkuit tetap berlaku**; cadangan API **dilewati**; bila utama gagal → lokal. Lokal **mulai dimuat** begitu status `lambat` berlaku. Median > 500 ms → **langsung lokal** ("Ambang internet" §5) | Utama → bila gagal, lokal (dimuat saat `lambat`) |
+| Internet `putus` | **Langsung lokal** (utama & cadangan API dilewati, tanpa menunggu habis waktu) | Langsung lokal |
+| Internet pulih (`normal`) | Pemeriksaan berikutnya kembali ke utama | Sama |
+
+Pemutus sirkuit lama (T27/T87) tetap berlaku untuk "API bermasalah" saat internet `normal` **dan** `lambat`.
+
+#### 4. Siaga dingin & bongkar
+
+- VLM lokal (darurat A / cadangan B) **tidak dimuat saat start**; VRAM bebas untuk YOLO & FR.
+- **Dimuat** (di latar, satu kali; **tanpa** gembok inspeksi — model dingin belum dipakai siapa pun, koreksi tinjauan T72a 21-10; gembok inspeksi hanya untuk bongkar & perbaikan T38) bila: internet `lambat`/`putus` berlaku, **atau** VLM API terakhir dalam rute gagal (A: cadangan gagal; B: utama dinyatakan gangguan).
+- Selama memuat: state `loading`; inspeksi yang tidak punya VLM lain → **tidak ada keputusan** (kuning, "mohon tunggu"), dicoba lagi otomatis begitu siap. Gagal memuat (Ollama mati / VRAM kurang) → state `failed`, dicatat, dicoba lagi tiap `VLM_LOCAL_RETRY_SECONDS`.
+- **Dibongkar** setelah internet `normal` **dan** utama sehat terus-menerus `VLM_LOCAL_IDLE_UNLOAD_SECONDS` (usul 600). Kuota habis seharian → utama tidak pernah sehat → model tetap dimuat (tidak muat-ulang berulang).
+- **Penjaga T38** hanya bekerja saat state `ready`; saat `unloaded` sengaja tidak dimuat ulang.
+- `VLM_LOCAL_PRELOAD` di `.env` (bawaan `false`): lokasi dengan GPU besar boleh memuat saat start (hangat). Tidak tampil di UI.
+- Catatan mutu: VLM lokal tidak memakai perbesaran kepala (T86, qwen gagal dengan panel) → deteksi rokok di mulut lebih lemah daripada utama; APD lengkap/kurang tetap teruji (T26: 0/58 APD kurang lolos).
+
+#### 5. Kontrak (bentuk JSON; tambah saja, bentuk lama tetap)
+
+**Pilihan VLM (T28)** `GET /api/config/vlm/providers` → `current` dan `POST /api/config/vlm/apply` body: tambah `local_fallback: {provider, model} | null` (hanya penyedia lokal; `null` = tanpa darurat). Ditolak 400 bila cadangan sudah lokal (susunan B, `local_fallback_with_local_backup`) atau penyedia bukan lokal (`local_fallback_not_local`). `.env`: `VLM_LOCAL_FALLBACK_PROVIDER` (bawaan `none`), `VLM_LOCAL_FALLBACK_MODEL`.
+
+**Telemetri `api_monitor`** (WebSocket & `GET /api/monitoring/status`):
+```json
+{
+  "mode": "UTAMA | CADANGAN | LOKAL | GANGGUAN",
+  "internet": {"state": "normal | lambat | putus | null", "median_ms": 42, "checked_at": "08:01:30"},
+  "local": {"role": "cadangan | darurat | null", "state": "unloaded | loading | ready | failed", "since": "08:01:31"}
+}
+```
+- `mode: "LOKAL"` = keputusan terakhir oleh VLM darurat (susunan A). Susunan B tetap `CADANGAN`.
+- `internet.state: null` = pemantau mati (tidak ada VLM lokal yang bisa dialihkan — susunan C).
+- UI operator: chip "Internet: normal / lambat / putus" dan "VLM lokal: siaga / memuat / siap / gagal" — **tanpa nama penyedia/model** (AGENTS §5).
+
+**Ambang internet (disetujui pengguna 21-10; dari data audit + referensi, bukan uji jaringan lambat):**
+Satu pemeriksaan API ≈ waktu Gemini (audit gerbang: median 2,3 dtk; Okt rata-rata 3,4 dtk termasuk konfirmasi larangan) + **±5 RTT**: sambungan selalu baru (httpx menutup sambungan menganggur setelah 5 dtk, pekerja datang lebih jarang) = TCP 1 + TLS 1.3 1 + kirim ±53 KB (gambar ≤40 KB + base64) dalam 3 putaran slow start (jendela awal ±14,6 KB, RFC 6928). Batas waktu API 5 dtk.
+
+| Median RTT pemantau | Status | Rute |
+| :-- | :-- | :-- |
+| ≤ `INTERNET_SLOW_MS` = **200 ms** (dulu 500) dan semua alamat tersambung | `normal` | API seperti biasa (5 RTT ≈ 1 dtk → ≤ 4 dtk saat Gemini ramai) |
+| 200–500 ms, atau sebagian alamat gagal | `lambat` | Utama dicoba; cadangan API dilewati; lokal mulai dimuat; **pemutus sirkuit tetap berlaku** (2 gagal → API dilewati `VLM_PRIMARY_RETRY_AFTER_SECONDS`, langsung lokal) |
+| > `INTERNET_VERY_SLOW_MS` = **500 ms** (baru) | `lambat` | **Langsung lokal** seperti `putus` (5 RTT ≈ 2,5 dtk → median 4,8 dtk, hampir selalu habis waktu) |
+
+Status telemetri tetap tiga (`normal/lambat/putus`); "sangat lambat" hanya aturan rute dari `median_ms`. Angka di `config.py`; disetel ulang setelah ada data gerbang nyata.
+
+**Tambahan kontrak (disetujui pengguna 21-10, temuan saat T72b):**
+1. Keputusan VLM lokal darurat dicatat di audit `inference_source = "VLM_DARURAT:<penyedia>/<model>"` (utama `VLM_LIVE:`, cadangan `VLM_CADANGAN:` tetap) dan **dihitung terpisah** di laporan (bukan digabung ke cadangan): `GET /api/reports` tambah `local_fallback_count` (di samping `backup_count`); telemetri `api_monitor` tambah `decisions_local` (di samping `decisions_backup`).
+2. `POST /api/config/vlm/apply` dengan VLM lokal (cadangan B atau darurat A) **tidak memuat model** — siaga dingin; model baru dimuat saat dibutuhkan (§4).
+3. `POST /api/config/vlm/test` untuk penyedia lokal (UI mengirim `role: "backup"` untuk darurat, karena kontrak uji T28 hanya utama/cadangan): bila model berstatus `unloaded` sebelum diuji, model **dikeluarkan lagi** setelah uji selesai.
+4. (Tinjauan Codex atas T72b, disetujui pengguna 22-10) `POST /api/monitoring/ping`: setiap baris `engines[]` tambah `standby: boolean` — `true` bila VLM lokal sengaja tidak diuji karena siaga dingin (`unloaded`), `false` selain itu (termasuk habis waktu/gagal sungguhan). UI tidak lagi menebak dari telemetri WebSocket yang bisa basi.
+5. Darurat lokal **tanpa** cadangan (`backup: null`, `local_fallback` lokal) sah — UI menampilkannya dan tidak menghapusnya diam-diam saat Terapkan.
+
+#### 6. Pembagian & tes
+
+- **T72a — backend** (Codex): `backend/internet_monitor.py` (baru, logika murni + I/O soket terpisah), `backend/vlm_analyzer.py` (rute, muat/bongkar), `backend/local_model_guard.py` (patuh state), `backend/vlm_selection.py` & `api/routes_vlm.py` (`local_fallback`), `backend/api_monitor.py`, `config.py`/`messages.py`/`.env.example` (tambah), `tests/`.
+- **T72b — UI** (Claude): Pengaturan → pilihan susunan (VLM lokal darurat), Monitoring → chip internet & VLM lokal; `web/src/lib/` + vitest.
+- **Tes wajib T72a:** klasifikasi `normal/lambat/putus` (soket tiruan: rute tak ada, semua gagal, sebagian gagal, lambat); konfirmasi 2 cek & pengecualian galat sambungan; rute tabel §3 untuk A & B (cadangan API dilewati saat `lambat`/`putus`); muat sekali walau banyak pemicu; inspeksi saat `loading` → tanpa keputusan; bongkar setelah sehat 600 dtk & **tidak** bongkar saat kuota habis; penjaga T38 diam saat `unloaded`; `local_fallback` simpan/tolak; telemetri.
+- **Uji nyata (setelah gabung):** cabut kabel LAN / matikan Wi-Fi saat ada pekerja (A: langsung lokal, waktu tunggu tercatat); batasi kecepatan (mis. hotspot ponsel lemah) → `lambat`; colok kembali → kembali utama; bongkar setelah 10 menit (`ollama ps`, `nvidia-smi`).
+
+Catatan saat digabung (22-10): baris antrean 4a (T72) selesai lewat T72a/T72b. Uji nyata jaringan (cabut LAN/Wi-Fi, internet lambat, muat model sungguhan saat darurat) belum — dijadwalkan di gerbang.

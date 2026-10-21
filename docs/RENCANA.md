@@ -14,9 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T89 — checklist APD Wajib di Pengaturan menimpa pilihan sebelumnya (bug sejak T33) | Claude | `claude/t89-ppe-checklist-sync` (dari `master` terbaru) | tinjau | `web/src/lib/stores/catalog.svelte.ts`, `web/src/pages/Pengaturan.svelte` (bagian APD saja), `web/src/lib/` (logika murni baru + tes) | **Risiko Tinggi**: `catalog.load()` tidak mengambil ulang setelah muat pertama (terbukti tes 21-10) → tiap centang mengirim status semua item dari data basi → pilihan sebelumnya ditimpa diam-diam (item yang baru diwajibkan bisa mati lagi → APD kurang lolos). Tidak beririsan dengan T72a/T72b. **Tinjau 21-10:** `catalog.load()` mengambil ulang (janji dikosongkan setelah selesai); perubahan centang lewat `catalog.setRequired` (item lain dari katalog terkini, katalog diganti jawaban server); centang dikunci selama menyimpan; server menolak → centang kembali. Vitest +6 (3 di antaranya gagal pada kode lama). Uji browser server uji :8002 (data uji): centang sarung tangan lalu kacamata → server & layar keduanya wajib; dibalik → keduanya mati. Cara uji: Pengaturan → APD Wajib, ubah 2 centang berturut-turut, F5, cocokkan. **Tinjauan Codex 22-10 (3 temuan) → v2:** kirim hanya `{item: wajib}` (backend menggabung di bawah gembok; dua tab tidak saling menimpa); GET yang dimulai sebelum penyimpanan dibuang; galat → status dibaca ulang dari server, gagal dibaca → checklist dikunci + tombol "Baca ulang status". Vitest 9 (3 skenario Codex gagal di v1), pytest +1 (perubahan sebagian tidak mengubah item lain). |
-| T72a — VLM lokal siaga dingin + pemantau internet (backend; "Rancangan T72") | Codex | `codex/t72a-local-standby` (dari `master` terbaru) | dikerjakan | `backend/internet_monitor.py` (baru), `backend/vlm_analyzer.py` (rute, muat/bongkar), `backend/local_model_guard.py` (patuh state), `backend/vlm_selection.py`, `backend/api/routes_vlm.py` (`local_fallback`), `backend/api_monitor.py` (`internet`, `local`, mode `LOKAL`), `backend/config.py` / `messages.py` / `.env.example` (tambah), `tests/` | Risiko Tinggi (kuota habis / internet putus = gerbang berhenti; salah rute = pekerja menunggu). Kontrak JSON di Rancangan T72 §5 — perubahan bentuk lewat pengguna dulu. |
-| T72b — Pengaturan susunan VLM lokal darurat + chip internet/VLM lokal di Monitoring (UI) | Claude | `claude/t72b-local-standby-ui` (dari `master` terbaru) | dikerjakan | `web/src/pages/Pengaturan.svelte` & komponen VLM di `web/src/components/settings/`, komponen bilah status Monitoring, `web/src/lib/` (logika murni + tes, `api/*`, `messages.ts`) | Tanpa nama penyedia/model di UI operator (AGENTS §5). Menunggu bentuk JSON T72a stabil. |
 | Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | selesai | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 Commit `39f5c1e` diverifikasi Claude 05-10 (pytest 259 & ruff di salinan terpisah). **Temuan:** pemetaan `legacyGemini` di `web/src/lib/format.ts` + tesnya ikut dihapus padahal untuk DATA audit lama (10 baris `GEMINI_LIVE`, 23–24 Sep) → wajib dikembalikan. Penghapusan pengalihan `/app` di luar lingkup tetapi tidak dirujuk lagi (diterima) Perbaikan `legacyGemini` (`701d096`) terverifikasi (vitest 75); digabung 06-10 (`e7c7d89`), T18 tertutup. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
@@ -296,107 +293,12 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
 
-### Rancangan T72 — VLM lokal siaga dingin + pemantau internet (disetujui pengguna 21-10)
-
-Diskusi pengguna 21-10. **Risiko Tinggi**: kuota API habis atau internet putus = gerbang berhenti memutuskan (pekerja menunggu terus); salah rute bisa membuat pekerja menunggu lama tanpa alasan. Keputusan APD tetap 100% oleh VLM (AGENTS §5): selama tidak ada VLM yang siap, pekerja **diminta menunggu (kuning)**, tidak diloloskan dan tidak ditolak.
-
-**Ukuran nyata (21-10, RTX 4060 Laptop 8 GB, `qwen2.5vl:7b`, jalur `VLMEngine.warm_up`):** muat dari dingin + 1 gambar **22,0 dtk** (pertama) / **13,4 dtk** (berkas sudah di cache OS); inspeksi berikutnya 1,5–4,3 dtk; VRAM model ±5,5–6 GB (100% GPU). Selama memuat, pekerja menunggu ±13–22 dtk.
-
-#### 1. Susunan VLM (dipilih admin di Pengaturan)
-
-| Susunan | Utama | Cadangan | VLM lokal |
-| :-- | :-- | :-- | :-- |
-| **A** | API | API (mis. Gemini akun kedua) | **Darurat**: dipakai bila utama **dan** cadangan gagal, atau langsung bila internet putus/bermasalah |
-| **B** | API | Lokal | Cadangan biasa (T71), kini **dingin** |
-| **C** | API | API / tidak ada | Tidak ada — internet putus = pekerja menunggu (perilaku sekarang) |
-
-Lokasi tanpa internet tetap memakai VLM lokal sebagai **utama** (dimuat saat start, tidak berubah).
-
-#### 2. Pemantau internet (bukan pemantau API)
-
-"Internet" = koneksi komputer gerbang ke internet. API yang bermasalah (kuota 429, 5xx, jawaban rusak, lambat) **bukan** masalah internet.
-
-Dicek di latar tiap `INTERNET_CHECK_INTERVAL_SECONDS` (usul 30) dan **segera** saat panggilan API gagal karena galat sambungan. Tanpa kuota VLM: hanya membuka koneksi TCP ke 2–3 alamat publik yang **bukan** penyedia VLM (`INTERNET_CHECK_TARGETS`, usul DNS publik `1.1.1.1:443`, `8.8.8.8:443`, `9.9.9.9:443`), paralel, batas `INTERNET_CHECK_TIMEOUT_SECONDS` (usul 2).
-
-| Status | Cara mengenali | Contoh |
-| :-- | :-- | :-- |
-| `normal` | ≥ 1 alamat tersambung dan median waktu sambung ≤ `INTERNET_SLOW_MS` (**200 ms**, lihat "Ambang internet" di §5) | — |
-| `lambat` (internet bermasalah) | Tersambung tetapi median > `INTERNET_SLOW_MS`, **atau** sebagian alamat gagal/habis waktu | Wi-Fi tersambung tapi browsing lama, sinyal lemah, jaringan padat |
-| `putus` | Tidak ada rute keluar (OS langsung menolak: `ENETUNREACH`/`EHOSTUNREACH`, cek tanpa kirim paket lewat soket UDP), **atau** semua alamat gagal | Kabel LAN lepas, Wi-Fi mati, router/ISP mati |
-
-- Status baru berlaku setelah **`INTERNET_CONFIRM_CHECKS` (usul 2) cek berturut-turut** sama — internet berkedip sebentar tidak memuat model ±6 GB. Pengecualian: galat sambungan saat inspeksi + cek ulang `putus` → langsung berlaku (pekerja sedang menunggu).
-- Netral OS (soket Python saja, tanpa `ping`/perintah OS) — produksi Linux/Docker.
-
-#### 3. Rute inspeksi
-
-| Keadaan | Susunan A | Susunan B |
-| :-- | :-- | :-- |
-| Internet `normal`, API sehat | Utama | Utama |
-| Internet `normal`, utama gagal | Cadangan API → bila gagal, lokal | Lokal |
-| Internet `lambat` | Utama dicoba (bisa saja masih di bawah batas 5 dtk) dengan **pemutus sirkuit tetap berlaku**; cadangan API **dilewati**; bila utama gagal → lokal. Lokal **mulai dimuat** begitu status `lambat` berlaku. Median > 500 ms → **langsung lokal** ("Ambang internet" §5) | Utama → bila gagal, lokal (dimuat saat `lambat`) |
-| Internet `putus` | **Langsung lokal** (utama & cadangan API dilewati, tanpa menunggu habis waktu) | Langsung lokal |
-| Internet pulih (`normal`) | Pemeriksaan berikutnya kembali ke utama | Sama |
-
-Pemutus sirkuit lama (T27/T87) tetap berlaku untuk "API bermasalah" saat internet `normal` **dan** `lambat`.
-
-#### 4. Siaga dingin & bongkar
-
-- VLM lokal (darurat A / cadangan B) **tidak dimuat saat start**; VRAM bebas untuk YOLO & FR.
-- **Dimuat** (di latar, satu kali; **tanpa** gembok inspeksi — model dingin belum dipakai siapa pun, koreksi tinjauan T72a 21-10; gembok inspeksi hanya untuk bongkar & perbaikan T38) bila: internet `lambat`/`putus` berlaku, **atau** VLM API terakhir dalam rute gagal (A: cadangan gagal; B: utama dinyatakan gangguan).
-- Selama memuat: state `loading`; inspeksi yang tidak punya VLM lain → **tidak ada keputusan** (kuning, "mohon tunggu"), dicoba lagi otomatis begitu siap. Gagal memuat (Ollama mati / VRAM kurang) → state `failed`, dicatat, dicoba lagi tiap `VLM_LOCAL_RETRY_SECONDS`.
-- **Dibongkar** setelah internet `normal` **dan** utama sehat terus-menerus `VLM_LOCAL_IDLE_UNLOAD_SECONDS` (usul 600). Kuota habis seharian → utama tidak pernah sehat → model tetap dimuat (tidak muat-ulang berulang).
-- **Penjaga T38** hanya bekerja saat state `ready`; saat `unloaded` sengaja tidak dimuat ulang.
-- `VLM_LOCAL_PRELOAD` di `.env` (bawaan `false`): lokasi dengan GPU besar boleh memuat saat start (hangat). Tidak tampil di UI.
-- Catatan mutu: VLM lokal tidak memakai perbesaran kepala (T86, qwen gagal dengan panel) → deteksi rokok di mulut lebih lemah daripada utama; APD lengkap/kurang tetap teruji (T26: 0/58 APD kurang lolos).
-
-#### 5. Kontrak (bentuk JSON; tambah saja, bentuk lama tetap)
-
-**Pilihan VLM (T28)** `GET /api/config/vlm/providers` → `current` dan `POST /api/config/vlm/apply` body: tambah `local_fallback: {provider, model} | null` (hanya penyedia lokal; `null` = tanpa darurat). Ditolak 400 bila cadangan sudah lokal (susunan B, `local_fallback_with_local_backup`) atau penyedia bukan lokal (`local_fallback_not_local`). `.env`: `VLM_LOCAL_FALLBACK_PROVIDER` (bawaan `none`), `VLM_LOCAL_FALLBACK_MODEL`.
-
-**Telemetri `api_monitor`** (WebSocket & `GET /api/monitoring/status`):
-```json
-{
-  "mode": "UTAMA | CADANGAN | LOKAL | GANGGUAN",
-  "internet": {"state": "normal | lambat | putus | null", "median_ms": 42, "checked_at": "08:01:30"},
-  "local": {"role": "cadangan | darurat | null", "state": "unloaded | loading | ready | failed", "since": "08:01:31"}
-}
-```
-- `mode: "LOKAL"` = keputusan terakhir oleh VLM darurat (susunan A). Susunan B tetap `CADANGAN`.
-- `internet.state: null` = pemantau mati (tidak ada VLM lokal yang bisa dialihkan — susunan C).
-- UI operator: chip "Internet: normal / lambat / putus" dan "VLM lokal: siaga / memuat / siap / gagal" — **tanpa nama penyedia/model** (AGENTS §5).
-
-**Ambang internet (disetujui pengguna 21-10; dari data audit + referensi, bukan uji jaringan lambat):**
-Satu pemeriksaan API ≈ waktu Gemini (audit gerbang: median 2,3 dtk; Okt rata-rata 3,4 dtk termasuk konfirmasi larangan) + **±5 RTT**: sambungan selalu baru (httpx menutup sambungan menganggur setelah 5 dtk, pekerja datang lebih jarang) = TCP 1 + TLS 1.3 1 + kirim ±53 KB (gambar ≤40 KB + base64) dalam 3 putaran slow start (jendela awal ±14,6 KB, RFC 6928). Batas waktu API 5 dtk.
-
-| Median RTT pemantau | Status | Rute |
-| :-- | :-- | :-- |
-| ≤ `INTERNET_SLOW_MS` = **200 ms** (dulu 500) dan semua alamat tersambung | `normal` | API seperti biasa (5 RTT ≈ 1 dtk → ≤ 4 dtk saat Gemini ramai) |
-| 200–500 ms, atau sebagian alamat gagal | `lambat` | Utama dicoba; cadangan API dilewati; lokal mulai dimuat; **pemutus sirkuit tetap berlaku** (2 gagal → API dilewati `VLM_PRIMARY_RETRY_AFTER_SECONDS`, langsung lokal) |
-| > `INTERNET_VERY_SLOW_MS` = **500 ms** (baru) | `lambat` | **Langsung lokal** seperti `putus` (5 RTT ≈ 2,5 dtk → median 4,8 dtk, hampir selalu habis waktu) |
-
-Status telemetri tetap tiga (`normal/lambat/putus`); "sangat lambat" hanya aturan rute dari `median_ms`. Angka di `config.py`; disetel ulang setelah ada data gerbang nyata.
-
-**Tambahan kontrak (disetujui pengguna 21-10, temuan saat T72b):**
-1. Keputusan VLM lokal darurat dicatat di audit `inference_source = "VLM_DARURAT:<penyedia>/<model>"` (utama `VLM_LIVE:`, cadangan `VLM_CADANGAN:` tetap) dan **dihitung terpisah** di laporan (bukan digabung ke cadangan): `GET /api/reports` tambah `local_fallback_count` (di samping `backup_count`); telemetri `api_monitor` tambah `decisions_local` (di samping `decisions_backup`).
-2. `POST /api/config/vlm/apply` dengan VLM lokal (cadangan B atau darurat A) **tidak memuat model** — siaga dingin; model baru dimuat saat dibutuhkan (§4).
-3. `POST /api/config/vlm/test` untuk penyedia lokal (UI mengirim `role: "backup"` untuk darurat, karena kontrak uji T28 hanya utama/cadangan): bila model berstatus `unloaded` sebelum diuji, model **dikeluarkan lagi** setelah uji selesai.
-4. (Tinjauan Codex atas T72b, disetujui pengguna 22-10) `POST /api/monitoring/ping`: setiap baris `engines[]` tambah `standby: boolean` — `true` bila VLM lokal sengaja tidak diuji karena siaga dingin (`unloaded`), `false` selain itu (termasuk habis waktu/gagal sungguhan). UI tidak lagi menebak dari telemetri WebSocket yang bisa basi.
-5. Darurat lokal **tanpa** cadangan (`backup: null`, `local_fallback` lokal) sah — UI menampilkannya dan tidak menghapusnya diam-diam saat Terapkan.
-
-#### 6. Pembagian & tes
-
-- **T72a — backend** (Codex): `backend/internet_monitor.py` (baru, logika murni + I/O soket terpisah), `backend/vlm_analyzer.py` (rute, muat/bongkar), `backend/local_model_guard.py` (patuh state), `backend/vlm_selection.py` & `api/routes_vlm.py` (`local_fallback`), `backend/api_monitor.py`, `config.py`/`messages.py`/`.env.example` (tambah), `tests/`.
-- **T72b — UI** (Claude): Pengaturan → pilihan susunan (VLM lokal darurat), Monitoring → chip internet & VLM lokal; `web/src/lib/` + vitest.
-- **Tes wajib T72a:** klasifikasi `normal/lambat/putus` (soket tiruan: rute tak ada, semua gagal, sebagian gagal, lambat); konfirmasi 2 cek & pengecualian galat sambungan; rute tabel §3 untuk A & B (cadangan API dilewati saat `lambat`/`putus`); muat sekali walau banyak pemicu; inspeksi saat `loading` → tanpa keputusan; bongkar setelah sehat 600 dtk & **tidak** bongkar saat kuota habis; penjaga T38 diam saat `unloaded`; `local_fallback` simpan/tolak; telemetri.
-- **Uji nyata (setelah gabung):** cabut kabel LAN / matikan Wi-Fi saat ada pekerja (A: langsung lokal, waktu tunggu tercatat); batasi kecepatan (mis. hotspot ponsel lemah) → `lambat`; colok kembali → kembali utama; bongkar setelah 10 menit (`ollama ps`, `nvidia-smi`).
-
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
 | # | Risiko | Task | Alasan risiko / isi |
 | :-- | :-- | :-- | :-- |
 | 3 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Perubahan besar T36a–d, T37, T38, T39a, T45–T58 + UI T33/T51 belum diuji di gerbang nyata (keputusan, suara, sesi, zona, pemulihan GPU). **Siap dijalankan** **Uji 2 sebagian 20-10 (18:51–19:08, 30 sesi, 9 keputusan):** APD lengkap hijau 4/4, tanpa helm & tanpa rompi merah dengan item benar, FR P003 0,60–0,81 & orang lain tak dikenali, kamera ditutup → kuning 7 dtk lalu pulih, relay putus sekali & pulih 2 dtk; **gagal: rokok di mulut lolos (→ T86)**; VLM timeout > 4 dtk 2× lalu utama dilewati 60 dtk (→ T87). Belum: cabut kamera, setengah badan, berjalan lewat, 1080p sejak awal (kamera sempat terbuka 1280×720 lalu 1080p). |
 | 4 | **Tinggi** | **Uji fisik T57 & T58** (ditunda 14-10: pencahayaan kurang) | Kamera terhalang tangan/kardus/kain/plastik, salah alarm jalur kosong; rokok/vape asli + pengecoh (pulpen, sedotan, tangan kotor). Daftar uji di obrolan 14-10, dicatat per jam lalu dicocokkan dengan log & audit **Sebagian 14-10 (uji UI, Gemini utama)**: pengguna memegang rokok asli → 3/3 pemeriksaan MERAH "Membawa Rokok / Vape", dikonfirmasi langkah kedua tiap kali; kamera terhalang 1x tertangkap (kuning, pulih 4 dtk). Waktu putusan kasus rokok ±7 dtk karena jeda kuota Gemini 4 dtk sebelum konfirmasi. Belum: pengecoh (pulpen, sedotan, ponsel, tangan kotor), vape, bungkus di saku, jalur cadangan lokal, kamera tertutup tangan/kain/plastik sistematis |
-| 4a | **Tinggi** (disetujui 21-10, dikerjakan T72a/T72b — lihat "Rancangan T72") | **T72 — VLM lokal siaga dingin + pemantau internet** (usul 19-10, diskusi 21-10) | Model lokal tidak dimuat saat start (VRAM bebas), dimuat otomatis begitu VLM utama dinyatakan gangguan. Alasan Tinggi: gerbang memakai Gemini **free tier** (keputusan pengguna 19-10, ~500 panggilan/hari) dengan asumsi 300 pekerja/gerbang → kuota bisa habis di hari ramai, dan tanpa cadangan gerbang berhenti menerima pekerja. Perlu diukur dulu: lama muat model dingin (pekerja pertama menunggu) & cukup-tidaknya VRAM saat itu bersama YOLO (penjaga T38). Risiko dinilai ulang saat rancangan matang |
 | 4b | **Tinggi** | **T74 — rokok/benda kecil terlihat VLM** (temuan uji 19-10) | Uji CPU only 19-10: rokok dipegang pekerja **tidak terdeteksi** di 3 sesi (lampu hijau; VLM `rokok.detected=false`). Potongan tubuh ke VLM hanya ~110–132 × 346–384 px (kamera 864×480) → rokok ±1–2 px; pengguna: foto bukti buram/tidak jelas. FR juga gagal ("0/3 frame berwajah cukup besar"). Langkah: (1) gabung T34c2 (1080p) lalu uji ulang rokok (dipegang & di mulut) + FR + beban CPU; (2) `VLM_IMAGE_MAX_SIZE=640` memperkecil lagi potongan 1080p (~850 px) — tinjau angka setelah cek cara Gemini menghitung gambar (kuota free tier per permintaan); (3) bila masih lolos: potongan resolusi penuh sekitar tangan & mulut (titik pose pergelangan & hidung) dikirim dalam panggilan VLM yang sama **Uji 1080p CPU only 19-10 (setelah T34c2 digabung):** rokok terdeteksi **4 dari 5** inspeksi (di tangan maupun di mulut; 480p: 0 dari 3); 1 lolos (sesi #6, potongan 298×734 px → diperkecil ke 640). FR: wajah cukup besar 2–3/3 frame (480p: 0/3). CPU ~8,5 dari 16 inti, RAM 1,1 GB. Larangan memakai panggilan konfirmasi (T58) + jeda kuota 4 dtk → keputusan rokok ~7 dtk & 2 kuota; pekerja yang keluar sebelum itu tidak mendapat lampu merah, tetapi pelanggaran **tetap masuk audit** (hasil terlambat dicatat). Sisa langkah: cek `VLM_IMAGE_MAX_SIZE` 640 → 768 (satu petak Gemini 768×768 = 258 token, kuota free tier per permintaan) & `media_resolution` (belum dipakai), lalu uji ulang; potongan tangan/mulut hanya bila masih ada yang lolos. **Langkah 1–2 selesai 19-10 tanpa perubahan kode** (lihat arsip): batas gambar & `media_resolution` (bawaan Gemini 3 sudah setara HIGH) tidak membantu, perbesaran tangan juga tidak — akar masalah: **area tangan buram** padahal skor ketajaman frame tinggi (1423; diukur atas seluruh tubuh, gerak dari kotak tubuh saja). **Lanjutan (diblokir uji fisik, ditunda pengguna 19-10):** (a) uji ulang dengan cahaya tambahan — bila terdeteksi, syarat pencahayaan masuk spesifikasi pemasangan; (b) pemilih frame peka tangan (ketajaman area pergelangan dari titik pose); (c) 2–3 frame terbaik dalam satu panggilan; (d) eksposur kamera dikunci (pilihan terakhir). |
 | 5 | Sedang | **Validasi Gemini untuk prompt T58** — 10 foto 10/10 benar (pagi + sore 14-10, `data/eval/20261014-070915`, `-171309`); sore Gemini lambat (median 5,5 dtk, 4/5 > batas 4 dtk). Sisa: 84 foto penuh bila kuota mengizinkan | Status Gemini kini `outdated` (terakhir diuji T48) → peringatan di log & Pengaturan; uji 10–20 foto dengan jeda RPM |
 | 6 | Sedang | **T40 — alternatif mesin VLM lokal** (keputusan setelah uji nyata) | Crash `encoding image` berasal dari llama.cpp (llama.cpp#17422, #17881; ollama#14170), jadi mengganti Ollama dengan llama.cpp langsung kemungkinan tidak menghilangkannya. Bila uji nyata menunjukkan cadangan masih sering bermasalah walau ada penjaga T38: uji coba Qwen2.5-VL 4-bit lewat Transformers (PyTorch) di **proses terpisah** berantarmuka OpenAI-compatible (adaptor sudah mendukung, cukup ganti `.env`), diukur dengan `tools/bench_vlm.py` (akurasi, 0 APD kurang lolos, waktu, VRAM bersama YOLO). vLLM ditinjau untuk produksi Linux/GPU besar (T29). Data sejauh ini: ~2–4 crash per 84 foto. Kriteria tambahan (T48, 05-10): `qwen2.5vl:7b` tidak melihat helm di atas rambut lebat (`apd_10`, salah 4/4; Gemini benar) dan sepatu `apd_4` hanya benar 2/4 — model pengganti harus lolos keduanya |
