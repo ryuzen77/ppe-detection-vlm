@@ -116,6 +116,41 @@ describe('catalog.setRequired (T89)', () => {
     expect(catalog.unconfirmed).toBe(false)
   })
 
+  it('POST tersimpan, jawaban hilang, lalu GET lama tiba setelah pemulihan: tidak menimpa', async () => {
+    // Skenario tinjauan Codex 22-10 terhadap v2
+    const server = fakeServer({ helm: true, rompi: true })
+    await catalog.load()
+    const oldGet = deferred<PpeCatalog>()
+    vi.spyOn(api, 'ppeRules').mockReturnValueOnce(oldGet.promise)
+    const loading = catalog.load()                              // GET lama dimulai sebelum perubahan
+    vi.spyOn(api, 'setPpeActive').mockImplementationOnce(async (active) => {
+      Object.assign(server.state, active)
+      throw new Error('koneksi terputus')
+    })
+    await expect(catalog.setRequired('rompi', false)).rejects.toThrow()   // pemulihan membaca rompi=false
+    oldGet.resolve(catalogOf({ helm: true, rompi: true }))      // jawaban basi tiba paling akhir
+    await loading
+    expect(requiredOf()).toEqual({ helm: true, rompi: false })
+    expect(catalog.unconfirmed).toBe(false)
+  })
+
+  it('GET yang dimulai saat POST masih berjalan tidak menimpa hasil POST', async () => {
+    const server = fakeServer({ helm: true, rompi: true })
+    await catalog.load()
+    const post = deferred<PpeCatalog>()
+    vi.spyOn(api, 'setPpeActive').mockReturnValueOnce(post.promise)
+    const saving = catalog.setRequired('rompi', false)
+    const midGet = deferred<PpeCatalog>()
+    vi.spyOn(api, 'ppeRules').mockReturnValueOnce(midGet.promise)
+    const loading = catalog.load()                              // membaca sebelum POST tersimpan
+    server.state.rompi = false
+    post.resolve(catalogOf(server.state))
+    await saving
+    midGet.resolve(catalogOf({ helm: true, rompi: true }))
+    await loading
+    expect(requiredOf()).toEqual({ helm: true, rompi: false })
+  })
+
   it('status server tidak terbaca setelah galat: ditandai belum pasti sampai dibaca ulang', async () => {
     fakeServer({ helm: true, rompi: true })
     await catalog.load()

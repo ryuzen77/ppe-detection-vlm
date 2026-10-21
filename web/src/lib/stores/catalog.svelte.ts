@@ -9,8 +9,8 @@ class CatalogStore {
   /** T89: penyimpanan gagal DAN status server belum bisa dibaca ulang — pilihan di layar tidak bisa dipercaya */
   unconfirmed = $state(false)
   private loading: Promise<void> | null = null
-  /** Bertambah setiap katalog diganti hasil penyimpanan; GET yang dimulai sebelumnya sudah basi */
-  private writes = 0
+  /** Bertambah saat perubahan dimulai dan selesai; GET yang dimulai sebelumnya sudah basi */
+  private epoch = 0
 
   get active(): PpeItem[] {
     return activeItems(this.items)
@@ -36,12 +36,16 @@ class CatalogStore {
    * Gagal → status server dibaca ulang, sebab POST bisa sudah tersimpan walau jawabannya hilang.
    */
   async setRequired(key: string, required: boolean): Promise<void> {
+    // Mulai & selesai perubahan sama-sama membuat GET yang sudah berjalan basi: GET itu bisa
+    // membaca status sebelum POST tersimpan (tinjauan Codex 22-10, juga saat POST gagal)
+    this.epoch++
     try {
       const res = await api.setPpeActive({ [key]: required })
-      this.writes++
+      this.epoch++
       this.items = res.items
       this.unconfirmed = false
     } catch (e) {
+      this.epoch++
       this.unconfirmed = !(await this.fetchLatest())
       throw e
     }
@@ -54,12 +58,12 @@ class CatalogStore {
     return ok
   }
 
-  /** GET katalog; jawaban dibuang bila sementara itu ada penyimpanan yang lebih baru. */
+  /** GET katalog; jawaban dibuang bila sejak GET dimulai ada perubahan yang dimulai/selesai. */
   private async fetchLatest(): Promise<boolean> {
-    const startedAt = this.writes
+    const startedAt = this.epoch
     try {
       const c = await api.ppeRules()
-      if (this.writes === startedAt) this.items = c.items
+      if (this.epoch === startedAt) this.items = c.items
       this.error = ''
       return true
     } catch (e: unknown) {
