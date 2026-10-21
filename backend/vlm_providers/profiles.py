@@ -102,6 +102,16 @@ class ModelValidation:
 
 
 VALIDATIONS = (
+    # T86 Gemini (21-10; gambar tubuh + perbesaran KEPALA saja — panel tangan dibatalkan karena helm yang
+    # dipegang & kaos kuning ikut diperbesar lalu dikira dipakai oleh model lokal). Pengguna meminta 10 foto
+    # tersulit: no_16 (helm dipegang), no_47 (kaos kuning), no_34 (tangan bernoda semen), apd_10, apd_4,
+    # apd_19, no_23, no_35, no_45 → 9/9 benar (median 2,35 dtk), tanpa rokok palsu; + foto bukti gerbang
+    # baris 121 (rokok di mulut, lolos sebelum T86) lewat analyze_person + konfirmasi → ditolak rokok.
+    # VLM lokal TIDAK memakai panel (vlm_selection.uses_zoom): prompt & gambarnya isi T58 persis.
+    ModelValidation("gemini", "gemini-3.5-flash-lite", "T86", "2026-10-21", photos=10, missed=0, false_rejects=0,
+                    median_seconds=2.35, complete=False,
+                    note="T86: no_16, no_47, no_34, apd_10, apd_4, apd_19, no_23, no_35, no_45 + bukti gerbang "
+                         "(rokok di mulut); data/eval 20261021-101715"),
     # T58 Gemini (izin pengguna 14-10: total 5 foto, jaga RPM): 5/5 benar — apd_10 & apd_4 (salah
     # tolak model lokal) lolos, no_34 (tangan bernoda semen) tidak dianggap rokok. Tanpa konfirmasi
     # kedua (eval_vlm memanggil VLM langsung). Median ~1,75 dtk.

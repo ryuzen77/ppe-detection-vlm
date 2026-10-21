@@ -434,10 +434,13 @@ export interface PingEngineResult {
   ok: boolean
   latency_ms: number
   error?: string
+  // T86: diukur dengan gambar contoh seukuran pemeriksaan; dibandingkan dengan batas waktu engine
+  is_local?: boolean
+  timeout_ms?: number
 }
 
 export interface PingResult {
-  status: 'ONLINE' | 'ERROR' | 'OFFLINE'
+  status: 'ONLINE' | 'ERROR' | 'OFFLINE' | 'BUSY'
   latency_ms: number
   message: string
   engines?: PingEngineResult[]

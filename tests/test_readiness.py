@@ -108,7 +108,7 @@ def terkirim(monkeypatch, catalog_defaults):
     asli = vlm_analyzer.analyze_person
     dikirim = []
 
-    def catat(crop):
+    def catat(crop, keypoints=None):
         dikirim.append(time.time())
         return asli(crop)
 

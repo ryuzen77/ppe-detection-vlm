@@ -111,10 +111,12 @@ def compose(crop: np.ndarray, keypoints: Optional[list]) -> np.ndarray:
     body = fit_body(crop)
     side = cfg.VLM_ZOOM_PANEL_WIDTH
     half = side // 2
+    hands = cfg.VLM_ZOOM_HAND_PANELS
     bh, bw = body.shape[:2]
-    canvas = np.full((max(bh, side + half), bw + side, 3), cfg.VLM_ZOOM_FILL_BGR, np.uint8)
+    canvas = np.full((max(bh, side + (half if hands else 0)), bw + side, 3), cfg.VLM_ZOOM_FILL_BGR, np.uint8)
     canvas[:bh, :bw] = body
     canvas[:side, bw:] = _panel(crop, head_box(keypoints, crop.shape), side)
-    for i, box in enumerate(hand_boxes(keypoints, crop.shape)):
-        canvas[side:side + half, bw + i * half:bw + (i + 1) * half] = _panel(crop, box, half)
+    if hands:
+        for i, box in enumerate(hand_boxes(keypoints, crop.shape)):
+            canvas[side:side + half, bw + i * half:bw + (i + 1) * half] = _panel(crop, box, half)
     return canvas

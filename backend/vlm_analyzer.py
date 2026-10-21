@@ -14,6 +14,7 @@ from .api_monitor import api_monitor
 from . import messages
 from . import ppe_rules
 from . import vlm_selection
+from . import vlm_image
 from .vlm_providers import profiles as vlm_profiles
 from .vlm_providers import create_provider
 from .vlm_selection import Choice, Selection
@@ -97,7 +98,7 @@ def _is_spoof_rejection(missing_items) -> bool:
 USER_PROMPT = messages.VLM_USER_PROMPT
 
 
-def build_system_prompt(items=None) -> str:
+def build_system_prompt(items=None, zoom: bool = False) -> str:
     """Prompt inspektur K3, dirakit dari item APD yang sedang aktif.
 
     Sebelumnya prompt ini ditulis tangan sehingga setiap perubahan item APD
@@ -106,22 +107,44 @@ def build_system_prompt(items=None) -> str:
     atau mematikan item, jadi item mati tidak pernah ditanyakan ke model.
     """
     items = items if items is not None else ppe_rules.get_active_items()
-    return messages.VLM_SYSTEM_PROMPT.format(
+    prompt = messages.VLM_SYSTEM_PROMPT.format(
         rules=ppe_rules.build_prompt_rules(items),
         json_shape=ppe_rules.build_json_shape(items),
     )
+    return prompt + (_zoom_note() if zoom else "")
 
 
-def warmup_image_jpeg() -> bytes:
-    """Gambar sintetis seukuran potongan pekerja: memanaskan penyandi gambar tanpa foto orang (T56)."""
+def _zoom_note() -> str:
+    """Penjelas panel perbesaran (T86), hanya untuk gambar berpanel (lihat vlm_selection.uses_zoom)."""
+    return messages.VLM_ZOOM_NOTE if cfg.VLM_ZOOM_HAND_PANELS else messages.VLM_ZOOM_NOTE_HEAD
+
+
+def image_for_vlm(crop_bgr: np.ndarray, keypoints: Optional[list] = None, zoom: bool = False) -> bytes:
+    """JPEG yang dikirim ke VLM: tubuh + panel kepala (T86, `zoom`), atau tubuh saja (isi T58 persis).
+
+    Bytes ini dikirim apa adanya ke penyedia, tanpa didekode dan dikompres ulang.
+    """
+    if zoom:
+        image = vlm_image.compose(crop_bgr, keypoints)
+    else:
+        image = vlm_image.fit_body(crop_bgr)
+    return cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])[1].tobytes()
+
+
+def warmup_image_jpeg(zoom: bool = False) -> bytes:
+    """Gambar sintetis seukuran gambar pemeriksaan (termasuk panel T86), tanpa foto orang.
+
+    Dipakai pemanasan VLM lokal (T56) dan uji latensi Pengaturan (T86): ukuran & bentuknya sama
+    dengan yang dikirim gerbang, jadi waktu yang terukur mewakili pemeriksaan sungguhan.
+    """
     h, w = cfg.VLM_WARMUP_IMAGE_HEIGHT, cfg.VLM_WARMUP_IMAGE_WIDTH
-    img = np.tile(np.linspace(40, 200, h).astype(np.uint8)[:, None, None], (1, w, 3))
-    return cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])[1].tobytes()
+    crop = np.tile(np.linspace(40, 200, h).astype(np.uint8)[:, None, None], (1, w, 3))
+    return image_for_vlm(crop, zoom=zoom)
 
 
-def confirmation_prompts(item) -> tuple[str, str]:
+def confirmation_prompts(item, zoom: bool = False) -> tuple[str, str]:
     """(prompt sistem, prompt pengguna) konfirmasi kedua satu larangan (T58)."""
-    return messages.VLM_CONFIRM_SYSTEM_PROMPT, f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
+    return messages.VLM_CONFIRM_SYSTEM_PROMPT + (_zoom_note() if zoom else ""), f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
 
 
 def parse_confirmation(data) -> tuple[bool, str]:
@@ -148,8 +171,9 @@ def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
     profile = vlm_profiles.get_profile(provider_name)
     if profile is not None and profile.support == vlm_profiles.EXPERIMENTAL:
         warnings.append(messages.VLM_PROVIDER_EXPERIMENTAL.format(who=who))
-    status = vlm_profiles.validation_status(provider_name, model, messages.PROMPT_VERSION)
-    record = vlm_profiles.find_validation(provider_name, model, messages.PROMPT_VERSION)
+    version = vlm_selection.prompt_version_for(provider_name)
+    status = vlm_profiles.validation_status(provider_name, model, version)
+    record = vlm_profiles.find_validation(provider_name, model, version)
     if status == vlm_profiles.UNVALIDATED:
         warnings.append(messages.VLM_MODEL_UNVALIDATED.format(who=who))
         return warnings
@@ -158,7 +182,7 @@ def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
         warnings.append(messages.VLM_MODEL_UNSAFE.format(who=who, missed=record.missed, photos=record.photos))
     elif status == vlm_profiles.OUTDATED and record is not None:
         warnings.append(messages.VLM_MODEL_OUTDATED.format(who=who, old=record.prompt_version,
-                                                           current=messages.PROMPT_VERSION))
+                                                           current=version))
     elif status == vlm_profiles.PARTIAL and record is not None:
         warnings.append(messages.VLM_MODEL_PARTIAL.format(who=who, note=record.note))
     return warnings
@@ -336,7 +360,8 @@ class VLMEngine:
             "error": self.error,
             # T39b, untuk Pengaturan admin (T28): resmi/eksperimental & status validasi model
             "support": getattr(vlm_profiles.get_profile(self.provider_name), "support", None),
-            "validated": vlm_profiles.validation_status(self.provider_name, self.model_name, messages.PROMPT_VERSION),
+            "validated": vlm_profiles.validation_status(self.provider_name, self.model_name,
+                                                     vlm_selection.prompt_version_for(self.provider_name)),
         }
 
 
@@ -586,27 +611,47 @@ class VLMAnalyzer:
         return info
 
     def ping_api(self) -> dict:
-        """Uji latensi utama dan cadangan."""
-        if not self._engines():
-            return {"status": "OFFLINE", "latency_ms": 0, "message": messages.VLM_NOT_CONFIGURED}
-        results = []
-        for engine in self._engines():
-            start = time.time()
-            try:
-                assert engine.provider is not None, "_engines() hanya berisi engine yang siap"
-                engine.executor.submit(engine.provider.ping).result(timeout=engine.timeout)
-                dur = round((time.time() - start) * 1000, 1)
-                results.append({"role": engine.role, "ok": True, "latency_ms": dur})
-            except Exception as e:
-                results.append({"role": engine.role, "ok": False,
-                                "latency_ms": round((time.time() - start) * 1000, 1),
-                                "error": str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]})
+        """Uji latensi Pengaturan: setiap VLM aktif (utama & cadangan, online maupun lokal).
+
+        T86: dulu hanya ping teks — uji 20-10 "latensi aman" (±0,5 dtk) padahal pemeriksaan foto
+        5 dtk lebih & habis waktu. Kini tiap engine menilai gambar contoh seukuran pemeriksaan,
+        lewat antrean yang sama dengan gerbang (tidak berebut kuota/GPU dengan pekerja).
+        """
+        engines = self._engines()
+        if not engines:
+            return {"status": "OFFLINE", "latency_ms": 0, "message": messages.VLM_NOT_CONFIGURED, "engines": []}
+        if not self.api_lock.acquire(timeout=cfg.VLM_PING_LOCK_WAIT_SECONDS):
+            return {"status": "BUSY", "latency_ms": 0, "message": messages.VLM_PING_BUSY, "engines": []}
+        try:
+            results = [self._ping_engine(engine) for engine in engines]
+        finally:
+            self.api_lock.release()
         first = results[0]
         message = "; ".join(
             f"{r['role']}: {'OK ' + str(r['latency_ms']) + ' ms' if r['ok'] else 'gagal (' + r.get('error', '') + ')'}"
             for r in results)
         return {"status": "ONLINE" if first["ok"] else "ERROR", "latency_ms": first["latency_ms"],
                 "message": message, "engines": results}
+
+    def _ping_engine(self, engine: VLMEngine) -> dict:
+        """Satu engine menilai gambar contoh; jeda kuota dijalani SEBELUM stopwatch dimulai."""
+        wait = engine.min_interval - (time.time() - engine.last_call_time)
+        if wait > 0:
+            time.sleep(wait)
+        start = time.time()
+        error = self._attempt(engine, lambda: self._call_answered(engine))
+        return {"role": engine.role, "ok": not error, "latency_ms": round((time.time() - start) * 1000, 1),
+                "error": error, "is_local": engine.is_local, "timeout_ms": round(engine.timeout * 1000)}
+
+    @staticmethod
+    def _call_answered(engine: VLMEngine):
+        """Panggilan inspeksi atas gambar contoh. Jawaban yang tiba tetapi bukan JSON tetap
+        dihitung menjawab: yang diukur di sini kecepatan, bukan isi penilaian."""
+        try:
+            zoom = vlm_selection.uses_zoom(engine.provider_name)
+            engine.call(warmup_image_jpeg(zoom), system_prompt=build_system_prompt(zoom=zoom), user_prompt=USER_PROMPT)
+        except ValueError:
+            pass
 
     # --- Pemutus sirkuit utama
     def _has_backup(self) -> bool:
@@ -676,7 +721,8 @@ class VLMAnalyzer:
         ini, bukan konfirmasi larangan — konfirmasi rokok di lokal akan tampak "lambat")."""
         start = time.time()
         try:
-            data = engine.call(image_jpeg, system_prompt=build_system_prompt(aktif), user_prompt=USER_PROMPT)
+            zoom = vlm_selection.uses_zoom(engine.provider_name)
+            data = engine.call(image_jpeg, system_prompt=build_system_prompt(aktif, zoom), user_prompt=USER_PROMPT)
         except Exception:
             if engine.is_local:
                 self.local_guard.record_call(None, time.time())
@@ -703,13 +749,20 @@ class VLMAnalyzer:
 
     @staticmethod
     def _ask_confirmation(engine: VLMEngine, image_jpeg: bytes, item) -> tuple[bool, str]:
-        """Gagal/habis waktu = tidak terlihat (keputusan pengguna 13-10: VLM ragu = tidak ada)."""
+        """Jawaban ragu = tidak terlihat (keputusan pengguna 13-10: VLM ragu = tidak ada).
+
+        Panggilan GAGAL (galat, habis waktu, jawaban rusak) bukan jawaban ragu: dilempar sebagai
+        kegagalan VLM ini, sehingga cadangan memeriksa ulang atau pekerja diminta menunggu (T86,
+        keputusan pengguna 20-10). Uji banding 20-10: rokok di mulut terlihat di pemeriksaan
+        pertama, tetapi konfirmasi habis waktu lalu dianggap "tidak terlihat" -> pekerja lolos.
+        """
         try:
-            confirmed, seen = parse_confirmation(engine.call(image_jpeg, *confirmation_prompts(item)))
+            zoom = vlm_selection.uses_zoom(engine.provider_name)
+            confirmed, seen = parse_confirmation(engine.call(image_jpeg, *confirmation_prompts(item, zoom)))
         except Exception as e:
-            logger.warning(f"Konfirmasi larangan '{item.key}' oleh VLM {engine.who} gagal "
-                           f"({str(e)[:80] or type(e).__name__}); dianggap tidak terlihat.")
-            return False, ""
+            logger.warning(messages.LOG_VLM_CONFIRM_FAILED.format(
+                item=item.key, who=engine.who, error=str(e)[:80] or type(e).__name__))
+            raise
         if confirmed:
             logger.info(f"Larangan '{item.key}' dikonfirmasi VLM {engine.who}: {seen}")
         else:
@@ -731,7 +784,7 @@ class VLMAnalyzer:
             return f"timeout > {engine.timeout:g} dtk"
         return f"galat: {str(e)[:80]}"
 
-    def analyze_person(self, person_crop_bgr: np.ndarray) -> InspectionResult:
+    def analyze_person(self, person_crop_bgr: np.ndarray, keypoints: Optional[list] = None) -> InspectionResult:
         """Keputusan APD untuk satu crop pekerja (lihat docstring kelas)."""
         start_t = time.time()
         if not self._engines():
@@ -748,7 +801,9 @@ class VLMAnalyzer:
             # Satu potret item aktif untuk seluruh inspeksi, supaya prompt dan
             # penilaian jawaban memakai daftar yang sama walau operator mengubahnya.
             aktif = ppe_rules.get_active_items()
-            image_jpeg = self._optimize_image_for_vlm(person_crop_bgr)
+            # T86: gambar per engine — berpanel untuk VLM online, tubuh saja (isi T58) untuk lokal
+            def jpeg(engine: VLMEngine) -> bytes:
+                return image_for_vlm(person_crop_bgr, keypoints, vlm_selection.uses_zoom(engine.provider_name))
             reasons = []
 
             now = time.time()
@@ -756,7 +811,7 @@ class VLMAnalyzer:
             if primary is not None and self._primary_allowed(now):
                 self.primary_last_attempt = now
                 try:
-                    result = self._try(primary, image_jpeg, aktif)
+                    result = self._try(primary, jpeg(primary), aktif)
                     self._primary_result(True, time.time())
                     return self._finish(result, start_t)
                 except Exception as e:
@@ -770,7 +825,7 @@ class VLMAnalyzer:
 
             if self.backup is not None and self.backup.provider is not None:
                 try:
-                    return self._finish(self._try(self.backup, image_jpeg, aktif), start_t)
+                    return self._finish(self._try(self.backup, jpeg(self.backup), aktif), start_t)
                 except Exception as e:
                     reason = self._describe(e, self.backup)
                     reasons.append(f"cadangan: {reason}")
@@ -821,7 +876,7 @@ class VLMAnalyzer:
         _, buffer = cv2.imencode('.jpg', image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])
         return buffer.tobytes()
 
-    def _call_vlm_internal(self, image_bgr: np.ndarray) -> InspectionResult:
+    def _call_vlm_internal(self, image_bgr: np.ndarray, keypoints: Optional[list] = None) -> InspectionResult:
         """Satu panggilan langsung ke VLM utama tanpa batas waktu & tanpa cadangan.
 
         Hanya untuk alat evaluasi (tools/eval_vlm.py), yang mengukur model apa adanya.
@@ -830,8 +885,8 @@ class VLMAnalyzer:
         primary = self.primary
         assert primary is not None and primary.provider is not None, "alat evaluasi butuh VLM utama yang siap"
         data = primary.provider.analyze(
-            self._optimize_image_for_vlm(image_bgr),
-            system_prompt=build_system_prompt(aktif),
+            image_for_vlm(image_bgr, keypoints, vlm_selection.uses_zoom(primary.provider_name)),
+            system_prompt=build_system_prompt(aktif, vlm_selection.uses_zoom(primary.provider_name)),
             user_prompt=USER_PROMPT,
         )
         return self._parse_vlm_payload(data, aktif)

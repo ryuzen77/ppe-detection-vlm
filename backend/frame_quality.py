@@ -34,6 +34,8 @@ class FrameCandidate:
     motion: float = 0.0          # pergeseran relatif terhadap frame sebelumnya
     pose: float = 0.0
     score: float = 0.0
+    # T86: titik pose dalam koordinat `crop` untuk panel perbesaran VLM (None = tanpa pose)
+    crop_keypoints: Optional[list] = None
 
 
 def sharpness(crop: np.ndarray) -> float:

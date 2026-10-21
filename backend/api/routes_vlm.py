@@ -117,6 +117,10 @@ async def get_monitoring_status():
 
 
 @router.post("/api/monitoring/ping", dependencies=[Depends(require_admin)])
-async def ping_vlm_api():
-    """Uji latensi sesaat ke VLM utama dan cadangan."""
+def ping_vlm_api():
+    """Uji latensi VLM utama & cadangan dengan gambar contoh (T86).
+
+    Sengaja `def` (bukan async): jeda kuota + panggilan gambar beberapa detik memblokir, jadi
+    FastAPI menjalankannya di thread pool — stream, telemetri, & lampu tidak ikut tertahan.
+    """
     return vlm_analyzer.ping_api()

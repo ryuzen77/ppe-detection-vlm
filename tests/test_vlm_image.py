@@ -82,8 +82,19 @@ def test_panel_tanpa_titik_yakin_abu_abu_polos():
     assert (img[:, body_w:] == np.array(cfg.VLM_ZOOM_FILL_BGR, np.uint8)).all()
 
 
-def test_crop_kecil_tidak_diperbesar_dan_kanvas_cukup_tinggi():
+@pytest.mark.parametrize("hands", [False, True])
+def test_crop_kecil_tidak_diperbesar_dan_kanvas_cukup_tinggi(monkeypatch, hands):
+    monkeypatch.setattr(cfg, "VLM_ZOOM_HAND_PANELS", hands)
     crop = _crop(h=300, w=120)
     img = vlm_image.compose(crop, None)
-    assert img.shape[0] == cfg.VLM_ZOOM_PANEL_WIDTH + cfg.VLM_ZOOM_PANEL_WIDTH // 2
+    side = cfg.VLM_ZOOM_PANEL_WIDTH
+    assert img.shape[0] == side + (side // 2 if hands else 0)
     assert np.array_equal(img[:300, :120], crop)
+
+
+def test_panel_tangan_mati_bawaan_tidak_memperbesar_tangan():
+    """Validasi lokal 21-10: helm yang dipegang & kaos kuning diperbesar di panel tangan lalu dikira dipakai."""
+    assert cfg.VLM_ZOOM_HAND_PANELS is False
+    crop = _crop()
+    img = vlm_image.compose(crop, _keypoints(nose=(180, 120), left_wrist=(300, 500), right_wrist=(60, 520)))
+    assert img.shape[0] == vlm_image.fit_body(crop).shape[0], "tanpa baris panel tangan di bawah kepala"

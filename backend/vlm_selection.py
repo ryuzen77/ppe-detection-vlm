@@ -123,10 +123,27 @@ def redact(text: str, api_key: str) -> str:
     return _MASKED_SECRET.sub(REDACTED, text)
 
 
+# --- Gambar berpanel & versi prompt per penyedia (T86) ---
+
+def uses_zoom(provider_name: str) -> bool:
+    """Panel perbesaran kepala hanya untuk VLM online.
+
+    Validasi 21-10: model lokal qwen2.5vl:7b meloloskan APD kurang dengan gambar berpanel di setiap
+    varian (helm DIPEGANG no_16, kaos kuning no_47; tiap ukuran panel gagal di foto berbeda), sedangkan
+    tanpa panel 84/84 aman (T58). Gemini benar dengan & tanpa panel.
+    """
+    return cfg.VLM_ZOOM_ENABLED and not profiles.is_local(provider_name)
+
+
+def prompt_version_for(provider_name: str) -> str:
+    """Versi prompt yang benar-benar dikirim ke penyedia ini (tanpa panel = isi T58 persis)."""
+    return messages.PROMPT_VERSION if uses_zoom(provider_name) else messages.PROMPT_VERSION_NO_ZOOM
+
+
 # --- Aturan pilihan ---
 
 def validation_of(choice: Choice) -> tuple[str, Optional[profiles.ModelValidation]]:
-    status = profiles.validation_status(choice.provider, choice.model, messages.PROMPT_VERSION)
+    status = profiles.validation_status(choice.provider, choice.model, prompt_version_for(choice.provider))
     return status, profiles.find_validation(choice.provider, choice.model)
 
 
@@ -154,7 +171,7 @@ def _check_validation(choice: Choice, confirm_unvalidated: bool):
             provider=choice.provider, model=choice.model, missed=record.missed, photos=record.photos))
     if status in NEEDS_CONFIRMATION and not confirm_unvalidated:
         raise SelectionError("needs_confirmation", messages.VLM_SELECT_NEEDS_CONFIRMATION.format(
-            provider=choice.provider, model=choice.model, prompt=messages.PROMPT_VERSION, status=status))
+            provider=choice.provider, model=choice.model, prompt=prompt_version_for(choice.provider), status=status))
 
 
 # --- Sumber pilihan: .env atau dashboard ---
