@@ -171,7 +171,50 @@ def test_gangguan_sistem_kuning_bukan_merah():
 def test_status_iot_saat_nonaktif():
     m = NotifierManager()
     m.link = None
-    assert m.iot_status() == {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None}
+    assert m.iot_status() == {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None,
+                              "lamps_on": None, "lamps_available": None}
+
+
+@pytest.mark.parametrize("reply,expected", [
+    (b"OK:GREEN\n", ["green"]), (b"OK:RED\n", ["red"]),
+    (b"OK:YELLOW\n", ["yellow"]), (b"OK:OFF\n", []),
+    (b"OK:UNKNOWN\n", None), (b"OK:GREEN\nOK:OFF\n", []),
+    (b"OK:GREEN\nOK:UNKNOWN\n", None),
+])
+def test_serial_lamps_follow_last_ack_instead_of_command(link, reply, expected):
+    lnk, _, ports = link
+    lnk.set_state(LightState.RED)
+    lnk.tick()
+    ports[0].reply = False
+    ports[0].rx = reply
+    lnk.tick()
+    manager = NotifierManager()
+    manager.link = lnk
+    assert manager.iot_status()["lamps_on"] == expected
+    assert manager.iot_status()["lamps_available"] == ["green", "red", "yellow"]
+
+
+@pytest.mark.parametrize("elapsed,expected", [(0, ["green"]), (0.01, None), (0.5, None)])
+def test_serial_lamps_expire_at_unrounded_timeout(link, elapsed, expected):
+    lnk, clock, _ = link
+    lnk.set_state(LightState.GREEN)
+    lnk.tick()
+    clock.now += cfg.IOT_ACK_TIMEOUT_SECONDS + elapsed
+    assert lnk.status()["lamps_on"] == expected
+
+
+@pytest.mark.parametrize("condition", ["unopened", "closed", "error"])
+def test_serial_lamps_unknown_without_connection(link, condition):
+    lnk, _, ports = link
+    if condition != "unopened":
+        lnk.tick()
+        if condition == "closed":
+            lnk.stop()
+        else:
+            ports[0].fail_write = True
+            lnk.tick()
+    assert lnk.status()["lamps_on"] is None
+    assert lnk.status()["lamps_available"] == ["green", "red", "yellow"]
 
 
 def test_iot_type_selain_serial_ditolak(monkeypatch, link):
