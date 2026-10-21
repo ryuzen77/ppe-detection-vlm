@@ -411,6 +411,9 @@ export const SETTINGS_TAB = {
     note: 'Diukur dengan gambar contoh seukuran pemeriksaan (memakai 1 panggilan kuota per VLM online).',
   },
   ppeUpdateFailed: 'Gagal mengubah aturan APD',
+  // T89: perubahan bisa sudah tersimpan walau jawaban server hilang
+  ppeUnconfirmed: 'Status aturan APD di server belum diketahui; centang dikunci sampai status terbaca ulang.',
+  ppeRefresh: 'Baca ulang status',
   zoneSaveFailed: 'Gagal mengubah zona',
   zoneRangeFailed: 'Gagal mengubah batas zona',
   zoneCalibrateFailed: 'Gagal kalibrasi',

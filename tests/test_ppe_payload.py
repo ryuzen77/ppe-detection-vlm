@@ -34,6 +34,15 @@ def test_pilihan_item_aktif_tersimpan_di_data_dir(catalog_defaults):
     assert runtime_settings.load()["ppe_active"]["sarung_tangan"] is True
 
 
+def test_perubahan_sebagian_tidak_mengubah_item_lain(catalog_defaults):
+    # T89: UI hanya mengirim item yang dicentang; dua tab admin tidak boleh saling mematikan
+    before = {item.key: item.required_default for item in catalog_defaults.get_items()}
+    catalog_defaults.set_active({"sarung_tangan": True})
+    catalog_defaults.set_active({"kacamata": True})
+    after = {item.key: item.required_default for item in catalog_defaults.get_items()}
+    assert after == {**before, "sarung_tangan": True, "kacamata": True}
+
+
 # --- Balasan VLM ------------------------------------------------------------------
 
 def _balasan_lengkap(**tambahan):

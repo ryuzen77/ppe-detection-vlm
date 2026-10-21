@@ -1,12 +1,16 @@
 /** Katalog item APD dari backend, dimuat sekali untuk seluruh aplikasi. */
 import { api } from '../api/client'
 import type { PpeItem } from '../api/types'
-import { activeItems, requiredMap } from '../ppe'
+import { activeItems } from '../ppe'
 
 class CatalogStore {
   items = $state<PpeItem[]>([])
   error = $state('')
+  /** T89: penyimpanan gagal DAN status server belum bisa dibaca ulang — pilihan di layar tidak bisa dipercaya */
+  unconfirmed = $state(false)
   private loading: Promise<void> | null = null
+  /** Bertambah setiap katalog diganti hasil penyimpanan; GET yang dimulai sebelumnya sudah basi */
+  private writes = 0
 
   get active(): PpeItem[] {
     return activeItems(this.items)
@@ -14,18 +18,12 @@ class CatalogStore {
 
   /**
    * Ambil katalog dari server. Panggilan yang bersamaan memakai satu permintaan; setelah selesai
-   * (berhasil maupun gagal) panggilan berikutnya mengambil ulang — dulu janji yang sudah
-   * berhasil disimpan selamanya sehingga katalog tidak pernah diperbarui (bug T89).
+   * panggilan berikutnya mengambil ulang — dulu janji yang berhasil disimpan selamanya sehingga
+   * katalog tidak pernah diperbarui (bug T89).
    */
   load(): Promise<void> {
-    this.loading ??= api.ppeRules()
-      .then((c) => {
-        this.items = c.items
-        this.error = ''
-      })
-      .catch((e: unknown) => {
-        this.error = e instanceof Error ? e.message : String(e)
-      })
+    this.loading ??= this.fetchLatest()
+      .then(() => undefined)
       .finally(() => {
         this.loading = null
       })
@@ -33,13 +31,41 @@ class CatalogStore {
   }
 
   /**
-   * Ubah satu centang APD Wajib (T89). Item lain diambil dari katalog terkini dan katalog
-   * diganti jawaban server, jadi perubahan berikutnya tidak menimpa yang ini. Galat diteruskan
-   * ke pemanggil; katalog tetap status server terakhir.
+   * Ubah satu centang APD Wajib (T89). Hanya item itu yang dikirim: backend menggabungkannya di
+   * bawah gembok, jadi katalog basi (tab lain, GET terlambat) tidak bisa menimpa pilihan lain.
+   * Gagal → status server dibaca ulang, sebab POST bisa sudah tersimpan walau jawabannya hilang.
    */
   async setRequired(key: string, required: boolean): Promise<void> {
-    const res = await api.setPpeActive(requiredMap(this.items, key, required))
-    this.items = res.items
+    try {
+      const res = await api.setPpeActive({ [key]: required })
+      this.writes++
+      this.items = res.items
+      this.unconfirmed = false
+    } catch (e) {
+      this.unconfirmed = !(await this.fetchLatest())
+      throw e
+    }
+  }
+
+  /** Baca ulang status server tanpa memakai GET yang sedang berjalan; true bila berhasil. */
+  async refresh(): Promise<boolean> {
+    const ok = await this.fetchLatest()
+    if (ok) this.unconfirmed = false
+    return ok
+  }
+
+  /** GET katalog; jawaban dibuang bila sementara itu ada penyimpanan yang lebih baru. */
+  private async fetchLatest(): Promise<boolean> {
+    const startedAt = this.writes
+    try {
+      const c = await api.ppeRules()
+      if (this.writes === startedAt) this.items = c.items
+      this.error = ''
+      return true
+    } catch (e: unknown) {
+      this.error = e instanceof Error ? e.message : String(e)
+      return false
+    }
   }
 
   replace(items: PpeItem[]): void {

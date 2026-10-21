@@ -71,8 +71,7 @@
     }
   }
 
-  // T89: satu perubahan pada satu waktu — centang kedua saat yang pertama belum dijawab server
-  // akan dihitung dari katalog yang belum memuat perubahan pertama
+  // T89: satu perubahan pada satu waktu, supaya pesan galat & status centang jelas milik perubahan mana
   let ppeSaving = $state(false)
 
   async function togglePpe(input: HTMLInputElement, key: string) {
@@ -82,11 +81,17 @@
       await catalog.setRequired(key, input.checked)
     } catch (e) {
       ppeError = withError(SETTINGS_TAB.ppeUpdateFailed, e)
-      // Server menolak (mis. mematikan item APD terakhir): centang kembali ke status server
-      input.checked = !input.checked
     } finally {
+      // Centang mengikuti status server terakhir yang diketahui (ditolak, atau ternyata tersimpan)
+      input.checked = catalog.items.find((i) => i.key === key)?.required ?? input.checked
       ppeSaving = false
     }
+  }
+
+  async function refreshPpe() {
+    ppeSaving = true
+    if (await catalog.refresh()) ppeError = ''
+    ppeSaving = false
   }
 </script>
 
@@ -114,11 +119,15 @@
       <section class="card">
         <h3>{SETTINGS_TAB.ppeRequired}</h3>
         {#if ppeError}<p class="error" role="alert">{ppeError}</p>{/if}
+        {#if catalog.unconfirmed}
+          <p class="warn" role="alert">{SETTINGS_TAB.ppeUnconfirmed}
+            <button class="btn" onclick={refreshPpe} disabled={ppeSaving}>{SETTINGS_TAB.ppeRefresh}</button></p>
+        {/if}
         <div class="ppe-list">
           {#if catalog.items}
             {#each catalog.items as item (item.key)}
               <label class="ppe-item">
-                <input type="checkbox" checked={item.required} disabled={ppeSaving}
+                <input type="checkbox" checked={item.required} disabled={ppeSaving || catalog.unconfirmed}
                        onchange={(e) => togglePpe(e.currentTarget, item.key)} />
                 {item.label}
               </label>
