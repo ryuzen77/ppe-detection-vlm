@@ -246,3 +246,11 @@ cd web && npm run build           # lalu commit web/dist (gerbang tidak punya No
   `-m backend`, skrip evaluasi) — di Windows, mematikan shell induk tidak
   mematikan anaknya.
 - Bongkar model Ollama yang dipakai uji (`ollama stop <model>`).
+- **`scripts/check.py` / pytest penuh tidak dijalankan dua agen bersamaan** — tanya
+  pengguna dulu apakah agen lain sedang menjalankannya. Kejadian 22-10: dua `check.py`
+  serentak membuat `test_shutdown` gagal palsu (server uji tidak sempat mengalirkan
+  stream) dan memori habis hingga IDE tertutup.
+- RAM terasa penuh padahal aplikasi sedikit → cek Task Manager › Details › *Commit size*.
+  22-10: layanan Windows **AppXSvc** bocor 35 GB (commit 59,8/63,8 GB) → Codex gagal
+  membuat proses (`0xC0000142`). Pulihkan: `Restart-Service AppXSvc -Force` (admin) atau
+  restart Windows.
