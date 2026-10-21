@@ -89,7 +89,27 @@ export interface VlmInfo extends VlmEngineInfo {
 
 // --- Kesehatan VLM (GET /api/monitoring/status, telemetry.api_monitor) ------------
 
-export type VlmMode = 'UTAMA' | 'CADANGAN' | 'GANGGUAN'
+// LOKAL (T72): keputusan oleh VLM lokal darurat (susunan A); cadangan lokal (susunan B) tetap CADANGAN
+export type VlmMode = 'UTAMA' | 'CADANGAN' | 'LOKAL' | 'GANGGUAN'
+
+/** Koneksi internet gerbang (T72), bukan kesehatan API VLM. */
+export type InternetState = 'normal' | 'lambat' | 'putus'
+
+export interface InternetStatus {
+  /** null = pemantau mati (tidak ada VLM lokal untuk dialihkan) */
+  state: InternetState | null
+  median_ms: number | null
+  checked_at: string | null
+}
+
+export type LocalStandbyState = 'unloaded' | 'loading' | 'ready' | 'failed'
+
+/** VLM lokal siaga dingin (T72): sebagai cadangan (susunan B) atau darurat (susunan A). */
+export interface LocalStandby {
+  role: 'cadangan' | 'darurat' | null
+  state: LocalStandbyState
+  since: string | null
+}
 
 export interface VlmEngineStats {
   configured: boolean
@@ -120,6 +140,9 @@ export interface MonitorStatus {
   is_locked: boolean
   latency_ms: number
   avg_latency_ms: number
+  /** T72; tidak ada pada server sebelum T72a */
+  internet?: InternetStatus
+  local?: LocalStandby
 }
 
 // --- Telemetri WebSocket (/ws) ---------------------------------------------------------
@@ -507,6 +530,8 @@ export interface VlmChoiceWithSource extends VlmChoice {
 export interface VlmSelection {
   primary: VlmChoiceWithSource | null
   backup: VlmChoiceWithSource | null
+  /** T72: VLM lokal darurat (susunan A); tidak ada pada server sebelum T72a */
+  local_fallback?: VlmChoiceWithSource | null
 }
 
 export type VlmValidationStatus = 'validated' | 'partial' | 'outdated' | 'unvalidated' | 'unsafe' | null
@@ -543,6 +568,7 @@ export interface VlmProvidersResponse {
 export interface VlmApplyRequest {
   primary: VlmChoice
   backup: VlmChoice | null
+  local_fallback: VlmChoice | null
   confirm_unvalidated: boolean
 }
 

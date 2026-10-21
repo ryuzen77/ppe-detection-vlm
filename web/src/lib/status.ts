@@ -1,7 +1,9 @@
 /** Status kamera & VLM → nada warna + teks chip (logika murni, teruji). */
-import type { Telemetry } from './api/types'
+import type { InternetState, LocalStandbyState, Telemetry } from './api/types'
 import type { Tone } from './gate'
-import { CAMERA_CHIP, VLM_CHIP, VLM_CHIP_NO_BACKUP, IOT_CHIP, SYSTEM_STATUS, cameraChipOk } from './messages'
+import {
+  CAMERA_CHIP, VLM_CHIP, VLM_CHIP_NO_BACKUP, IOT_CHIP, INTERNET_CHIP, LOCAL_STANDBY_CHIP, SYSTEM_STATUS, cameraChipOk,
+} from './messages'
 
 export interface Chip {
   tone: Tone
@@ -17,7 +19,7 @@ export function cameraChip(t: Telemetry | null): Chip {
   return { tone, text, hint: c.name }
 }
 
-const VLM_TONE: Record<string, Tone> = { UTAMA: 'ok', CADANGAN: 'warn', GANGGUAN: 'danger' }
+const VLM_TONE: Record<string, Tone> = { UTAMA: 'ok', CADANGAN: 'warn', LOKAL: 'warn', GANGGUAN: 'danger' }
 
 /** Nama penyedia/model sengaja tidak ditampilkan (keputusan pengguna): hanya status umum */
 export function vlmChip(t: Telemetry | null): Chip {
@@ -29,6 +31,28 @@ export function vlmChip(t: Telemetry | null): Chip {
 }
 
 
+
+const INTERNET_TONE: Record<InternetState, Tone> = { normal: 'ok', lambat: 'warn', putus: 'warn' }
+
+/**
+ * T72: koneksi internet gerbang. null = pemantau mati (tanpa VLM lokal untuk dialihkan,
+ * atau server sebelum T72a) — tidak ada chip. Putus tetap kuning, bukan merah: gerbang masih
+ * menilai lewat VLM lokal; merah hanya bila tidak ada VLM sama sekali (chip VLM gangguan).
+ */
+export function internetChip(t: Telemetry | null): Chip | null {
+  const state = t?.api_monitor?.internet?.state
+  if (!state) return null
+  return { tone: INTERNET_TONE[state], ...INTERNET_CHIP[state] }
+}
+
+const LOCAL_TONE: Record<LocalStandbyState, Tone> = { unloaded: 'neutral', loading: 'warn', ready: 'ok', failed: 'warn' }
+
+/** T72: VLM lokal siaga dingin. Siaga = keadaan normal (netral), bukan masalah di ringkasan. */
+export function localStandbyChip(t: Telemetry | null): Chip | null {
+  const local = t?.api_monitor?.local
+  if (!local?.role) return null
+  return { tone: LOCAL_TONE[local.state], ...LOCAL_STANDBY_CHIP[local.state] }
+}
 
 export function iotChip(t: Telemetry | null): Chip {
   const iot = t?.iot

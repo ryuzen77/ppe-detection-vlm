@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { api } from '../../lib/api/client'
-  import type { VlmChoice, VlmProvidersResponse, VlmTestResponse, VlmModelEntry } from '../../lib/api/types'
+  import type { VlmChoice, VlmProvidersResponse, VlmTestResponse } from '../../lib/api/types'
   import { SETTINGS_TAB, VLM_SETTINGS } from '../../lib/messages'
-  import { validationBadge, handleSelectionError, backupChange } from '../../lib/vlmSelection'
-  import Server from '@lucide/svelte/icons/server'
+  import {
+    handleSelectionError, backupChange, providerOptionLabel, localFallbackAvailability, localFallbackChoice,
+  } from '../../lib/vlmSelection'
   import { extractApiError } from '../../lib/api/error'
+  import VlmModelField from './VlmModelField.svelte'
+
+  type TestRole = 'primary' | 'backup' | 'local'
 
   let data = $state<VlmProvidersResponse | null>(null)
   let loading = $state(true)
@@ -15,24 +19,33 @@
   let primaryModel = $state('')
   let backupProvider = $state('')
   let backupModel = $state('')
+  // T72: VLM lokal darurat (susunan A)
+  let localProvider = $state('')
+  let localModel = $state('')
 
   let applying = $state(false)
   let applyStatus = $state('')
-  
-  let testing = $state<'primary'|'backup'|null>(null)
-  let testResult = $state<{role: string, res: VlmTestResponse | null, err: string}>({ role: '', res: null, err: '' })
+
+  let testing = $state<TestRole | null>(null)
+  let testResult = $state<{role: TestRole | '', res: VlmTestResponse | null, err: string}>({ role: '', res: null, err: '' })
 
   let confirmation = $state<{code: string, message: string} | null>(null)
   let resetConfirmation = $state(false)
   let disableConfirmation = $state(false)
 
+  function fillForm(current: VlmProvidersResponse['current']) {
+    primaryProvider = current.primary?.provider || ''
+    primaryModel = current.primary?.model || ''
+    backupProvider = current.backup?.provider || ''
+    backupModel = current.backup?.model || ''
+    localProvider = current.local_fallback?.provider || ''
+    localModel = current.local_fallback?.model || ''
+  }
+
   async function load() {
     try {
       data = await api.getVlmProviders()
-      primaryProvider = data.current.primary?.provider || ''
-      primaryModel = data.current.primary?.model || ''
-      backupProvider = data.current.backup?.provider || ''
-      backupModel = data.current.backup?.model || ''
+      fillForm(data.current)
     } catch (e) {
       errorMsg = extractApiError(e, VLM_SETTINGS.errLoad)
     } finally {
@@ -43,16 +56,19 @@
   onMount(load)
 
   const providers = $derived(data?.providers || [])
+  const localProviders = $derived(providers.filter((p) => p.is_local))
   // T70: mematikan cadangan perlu konfirmasi; mengaktifkan cadangan lokal = menunggu model siap
   const change = $derived(backupChange(data?.current.backup ?? null, backupProvider, backupModel, providers))
+  const localAvailability = $derived(localFallbackAvailability(backupProvider, providers))
+  const LOCAL_UNAVAILABLE_HINT = {
+    backup_is_local: VLM_SETTINGS.localFallbackBackupIsLocal,
+    needs_backup: VLM_SETTINGS.localFallbackNeedsBackup,
+    no_local_provider: VLM_SETTINGS.noLocalProvider,
+  } as const
 
   function requestApply() {
     if (change === 'disable') disableConfirmation = true
     else handleApply(false)
-  }
-
-  function findModel(pName: string, mName: string): VlmModelEntry | undefined {
-    return providers.find(p => p.name === pName)?.models.find(m => m.model === mName)
   }
 
   async function handleApply(confirmUnvalidated = false) {
@@ -64,13 +80,14 @@
     try {
       const primary: VlmChoice = { provider: primaryProvider, model: primaryModel }
       const backup: VlmChoice | null = backupProvider ? { provider: backupProvider, model: backupModel } : null
-      
+
       const res = await api.applyVlmSelection({
         primary,
         backup,
+        local_fallback: localFallbackChoice(localAvailability, localProvider, localModel),
         confirm_unvalidated: confirmUnvalidated
       })
-      
+
       if (data) data.current = res
       applyStatus = VLM_SETTINGS.applySuccess
       setTimeout(() => applyStatus = '', 3000)
@@ -94,13 +111,23 @@
     }
   }
 
-  async function handleTest(role: 'primary'|'backup') {
+  const TEST_CHOICE = {
+    primary: () => ({ provider: primaryProvider, model: primaryModel }),
+    backup: () => ({ provider: backupProvider, model: backupModel }),
+    local: () => ({ provider: localProvider, model: localModel }),
+  }
+  const TEST_TITLE = {
+    primary: VLM_SETTINGS.testResultPrimary,
+    backup: VLM_SETTINGS.testResultBackup,
+    local: VLM_SETTINGS.testResultLocal,
+  }
+
+  async function handleTest(role: TestRole) {
     testing = role
     testResult = { role, res: null, err: '' }
     try {
-      const provider = role === 'primary' ? primaryProvider : backupProvider
-      const model = role === 'primary' ? primaryModel : backupModel
-      const res = await api.testVlmProvider({ role, provider, model })
+      // Kontrak uji (T28) hanya mengenal utama/cadangan; VLM lokal darurat diuji di jalur cadangan
+      const res = await api.testVlmProvider({ role: role === 'primary' ? 'primary' : 'backup', ...TEST_CHOICE[role]() })
       testResult = { role, res, err: '' }
     } catch (e) {
       testResult = { role, res: null, err: extractApiError(e, VLM_SETTINGS.errTest) }
@@ -116,10 +143,7 @@
     try {
       const res = await api.resetVlmSelection()
       if (data) data.current = res
-      primaryProvider = res.primary?.provider || ''
-      primaryModel = res.primary?.model || ''
-      backupProvider = res.backup?.provider || ''
-      backupModel = res.backup?.model || ''
+      fillForm(res)
     } catch (e) {
       errorMsg = extractApiError(e, VLM_SETTINGS.errReset)
     } finally {
@@ -153,40 +177,15 @@
       <label>
         <span>{VLM_SETTINGS.providerLabel}</span>
         <select bind:value={primaryProvider} disabled={applying}>
-          {#each providers as p}
-            <option value={p.name} disabled={p.missing !== null}>{p.label}{p.missing === 'base_url' ? ` ${VLM_SETTINGS.missingBaseUrl}` : p.missing === 'key' ? ` ${VLM_SETTINGS.missingKey}` : ''}</option>
+          {#each providers as p (p.name)}
+            <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
           {/each}
         </select>
       </label>
-      
+
       {#if primaryProvider}
-        {@const pList = providers.find(p => p.name === primaryProvider)}
-        <label>
-          <span>{VLM_SETTINGS.modelLabel}</span>
-          <input type="text" bind:value={primaryModel} list="models-primary" disabled={applying} />
-          <datalist id="models-primary">
-            {#each pList?.models || [] as m}
-              <option value={m.model}></option>
-            {/each}
-          </datalist>
-        </label>
-        
-        {@const mData = findModel(primaryProvider, primaryModel)}
-        {#if mData}
-          {@const badge = validationBadge(mData.validated)}
-          <div class="meta">
-            <span class="badge tone-{badge.tone}">{badge.text}</span>
-            {#if pList?.data_location}
-              <span class="location" title={VLM_SETTINGS.dataLocation}><Server size={14}/> {pList.data_location}</span>
-            {/if}
-          </div>
-          {#if mData.photos}
-            <div class="stats">
-              {VLM_SETTINGS.stats(mData.photos, mData.missed, mData.false_rejects, mData.median_seconds)}
-            </div>
-          {/if}
-        {/if}
-        
+        <VlmModelField id="primary" provider={providers.find(p => p.name === primaryProvider)}
+                       bind:model={primaryModel} disabled={applying} showStats />
         <button class="btn btn-secondary mt-2" onclick={() => handleTest('primary')} disabled={testing !== null || applying || !primaryModel}>
           {testing === 'primary' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
         </button>
@@ -200,47 +199,56 @@
         <span>{VLM_SETTINGS.providerLabel}</span>
         <select bind:value={backupProvider} disabled={applying}>
           <option value="">{VLM_SETTINGS.noBackup}</option>
-          {#each providers as p}
-            <option value={p.name} disabled={p.missing !== null}>{p.label}{p.missing === 'base_url' ? ` ${VLM_SETTINGS.missingBaseUrl}` : p.missing === 'key' ? ` ${VLM_SETTINGS.missingKey}` : ''}</option>
+          {#each providers as p (p.name)}
+            <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
           {/each}
         </select>
       </label>
       {#if !backupProvider}
         <p class="hint">{VLM_SETTINGS.noBackupHint}</p>
       {/if}
-      
+
       {#if backupProvider}
-        {@const pList = providers.find(p => p.name === backupProvider)}
-        <label>
-          <span>{VLM_SETTINGS.modelLabel}</span>
-          <input type="text" bind:value={backupModel} list="models-backup" disabled={applying} />
-          <datalist id="models-backup">
-            {#each pList?.models || [] as m}
-              <option value={m.model}></option>
-            {/each}
-          </datalist>
-        </label>
-        
-        {@const mData = findModel(backupProvider, backupModel)}
-        {#if mData}
-          {@const badge = validationBadge(mData.validated)}
-          <div class="meta">
-            <span class="badge tone-{badge.tone}">{badge.text}</span>
-            {#if pList?.data_location}
-              <span class="location" title={VLM_SETTINGS.dataLocation}><Server size={14}/> {pList.data_location}</span>
-            {/if}
-          </div>
-        {/if}
+        <VlmModelField id="backup" provider={providers.find(p => p.name === backupProvider)}
+                       bind:model={backupModel} disabled={applying} />
         <button class="btn btn-secondary mt-2" onclick={() => handleTest('backup')} disabled={testing !== null || applying || !backupModel}>
           {testing === 'backup' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
         </button>
       {/if}
     </div>
+
+    <!-- Lokal darurat (T72, susunan A): hanya bila cadangan = API -->
+    <div class="role-box">
+      <h3>{VLM_SETTINGS.localFallbackTitle}</h3>
+      {#if localAvailability === 'available'}
+        <label>
+          <span>{VLM_SETTINGS.providerLabel}</span>
+          <select bind:value={localProvider} disabled={applying}>
+            <option value="">{VLM_SETTINGS.noLocalFallback}</option>
+            {#each localProviders as p (p.name)}
+              <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
+            {/each}
+          </select>
+        </label>
+        {#if localProvider}
+          <VlmModelField id="local" provider={providers.find(p => p.name === localProvider)}
+                         bind:model={localModel} disabled={applying} />
+          <p class="hint">{VLM_SETTINGS.localFallbackHint}</p>
+          <button class="btn btn-secondary mt-2" onclick={() => handleTest('local')} disabled={testing !== null || applying || !localModel}>
+            {testing === 'local' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
+          </button>
+        {:else}
+          <p class="hint">{VLM_SETTINGS.noLocalFallbackHint}</p>
+        {/if}
+      {:else}
+        <p class="hint">{LOCAL_UNAVAILABLE_HINT[localAvailability]}</p>
+      {/if}
+    </div>
   </div>
-  
+
   {#if testResult.role}
     <div class="test-result">
-      <strong>{testResult.role === 'primary' ? VLM_SETTINGS.testResultPrimary : VLM_SETTINGS.testResultBackup}:</strong>
+      <strong>{TEST_TITLE[testResult.role]}:</strong>
       {#if testResult.err}
         <span class="error">{testResult.err}</span>
       {:else if testResult.res}
@@ -262,7 +270,7 @@
       </div>
     </div>
   {/if}
-  
+
   {#if resetConfirmation}
     <div class="confirmation-box">
       <p><strong>{VLM_SETTINGS.resetConfirmTitle}</strong></p>
@@ -337,42 +345,15 @@
     gap: var(--space-1);
     margin-bottom: var(--space-3);
   }
-  select, input {
+  select {
     padding: 6px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong);
     background: var(--surface);
     color: var(--text);
   }
-  .meta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-1);
-  }
-  .badge {
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: 500;
-  }
-  /* T70: konsekuensi cadangan mati */
+  /* T70: konsekuensi cadangan mati; T72: penjelasan VLM lokal darurat */
   .hint { font-size: var(--text-sm); color: var(--text-muted); margin: 0.25rem 0 0; }
-  .tone-ok { background: var(--ok); color: var(--text); }
-  .tone-warn { background: var(--warn); color: var(--surface); }
-  .tone-muted { background: var(--border-strong); color: var(--text); }
-  
-  .location {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--text-xs);
-    color: var(--text-muted);
-  }
-  .stats {
-    font-size: var(--text-xs);
-    color: var(--text-muted);
-  }
   .test-result {
     margin-top: var(--space-4);
     padding: var(--space-3);

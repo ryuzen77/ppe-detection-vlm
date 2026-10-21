@@ -1,4 +1,5 @@
-import type { VlmValidationStatus } from './api/types'
+import type { VlmMissingSetting, VlmValidationStatus } from './api/types'
+import { VLM_SETTINGS } from './messages'
 
 export type ValidationTone = 'ok' | 'warn' | 'muted'
 
@@ -33,6 +34,37 @@ export function handleSelectionError(code: string, message: string): ActionRequi
   }
   // unsafe_model, missing_key, engine_failed, etc.
   return { type: 'error', code, message, isWarn: false }
+}
+
+/** Teks pilihan penyedia: label + keterangan setelan server yang belum diisi. */
+export function providerOptionLabel(p: { label: string; missing: VlmMissingSetting }): string {
+  if (p.missing === 'base_url') return `${p.label} ${VLM_SETTINGS.missingBaseUrl}`
+  if (p.missing === 'key') return `${p.label} ${VLM_SETTINGS.missingKey}`
+  return p.label
+}
+
+export type LocalFallbackAvailability = 'available' | 'backup_is_local' | 'needs_backup' | 'no_local_provider'
+
+type ProviderKind = { name: string; is_local: boolean }
+
+/**
+ * Apakah VLM lokal darurat (T72, susunan A) bisa dipilih. Hanya bila cadangan = API:
+ * cadangan lokal (susunan B) sudah siaga dingin sendiri — backend menolaknya
+ * (`local_fallback_with_local_backup`); tanpa cadangan, admin diarahkan memilih cadangan dulu.
+ */
+export function localFallbackAvailability(backupProvider: string, providers: ProviderKind[]): LocalFallbackAvailability {
+  if (!providers.some((p) => p.is_local)) return 'no_local_provider'
+  if (!backupProvider) return 'needs_backup'
+  return providers.find((p) => p.name === backupProvider)?.is_local ? 'backup_is_local' : 'available'
+}
+
+/** Isi `local_fallback` permintaan apply: null bila tidak tersedia atau tidak dipilih. */
+export function localFallbackChoice(
+  availability: LocalFallbackAvailability,
+  provider: string,
+  model: string,
+): { provider: string; model: string } | null {
+  return availability === 'available' && provider ? { provider, model } : null
 }
 
 export type BackupChange = 'unchanged' | 'disable' | 'enable_local' | 'other'
