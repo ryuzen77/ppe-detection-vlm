@@ -126,6 +126,7 @@ class UsbRelayLink:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.last_ok: Optional[float] = None
+        self._verified_mask: Optional[int] = None
         self.error: Optional[str] = None
         self._next_open_at = 0.0
 
@@ -160,10 +161,22 @@ class UsbRelayLink:
         self._wake.set()
 
     def status(self) -> dict:
-        age = None if self.last_ok is None else round(self._clock() - self.last_ok, 1)
+        now = self._clock()
+        age = None if self.last_ok is None else round(now - self.last_ok, 1)
         connected = age is not None and age <= cfg.IOT_ACK_TIMEOUT_SECONDS
         return {"enabled": True, "connected": connected, "last_ack_age_s": age,
-                "error": None if connected else (self.error or messages.IOT_NO_ACK)}
+                "error": None if connected else (self.error or messages.IOT_NO_ACK),
+                "lamps_on": self._lamps_on(now),
+                "lamps_available": [cfg.IOT_LAMP_GREEN, cfg.IOT_LAMP_RED]}
+
+    def _lamps_on(self, now: float) -> Optional[list[str]]:
+        mask = self._verified_mask
+        if (mask is None or self._board is None or self.error is not None or self.last_ok is None
+                or now - self.last_ok > cfg.IOT_ACK_TIMEOUT_SECONDS):
+            return None
+        channels = ((cfg.IOT_LAMP_GREEN, cfg.IOT_RELAY_GREEN_CHANNEL),
+                    (cfg.IOT_LAMP_RED, cfg.IOT_RELAY_RED_CHANNEL))
+        return [lamp for lamp, channel in channels if mask & channel_mask(channel)]
 
     # --- Satu putaran thread (dipanggil langsung oleh tes) ----------------------------
 
@@ -200,6 +213,7 @@ class UsbRelayLink:
             actual = board.read_mask() & self._all
         if actual != wanted:
             raise RelayMismatch(messages.IOT_RELAY_MISMATCH.format(wanted=wanted, actual=actual))
+        self._verified_mask = actual
         self.last_ok = self._clock()
         self.error = None
 
@@ -235,6 +249,7 @@ class UsbRelayLink:
         self._next_open_at = self._clock() + cfg.IOT_RECONNECT_SECONDS
 
     def _close(self):
+        self._verified_mask = None
         if self._board is not None:
             self._board.close()
             self._board = None

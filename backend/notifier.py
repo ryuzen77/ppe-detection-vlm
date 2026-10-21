@@ -40,6 +40,13 @@ COMMANDS = {
     LightState.YELLOW: "LIGHT_YELLOW",
 }
 ACK_PREFIX = b"OK:"
+ACK_LAMPS = {
+    LightState.GREEN.encode(): (cfg.IOT_LAMP_GREEN,),
+    LightState.RED.encode(): (cfg.IOT_LAMP_RED,),
+    LightState.YELLOW.encode(): (cfg.IOT_LAMP_YELLOW,),
+    LightState.OFF.encode(): (),
+}
+SERIAL_LAMPS = (cfg.IOT_LAMP_GREEN, cfg.IOT_LAMP_RED, cfg.IOT_LAMP_YELLOW)
 SERIAL_URL_SCHEMES = ("rfc2217://", "socket://")   # simulator Wokwi
 
 
@@ -74,6 +81,7 @@ class GateLightLink:
         self._thread: Optional[threading.Thread] = None
         self._rx = b""
         self.last_ack: Optional[float] = None
+        self._ack_state: Optional[bytes] = None
         self.error: Optional[str] = None
         self._next_open_at = 0.0
 
@@ -102,8 +110,13 @@ class GateLightLink:
         now = self._clock()
         age = None if self.last_ack is None else round(now - self.last_ack, 1)
         connected = age is not None and age <= cfg.IOT_ACK_TIMEOUT_SECONDS
+        lamps = ACK_LAMPS.get(self._ack_state) if self._ack_state is not None else None
+        fresh = self.last_ack is not None and now - self.last_ack <= cfg.IOT_ACK_TIMEOUT_SECONDS
+        known = fresh and self._conn is not None and self.error is None and lamps is not None
         return {"enabled": True, "connected": connected, "last_ack_age_s": age,
-                "error": None if connected else (self.error or messages.IOT_NO_ACK)}
+                "error": None if connected else (self.error or messages.IOT_NO_ACK),
+                "lamps_on": list(lamps) if known and lamps is not None else None,
+                "lamps_available": list(SERIAL_LAMPS)}
 
     # --- Satu putaran thread (dipanggil langsung oleh tes) ----------------------------
 
@@ -151,9 +164,11 @@ class GateLightLink:
             return
         self._rx += data
         *lines, self._rx = self._rx.split(b"\n")
-        if any(line.strip().startswith(ACK_PREFIX) for line in lines):
-            self.last_ack = self._clock()
-            self.error = None
+        for line in lines:
+            if line.strip().startswith(ACK_PREFIX):
+                self._ack_state = line.strip()[len(ACK_PREFIX):]
+                self.last_ack = self._clock()
+                self.error = None
         # Sisa tanpa baris baru dibatasi supaya data sampah tidak menumpuk
         self._rx = self._rx[-cfg.IOT_RX_MAX_BYTES:]
 
@@ -166,6 +181,7 @@ class GateLightLink:
         self._next_open_at = self._clock() + cfg.IOT_RECONNECT_SECONDS
 
     def _close(self):
+        self._ack_state = None
         if self._conn is not None:
             try:
                 self._conn.close()
@@ -239,7 +255,8 @@ class NotifierManager:
     def iot_status(self) -> dict:
         """Status lampu fisik untuk telemetri (kontrak T47)."""
         if self.link is None:
-            return {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None}
+            return {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None,
+                    "lamps_on": None, "lamps_available": None}
         return self.link.status()
 
 

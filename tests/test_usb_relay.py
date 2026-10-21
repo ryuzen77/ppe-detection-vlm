@@ -254,3 +254,55 @@ def test_keputusan_gerbang_sampai_ke_relay(relay_link, board):
     manager.set_waiting()
     link.tick()
     assert board.mask == 0
+
+
+@pytest.mark.parametrize("state,expected", [
+    (LightState.GREEN, ["green"]), (LightState.RED, ["red"]),
+    (LightState.OFF, []), (LightState.YELLOW, []),
+])
+def test_relay_lamps_follow_verified_readback(relay_link, state, expected):
+    link, _, _ = relay_link
+    link.set_state(state)
+    link.tick()
+    link.set_state(LightState.RED if state != LightState.RED else LightState.GREEN)
+    manager = NotifierManager()
+    manager.link = link
+    assert manager.iot_status()["lamps_on"] == expected
+    assert manager.iot_status()["lamps_available"] == ["green", "red"]
+
+
+@pytest.mark.parametrize("condition", ["unopened", "closed", "error", "mismatch"])
+def test_relay_lamps_unknown_without_verified_board(relay_link, board, condition):
+    link, _, _ = relay_link
+    if condition != "unopened":
+        link.set_state(LightState.GREEN)
+        link.tick()
+        if condition == "closed":
+            link.stop()
+        else:
+            board.unplugged = condition == "error"
+            board.ignore_commands = condition == "mismatch"
+            link.set_state(LightState.RED)
+            link.tick()
+    assert link.status()["lamps_on"] is None
+    assert link.status()["lamps_available"] == ["green", "red"]
+
+
+@pytest.mark.parametrize("elapsed,expected", [(0, ["green"]), (0.01, None), (0.5, None)])
+def test_relay_lamps_expire_at_unrounded_timeout(relay_link, elapsed, expected):
+    link, clock, _ = relay_link
+    link.set_state(LightState.GREEN)
+    link.tick()
+    clock.now += cfg.IOT_ACK_TIMEOUT_SECONDS + elapsed
+    assert link.status()["lamps_on"] == expected
+
+
+def test_relay_lamps_use_configured_channels(monkeypatch, board):
+    monkeypatch.setattr(cfg, "IOT_RELAY_GREEN_CHANNEL", 2)
+    monkeypatch.setattr(cfg, "IOT_RELAY_RED_CHANNEL", 1)
+    link = notifier_module._usb_relay_link()
+    link._opener = lambda serial: usb_relay.RelayBoard(board, "USBRelay2", "HURTM")
+    link.set_state(LightState.GREEN)
+    link.tick()
+    assert board.mask == RED_BIT
+    assert link.status()["lamps_on"] == ["green"]

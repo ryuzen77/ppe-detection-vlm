@@ -595,5 +595,9 @@ class Config:
     IOT_ACK_TIMEOUT_SECONDS: float = 3.0      # tanpa balasan "OK:" selama ini = terputus
     IOT_RECONNECT_SECONDS: float = 2.0        # jeda mencoba membuka ulang port
     IOT_RX_MAX_BYTES: int = 256               # sisa data tanpa baris baru yang disimpan
+    # Nama warna pada kontrak telemetri lampu fisik (T88).
+    IOT_LAMP_GREEN: str = "green"
+    IOT_LAMP_RED: str = "red"
+    IOT_LAMP_YELLOW: str = "yellow"
 
 cfg = Config()
