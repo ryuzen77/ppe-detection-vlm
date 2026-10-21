@@ -67,6 +67,13 @@ export const HUD = {
 } as const
 
 /** Halaman Laporan */
+/** T80: warna tingkat pengenalan wajah (0..1) di laporan kehadiran. T83 ("wajib terdaftar")
+ *  baru masuk akal bila angka ini tinggi di gerbang nyata. */
+export const ATTENDANCE_RATE = {
+  good: 0.9,
+  fair: 0.7,
+}
+
 export const REPORTS = {
   pageSize: 25,
   /** Ambang warna meter kepatuhan (%): >= good hijau, >= warn kuning, di bawahnya merah */

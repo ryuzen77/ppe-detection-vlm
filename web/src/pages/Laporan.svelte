@@ -11,15 +11,19 @@
   import PeriodSelector from '../components/reports/PeriodSelector.svelte'
   import ReportChart from '../components/reports/ReportChart.svelte'
   import MissingItemsChart from '../components/reports/MissingItemsChart.svelte'
+  import AttendancePanel from '../components/reports/AttendancePanel.svelte'
   import { api } from '../lib/api/client'
   import type { OrgEntry, ReportRecord, ReportsPage, ReportStatusFilter, ReportPeriod, ReportSummary, ReportWhoFilter, Worker } from '../lib/api/types'
-  import { REPORTS as TEXT, count, percent, withError } from '../lib/messages'
+  import { ATTENDANCE, REPORTS as TEXT, count, percent, withError } from '../lib/messages'
   import { complianceTone, historyHead, pageInfo } from '../lib/reports'
   import { REPORTS } from '../lib/settings'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
   const STATUSES: ReportStatusFilter[] = ['all', 'complete', 'incomplete']
+  // T80: tab Kehadiran (informasi lewat gerbang, bukan absensi resmi) di samping laporan APD
+  const TABS = ['apd', 'attendance'] as const
+  let tab = $state<(typeof TABS)[number]>('apd')
 
 
   let status = $state<ReportStatusFilter>('all')
@@ -89,7 +93,7 @@
   // Muat ulang setiap saringan atau halaman berubah
   $effect(() => {
     void [period, date, status, offset, who]
-    load()
+    if (tab === 'apd') load()
   })
 
 
@@ -126,6 +130,7 @@
       <h1>{TEXT.title}</h1>
       <p class="subtitle">{TEXT.subtitle}</p>
     </div>
+    {#if tab === 'apd'}
     <div class="actions">
       <button class="btn" onclick={load} disabled={loading}>
         <RefreshCw size={16} aria-hidden="true" />{TEXT.refresh}
@@ -134,8 +139,18 @@
         <Download size={16} aria-hidden="true" />{TEXT.exportCsv}
       </a>
     </div>
+    {/if}
   </header>
 
+  <div class="segmented tabs" role="group" aria-label={ATTENDANCE.tabsLabel}>
+    {#each TABS as t (t)}
+      <button class:active={tab === t} aria-pressed={tab === t} onclick={() => (tab = t)}>{ATTENDANCE.tabs[t]}</button>
+    {/each}
+  </div>
+
+  {#if tab === 'attendance'}
+    <AttendancePanel {departments} {companies} />
+  {:else}
   <PeriodSelector bind:period bind:date range={summary?.range ?? null} {loading} />
 
   <section aria-label={TEXT.stats.ariaLabel}>
@@ -218,11 +233,15 @@
       </nav>
     {/if}
   </section>
+  {/if}
 </div>
 
 <SnapshotDialog bind:record={photo} />
 
 <style>
+  .tabs {
+    align-self: flex-start;
+  }
   .who {
     width: auto;
     max-width: 240px;

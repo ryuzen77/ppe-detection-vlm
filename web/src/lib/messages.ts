@@ -253,6 +253,42 @@ export const NOTIFY = {
 
 // --- Laporan (T33 langkah 2) --------------------------------------------------------------------
 
+// T80: laporan kehadiran — informasi lewat gerbang, BUKAN absensi resmi (keputusan pengguna 21-10)
+export const ATTENDANCE = {
+  tabs: { apd: 'Pemeriksaan APD', attendance: 'Kehadiran' },
+  tabsLabel: 'Jenis laporan',
+  title: 'Kehadiran lewat gerbang',
+  notice: 'Informasi lewat gerbang dari pengenalan wajah — bukan absensi resmi.',
+  notSeenNotice: 'Belum terlihat bisa karena wajah tidak dikenali di gerbang, bukan berarti tidak masuk kerja.',
+  date: 'Tanggal',
+  exportCsv: 'Ekspor CSV kehadiran',
+  tiles: {
+    seen: 'Pekerja terlihat',
+    notSeen: 'Belum terlihat',
+    unknown: 'Lintasan tidak dikenali',
+    rate: 'Tingkat pengenalan wajah',
+  },
+  ofActive: (seen: number, active: number) => `${seen} dari ${active} pekerja aktif`,
+  // Wajah tak dikenali tidak punya divisi/perusahaan: angka ini selalu SELURUH gerbang hari itu (tinjauan T80a)
+  rateHint: (recognized: number, passes: number) => `${recognized} dari ${passes} lintasan dikenali (seluruh gerbang)`,
+  unknownHint: (passed: number, rejected: number) => `${passed} lolos · ${rejected} ditolak (seluruh gerbang)`,
+  noPasses: 'Belum ada lintasan',
+  sections: { seen: 'Terlihat lewat gerbang', notSeen: 'Belum terlihat' },
+  cols: {
+    no: 'No. pegawai', name: 'Nama', org: 'Divisi · Perusahaan', first: 'Pertama', last: 'Terakhir',
+    passes: 'Lewat', result: 'Hasil terakhir',
+  },
+  passResult: (passed: number, rejected: number) => `${passed} lolos · ${rejected} ditolak`,
+  lastPassed: 'Lolos',
+  lastRejected: 'Ditolak',
+  emptySeen: 'Belum ada pekerja terdaftar yang terlihat pada tanggal ini.',
+  emptyNotSeen: 'Semua pekerja aktif sudah terlihat.',
+  loading: 'Memuat kehadiran…',
+  loadFailed: 'Gagal memuat kehadiran',
+  adminOnly: 'Laporan kehadiran khusus admin.',
+  unavailable: 'Laporan kehadiran belum tersedia di server ini.',
+} as const
+
 export const REPORTS = {
   title: 'Laporan',
   subtitle: 'Riwayat pemeriksaan gerbang, foto bukti, dan statistik kepatuhan APD.',

@@ -39,6 +39,8 @@ import type {
   OrgEntry,
   OrgKind,
   ReportWhoFilter,
+  AttendanceFilter,
+  AttendanceReport,
   WorkerInspectionsPage,
 } from './types'
 import { withQuery } from '../url'
@@ -168,6 +170,10 @@ export class ApiClient {
   snapshotUrl = (filename: string) => this.url(`/api/reports/snapshots/${encodeURIComponent(filename)}`)
   exportCsvUrl = (params: { from?: string; to?: string } & ReportWhoFilter = {}) =>
     this.url(withQuery('/api/reports/export', params))
+  // Kehadiran (T80, khusus admin)
+  attendance = (params: AttendanceFilter = {}) =>
+    this.request<AttendanceReport>('GET', withQuery('/api/reports/attendance', params))
+  attendanceCsvUrl = (params: AttendanceFilter = {}) => this.url(withQuery('/api/reports/attendance/export', params))
   streamUrl = () => this.url('/api/stream')
 
   // --- Pekerja & Identitas Wajah (T34)

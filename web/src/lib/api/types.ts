@@ -320,6 +320,39 @@ export interface ReportWhoFilter {
   company?: string
 }
 
+// --- Laporan kehadiran (kontrak T80): informasi lewat gerbang, BUKAN absensi resmi ---
+export interface AttendanceSeen {
+  worker_id: number
+  employee_no: string
+  name: string
+  department: string | null
+  company: string | null
+  first_seen: string           // HH:MM:SS
+  last_seen: string
+  passes: number
+  passed: number
+  rejected: number
+  last_complete: boolean
+}
+
+export interface AttendanceNotSeen {
+  worker_id: number
+  employee_no: string
+  name: string
+  department: string | null
+  company: string | null
+}
+
+export interface AttendanceReport {
+  date: string
+  seen: AttendanceSeen[]
+  not_seen: AttendanceNotSeen[]
+  unknown: { passes: number; passed: number; rejected: number }
+  totals: { passes: number; recognized: number; recognition_rate: number | null; active_workers: number; seen_workers: number }
+}
+
+export type AttendanceFilter = { date?: string; department?: string; company?: string }
+
 export interface ReportsPage {
   total_all: number
   complete_count: number
