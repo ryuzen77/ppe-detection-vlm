@@ -32,6 +32,7 @@ class TestBody(ChoiceBody):
 class ApplyBody(BaseModel):
     primary: ChoiceBody
     backup: Optional[ChoiceBody] = None
+    local_fallback: Optional[ChoiceBody] = None
     confirm_unvalidated: bool = False
 
 
@@ -87,12 +88,12 @@ def apply_vlm_selection(body: ApplyBody, request: Request):
     primary, backup = Choice.parse(body.primary.model_dump()), Choice.parse(body.backup and body.backup.model_dump())
     if primary is None:
         raise _error(400, "unknown_provider", messages.VLM_SELECT_UNKNOWN_PROVIDER.format(provider=""))
+    fallback = Choice.parse(body.local_fallback and body.local_fallback.model_dump())
+    selection = Selection(primary, backup, vlm_selection.SOURCE_DASHBOARD, fallback)
     try:
-        for choice in filter(None, (primary, backup)):
-            vlm_selection.check_choice(choice, body.confirm_unvalidated)
+        vlm_selection.check_selection(selection, body.confirm_unvalidated)
     except SelectionError as e:
         raise _error(400, e.code, e.message)
-    selection = Selection(primary, backup, vlm_selection.SOURCE_DASHBOARD)
     current = _apply(selection, request)
     vlm_selection.save(selection)
     return current

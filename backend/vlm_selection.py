@@ -19,8 +19,10 @@ from typing import Optional
 from . import messages, runtime_settings, security_log
 from .config import cfg, provider_api_key
 from .vlm_providers import profiles
+from .internet_monitor import DISCONNECTED, SLOW
 
 logger = logging.getLogger(__name__)
+LOCAL_FALLBACK_SOURCE_PREFIX = "VLM_DARURAT:"
 
 SETTINGS_KEY = "vlm_selection"
 SOURCE_ENV = "env"
@@ -55,9 +57,11 @@ class Selection:
     primary: Choice
     backup: Optional[Choice]
     source: str
+    local_fallback: Optional[Choice] = None
 
     def stored_form(self) -> dict:
-        return {"primary": asdict(self.primary), "backup": asdict(self.backup) if self.backup else None}
+        return {"primary": asdict(self.primary), "backup": asdict(self.backup) if self.backup else None,
+                "local_fallback": asdict(self.local_fallback) if self.local_fallback else None}
 
 
 class SelectionError(Exception):
@@ -140,6 +144,25 @@ def prompt_version_for(provider_name: str) -> str:
     return messages.PROMPT_VERSION if uses_zoom(provider_name) else messages.PROMPT_VERSION_NO_ZOOM
 
 
+def requires_local_route(internet_state, median_ms=None) -> bool:
+    return internet_state == DISCONNECTED or (internet_state == SLOW and median_ms is not None
+                                             and median_ms > cfg.INTERNET_VERY_SLOW_MS)
+
+
+def inspection_route(internet_state, primary, backup, local_fallback, median_ms=None) -> tuple:
+    """Tabel T72, O(1): hanya status tersimpan & referensi engine, tanpa I/O."""
+    local = local_fallback or (backup if backup is not None and backup.is_local else None)
+    if primary is not None and primary.is_local:
+        candidates = (primary, backup)
+    elif requires_local_route(internet_state, median_ms):
+        candidates = (local,)
+    elif internet_state == SLOW:
+        candidates = (primary, local)
+    else:
+        candidates = (primary, backup, local_fallback)
+    return tuple(engine for engine in candidates if engine is not None)
+
+
 # --- Aturan pilihan ---
 
 def validation_of(choice: Choice) -> tuple[str, Optional[profiles.ModelValidation]]:
@@ -179,7 +202,29 @@ def _check_validation(choice: Choice, confirm_unvalidated: bool):
 def env_selection() -> Selection:
     backup = (Choice(cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL)
               if cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_PROVIDER != NO_BACKUP else None)
-    return Selection(Choice(cfg.VLM_PROVIDER, cfg.VLM_MODEL), backup, SOURCE_ENV)
+    fallback = (Choice(cfg.VLM_LOCAL_FALLBACK_PROVIDER, cfg.VLM_LOCAL_FALLBACK_MODEL)
+                if cfg.VLM_LOCAL_FALLBACK_PROVIDER != NO_BACKUP else None)
+    try:
+        check_local_fallback(backup, fallback)
+    except SelectionError as error:
+        logger.warning(messages.VLM_LOCAL_FALLBACK_ENV_IGNORED.format(reason=error.message))
+        fallback = None
+    return Selection(Choice(cfg.VLM_PROVIDER, cfg.VLM_MODEL), backup, SOURCE_ENV, fallback)
+
+
+def check_local_fallback(backup: Optional[Choice], fallback: Optional[Choice]):
+    if fallback is None:
+        return
+    if backup is not None and profiles.is_local(backup.provider):
+        raise SelectionError("local_fallback_with_local_backup", messages.VLM_LOCAL_FALLBACK_WITH_LOCAL_BACKUP)
+    if not profiles.is_local(fallback.provider):
+        raise SelectionError("local_fallback_not_local", messages.VLM_LOCAL_FALLBACK_NOT_LOCAL)
+
+
+def check_selection(selection: Selection, confirm_unvalidated: bool):
+    check_local_fallback(selection.backup, selection.local_fallback)
+    for choice in filter(None, (selection.primary, selection.backup, selection.local_fallback)):
+        check_choice(choice, confirm_unvalidated)
 
 
 def stored_selection() -> Optional[Selection]:
@@ -193,15 +238,15 @@ def stored_selection() -> Optional[Selection]:
     if not isinstance(data, dict):
         return None
     primary, backup = Choice.parse(data.get("primary")), Choice.parse(data.get("backup"))
+    fallback = Choice.parse(data.get("local_fallback"))
     try:
         if primary is None:
             raise SelectionError("missing_primary", "VLM utama kosong")
-        for choice in filter(None, (primary, backup)):
-            check_choice(choice, confirm_unvalidated=True)
+        check_selection(Selection(primary, backup, SOURCE_DASHBOARD, fallback), confirm_unvalidated=True)
     except SelectionError as e:
         logger.warning(messages.VLM_SELECT_STORED_IGNORED.format(reason=e.message))
         return None
-    return Selection(primary, backup, SOURCE_DASHBOARD)
+    return Selection(primary, backup, SOURCE_DASHBOARD, fallback)
 
 
 def effective_selection() -> Selection:

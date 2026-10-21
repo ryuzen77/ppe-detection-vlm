@@ -6,11 +6,13 @@ import threading
 from dataclasses import asdict
 from typing import Callable, Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from contextlib import contextmanager, nullcontext
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import cfg
-from .local_model_guard import LocalModelGuard
-from .api_monitor import api_monitor
+from .local_model_guard import LocalModelGuard, LocalStandby, UNLOADED, LOADING, READY, FAILED
+from .api_monitor import api_monitor, ROLE_EMERGENCY
+from .internet_monitor import InternetMonitor, NORMAL, SLOW, DISCONNECTED, is_connection_failure
 from . import messages
 from . import ppe_rules
 from . import vlm_selection
@@ -222,6 +224,9 @@ class VLMEngine:
         self.error = ""
         self.warm_error = ""
         self.last_call_time = 0.0
+        self.last_call_ok: Optional[bool] = None
+        self._warm_future = None
+        self.warm_state, self.warm_since = UNLOADED, time.strftime(cfg.TELEMETRY_TIME_FORMAT)
         self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT,
                                            thread_name_prefix=f"VLM_{role}")
 
@@ -235,6 +240,8 @@ class VLMEngine:
 
     @property
     def label(self) -> str:
+        if self.role == ROLE_EMERGENCY:
+            return f"{vlm_selection.LOCAL_FALLBACK_SOURCE_PREFIX}{self.provider_name}/{self.model_name}"
         prefix = "VLM_LIVE" if self.role == ROLE_PRIMARY else "VLM_CADANGAN"
         return f"{prefix}:{self.provider_name}/{self.model_name}"
 
@@ -304,12 +311,15 @@ class VLMEngine:
         self.warm_error = ""
         if self.provider is None:
             return None
+        self._set_warm_state(LOADING)
         start = time.time()
         try:
-            self.executor.submit(self.provider.warm_up).result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
+            self._warm_future = self.executor.submit(self.provider.warm_up)
+            self._warm_future.result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
             if self.is_local:
                 self._warm_with_image()
         except Exception as e:
+            self._set_warm_state(FAILED)
             self.warm_error = vlm_selection.redact(str(e), self.api_key)[:cfg.ERROR_MESSAGE_MAX_CHARS] or type(e).__name__
             # Tidak fatal: server tetap menyala; VLM ini dicoba lagi pada pekerja
             # pertama dan, bila gagal, inspeksi dialihkan ke VLM lain (T27).
@@ -317,8 +327,16 @@ class VLMEngine:
                            f"Server tetap berjalan; VLM ini dicoba lagi saat inspeksi.")
             return None
         duration = time.time() - start
+        self._set_warm_state(READY)
         logger.info(f"Pemanasan VLM {self.role} {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
         return duration
+
+    def _set_warm_state(self, state: str):
+        self.warm_state, self.warm_since = state, time.strftime(cfg.TELEMETRY_TIME_FORMAT)
+
+    @property
+    def warm_pending(self) -> bool:
+        return self._warm_future is not None and not self._warm_future.done()
 
     def _warm_with_image(self):
         """Satu panggilan seperti inspeksi (prompt produksi + gambar), hanya untuk VLM lokal:
@@ -329,6 +347,7 @@ class VLMEngine:
         assert provider is not None, "pemanasan hanya untuk engine yang siap"
         future = self.executor.submit(provider.analyze, warmup_image_jpeg(),
                                       system_prompt=build_system_prompt(), user_prompt=USER_PROMPT)
+        self._warm_future = future
         try:
             future.result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
         except ValueError:
@@ -385,13 +404,20 @@ class VLMAnalyzer:
     def __init__(self):
         self.primary: Optional[VLMEngine] = None
         self.backup: Optional[VLMEngine] = None
+        self.local_fallback: Optional[VLMEngine] = None
         # Satu inspeksi pada satu waktu; permintaan lain menunggu gilirannya
         self.api_lock = threading.Lock()
         self.primary_failures = 0
         self.primary_down_since: Optional[float] = None
         self.primary_last_attempt = 0.0
         # Menjaga model lokal tetap penuh di GPU setelah crash Ollama (T38)
-        self.local_guard = LocalModelGuard(self.api_lock, self._local_engine)
+        self.standby = LocalStandby(self.api_lock, api_monitor.set_local)
+        self.internet = InternetMonitor(on_change=self._internet_changed)
+        self._internet_state = None
+        self._internet_recovered = threading.Event()
+        self._services_on = self._started = False
+        self.local_guard = LocalModelGuard(self.api_lock, self._local_engine,
+                                           self._start_services, self._stop_services)
         # Satu pergantian penyedia pada satu waktu (T28)
         self.apply_lock = threading.Lock()
         self.selection_source = vlm_selection.SOURCE_ENV
@@ -401,6 +427,9 @@ class VLMAnalyzer:
         selection = vlm_selection.effective_selection()
         self.primary = self._new_engine(ROLE_PRIMARY, selection.primary)
         self.backup = self._new_engine(ROLE_BACKUP, selection.backup) if selection.backup else None
+        self.local_fallback = self._new_engine(ROLE_EMERGENCY, selection.local_fallback) if selection.local_fallback else None
+        self._started = True
+        self._configure_standby()
         self.selection_source = selection.source
         self._reset_breaker()
         self._publish_status()
@@ -414,7 +443,10 @@ class VLMAnalyzer:
         dulu melewati pembersihan ini sehingga model tertinggal. Diperiksa di latar supaya start
         tidak menunggu Ollama.
         """
-        if self._local_engine() is not None:
+        if self.standby.engine is not None:
+            self.standby.ensure_cold()
+            return
+        if self.primary is not None and self.primary.is_local:
             return
         stale = self._new_engine(ROLE_BACKUP, self._stale_local_choice())
         threading.Thread(target=self._unload_if_loaded, args=(stale,), name="VLM_StaleUnload", daemon=True).start()
@@ -450,15 +482,53 @@ class VLMAnalyzer:
         self.primary_down_since = None
         self.primary_last_attempt = 0.0
 
+    def _configure_standby(self):
+        engine = None
+        if self.primary is None or not self.primary.is_local:
+            engine = next((e for e in (self.local_fallback, self.backup)
+                           if e is not None and e.is_local), None)
+        self.standby.configure(engine)
+        self.internet.configure(engine is not None)
+        if self._services_on and engine is not None:
+            self.internet.start()
+            if cfg.VLM_LOCAL_PRELOAD:
+                self.standby.request()
+            else:
+                self.standby.ensure_cold()
+
+    def _internet_changed(self, status: dict):
+        if self._internet_state in (SLOW, DISCONNECTED) and status["state"] == NORMAL:
+            self._internet_recovered.set()
+        self._internet_state = status["state"]
+        api_monitor.set_internet(status)
+        self.standby.internet_changed(status["state"])
+
+    def _start_services(self):
+        self._services_on = True
+        self.standby.start()
+        if self.standby.engine is not None:
+            self.internet.start()
+
+    def _stop_services(self):
+        self._services_on = False
+        self.internet.stop()
+        self.standby.stop()
+
+    def _local_status(self) -> dict:
+        if self.primary is not None and self.primary.is_local:
+            return {"role": None, "state": self.primary.warm_state, "since": self.primary.warm_since}
+        return self.standby.status()
+
     # --- Ganti penyedia dari dashboard (T28)
     def active_choices(self) -> list[Choice]:
-        return [e.choice() for e in (self.primary, self.backup) if e is not None]
+        return [e.choice() for e in (self.primary, self.backup, self.local_fallback) if e is not None]
 
     def current_selection(self) -> dict:
         """Bentuk `current` kontrak T28. Tanpa API key."""
         def sel(engine):
             return None if engine is None else {**asdict(engine.choice()), "source": self.selection_source}
-        return {"primary": sel(self.primary), "backup": sel(self.backup)}
+        return {"primary": sel(self.primary), "backup": sel(self.backup),
+                "local_fallback": sel(self.local_fallback)}
 
     def apply_selection(self, selection: Selection, lane_empty: Callable[[], bool],
                         client: str = "", user: str = "") -> dict:
@@ -469,33 +539,65 @@ class VLMAnalyzer:
         gembok inspeksi, jadi inspeksi yang sedang berjalan selesai dengan engine
         lama, dan hanya bila jalur kosong (`LaneBusy`).
         """
-        with self.apply_lock:
-            fresh = self._prepare(ROLE_PRIMARY, selection.primary), (
-                self._prepare(ROLE_BACKUP, selection.backup) if selection.backup else None)
+        with self.apply_lock, self._local_operation():
+            fresh = self._prepare_selection(selection)
             try:
                 old = self._swap(fresh, selection.source, lane_empty)
             except Exception:
-                self._discard(fresh, keep=(self.primary, self.backup))
+                self._discard(fresh, keep=(self.primary, self.backup, self.local_fallback))
                 raise
             self._discard(old, keep=fresh)
-            for role, before, after in ((ROLE_PRIMARY, old[0], fresh[0]), (ROLE_BACKUP, old[1], fresh[1])):
+            for role, before, after in zip((ROLE_PRIMARY, ROLE_BACKUP, ROLE_EMERGENCY), old, fresh):
                 before_choice, after_choice = before.choice() if before else None, after.choice() if after else None
                 if before_choice != after_choice:
                     vlm_selection.record_change(role, before_choice, after_choice, selection.source, client, user)
             return self.current_selection()
 
+    @contextmanager
+    def _local_operation(self):
+        # Menunggu pemuat di luar api_lock: inspeksi online tetap berjalan.
+        if not self.standby.model_lock.acquire(timeout=cfg.LOCAL_GPU_REPAIR_WAIT_SECONDS):
+            raise LaneBusy(messages.VLM_SELECT_LANE_BUSY)
+        try:
+            yield
+        finally:
+            self.standby.model_lock.release()
+
+    def _prepare_selection(self, selection: Selection) -> tuple:
+        fresh = []
+        try:
+            for role, choice in zip((ROLE_PRIMARY, ROLE_BACKUP, ROLE_EMERGENCY),
+                                    (selection.primary, selection.backup, selection.local_fallback)):
+                fresh.append(self._prepare(role, choice) if choice else None)
+        except Exception:
+            self._discard(tuple(fresh), keep=(self.primary, self.backup, self.local_fallback))
+            raise
+        return tuple(fresh)
+
     def _prepare(self, role: str, choice: Choice) -> VLMEngine:
         """Engine siap pakai: yang sedang berjalan bila sama persis, selain itu rakit + panaskan."""
-        for engine in (self.primary, self.backup):
+        for engine in (self.primary, self.backup, self.local_fallback):
             if engine is not None and engine.role == role and engine.matches(choice):
                 return engine
         engine = self._new_engine(role, choice)
-        if engine.provider is None or engine.warm_up() is None:
+        cold = engine.is_local and role != ROLE_PRIMARY
+        if engine.provider is None or (not cold and self._warm_prepared(engine) is None):
             engine.close()
             raise EngineFailed(messages.VLM_SELECT_ENGINE_FAILED.format(
                 role=role, provider=choice.provider, model=choice.model,
                 error=engine.error or engine.warm_error))
         return engine
+
+    def _warm_prepared(self, engine: VLMEngine) -> Optional[float]:
+        if not engine.is_local:
+            return engine.warm_up()
+        if not self.api_lock.acquire(timeout=cfg.LOCAL_GPU_REPAIR_WAIT_SECONDS):
+            engine.close()
+            raise LaneBusy(messages.VLM_SELECT_LANE_BUSY)
+        try:
+            return engine.warm_up()
+        finally:
+            self.api_lock.release()
 
     def _swap(self, fresh: tuple, source: str, lane_empty: Callable[[], bool]) -> tuple:
         lock_wait = sum(e.timeout + e.min_interval for e in self._engines()) + 1.0
@@ -504,8 +606,9 @@ class VLMAnalyzer:
         try:
             if not lane_empty():
                 raise LaneBusy(messages.VLM_SELECT_LANE_BUSY)
-            old = (self.primary, self.backup)
-            self.primary, self.backup = fresh
+            old = (self.primary, self.backup, self.local_fallback)
+            self.primary, self.backup, self.local_fallback = fresh
+            self._configure_standby()
             self.selection_source = source
             self._reset_breaker()
         finally:
@@ -513,14 +616,21 @@ class VLMAnalyzer:
         self._publish_status()
         return old
 
-    @staticmethod
-    def _discard(engines: tuple, keep: tuple):
+    def _discard(self, engines: tuple, keep: tuple):
         """Engine yang tidak dipakai lagi dilepas; model lokalnya dikeluarkan dari GPU kecuali model
         yang sama masih dipakai engine yang dipertahankan (T70: cadangan mati = benar-benar mati)."""
         kept_local = {k.local_key() for k in keep if k is not None and k.is_local}
         for engine in engines:
             if engine is not None and all(engine is not k for k in keep):
-                engine.close(unload=engine.is_local and engine.local_key() not in kept_local)
+                engine.close()
+                if engine.is_local and engine.local_key() not in kept_local:
+                    threading.Thread(target=self._unload_unused, args=(engine,),
+                                     name="VLM_Unload", daemon=True).start()
+
+    def _unload_unused(self, engine: VLMEngine):
+        with self.standby.model_lock, self.api_lock:
+            if not any(active.is_local and active.local_key() == engine.local_key() for active in self._engines()):
+                engine._unload()
 
     def test_choice(self, role: str, choice: Choice) -> dict:
         """Tombol "Uji": 1 ping + 1 gambar sintetis lewat engine sementara (memakai kuota penyedia).
@@ -528,7 +638,13 @@ class VLMAnalyzer:
         `ok` = penyedia menjawab; `json_ok` = jawaban gambar berupa JSON yang bisa diurai.
         Engine gerbang yang sedang berjalan tidak disentuh.
         """
+        guard = self._local_operation() if vlm_profiles.is_local(choice.provider) else nullcontext()
+        with self.apply_lock, guard:
+            return self._test_choice(role, choice)
+
+    def _test_choice(self, role: str, choice: Choice) -> dict:
         engine = self._new_engine(role, choice)
+        unload = engine.is_local and engine.provider is not None and not self._tested_local_is_in_use(engine)
         try:
             if engine.provider is None:
                 return {"ok": False, "latency_ms": None, "json_ok": False, "error": engine.error}
@@ -544,6 +660,19 @@ class VLMAnalyzer:
             return {"ok": True, "latency_ms": latency, "json_ok": not json_error, "error": json_error}
         finally:
             engine.close()
+            if unload:
+                self._unload_test_engine(engine)
+
+    def _tested_local_is_in_use(self, engine: VLMEngine) -> bool:
+        return any(active.is_local and active.local_key() == engine.local_key()
+                   and (not self.standby.owns(active) or self.standby.state != UNLOADED)
+                   for active in self._engines())
+
+    def _unload_test_engine(self, engine: VLMEngine):
+        # Tidak membongkar saat panggilan uji yang habis waktu masih menyelesaikan I/O.
+        engine.executor.shutdown(wait=True)
+        with self.api_lock:
+            engine._unload()
 
     def _attempt(self, engine: VLMEngine, call: Callable[[], object]) -> str:
         """Kosong bila berhasil, selain itu alasan singkat untuk Pengaturan admin."""
@@ -581,28 +710,28 @@ class VLMAnalyzer:
 
     def _local_engine(self) -> Optional[VLMEngine]:
         """Engine lokal (Ollama) yang dijaga porsi GPU-nya: cadangan, atau utama bila lokal."""
-        for e in (self.backup, self.primary):
-            if e is not None and e.is_local and e.provider is not None:
+        for e in (self.local_fallback, self.backup, self.primary):
+            if e is not None and e.is_local and e.provider is not None and self.standby.ready(e):
+                if e is self.primary and self._started and e.warm_state != READY:
+                    continue
                 return e
         return None
 
     def _engines(self) -> list[VLMEngine]:
-        return [e for e in (self.primary, self.backup) if e is not None and e.provider is not None]
+        return [e for e in (self.primary, self.backup, self.local_fallback) if e is not None and e.provider is not None]
 
     def is_live_api(self) -> bool:
         """Ada setidaknya satu VLM yang siap memutuskan."""
         return bool(self._engines())
 
     def warm_up(self) -> Optional[float]:
-        """Memanaskan utama DAN cadangan saat startup.
-
-        Cadangan juga dipanaskan (model lokal dimuat & ditahan di GPU) supaya
-        peralihan saat utama gagal tidak menunggu ~40 dtk pemuatan model.
-        Mengembalikan durasi pemanasan utama (None bila gagal/nonaktif).
-        """
+        """Utama tetap dipanaskan; lokal cadangan/darurat dingin kecuali preload diaktifkan."""
         result = self.primary.warm_up() if self.primary else None
-        if self.backup is not None:
+        if self.backup is not None and not self.backup.is_local:
             self.backup.warm_up()
+        if cfg.VLM_LOCAL_PRELOAD:
+            self.standby.preload()
+        self._publish_status()
         return result
 
     def provider_info(self) -> dict:
@@ -642,13 +771,19 @@ class VLMAnalyzer:
 
     def _ping_engine(self, engine: VLMEngine) -> dict:
         """Satu engine menilai gambar contoh; jeda kuota dijalani SEBELUM stopwatch dimulai."""
+        if not self.standby.ready(engine):
+            return {"role": engine.role, "ok": False, "latency_ms": 0,
+                    "error": (messages.VLM_LOCAL_STANDBY_UNLOADED if self.standby.state == UNLOADED
+                              else messages.VLM_LOCAL_NOT_READY), "is_local": True,
+                    "timeout_ms": round(engine.timeout * 1000), "standby": self.standby.state == UNLOADED}
         wait = engine.min_interval - (time.time() - engine.last_call_time)
         if wait > 0:
             time.sleep(wait)
         start = time.time()
         error = self._attempt(engine, lambda: self._call_answered(engine))
         return {"role": engine.role, "ok": not error, "latency_ms": round((time.time() - start) * 1000, 1),
-                "error": error, "is_local": engine.is_local, "timeout_ms": round(engine.timeout * 1000)}
+                "error": error, "is_local": engine.is_local, "timeout_ms": round(engine.timeout * 1000),
+                "standby": False}
 
     @staticmethod
     def _call_answered(engine: VLMEngine):
@@ -662,7 +797,7 @@ class VLMAnalyzer:
 
     # --- Pemutus sirkuit utama
     def _has_backup(self) -> bool:
-        return self.backup is not None and self.backup.provider is not None
+        return any(e is not None and e.provider is not None for e in (self.backup, self.local_fallback))
 
     def _primary_allowed(self, now: float) -> bool:
         if self.primary is None or self.primary.provider is None:
@@ -675,6 +810,7 @@ class VLMAnalyzer:
         return now - self.primary_last_attempt >= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
 
     def _primary_result(self, ok: bool, now: float):
+        self.standby.primary_result(ok)
         primary = self.primary
         assert primary is not None, "hanya dipanggil setelah utama dicoba"
         if ok:
@@ -701,6 +837,9 @@ class VLMAnalyzer:
                 ))
 
     def _publish_status(self):
+        api_monitor.set_internet(self.internet.status())
+        api_monitor.set_local(self._local_status())
+        api_monitor.set_emergency(self.local_fallback.info() if self.local_fallback else None)
         api_monitor.set_engines(
             primary=self.primary.info() if self.primary else None,
             backup=self.backup.info() if self.backup else None,
@@ -713,11 +852,14 @@ class VLMAnalyzer:
             data = self._timed_call(engine, image_jpeg, aktif)
             result = self._confirm_prohibitions(engine, image_jpeg, self._parse_vlm_payload(data, aktif), aktif)
         except TimeoutError:
+            engine.last_call_ok = False
             api_monitor.record_failure(engine.role, f"timeout > {engine.timeout:g} dtk", is_timeout=True)
             raise
         except Exception as e:
+            engine.last_call_ok = False
             api_monitor.record_failure(engine.role, str(e))
             raise
+        engine.last_call_ok = True
         api_monitor.record_success(engine.role, round((time.time() - call_start) * 1000, 1))
         result.inference_source = engine.label
         result.decided_by = engine.role
@@ -796,12 +938,16 @@ class VLMAnalyzer:
         start_t = time.time()
         if not self._engines():
             return self._no_decision(start_t, messages.VLM_NOT_CONFIGURED)
+        internet = self.internet.status()
+        if self.standby.state == LOADING and (vlm_selection.requires_local_route(internet["state"], internet["median_ms"])
+                                             or not self._online_available()):
+            return self._no_decision(start_t, messages.VLM_LOCAL_NOT_READY)
 
         # Terburuk: utama habis waktu, lalu cadangan menjawab + satu konfirmasi larangan (T58)
         slots = [e.timeout + e.min_interval for e in self._engines()]
         lock_wait = sum(slots) + max(slots) + 1.0
         if not self.api_lock.acquire(timeout=lock_wait):
-            return self._no_decision(start_t, "antrean VLM penuh")
+            return self._no_decision(start_t, messages.VLM_QUEUE_FULL)
 
         api_monitor.set_locked(True)
         try:
@@ -809,9 +955,7 @@ class VLMAnalyzer:
             # penilaian jawaban memakai daftar yang sama walau operator mengubahnya.
             aktif = ppe_rules.get_active_items()
             reasons: list[str] = []
-            result = self._attempt_primary(person_crop_bgr, keypoints, aktif, reasons)
-            if result is None:
-                result = self._attempt_backup(person_crop_bgr, keypoints, aktif, reasons)
+            result = self._inspect_route(person_crop_bgr, keypoints, aktif, reasons)
             if result is not None:
                 return self._finish(result, start_t)
             return self._no_decision(start_t, "; ".join(reasons))
@@ -819,6 +963,36 @@ class VLMAnalyzer:
             self._publish_status()
             api_monitor.set_locked(False)
             self.api_lock.release()
+
+    def _online_available(self) -> bool:
+        return any(e is not None and e.provider is not None and not e.is_local and e.last_call_ok is not False
+                   for e in (self.primary, self.backup))
+
+    def _inspect_route(self, crop, keypoints, items, reasons):
+        if self._internet_recovered.is_set():
+            self._internet_recovered.clear()
+            self._reset_breaker()
+        internet = self.internet.status()
+        state = internet["state"]
+        if state in (SLOW, DISCONNECTED):
+            self.standby.request()
+        route = vlm_selection.inspection_route(state, self.primary, self.backup, self.local_fallback,
+                                               median_ms=internet["median_ms"])
+        for engine in route:
+            internet = self.internet.status()
+            state = internet["state"]
+            if not engine.is_local and (vlm_selection.requires_local_route(state, internet["median_ms"])
+                                       or (state == SLOW and engine is not self.primary)):
+                continue
+            if engine is self.primary:
+                result = self._attempt_primary(crop, keypoints, items, reasons)
+            else:
+                result = self._attempt_secondary(engine, crop, keypoints, items, reasons)
+            if result is not None:
+                return result
+        if not self._has_backup():
+            reasons.append(messages.VLM_BACKUP_UNAVAILABLE)
+        return None
 
     def _attempt_primary(self, crop: np.ndarray, keypoints: Optional[list], aktif,
                          reasons: list[str]) -> Optional[InspectionResult]:
@@ -834,6 +1008,7 @@ class VLMAnalyzer:
             result = self._try(primary, _engine_jpeg(primary, crop, keypoints), aktif)
         except Exception as e:
             self._primary_result(False, time.time())
+            self._network_failure(primary, e)
             reason = self._describe(e, primary)
             reasons.append(f"utama: {reason}")
             target = self.backup.who if self._has_backup() and self.backup is not None else "-"
@@ -842,23 +1017,31 @@ class VLMAnalyzer:
         self._primary_result(True, time.time())
         return result
 
-    def _attempt_backup(self, crop: np.ndarray, keypoints: Optional[list], aktif,
-                        reasons: list[str]) -> Optional[InspectionResult]:
+    def _attempt_secondary(self, backup: VLMEngine, crop: np.ndarray, keypoints: Optional[list], aktif,
+                           reasons: list[str]) -> Optional[InspectionResult]:
         """VLM cadangan; None = tidak ada / gagal (alasan ke `reasons`)."""
-        backup = self.backup
-        if backup is None or backup.provider is None:
+        if backup.provider is None:
             reasons.append("cadangan: tidak tersedia")
+            return None
+        if not self.standby.ready(backup):
+            self.standby.request()
+            reasons.append(messages.VLM_LOCAL_NOT_READY)
             return None
         try:
             return self._try(backup, _engine_jpeg(backup, crop, keypoints), aktif)
         except Exception as e:
+            self._network_failure(backup, e)
             reason = self._describe(e, backup)
             reasons.append(f"cadangan: {reason}")
-            logger.warning(f"VLM {backup.who} gagal ({reason}).")
+            logger.warning(messages.LOG_VLM_ROUTE_FAILED.format(who=backup.who, reason=reason))
             if backup.is_local:
                 # Crash Ollama bisa meninggalkan model sebagian di CPU (T38)
                 self.local_guard.trigger()
             return None
+
+    def _network_failure(self, engine: VLMEngine, error: Exception):
+        if not engine.is_local and is_connection_failure(error):
+            self.internet.request_check()
 
     @staticmethod
     def _finish(result: InspectionResult, start_t: float) -> InspectionResult:

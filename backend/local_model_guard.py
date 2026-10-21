@@ -12,10 +12,12 @@ inspeksi VLM), supaya tidak memutus pekerja yang sedang diperiksa.
 """
 import logging
 import threading
+import time
 from typing import Callable, Optional
 
 from . import gpu_processes, messages
 from .config import cfg
+from .internet_monitor import NORMAL, SLOW, DISCONNECTED
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +26,194 @@ STATE_OK = "ok"
 STATE_SLOW = "slow"
 STATE_PARTIAL_GPU = "partial_gpu"
 STATE_UNKNOWN = "unknown"
+UNLOADED, LOADING, READY, FAILED = "unloaded", "loading", "ready", "failed"
+
+
+class LocalStandby:
+    """Satu operasi model; muat dingin tidak menahan inspeksi lewat API."""
+
+    def __init__(self, inspection_lock, on_change=None, clock=time.monotonic):
+        self._inspection_lock, self._on_change, self._clock = inspection_lock, on_change, clock
+        self._lock = threading.Lock()
+        self.model_lock = threading.RLock()
+        self._stop = threading.Event()
+        self._thread = self._loader = None
+        self.engine = None
+        self.state, self.since = UNLOADED, time.strftime(cfg.TELEMETRY_TIME_FORMAT)
+        self._wanted = self._primary_ok = False
+        self._internet = None
+        self._healthy_since = None
+        self._retry_at = 0.0
+
+    def status(self) -> dict:
+        with self._lock:
+            return {"role": self.engine.role if self.engine is not None else None,
+                    "state": self.state, "since": self.since}
+
+    def owns(self, engine) -> bool:
+        with self._lock:
+            return engine is not None and engine is self.engine
+
+    def ready(self, engine) -> bool:
+        with self._lock:
+            return self.engine is not engine or self.state == READY
+
+    def configure(self, engine):
+        with self._lock:
+            if self.engine is engine:
+                return
+            self.engine = engine
+            self._wanted = self._primary_ok = False
+            self._healthy_since = None
+            self._retry_at = 0.0
+            self._set_state(UNLOADED)
+        self._publish()
+
+    def _set_state(self, state):
+        self.state, self.since = state, time.strftime(cfg.TELEMETRY_TIME_FORMAT)
+
+    def _publish(self):
+        status = self.status()
+        logger.info(messages.LOG_LOCAL_STANDBY_STATE.format(**status))
+        if self._on_change is not None:
+            self._on_change(status)
+
+    def internet_changed(self, state):
+        with self._lock:
+            self._internet = state
+            self._update_health()
+        if state in (SLOW, DISCONNECTED):
+            self.request()
+
+    def primary_result(self, ok: bool):
+        with self._lock:
+            self._primary_ok = ok
+            self._update_health()
+
+    def _update_health(self):
+        if self._internet != NORMAL or not self._primary_ok:
+            self._healthy_since = None
+        elif self._healthy_since is None:
+            self._healthy_since = self._clock()
+
+    def request(self) -> bool:
+        with self._lock:
+            if self.engine is None or self._stop.is_set():
+                return False
+            self._wanted = True
+            if (self.state in (LOADING, READY) or self._clock() < self._retry_at
+                    or getattr(self.engine, "warm_pending", False)):
+                return False
+            self._set_state(LOADING)
+            self._loader = threading.Thread(target=self._load, args=(self.engine,), name="LocalStandbyLoad", daemon=True)
+            self._loader.start()
+        self._publish()
+        return True
+
+    def _load(self, engine):
+        with self.model_lock:
+            if self._stop.is_set() or engine is None or self.engine is not engine:
+                return
+            try:
+                ready = engine.warm_up() is not None
+            except Exception:
+                ready = False
+            if self._stop.is_set():
+                if ready:
+                    try:
+                        with self._inspection_lock:
+                            engine.provider.unload()
+                    except Exception:
+                        logger.warning(messages.VLM_LOCAL_UNLOAD_FAILED)
+                with self._lock:
+                    self._set_state(UNLOADED)
+                return
+            with self._lock:
+                self._set_state(READY if ready else FAILED)
+                self._retry_at = self._clock() + cfg.VLM_LOCAL_RETRY_SECONDS if not ready else 0.0
+            if not ready:
+                logger.warning(messages.LOG_LOCAL_STANDBY_FAILED.format(error=engine.warm_error))
+        self._publish()
+
+    def preload(self):
+        with self._lock:
+            engine = self.engine
+            if engine is None or self.state != UNLOADED:
+                return
+            self._wanted = True
+            self._set_state(LOADING)
+        self._publish()
+        self._load(engine)
+
+    def tick(self):
+        with self._lock:
+            retry = self.state == FAILED and self._wanted and self._clock() >= self._retry_at
+            retire = (self.state == READY and self._healthy_since is not None
+                      and self._clock() - self._healthy_since >= cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS)
+        if retry:
+            self.request()
+        if retire:
+            self._retire()
+
+    def _retire(self):
+        with self.model_lock, self._inspection_lock:
+            with self._lock:
+                if (self.state != READY or self.engine is None or self._healthy_since is None
+                        or self._clock() - self._healthy_since < cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS):
+                    return
+                engine = self.engine
+            try:
+                engine.provider.unload()
+            except Exception:
+                logger.warning(messages.VLM_LOCAL_UNLOAD_FAILED)
+                return
+            with self._lock:
+                reload_required = self._internet in (SLOW, DISCONNECTED)
+                self._wanted = False
+                self._set_state(UNLOADED)
+        self._publish()
+        if reload_required:
+            self.request()
+
+    def ensure_cold(self):
+        threading.Thread(target=self._clear_resident, name="LocalStandbyClear", daemon=True).start()
+
+    def _clear_resident(self):
+        with self.model_lock, self._inspection_lock:
+            with self._lock:
+                engine = self.engine if self.state == UNLOADED and not self._wanted else None
+            if engine is not None and engine.provider is not None:
+                try:
+                    if engine.provider.gpu_residency():
+                        engine.provider.unload()
+                except Exception:
+                    pass  # Ollama yang belum berjalan tidak menghalangi siaga dingin.
+
+    def start(self):
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, name="LocalStandby", daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        while not self._stop.wait(cfg.VLM_LOCAL_STANDBY_POLL_SECONDS):
+            self.tick()
+
+    def stop(self):
+        self._stop.set()
+        for thread in (self._thread, self._loader):
+            if thread is not None:
+                thread.join(timeout=cfg.THREAD_STOP_TIMEOUT_SECONDS)
 
 
 class LocalModelGuard:
-    def __init__(self, inspection_lock: threading.Lock, engine_getter: Callable[[], Optional[object]]):
+    def __init__(self, inspection_lock: threading.Lock, engine_getter: Callable[[], Optional[object]],
+                 on_start=None, on_stop=None):
         """`engine_getter` mengembalikan VLMEngine lokal yang dijaga (atau None)."""
         self._inspection_lock = inspection_lock
         self._engine_getter = engine_getter
+        self._on_start, self._on_stop = on_start, on_stop
         self._busy = threading.Lock()          # satu pemeriksaan/perbaikan pada satu waktu
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -60,6 +243,8 @@ class LocalModelGuard:
             if not self._inspection_lock.acquire(timeout=cfg.LOCAL_GPU_REPAIR_WAIT_SECONDS):
                 return None
             try:
+                if getattr(self._engine_getter(), "provider", None) is not provider:
+                    return None
                 return self._reload(engine, provider, ratio, force)
             finally:
                 self._inspection_lock.release()
@@ -138,6 +323,8 @@ class LocalModelGuard:
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="LocalModelGuard", daemon=True)
         self._thread.start()
+        if self._on_start is not None:
+            self._on_start()
 
     def _loop(self):
         while not self._stop.wait(cfg.LOCAL_GPU_CHECK_SECONDS):
@@ -146,3 +333,5 @@ class LocalModelGuard:
 
     def stop(self):
         self._stop.set()
+        if self._on_stop is not None:
+            self._on_stop()

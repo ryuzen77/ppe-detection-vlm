@@ -20,6 +20,7 @@ from . import messages
 from . import worker_store
 from .face_identity import RECOGNIZED
 from .disk_guard import BYTES_PER_GB
+from .vlm_selection import LOCAL_FALLBACK_SOURCE_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +158,8 @@ _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_date_str ON worker_inspections(date_str)",
     # Laporan & filter per pekerja (T34)
     "CREATE INDEX IF NOT EXISTS idx_worker_id ON worker_inspections(worker_id)",
+    # T72: hitungan global cadangan/darurat cukup membaca indeks kecil, bukan seluruh audit.
+    "CREATE INDEX IF NOT EXISTS idx_inference_source ON worker_inspections(inference_source)",
 )
 
 
@@ -577,9 +580,11 @@ class ReportManager:
             compliance_rate = round((complete_count / total_count * 100.0), 1) if total_count > 0 else 100.0
 
             # Keputusan oleh VLM cadangan (utama gagal/terputus), T27
-            cursor.execute("SELECT COUNT(*) AS n FROM worker_inspections WHERE inference_source LIKE ?",
-                           (f"{BACKUP_SOURCE_PREFIX}%",))
-            backup_count = cursor.fetchone()["n"]
+            cursor.execute("""SELECT COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS backup_count,
+                           COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS local_fallback_count
+                           FROM worker_inspections""",
+                           (BACKUP_SOURCE_PREFIX, LOCAL_FALLBACK_SOURCE_PREFIX))
+            source_counts = dict(cursor.fetchone())
 
             # Filter query (T79)
             conditions, params = _filter_clause(
@@ -613,7 +618,7 @@ class ReportManager:
                 "complete_count": complete_count,
                 "violation_count": violation_count,
                 "compliance_rate": compliance_rate,
-                "backup_count": backup_count,
+                **source_counts,
                 "filtered_total": filtered_total,
                 "page_records": records
             }
