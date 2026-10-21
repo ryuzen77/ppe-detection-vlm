@@ -196,7 +196,9 @@ def main():
             time.sleep(wait)  # jeda kuota free tier; di luar pengukuran latensi
         start = time.time()
         try:
-            res = pool.submit(analyzer._call_vlm_internal, det.crop_img).result(timeout=EVAL_TIMEOUT_SECONDS)
+            # T86: titik pose ikut, supaya gambar yang dinilai sama dengan di gerbang (panel kepala & tangan)
+            res = pool.submit(analyzer._call_vlm_internal, det.crop_img,
+                              getattr(det, "crop_keypoints", None)).result(timeout=EVAL_TIMEOUT_SECONDS)
             row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items))
         except Exception as e:
             kind = "timeout" if e.__class__.__name__ == "TimeoutError" else "galat"

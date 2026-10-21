@@ -13,6 +13,7 @@ from .config import cfg
 from . import zone
 from . import messages
 from . import pose_keypoints as kp
+from . import vlm_image
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,8 @@ class DetectionResult:
         # dari pergelangan kaki (None bila tertutup) dan dari tepi bawah kotak.
         self.foot_y = foot_y
         self.foot_y_box = foot_y_box
+        # T86: titik pose dalam koordinat crop_img (diisi detect_and_track); None = tanpa pose
+        self.crop_keypoints: Optional[list] = None
         # Posisi yang dipakai zona setelah ingatan per ID (diisi state_manager)
         self.zone_y = foot_y if foot_y is not None else foot_y_box
 
@@ -98,12 +101,16 @@ class PersonDetector:
             inside = _inside_corridor(box, w)
             is_full_body, reason, clip_type = _full_body_status(box, kpts, inside, h, margins)
             kpts_to_save = keypoints_data[idx].tolist() if keypoints_data is not None else None
-            detections.append(DetectionResult(
+            window = vlm_image.crop_window(h, w, box)
+            detection = DetectionResult(
                 track_id=int(track_id), bbox=list(box), is_full_body=is_full_body, reason=reason,
-                is_inside_corridor=inside, keypoints=kpts_to_save, crop_img=_crop_for_vlm(frame, box),
+                is_inside_corridor=inside, keypoints=kpts_to_save, crop_img=_crop(frame, window),
                 conf=float(conf), clip_type=clip_type,
                 foot_y=zone.ankle_y(kpts_to_save, h), foot_y_box=zone.box_bottom_y(list(box), h),
-            ))
+            )
+            # T86: titik pose dalam koordinat crop untuk panel perbesaran kepala & tangan
+            detection.crop_keypoints = vlm_image.to_crop_coords(kpts_to_save, window)
+            detections.append(detection)
         return detections
 
 
@@ -227,12 +234,9 @@ def _full_body_status(box, kpts, inside: bool, h: int, margins: FrameMargins) ->
     return _pose_status(kpts, box, h, margins) if kpts is not None else _edge_status(box, h, margins)
 
 
-def _crop_for_vlm(frame: np.ndarray, box) -> np.ndarray:
-    """Potongan orang untuk VLM, dengan tepi tambahan untuk konteks helm & sepatu."""
-    h, w = frame.shape[:2]
-    x1, y1, x2, y2 = box
-    margin_y = int((y2 - y1) * cfg.CROP_MARGIN_Y_RATIO)
-    margin_x = int((x2 - x1) * cfg.CROP_MARGIN_X_RATIO)
-    return frame[max(0, y1 - margin_y):min(h, y2 + margin_y), max(0, x1 - margin_x):min(w, x2 + margin_x)].copy()
+def _crop(frame: np.ndarray, window) -> np.ndarray:
+    """Potongan orang untuk VLM (jendela `vlm_image.crop_window`: kotak + tepi helm & sepatu)."""
+    x0, y0, x1, y1 = window
+    return frame[y0:y1, x0:x1].copy()
 
 detector = PersonDetector()

@@ -12,6 +12,7 @@
   import { catalog } from '../lib/stores/catalog.svelte'
   import { formatLostSince } from '../lib/diagnostics'
   import { iotChip } from '../lib/status'
+  import { pingRows, type PingRow } from '../lib/ping'
   import { withError } from '../lib/messages'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
@@ -22,6 +23,7 @@
   let ppeError = $state('')
   let lightStatus = $state('')
   let pingStatus = $state('')
+  let pingList = $state<PingRow[]>([])
 
   const gateIot = $derived(iotChip(telemetry.data))
   const camera = $derived(telemetry.data?.camera ?? null)
@@ -58,9 +60,12 @@
 
   async function pingVlm() {
     pingStatus = SETTINGS_TAB.running
+    pingList = []
     try {
       const res = await api.pingVlm()
-      pingStatus = SETTINGS_TAB.pingResult(res.status, res.latency_ms, res.message)
+      pingList = pingRows(res)
+      // Sibuk / tidak dikonfigurasi: tidak ada baris per VLM, pesan server yang tampil
+      pingStatus = pingList.length ? SETTINGS_TAB.ping.note : res.message
     } catch (e) {
       pingStatus = withError(SETTINGS_TAB.pingFailed, e)
     }
@@ -152,6 +157,16 @@
           {/if}
           <button class="btn" onclick={pingVlm}>{SETTINGS_TAB.latencyTestBtn}</button>
         </div>
+        {#if pingList.length}
+          <ul class="ping-list">
+            {#each pingList as row (row.label)}
+              <li class="ping-{row.tone}">
+                <span class="lamp lamp-{row.tone}" aria-hidden="true"></span>
+                <span><strong>{row.label}</strong>: {row.text}{#if row.hint}<br /><span class="muted">{row.hint}</span>{/if}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
         {#if pingStatus}<p class="hint">{pingStatus}</p>{/if}
       </section>
     </section>
@@ -246,8 +261,36 @@
   .lamp-red {
     background: var(--danger);
   }
-  .lamp-yellow {
+  .lamp-yellow,
+  .lamp-warn {
     background: var(--warn);
+  }
+  .lamp-ok {
+    background: var(--ok);
+  }
+  .lamp-danger {
+    background: var(--danger);
+  }
+  .lamp-muted {
+    background: var(--text-faint);
+  }
+  .ping-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+  .ping-list li {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+  .ping-list .lamp {
+    flex: none;
+    transform: translateY(1px);
   }
   .status {
     display: flex;

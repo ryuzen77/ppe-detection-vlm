@@ -347,9 +347,19 @@ export const SETTINGS_TAB = {
   lightOnFailed: 'Gagal menyalakan lampu',
   lightOffFailed: 'Gagal mematikan lampu',
   pingFailed: 'Gagal ping VLM',
+  // T86: uji latensi per VLM aktif, diukur dengan gambar contoh seukuran pemeriksaan
+  ping: {
+    roles: { utama: 'VLM utama', cadangan: 'VLM cadangan' } as Record<string, string>,
+    local: 'lokal',
+    online: 'online',
+    answered: (ms: number) => `menjawab dalam ${seconds(ms)}`,
+    failed: (reason: string) => (reason ? `tidak menjawab (${reason})` : 'tidak menjawab'),
+    overLimit: (limitMs: number) => `lebih lama dari batas pemeriksaan ${seconds(limitMs)}: pekerja bisa diminta menunggu`,
+    localLoading: 'model lokal mungkin sedang dimuat ke GPU; uji lagi sebentar',
+    noBackup: 'VLM cadangan tidak aktif',
+    note: 'Diukur dengan gambar contoh seukuran pemeriksaan (memakai 1 panggilan kuota per VLM online).',
+  },
   ppeUpdateFailed: 'Gagal mengubah aturan APD',
-  pingResult: (status: string, ms: number, msg: string) =>
-    `${status === 'ONLINE' ? 'VLM menjawab' : 'VLM tidak menjawab'} dalam ${seconds(ms)}${msg ? ` — ${msg}` : ''}`,
   zoneSaveFailed: 'Gagal mengubah zona',
   zoneRangeFailed: 'Gagal mengubah batas zona',
   zoneCalibrateFailed: 'Gagal kalibrasi',

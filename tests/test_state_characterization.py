@@ -49,7 +49,7 @@ class _World:
                    InspectionResult(is_complete=False, missing_items=["Helm Keselamatan"], inference_source="VLM_LIVE:x"),
                    InspectionResult(is_system_unavailable=True), None]
 
-        def analyze(crop):
+        def analyze(crop, keypoints=None):
             self.vlm_calls += 1
             reply = replies[(self.vlm_calls - 1 + first_reply) % len(replies)]
             if reply is None:

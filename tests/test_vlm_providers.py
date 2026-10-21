@@ -1,5 +1,6 @@
 """Adaptor penyedia VLM dan jalur VLMAnalyzer di atasnya, tanpa panggilan jaringan."""
 import json
+import threading
 import time
 
 import cv2
@@ -8,7 +9,8 @@ import pytest
 
 from backend import messages, ppe_rules
 from backend.config import cfg
-from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
+from backend.vlm_analyzer import (USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt, confirmation_prompts,
+                                   image_for_vlm)
 from backend.vlm_providers import VLMProvider, create_provider, parse_json_reply
 from backend.vlm_providers.gemini import GeminiProvider
 from backend.vlm_providers.openai_compatible import OpenAICompatibleProvider
@@ -359,6 +361,83 @@ def test_ping_menguji_utama_dan_cadangan(analyzer):
     assert all(r["ok"] for r in res["engines"])
 
 
+def test_ping_memakai_gambar_contoh_seukuran_pemeriksaan(analyzer):
+    """T86: dulu ping teks (±0,5 dtk) sementara pemeriksaan foto > 5 dtk -> "latensi aman" menyesatkan."""
+    from backend.vlm_analyzer import warmup_image_jpeg
+    utama = FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=utama)
+    res = analyzer.ping_api()
+    image, system_prompt, _ = utama.calls[0]
+    # Penyedia tiruan = online -> gambar contoh berpanel & prompt berpanel, sama dengan pemeriksaan (T86)
+    assert image == warmup_image_jpeg(zoom=True) and system_prompt == build_system_prompt(zoom=True)
+    row = res["engines"][0]
+    assert row["ok"] and row["is_local"] is False and row["timeout_ms"] == round(analyzer.primary.timeout * 1000)
+
+
+def test_cadangan_lokal_menerima_gambar_dan_prompt_isi_t58(analyzer):
+    """Tinjauan Codex T86: utama online gagal -> cadangan LOKAL tetap tanpa panel (gambar & prompt).
+    Validasi lokal 21-10: dengan panel apa pun qwen2.5vl:7b meloloskan APD kurang."""
+    utama = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    cadangan = FakeProvider(reply=_lengkap())
+    crop = person_crop()
+    hasil = analyzer.pasang(utama=utama, cadangan=cadangan).analyze_person(crop, None)
+    assert hasil.decided_by == "cadangan"
+    online_image, online_prompt, _ = utama.calls[0]
+    local_image, local_prompt, _ = cadangan.calls[0]
+    assert online_image == image_for_vlm(crop, None, zoom=True) and online_prompt == build_system_prompt(zoom=True)
+    assert local_image == VLMAnalyzer._optimize_image_for_vlm(crop), "byte JPEG lokal = cara lama (isi T58)"
+    assert local_prompt == build_system_prompt(zoom=False)
+
+
+@pytest.mark.parametrize("shape", [(640, 220), (900, 300), (300, 120), (1080, 1920), (50, 40)])
+def test_gambar_tanpa_panel_identik_cara_lama(shape):
+    """Validasi lokal T58 (84 foto) hanya berlaku bila byte JPEG-nya PERSIS sama dengan sebelum T86."""
+    h, w = shape
+    crop = np.random.default_rng(h * w).integers(0, 255, (h, w, 3), dtype=np.uint8)
+    assert image_for_vlm(crop, None, zoom=False) == VLMAnalyzer._optimize_image_for_vlm(crop)
+
+
+def test_ping_memakai_engine_terbaru_bila_penyedia_diganti_saat_menunggu(analyzer, monkeypatch):
+    """Tinjauan Codex T86: daftar engine diambil setelah lock; engine lama yang ditutup tidak diuji."""
+    monkeypatch.setattr(cfg, "VLM_PING_LOCK_WAIT_SECONDS", 5.0)
+    lama, baru = FakeProvider(reply=_lengkap()), FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=lama)
+    analyzer.api_lock.acquire()
+    hasil = {}
+    t = threading.Thread(target=lambda: hasil.update(analyzer.ping_api()))
+    t.start()
+    time.sleep(0.2)                       # ping sedang menunggu lock
+    analyzer.pasang(utama=baru)           # pergantian penyedia (di produksi: _swap di bawah lock yang sama)
+    analyzer.api_lock.release()
+    t.join(timeout=5)
+    assert hasil["engines"][0]["ok"] and lama.calls == [] and len(baru.calls) == 1
+
+
+def test_ping_jeda_kuota_tidak_ikut_terukur(analyzer, monkeypatch):
+    analyzer.pasang(utama=FakeProvider(reply=_lengkap()))
+    analyzer.primary.min_interval = 0.3
+    analyzer.primary.last_call_time = time.time()
+    assert analyzer.ping_api()["engines"][0]["latency_ms"] < 250
+
+
+def test_ping_galat_dilaporkan_per_engine(analyzer):
+    analyzer.pasang(utama=FakeProvider(reply=_lengkap()), cadangan=FakeProvider(error=RuntimeError("503 UNAVAILABLE")))
+    utama, cadangan = analyzer.ping_api()["engines"]
+    assert utama["ok"] and not cadangan["ok"] and "503" in cadangan["error"]
+
+
+def test_ping_sibuk_saat_gerbang_memeriksa(analyzer, monkeypatch):
+    monkeypatch.setattr(cfg, "VLM_PING_LOCK_WAIT_SECONDS", 0.05)
+    utama = FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=utama)
+    analyzer.api_lock.acquire()
+    try:
+        res = analyzer.ping_api()
+    finally:
+        analyzer.api_lock.release()
+    assert res["status"] == "BUSY" and res["message"] == messages.VLM_PING_BUSY and utama.calls == []
+
+
 def test_status_dashboard_mengikuti_siapa_yang_memutuskan(analyzer):
     from backend.api_monitor import api_monitor
     analyzer.pasang(utama=FakeProvider(error=RuntimeError("503")), cadangan=FakeProvider(reply=_lengkap()))
@@ -466,7 +545,9 @@ def test_rokok_dikonfirmasi_pekerja_ditolak(analyzer):
     assert not hasil.is_complete
     assert hasil.missing_items == [_item("rokok").missing_label]
     _, system_prompt, user_prompt = utama.calls[1]
-    assert system_prompt == messages.VLM_CONFIRM_SYSTEM_PROMPT
+    # Penyedia tiruan = online: gambar berpanel & penjelas panel kepala ikut di konfirmasi (T86)
+    assert system_prompt == confirmation_prompts(_item("rokok"), zoom=True)[0]
+    assert system_prompt.startswith(messages.VLM_CONFIRM_SYSTEM_PROMPT)
     assert _item("rokok").confirm_prompt in user_prompt
 
 
@@ -479,12 +560,29 @@ def test_rokok_tidak_dikonfirmasi_pekerja_lolos(analyzer, caplog):
     assert "tangan kosong" in caplog.text, "pembatalan dicatat di log untuk evaluasi"
 
 
-@pytest.mark.parametrize("gagal", [RuntimeError("503 UNAVAILABLE"), "bukan json", json.dumps({"seen": "?"})])
-def test_konfirmasi_gagal_atau_ragu_dianggap_tidak_terlihat(analyzer, gagal):
-    utama = SequenceProvider(_lengkap_dengan_rokok(), gagal)
+def test_konfirmasi_ragu_dianggap_tidak_terlihat(analyzer):
+    """Keputusan pengguna 13-10: VLM yang MENJAWAB tetapi ragu = larangan tidak ada."""
+    utama = SequenceProvider(_lengkap_dengan_rokok(), json.dumps({"seen": "?"}))
     hasil = analyzer.pasang(utama=utama, cadangan=FakeProvider(reply=_lengkap())).analyze_person(person_crop())
     assert hasil.is_complete and hasil.decided_by == "utama"
-    assert analyzer.backup.provider.calls == [], "konfirmasi gagal bukan kegagalan VLM utama"
+    assert analyzer.backup.provider.calls == []
+
+
+@pytest.mark.parametrize("gagal", [RuntimeError("503 UNAVAILABLE"), TimeoutError(), "bukan json"])
+def test_konfirmasi_gagal_dialihkan_ke_cadangan(analyzer, gagal):
+    """T86 (keputusan pengguna 20-10): konfirmasi GAGAL bukan jawaban ragu. Uji banding 20-10:
+    rokok di mulut terlihat, konfirmasi habis waktu -> dulu dianggap tidak terlihat -> lolos."""
+    utama = SequenceProvider(_lengkap_dengan_rokok(), gagal)
+    cadangan = SequenceProvider(_lengkap_dengan_rokok(), _konfirmasi(True))
+    hasil = analyzer.pasang(utama=utama, cadangan=cadangan).analyze_person(person_crop())
+    assert hasil.decided_by == "cadangan" and not hasil.is_complete
+    assert hasil.missing_items == [_item("rokok").missing_label]
+
+
+@pytest.mark.parametrize("gagal", [RuntimeError("503 UNAVAILABLE"), TimeoutError(), "bukan json"])
+def test_konfirmasi_gagal_tanpa_cadangan_pekerja_menunggu(analyzer, gagal):
+    utama = SequenceProvider(_lengkap_dengan_rokok(), gagal)
+    _assert_tanpa_keputusan(analyzer.pasang(utama=utama).analyze_person(person_crop()))
 
 
 def test_tanpa_rokok_tidak_ada_panggilan_konfirmasi(analyzer):

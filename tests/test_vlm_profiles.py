@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from backend import config, messages, ppe_rules
+from backend import config, messages, ppe_rules, vlm_selection
 from backend.vlm_analyzer import (VLMEngine, build_system_prompt, confirmation_prompts, profile_warnings,
                                   thinking_option)
 from backend.vlm_providers import OPENAI_COMPATIBLE, profiles
@@ -14,15 +14,27 @@ from backend.vlm_providers.openai_compatible import PRESETS
 # messages.PROMPT_VERSION, tambahkan sidik jari baru di sini, lalu uji ulang model
 # dengan foto berlabel dan perbarui profiles.VALIDATIONS. Tanpa itu, validasi lama
 # diam-diam dianggap berlaku untuk prompt yang belum pernah diuji.
-PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e", "T58": "1b4f2a739acb7d79"}
+PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e", "T58": "1b4f2a739acb7d79",
+                       "T86": "1e31d0a1525c2f20"}
+
+
+def _fingerprint(zoom: bool) -> str:
+    # Pertanyaan konfirmasi larangan (T58) ikut menentukan keputusan, jadi ikut sidik jari
+    confirm = "".join("".join(confirmation_prompts(i, zoom)) for i in ppe_rules.get_items() if i.prohibited)
+    text = build_system_prompt(ppe_rules.get_items(), zoom) + confirm
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
 def test_prompt_berubah_wajib_menaikkan_versi(catalog_defaults):
-    # Pertanyaan konfirmasi larangan (T58) ikut menentukan keputusan, jadi ikut sidik jari
-    confirm = "".join("".join(confirmation_prompts(i)) for i in ppe_rules.get_items() if i.prohibited)
-    fingerprint = hashlib.sha256((build_system_prompt(ppe_rules.get_items()) + confirm).encode()).hexdigest()[:16]
+    fingerprint = _fingerprint(zoom=True)
     assert PROMPT_FINGERPRINTS.get(messages.PROMPT_VERSION) == fingerprint, (
         f"Prompt berubah ({fingerprint}) tanpa menaikkan PROMPT_VERSION={messages.PROMPT_VERSION}")
+
+
+def test_prompt_tanpa_panel_identik_versi_lama(catalog_defaults):
+    """T86: VLM lokal memakai prompt & gambar tanpa panel; validasi lokal T58 (84 foto) hanya berlaku
+    bila isinya PERSIS sama — bila tes ini gagal, PROMPT_VERSION_NO_ZOOM wajib dinaikkan & diuji ulang."""
+    assert PROMPT_FINGERPRINTS.get(messages.PROMPT_VERSION_NO_ZOOM) == _fingerprint(zoom=False)
 
 
 # --- Katalog ----------------------------------------------------------------------------
@@ -47,7 +59,10 @@ def test_satu_sumber_untuk_adaptor_dan_config():
 
 def test_status_model_saat_ini():
     v = messages.PROMPT_VERSION
-    assert profiles.validation_status("ollama", "qwen2.5vl:7b", v) == profiles.VALIDATED
+    # T86: VLM lokal menerima prompt & gambar TANPA panel (isi T58 persis) -> dinilai dengan versi itu
+    local_version = vlm_selection.prompt_version_for("ollama")
+    assert local_version == messages.PROMPT_VERSION_NO_ZOOM and vlm_selection.prompt_version_for("gemini") == v
+    assert profiles.validation_status("ollama", "qwen2.5vl:7b", local_version) == profiles.VALIDATED
     # Gemini T58: 5 foto (izin pengguna 14-10) → sebagian
     assert profiles.validation_status("gemini", "gemini-3.5-flash-lite", v) == profiles.PARTIAL
     record = profiles.find_validation("gemini", "gemini-3.5-flash-lite", v)
@@ -60,7 +75,7 @@ def test_validasi_prompt_lama_kedaluwarsa():
     assert profiles.validation_status("ollama", "qwen2.5vl:7b", "T99") == profiles.OUTDATED
     # tanpa catatan untuk versi itu, yang dipakai catatan terbaru
     record = profiles.find_validation("gemini", "gemini-3.5-flash-lite", "T99")
-    assert record is not None and record.prompt_version == "T58"
+    assert record is not None and record.prompt_version == "T86"
 
 
 def test_model_yang_pernah_meloloskan_apd_kurang_ditandai_tidak_aman():

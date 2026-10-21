@@ -137,7 +137,9 @@ API_LOGIN_LOCKED = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 # Jawaban ringkas (hanya nilai per item) — lihat ppe_rules.build_json_shape.
 # Versi prompt VLM. NAIKKAN setiap kali isi prompt atau aturan item berubah:
 # validasi model di vlm_providers/profiles.py berlaku untuk versi tertentu (T39b).
-PROMPT_VERSION = "T58"
+PROMPT_VERSION = "T86"   # T86: + penjelas gambar berpanel (VLM_ZOOM_NOTE_HEAD) di inspeksi & konfirmasi
+# Prompt tanpa panel (VLM lokal, atau VLM_ZOOM_ENABLED mati) = isi T58 persis; dijaga tes sidik jari
+PROMPT_VERSION_NO_ZOOM = "T58"
 
 VLM_SYSTEM_PROMPT = (
     "Anda inspektur K3. Nilai APD orang di gambar. "
@@ -153,6 +155,20 @@ VLM_PING_PROMPT = "Ping. Jawab 'PONG'."
 # terlihat. Pertanyaan per item ada di katalog (`PPEItem.confirm_prompt`). Bench 13-10:
 # qwen2.5vl:7b menilai tangan bernoda semen sebagai "rokok menyala"; ditanya khusus -> "tangan kosong".
 VLM_CONFIRM_SYSTEM_PROMPT = "Anda pemeriksa larangan K3. Jawab HANYA JSON, tanpa teks lain."
+# T86: penjelas gambar berpanel (tubuh + perbesaran kepala & tangan), ditambahkan ke prompt sistem
+# inspeksi & konfirmasi bila cfg.VLM_ZOOM_ENABLED. Uji banding 20-10 (foto bukti nyata): rokok di
+# mulut lolos 3/3 tanpa panel -> ditolak 3/3 dengan panel; keputusan APD lain tidak berubah.
+VLM_ZOOM_NOTE = ("\n\nGAMBAR BERPANEL: panel kiri = seluruh tubuh pekerja. Kolom kanan = perbesaran dari pekerja "
+                 "yang SAMA: atas = kepala/wajah, bawah = kedua tangan (panel abu-abu polos = tidak tersedia). "
+                 "Nilai APD dari panel kiri; pakai panel perbesaran untuk memeriksa benda kecil seperti rokok "
+                 "atau vape di mulut atau di tangan.")
+# Varian panel KEPALA saja (bawaan, cfg.VLM_ZOOM_HAND_PANELS mati): lihat alasan di config.py
+VLM_ZOOM_NOTE_HEAD = ("\n\nGAMBAR BERPANEL: kiri = seluruh tubuh pekerja. Kanan = perbesaran KEPALA/WAJAH pekerja "
+                      "yang SAMA (abu-abu polos = tidak tersedia). Nilai SEMUA APD hanya dari panel kiri; panel "
+                      "kepala hanya untuk memeriksa benda kecil di mulut/wajah seperti rokok atau vape.")
+VLM_PING_BUSY ="Gerbang sedang memeriksa pekerja; uji latensi dicoba lagi sebentar."
+LOG_VLM_CONFIRM_FAILED = ("Konfirmasi larangan '{item}' oleh VLM {who} gagal ({error}); VLM ini dianggap gagal "
+                          "(bukan 'tidak terlihat') sehingga pekerja tidak lolos tanpa keputusan.")
 VLM_CONFIRM_SHAPE = 'Bentuk JSON: {"detected": true/false, "seen": "<benda yang terlihat di tangan dan mulut>"}'
 
 # --- Suara gerbang (dibangkitkan jadi MP3 oleh generate_audio.py) ---

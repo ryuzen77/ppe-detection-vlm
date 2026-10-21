@@ -111,7 +111,7 @@ def terkirim(monkeypatch, catalog_defaults):
     asli = vlm_analyzer.analyze_person
     dikirim = []
 
-    def catat(crop):
+    def catat(crop, keypoints=None):
         dikirim.append(crop.copy())
         return asli(crop)
 

@@ -427,7 +427,8 @@ class StateManager:
             return False
         if det.crop_img is not None:
             session.add_candidate(frame_quality.FrameCandidate(
-                crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id))
+                crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id,
+                crop_keypoints=getattr(det, "crop_keypoints", None)))
         else:
             session.stable_frames += 1
         # Setelah pekerja diam READY_HOLD_SECONDS (minimal STABLE_FRAMES_REQUIRED frame)
@@ -440,11 +441,11 @@ class StateManager:
             session=session.session_id, held=session.readiness.held_seconds(now),
             restarts=session.readiness.restarts, frames=session.stable_frames))
         session.state = TrackState.ANALYZING
-        crop_to_analyze, track_id, identity = None, det.track_id, None
+        crop_to_analyze, track_id, identity, crop_keypoints = None, det.track_id, None, None
         if session.candidates:
             best = frame_quality.choose_best(session.candidates, session.prev_bbox)
             identity = self._start_identity(session)
-            crop_to_analyze, track_id = best.crop, best.track_id
+            crop_to_analyze, track_id, crop_keypoints = best.crop, best.track_id, best.crop_keypoints
             logger.info(
                 f"Sesi #{session.session_id}: frame terbaik #{session.candidates.index(best) + 1} dari "
                 f"{len(session.candidates)} | skor " + ", ".join(
@@ -453,7 +454,8 @@ class StateManager:
         session.candidates = []
         logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{track_id} (1 frame)...")
         audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
-        self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze, identity)
+        self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze, identity,
+                             crop_keypoints)
 
     def _start_identity(self, session: GateSession) -> Optional[Future]:
         """FR pada FACE_VOTE_FRAMES potongan terbaik (skor `choose_best`), paralel dengan VLM.
@@ -486,13 +488,13 @@ class StateManager:
             return face_identity.Identity(face_identity.UNKNOWN)
 
     def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray],
-                          identity_future: Optional[Future] = None):
+                          identity_future: Optional[Future] = None, crop_keypoints: Optional[list] = None):
         if crop_img is None:
             self._retry_session(session_id)
             return
 
         try:
-            result = vlm_analyzer.analyze_person(crop_img)
+            result = vlm_analyzer.analyze_person(crop_img, crop_keypoints)
 
             if result.is_system_unavailable:
                 self._wait_for_system(session_id, result)

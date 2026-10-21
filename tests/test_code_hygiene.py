@@ -31,7 +31,6 @@ LONG_FUNCTIONS_DEBT = {
     "backend/video/hud.py::draw_hud",
     "backend/report_manager.py::get_reports",
     "backend/app.py::run",
-    "backend/vlm_analyzer.py::analyze_person",
     "backend/api/routes_cameras.py::list_cameras",
     "backend/camera_manager.py::_scan_worker",
     "backend/vlm_analyzer.py::_parse_vlm_payload",

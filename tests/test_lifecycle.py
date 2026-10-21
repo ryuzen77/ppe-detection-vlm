@@ -303,7 +303,7 @@ def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, m
     from backend.vlm_analyzer import vlm_analyzer
     asli = vlm_analyzer.analyze_person
 
-    def lambat(crop):
+    def lambat(crop, keypoints=None):
         time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS + 0.4)
         return asli(crop)
 
