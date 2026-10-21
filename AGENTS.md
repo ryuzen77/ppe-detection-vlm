@@ -34,6 +34,7 @@ Claude Code dan Gemini (Antigravity) boleh bekerja **bersamaan**, dengan aturan:
 | :-- | :-- | :-- | :-- |
 | **Claude** — juga **integrator** | `ppe_detection_vlm/` (folder utama) | `master` + `claude/<task>` | 8000 |
 | **Gemini** | `ppe_detection_vlm-gemini/` (di sebelah folder utama) | `gemini/<task>` | **8001** (`PORT=8001`) |
+| **Codex** (pengganti Gemini sejak 21-10; aturan "Gemini" di berkas ini berlaku untuknya) | `ppe_detection_vlm-gemini/` (folder yang sama) | `codex/<task>` | **8001** (`PORT=8001`) |
 
 - **Jangan pernah menyunting folder agen lain.**
 - **Cek folder kerja sebelum mulai** (setiap sesi, sebelum perintah git atau
