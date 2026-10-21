@@ -177,6 +177,11 @@
     gap: var(--space-2);
     margin-left: auto;
   }
+  /* Tautan unduh tampil sebagai tombol, sama dengan "Muat ulang" di sebelahnya */
+  .actions a.btn {
+    color: var(--text);
+    text-decoration: none;
+  }
   .tiles {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
