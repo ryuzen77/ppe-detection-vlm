@@ -62,9 +62,9 @@
   const localAvailability = $derived(localFallbackAvailability(backupProvider, providers))
   const LOCAL_UNAVAILABLE_HINT = {
     backup_is_local: VLM_SETTINGS.localFallbackBackupIsLocal,
-    needs_backup: VLM_SETTINGS.localFallbackNeedsBackup,
     no_local_provider: VLM_SETTINGS.noLocalProvider,
   } as const
+  const localChosen = $derived(localFallbackChoice(localAvailability, localProvider, localModel) !== null)
 
   function requestApply() {
     if (change === 'disable') disableConfirmation = true
@@ -205,7 +205,7 @@
         </select>
       </label>
       {#if !backupProvider}
-        <p class="hint">{VLM_SETTINGS.noBackupHint}</p>
+        <p class="hint">{localChosen ? VLM_SETTINGS.noBackupWithLocalHint : VLM_SETTINGS.noBackupHint}</p>
       {/if}
 
       {#if backupProvider}

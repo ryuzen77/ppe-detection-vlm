@@ -43,18 +43,18 @@ export function providerOptionLabel(p: { label: string; missing: VlmMissingSetti
   return p.label
 }
 
-export type LocalFallbackAvailability = 'available' | 'backup_is_local' | 'needs_backup' | 'no_local_provider'
+export type LocalFallbackAvailability = 'available' | 'backup_is_local' | 'no_local_provider'
 
 type ProviderKind = { name: string; is_local: boolean }
 
 /**
- * Apakah VLM lokal darurat (T72, susunan A) bisa dipilih. Hanya bila cadangan = API:
- * cadangan lokal (susunan B) sudah siaga dingin sendiri — backend menolaknya
- * (`local_fallback_with_local_backup`); tanpa cadangan, admin diarahkan memilih cadangan dulu.
+ * Apakah VLM lokal darurat (T72) bisa dipilih: bila cadangan = API atau tidak ada cadangan
+ * (keduanya sah di backend; tanpa cadangan dulu disembunyikan lalu terhapus saat Terapkan —
+ * tinjauan Codex 22-10). Cadangan lokal (susunan B) sudah siaga dingin sendiri — backend
+ * menolak kombinasi itu (`local_fallback_with_local_backup`).
  */
 export function localFallbackAvailability(backupProvider: string, providers: ProviderKind[]): LocalFallbackAvailability {
   if (!providers.some((p) => p.is_local)) return 'no_local_provider'
-  if (!backupProvider) return 'needs_backup'
   return providers.find((p) => p.name === backupProvider)?.is_local ? 'backup_is_local' : 'available'
 }
 

@@ -63,7 +63,7 @@
     pingList = []
     try {
       const res = await api.pingVlm()
-      pingList = pingRows(res, telemetry.data?.api_monitor?.local)
+      pingList = pingRows(res)
       // Sibuk / tidak dikonfigurasi: tidak ada baris per VLM, pesan server yang tampil
       pingStatus = pingList.length ? SETTINGS_TAB.ping.note : res.message
     } catch (e) {

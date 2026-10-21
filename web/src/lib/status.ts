@@ -25,7 +25,9 @@ const VLM_TONE: Record<string, Tone> = { UTAMA: 'ok', CADANGAN: 'warn', LOKAL: '
 export function vlmChip(t: Telemetry | null): Chip {
   const mode = t?.api_monitor?.mode
   // T71: tanpa cadangan (bawaan) operator perlu tahu bahwa gangguan VLM utama = pekerja menunggu
+  // T72: VLM lokal darurat tanpa cadangan API tetap "punya cadangan" (tinjauan Codex 22-10)
   const noBackup = mode === 'UTAMA' && t?.api_monitor?.backup?.configured === false
+    && t?.api_monitor?.local?.role !== 'darurat'
   const label = noBackup ? VLM_CHIP_NO_BACKUP : mode ? VLM_CHIP[mode] : VLM_CHIP.UNKNOWN
   return { tone: (mode && VLM_TONE[mode]) || 'neutral', text: label.text, hint: label.hint }
 }

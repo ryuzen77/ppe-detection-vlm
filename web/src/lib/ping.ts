@@ -1,7 +1,7 @@
 // Uji latensi VLM (T86): satu baris per VLM aktif, dibandingkan dengan batas waktu pemeriksaannya.
 // Logika murni; Pengaturan hanya merakit. Uji 20-10: ping teks "aman" padahal pemeriksaan foto habis
 // waktu — kini server mengukur dengan gambar contoh, dan baris ditandai bila melebihi batas.
-import type { LocalStandby, PingResult } from './api/types'
+import type { PingResult } from './api/types'
 import { SETTINGS_TAB } from './messages'
 
 export type PingTone = 'ok' | 'warn' | 'danger' | 'muted'
@@ -15,16 +15,14 @@ export interface PingRow {
 
 const TEXT = SETTINGS_TAB.ping
 
-/**
- * `local` = status VLM lokal siaga dari telemetri (T72). Lokal yang `unloaded` memang tidak
- * diuji server (supaya tidak memuat ±6 GB), jadi bukan kegagalan: baris netral, bukan merah.
- */
-export function pingRows(res: PingResult, local?: LocalStandby | null): PingRow[] {
+export function pingRows(res: PingResult): PingRow[] {
   const engines = res.engines ?? []
   const rows: PingRow[] = engines.map((e) => {
     const kind = e.is_local === undefined ? '' : ` (${e.is_local ? TEXT.local : TEXT.online})`
     const label = (TEXT.roles[e.role] ?? e.role) + kind
-    if (!e.ok && e.is_local && local?.role === e.role && local.state === 'unloaded') {
+    // T72: VLM lokal siaga dingin sengaja tidak diuji server (supaya tidak memuat ±6 GB) — penanda
+    // dari jawaban ping itu sendiri, bukan tebakan dari telemetri WebSocket yang bisa basi
+    if (e.standby) {
       return { label, tone: 'muted', text: TEXT.standby, hint: TEXT.standbyHint }
     }
     if (!e.ok) {

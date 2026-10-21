@@ -568,7 +568,7 @@ export const VLM_SETTINGS = {
     'Tidak dimuat saat server menyala. Dimuat otomatis bila internet putus/lambat atau VLM utama & cadangan gagal; pekerja pertama menunggu sekitar 15–25 detik selama model disiapkan. Dikeluarkan lagi dari GPU setelah internet & VLM utama normal kembali.',
   noLocalFallbackHint: 'Tanpa VLM lokal darurat: bila internet putus atau VLM utama & cadangan gagal, pekerja diminta menunggu.',
   localFallbackBackupIsLocal: 'Cadangan sudah VLM lokal (siaga dingin: dimuat saat VLM utama gangguan atau internet bermasalah), jadi VLM lokal darurat tidak diperlukan.',
-  localFallbackNeedsBackup: 'Pilih VLM cadangan berupa API untuk menambah VLM lokal darurat, atau pilih penyedia lokal sebagai cadangan.',
+  noBackupWithLocalHint: 'Tanpa VLM cadangan API: bila VLM utama gangguan atau internet bermasalah, penilaian dialihkan ke VLM lokal darurat.',
   noLocalProvider: 'Belum ada penyedia VLM lokal (mis. Ollama) yang tersedia di server.',
   testResultLocal: 'Hasil Uji VLM Lokal Darurat',
   missingKey: '(API key belum diisi di berkas konfigurasi server)',

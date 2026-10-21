@@ -58,6 +58,13 @@ describe('chip VLM lokal (T72)', () => {
     }
   })
 
+  it('tanpa cadangan API tetapi ada darurat lokal: bukan "tanpa cadangan"', () => {
+    const monitor = (role: LocalStandby['role']) =>
+      tele({ backup: { configured: false } as MonitorStatus['backup'], local: local('unloaded', role) })
+    expect(vlmChip(monitor('darurat')).text).toBe('VLM utama')
+    expect(vlmChip(monitor(null)).text).toBe('VLM utama · tanpa cadangan')
+  })
+
   it('mode LOKAL: chip VLM kuning dengan teks umum', () => {
     expect(vlmChip(tele({ mode: 'LOKAL' }))).toMatchObject({ tone: 'warn', text: 'VLM lokal' })
   })
@@ -85,7 +92,8 @@ describe('pilihan VLM lokal darurat (T72)', () => {
   it('hanya tersedia bila cadangan = API (susunan A)', () => {
     expect(localFallbackAvailability('gemini', PROVIDERS)).toBe('available')
     expect(localFallbackAvailability('ollama', PROVIDERS)).toBe('backup_is_local')
-    expect(localFallbackAvailability('', PROVIDERS)).toBe('needs_backup')
+    // tanpa cadangan + darurat lokal sah (tinjauan Codex 22-10): pilihan tampil & tidak terhapus
+    expect(localFallbackAvailability('', PROVIDERS)).toBe('available')
     expect(localFallbackAvailability('gemini', PROVIDERS.filter((p) => !p.is_local))).toBe('no_local_provider')
   })
 
@@ -94,7 +102,7 @@ describe('pilihan VLM lokal darurat (T72)', () => {
     expect(localFallbackChoice('available', '', '')).toBeNull()
     // Cadangan diganti ke lokal setelah darurat dipilih: pilihan lama tidak ikut terkirim
     expect(localFallbackChoice('backup_is_local', 'ollama', 'qwen2.5vl:7b')).toBeNull()
-    expect(localFallbackChoice('needs_backup', 'ollama', 'qwen2.5vl:7b')).toBeNull()
+    expect(localFallbackChoice('no_local_provider', 'ollama', 'qwen2.5vl:7b')).toBeNull()
   })
 
   it('label penyedia menyebut setelan server yang belum diisi', () => {

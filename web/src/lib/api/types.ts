@@ -505,6 +505,8 @@ export interface Health {
 export interface PingEngineResult {
   role: 'utama' | 'cadangan' | 'darurat'
   ok: boolean
+  /** T72: VLM lokal siaga dingin sengaja tidak diuji (bukan kegagalan); tidak ada pada server sebelum T72a */
+  standby?: boolean
   latency_ms: number
   error?: string
   // T86: diukur dengan gambar contoh seukuran pemeriksaan; dibandingkan dengan batas waktu engine
