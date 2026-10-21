@@ -14,8 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T80a — laporan kehadiran (backend; kontrak "Kontrak T80") | Codex | `codex/t80a-attendance` (dari `master` terbaru) | dikerjakan | `backend/report_manager.py` (kueri baru), `backend/api/routes_reports.py` (2 rute baru), `backend/worker_store.py` (hanya baca daftar pekerja aktif), `backend/messages.py` / `config.py` (tambah), `tests/` | Risiko Sedang (data pribadi; bisa disalahartikan absensi). Keputusan pengguna 21-10: per hari, angka + daftar nama belum terlihat, admin saja, CSV. |
-| T80b — laporan kehadiran (UI) | Claude | `claude/t80b-attendance-ui` (dari `master` terbaru) | dikerjakan | `web/src/pages/Laporan.svelte` (tab/bagian Kehadiran), `web/src/components/reports/` (komponen baru), `web/src/lib/` (logika murni + tes, `api/*`, `messages.ts`) | Label wajib "Informasi lewat gerbang — bukan absensi resmi". |
 | Hapus UI lama (`frontend/`, `/legacy/`) + T18 (XSS) | Gemini | `gemini/remove-legacy-ui` | selesai | `frontend/` (hapus), `backend/app.py` (bagian `/legacy` saja), `web/src/pages/NotYetMigrated.svelte`, `web/src/lib/settings.ts` & `format.ts` (hanya rujukan legacy), `tests/test_frontend_serving.py`, `tests/conftest.py`, `tests/test_storage.py` (hanya rujukan legacy), `README.md` & `docs/*.md` (hanya rujukan legacy) | Diklaim 05-10. Tidak beririsan dengan T46. `docs/RENCANA.md` (papan) tetap ditulis integrator; Gemini cukup menulis catatan di laporan. Tes wajib: `GET /legacy/` & `/legacy/index.html` → 404 Commit `39f5c1e` diverifikasi Claude 05-10 (pytest 259 & ruff di salinan terpisah). **Temuan:** pemetaan `legacyGemini` di `web/src/lib/format.ts` + tesnya ikut dihapus padahal untuk DATA audit lama (10 baris `GEMINI_LIVE`, 23–24 Sep) → wajib dikembalikan. Penghapusan pengalihan `/app` di luar lingkup tetapi tidak dirujuk lagi (diterima) Perbaikan `legacyGemini` (`701d096`) terverifikasi (vitest 75); digabung 06-10 (`e7c7d89`), T18 tertutup. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
@@ -294,30 +292,6 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
-
-### Kontrak T80 — laporan kehadiran (informasi, bukan absensi resmi; disetujui pengguna 21-10)
-
-Keputusan pengguna 21-10: **per hari**, tampilkan **angka + daftar nama** pekerja aktif yang belum terlihat, **admin saja**, **ekspor CSV**. Sumber = audit `worker_inspections` yang sudah ada (tanpa tabel baru). Teks wajib di UI & CSV: *informasi lewat gerbang, bukan absensi resmi*; daftar belum terlihat diberi keterangan *bisa karena wajah tidak dikenali, bukan berarti tidak masuk*. Juga memberi angka tingkat pengenalan wajah di gerbang nyata (syarat T83).
-
-**`GET /api/reports/attendance?date=YYYY-MM-DD&department=&company=`** (khusus admin, `require_admin`; `date` kosong = hari ini; tanggal tidak sah → 400; `department`/`company` = nama persis, opsional):
-```json
-{
-  "date": "2026-10-21",
-  "seen": [{"worker_id": 4, "employee_no": "P-0001", "name": "…", "department": "…|null", "company": "…|null",
-            "first_seen": "07:58:12", "last_seen": "16:03:40", "passes": 3, "passed": 2, "rejected": 1, "last_complete": true}],
-  "not_seen": [{"worker_id": 2, "employee_no": "P002", "name": "…", "department": "…|null", "company": "…|null"}],
-  "unknown": {"passes": 5, "passed": 3, "rejected": 2},
-  "totals": {"passes": 8, "recognized": 3, "recognition_rate": 0.375, "active_workers": 4, "seen_workers": 1}
-}
-```
-- `seen`: baris audit hari itu dengan `fr_status = "recognized"`, dikelompokkan per `worker_id`; nama/nomor/divisi/perusahaan dari **snapshot audit** baris terakhir hari itu; urut `first_seen`. `passed`/`rejected` dari `is_complete`; `last_complete` = hasil pemeriksaan terakhir.
-- `not_seen`: pekerja **aktif** saat ini (data pekerja sekarang) tanpa baris `recognized` hari itu; urut nama. Filter divisi/perusahaan memakai snapshot untuk `seen` dan data pekerja sekarang untuk `not_seen`.
-- `unknown`: baris hari itu yang bukan `recognized` (tidak dikenali / FR mati). `recognition_rate` = `recognized / passes`, `null` bila `passes` = 0.
-- Kueri memakai `idx_date_str` / `idx_worker_id` (EXPLAIN QUERY PLAN di laporan); ukur 100 vs 100.000 baris audit.
-
-**`GET /api/reports/attendance/export?date=&department=&company=`** (khusus admin) → CSV (`text/csv`, nama berkas dari `messages`, mis. `kehadiran_informasi_2026-10-21.csv`): baris pertama = catatan "bukan absensi resmi"; lalu header (teks di `messages.py`): No, Nomor Pegawai, Nama, Divisi, Perusahaan, Status (Terlihat / Belum terlihat), Jam pertama, Jam terakhir, Jumlah lewat, Lolos, Ditolak; baris `seen` lalu `not_seen` (kolom jam/jumlah kosong); terakhir satu baris ringkasan tidak dikenali.
-
-Tes wajib: 403 untuk non-admin (kedua rute); tanggal tidak sah 400; agregasi `seen` (beberapa lintasan, jam pertama/terakhir, lolos/ditolak, snapshot nama lama tetap dipakai); `not_seen` tidak memuat pekerja nonaktif & yang sudah terlihat; `unknown` + `recognition_rate` (termasuk `null`); filter divisi/perusahaan; CSV (catatan, header, isi); hari tanpa data.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
