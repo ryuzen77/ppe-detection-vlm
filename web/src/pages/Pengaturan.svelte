@@ -71,18 +71,21 @@
     }
   }
 
-  async function togglePpe(key: string, checked: boolean) {
-    if (!catalog.items) return
+  // T89: satu perubahan pada satu waktu — centang kedua saat yang pertama belum dijawab server
+  // akan dihitung dari katalog yang belum memuat perubahan pertama
+  let ppeSaving = $state(false)
+
+  async function togglePpe(input: HTMLInputElement, key: string) {
     ppeError = ''
-    const active: Record<string, boolean> = {}
-    for (const item of catalog.items) {
-      active[item.key] = item.key === key ? checked : item.required
-    }
+    ppeSaving = true
     try {
-      await api.setPpeActive(active)
-      catalog.load()
+      await catalog.setRequired(key, input.checked)
     } catch (e) {
       ppeError = withError(SETTINGS_TAB.ppeUpdateFailed, e)
+      // Server menolak (mis. mematikan item APD terakhir): centang kembali ke status server
+      input.checked = !input.checked
+    } finally {
+      ppeSaving = false
     }
   }
 </script>
@@ -115,7 +118,8 @@
           {#if catalog.items}
             {#each catalog.items as item (item.key)}
               <label class="ppe-item">
-                <input type="checkbox" checked={item.required} onchange={(e) => togglePpe(item.key, e.currentTarget.checked)} />
+                <input type="checkbox" checked={item.required} disabled={ppeSaving}
+                       onchange={(e) => togglePpe(e.currentTarget, item.key)} />
                 {item.label}
               </label>
             {/each}

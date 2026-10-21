@@ -62,6 +62,15 @@ export function assessItem(
 }
 
 /** Item yang sedang diwajibkan (diperiksa gerbang). */
+/**
+ * Isi `POST /api/ppe-rules/active` saat satu centang APD Wajib diubah: backend menerima status
+ * SEMUA item, jadi item lain wajib diambil dari katalog terkini — katalog basi menimpa
+ * pilihan sebelumnya (bug T89).
+ */
+export function requiredMap(items: PpeItem[], key: string, required: boolean): Record<string, boolean> {
+  return Object.fromEntries(items.map((item) => [item.key, item.key === key ? required : item.required]))
+}
+
 export function activeItems(items: PpeItem[]): PpeItem[] {
   return items.filter((i) => i.required)
 }
