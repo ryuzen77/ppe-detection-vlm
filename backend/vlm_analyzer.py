@@ -6,6 +6,7 @@ import threading
 from dataclasses import asdict
 from typing import Callable, Optional, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from contextlib import contextmanager, nullcontext
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import cfg
@@ -239,6 +240,8 @@ class VLMEngine:
 
     @property
     def label(self) -> str:
+        if self.role == ROLE_EMERGENCY:
+            return f"{vlm_selection.LOCAL_FALLBACK_SOURCE_PREFIX}{self.provider_name}/{self.model_name}"
         prefix = "VLM_LIVE" if self.role == ROLE_PRIMARY else "VLM_CADANGAN"
         return f"{prefix}:{self.provider_name}/{self.model_name}"
 
@@ -525,7 +528,7 @@ class VLMAnalyzer:
         def sel(engine):
             return None if engine is None else {**asdict(engine.choice()), "source": self.selection_source}
         return {"primary": sel(self.primary), "backup": sel(self.backup),
-                "local_fallback": asdict(self.local_fallback.choice()) if self.local_fallback else None}
+                "local_fallback": sel(self.local_fallback)}
 
     def apply_selection(self, selection: Selection, lane_empty: Callable[[], bool],
                         client: str = "", user: str = "") -> dict:
@@ -536,7 +539,7 @@ class VLMAnalyzer:
         gembok inspeksi, jadi inspeksi yang sedang berjalan selesai dengan engine
         lama, dan hanya bila jalur kosong (`LaneBusy`).
         """
-        with self.apply_lock:
+        with self.apply_lock, self._local_operation():
             fresh = self._prepare_selection(selection)
             try:
                 old = self._swap(fresh, selection.source, lane_empty)
@@ -549,6 +552,16 @@ class VLMAnalyzer:
                 if before_choice != after_choice:
                     vlm_selection.record_change(role, before_choice, after_choice, selection.source, client, user)
             return self.current_selection()
+
+    @contextmanager
+    def _local_operation(self):
+        # Menunggu pemuat di luar api_lock: inspeksi online tetap berjalan.
+        if not self.standby.model_lock.acquire(timeout=cfg.LOCAL_GPU_REPAIR_WAIT_SECONDS):
+            raise LaneBusy(messages.VLM_SELECT_LANE_BUSY)
+        try:
+            yield
+        finally:
+            self.standby.model_lock.release()
 
     def _prepare_selection(self, selection: Selection) -> tuple:
         fresh = []
@@ -603,14 +616,21 @@ class VLMAnalyzer:
         self._publish_status()
         return old
 
-    @staticmethod
-    def _discard(engines: tuple, keep: tuple):
+    def _discard(self, engines: tuple, keep: tuple):
         """Engine yang tidak dipakai lagi dilepas; model lokalnya dikeluarkan dari GPU kecuali model
         yang sama masih dipakai engine yang dipertahankan (T70: cadangan mati = benar-benar mati)."""
         kept_local = {k.local_key() for k in keep if k is not None and k.is_local}
         for engine in engines:
             if engine is not None and all(engine is not k for k in keep):
-                engine.close(unload=engine.is_local and engine.local_key() not in kept_local)
+                engine.close()
+                if engine.is_local and engine.local_key() not in kept_local:
+                    threading.Thread(target=self._unload_unused, args=(engine,),
+                                     name="VLM_Unload", daemon=True).start()
+
+    def _unload_unused(self, engine: VLMEngine):
+        with self.standby.model_lock, self.api_lock:
+            if not any(active.is_local and active.local_key() == engine.local_key() for active in self._engines()):
+                engine._unload()
 
     def test_choice(self, role: str, choice: Choice) -> dict:
         """Tombol "Uji": 1 ping + 1 gambar sintetis lewat engine sementara (memakai kuota penyedia).
@@ -618,7 +638,13 @@ class VLMAnalyzer:
         `ok` = penyedia menjawab; `json_ok` = jawaban gambar berupa JSON yang bisa diurai.
         Engine gerbang yang sedang berjalan tidak disentuh.
         """
+        guard = self._local_operation() if vlm_profiles.is_local(choice.provider) else nullcontext()
+        with self.apply_lock, guard:
+            return self._test_choice(role, choice)
+
+    def _test_choice(self, role: str, choice: Choice) -> dict:
         engine = self._new_engine(role, choice)
+        unload = engine.is_local and engine.provider is not None and not self._tested_local_is_in_use(engine)
         try:
             if engine.provider is None:
                 return {"ok": False, "latency_ms": None, "json_ok": False, "error": engine.error}
@@ -634,6 +660,19 @@ class VLMAnalyzer:
             return {"ok": True, "latency_ms": latency, "json_ok": not json_error, "error": json_error}
         finally:
             engine.close()
+            if unload:
+                self._unload_test_engine(engine)
+
+    def _tested_local_is_in_use(self, engine: VLMEngine) -> bool:
+        return any(active.is_local and active.local_key() == engine.local_key()
+                   and (not self.standby.owns(active) or self.standby.state != UNLOADED)
+                   for active in self._engines())
+
+    def _unload_test_engine(self, engine: VLMEngine):
+        # Tidak membongkar saat panggilan uji yang habis waktu masih menyelesaikan I/O.
+        engine.executor.shutdown(wait=True)
+        with self.api_lock:
+            engine._unload()
 
     def _attempt(self, engine: VLMEngine, call: Callable[[], object]) -> str:
         """Kosong bila berhasil, selain itu alasan singkat untuk Pengaturan admin."""
@@ -733,9 +772,9 @@ class VLMAnalyzer:
     def _ping_engine(self, engine: VLMEngine) -> dict:
         """Satu engine menilai gambar contoh; jeda kuota dijalani SEBELUM stopwatch dimulai."""
         if not self.standby.ready(engine):
-            self.standby.request()
             return {"role": engine.role, "ok": False, "latency_ms": 0,
-                    "error": messages.VLM_LOCAL_NOT_READY, "is_local": True,
+                    "error": (messages.VLM_LOCAL_STANDBY_UNLOADED if self.standby.state == UNLOADED
+                              else messages.VLM_LOCAL_NOT_READY), "is_local": True,
                     "timeout_ms": round(engine.timeout * 1000)}
         wait = engine.min_interval - (time.time() - engine.last_call_time)
         if wait > 0:

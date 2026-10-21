@@ -393,6 +393,8 @@ VLM_LOCAL_UNLOAD_FAILED = "VLM lokal gagal dibongkar; akan dicoba lagi."
 VLM_QUEUE_FULL = "Antrean VLM penuh; mohon tunggu."
 LOG_VLM_ROUTE_FAILED = "VLM {who} gagal ({reason})."
 VLM_BACKUP_UNAVAILABLE = "cadangan: tidak tersedia"
+VLM_LOCAL_FALLBACK_ENV_IGNORED = "Pilihan VLM darurat dari lingkungan diabaikan: {reason}"
+VLM_LOCAL_STANDBY_UNLOADED = "Siaga (belum dimuat)."
 # --- VLM cadangan dimatikan (T70) ---
 LOG_VLM_LOCAL_UNLOADED = "Model {who} dikeluarkan dari GPU (tidak dipakai lagi)."
 LOG_VLM_STALE_CHECK_SKIPPED = "Pemeriksaan model {who} sisa sesi lalu dilewati (Ollama tidak terjangkau): {error}"

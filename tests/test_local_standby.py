@@ -33,7 +33,8 @@ def _complete():
 class FakeProvider(VLMProvider):
     def __init__(self, name):
         super().__init__("model-uji")
-        self.name, self.error = name, None
+        self.name = name
+        self.error: Exception | None = None
         self.calls, self.warms, self.unloads = [], 0, 0
         self.warm_started, self.release = threading.Event(), threading.Event()
         self.release.set()
@@ -380,6 +381,91 @@ def test_switch_provider_while_loading_finishes_without_deadlock(make_analyzer):
     worker.join(2)
     assert not worker.is_alive() and result
     assert analyzer.local_fallback is None and analyzer.standby.engine is None
+
+
+@pytest.mark.parametrize("layout", ["A", "B"])
+def test_cold_load_leaves_inspection_lock_available_and_online_primary_responds(make_analyzer, layout):
+    analyzer = make_analyzer(layout)
+    provider = analyzer.standby.engine.provider
+    provider.release.clear()
+    try:
+        _internet(analyzer, SLOW)
+        assert provider.warm_started.wait(1)
+        assert analyzer.api_lock.acquire(timeout=0.1)
+        analyzer.api_lock.release()
+        result = analyzer.analyze_person(person_crop())
+        assert result.decided_by == "utama" and result.is_complete
+        assert analyzer.standby.state == LOADING and provider.warms == 1
+    finally:
+        provider.release.set()
+        analyzer.standby._loader.join(2)
+
+
+def test_cold_ping_does_not_load_or_record_engine_failure(make_analyzer, monkeypatch):
+    from backend import messages
+    from backend.api_monitor import api_monitor
+
+    analyzer = make_analyzer("B")
+    local = analyzer.standby.engine
+    failures = api_monitor.get_status()["backup"]["failures"]
+    monkeypatch.setattr(analyzer.standby, "request", lambda: pytest.fail("ping tidak boleh memuat"))
+    row = analyzer._ping_engine(local)
+    assert not row["ok"] and row["error"] == messages.VLM_LOCAL_STANDBY_UNLOADED
+    assert analyzer.standby.state == UNLOADED and local.provider.warms == 0
+    assert api_monitor.get_status()["backup"]["failures"] == failures
+
+
+def test_emergency_audit_label_and_telemetry_are_separate(make_analyzer):
+    from backend.api_monitor import api_monitor
+
+    analyzer = make_analyzer("A", warm=True)
+    before = api_monitor.get_status()
+    _internet(analyzer, DISCONNECTED)
+    result = analyzer.analyze_person(person_crop())
+    assert result.decided_by == ROLE_EMERGENCY
+    assert result.inference_source == f"{vlm_selection.LOCAL_FALLBACK_SOURCE_PREFIX}ollama/model-uji"
+    after = api_monitor.get_status()
+    assert after["decisions_local"] == before["decisions_local"] + 1
+    assert after["decisions_backup"] == before["decisions_backup"]
+
+
+def test_current_local_fallback_includes_selection_source(make_analyzer):
+    analyzer = make_analyzer("A")
+    current = analyzer.current_selection()
+    assert current["local_fallback"]["source"] == current["primary"]["source"] == "env"
+
+
+@pytest.mark.parametrize("warm,error", [(False, False), (False, True), (True, False)])
+def test_local_provider_test_restores_cold_state_but_keeps_ready_model(make_analyzer, monkeypatch, warm, error):
+    from backend.api import routes_vlm
+    from backend.app import app
+
+    analyzer = make_analyzer("A", warm=warm)
+    temporary = _fake_engine("cadangan", Choice("ollama", "qwen2.5vl:7b"))
+    # Model sementara sama dengan standby; uji tidak boleh membongkar model yang sudah siap.
+    analyzer.standby.engine.model_name = temporary.model_name
+    provider = temporary.provider
+    assert isinstance(provider, FakeProvider)
+    if error:
+        provider.error = RuntimeError("galat uji tiruan")
+    monkeypatch.setattr(analyzer, "_new_engine", lambda role, choice: temporary)
+    monkeypatch.setattr(routes_vlm, "vlm_analyzer", analyzer)
+    response = TestClient(app).post("/api/config/vlm/test", json={
+        "role": "backup", "provider": "ollama", "model": temporary.model_name})
+    assert response.status_code == 200 and response.json()["json_ok"] is (not error)
+    assert provider.unloads == (0 if warm else 1)
+    assert analyzer.standby.state == (READY if warm else UNLOADED)
+
+
+@pytest.mark.parametrize("layout", ["A", "B"])
+def test_apply_local_standby_does_not_warm_it(make_analyzer, layout):
+    analyzer = make_analyzer("C")
+    local = Choice("ollama", "qwen2.5vl:7b")
+    selection = Selection(analyzer.primary.choice(), local if layout == "B" else analyzer.backup.choice(),
+                          "dashboard", local if layout == "A" else None)
+    current = analyzer.apply_selection(selection, lambda: True)
+    assert analyzer.standby.state == UNLOADED and analyzer.standby.engine.provider.warms == 0
+    assert current["local_fallback"]["source"] == "dashboard" if layout == "A" else current["local_fallback"] is None
 
 
 def test_local_as_primary_is_warmed_at_startup(make_analyzer):

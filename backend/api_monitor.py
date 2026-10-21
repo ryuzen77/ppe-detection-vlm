@@ -151,6 +151,7 @@ class APIMonitor:
                 "backup": backup,
                 "decisions_primary": self.decisions["utama"],
                 "decisions_backup": self.decisions["cadangan"],
+                "decisions_local": self.decisions[ROLE_EMERGENCY],
                 "no_decisions": self.no_decisions,
                 "last_no_decision_reason": self.last_no_decision_reason,
                 "is_locked": self.is_locked,

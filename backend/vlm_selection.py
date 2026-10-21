@@ -22,6 +22,7 @@ from .vlm_providers import profiles
 from .internet_monitor import DISCONNECTED, SLOW
 
 logger = logging.getLogger(__name__)
+LOCAL_FALLBACK_SOURCE_PREFIX = "VLM_DARURAT:"
 
 SETTINGS_KEY = "vlm_selection"
 SOURCE_ENV = "env"
@@ -198,7 +199,11 @@ def env_selection() -> Selection:
               if cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_PROVIDER != NO_BACKUP else None)
     fallback = (Choice(cfg.VLM_LOCAL_FALLBACK_PROVIDER, cfg.VLM_LOCAL_FALLBACK_MODEL)
                 if cfg.VLM_LOCAL_FALLBACK_PROVIDER != NO_BACKUP else None)
-    check_local_fallback(backup, fallback)
+    try:
+        check_local_fallback(backup, fallback)
+    except SelectionError as error:
+        logger.warning(messages.VLM_LOCAL_FALLBACK_ENV_IGNORED.format(reason=error.message))
+        fallback = None
     return Selection(Choice(cfg.VLM_PROVIDER, cfg.VLM_MODEL), backup, SOURCE_ENV, fallback)
 
 

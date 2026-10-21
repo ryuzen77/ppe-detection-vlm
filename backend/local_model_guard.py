@@ -30,11 +30,12 @@ UNLOADED, LOADING, READY, FAILED = "unloaded", "loading", "ready", "failed"
 
 
 class LocalStandby:
-    """Satu pemuat model; urutan lock selalu inspeksi -> state, tidak pernah apply_lock."""
+    """Satu operasi model; muat dingin tidak menahan inspeksi lewat API."""
 
     def __init__(self, inspection_lock, on_change=None, clock=time.monotonic):
         self._inspection_lock, self._on_change, self._clock = inspection_lock, on_change, clock
         self._lock = threading.Lock()
+        self.model_lock = threading.RLock()
         self._stop = threading.Event()
         self._thread = self._loader = None
         self.engine = None
@@ -110,7 +111,7 @@ class LocalStandby:
         return True
 
     def _load(self, engine):
-        with self._inspection_lock:
+        with self.model_lock:
             if self._stop.is_set() or engine is None or self.engine is not engine:
                 return
             try:
@@ -120,7 +121,8 @@ class LocalStandby:
             if self._stop.is_set():
                 if ready:
                     try:
-                        engine.provider.unload()
+                        with self._inspection_lock:
+                            engine.provider.unload()
                     except Exception:
                         logger.warning(messages.VLM_LOCAL_UNLOAD_FAILED)
                 with self._lock:
@@ -154,7 +156,7 @@ class LocalStandby:
             self._retire()
 
     def _retire(self):
-        with self._inspection_lock:
+        with self.model_lock, self._inspection_lock:
             with self._lock:
                 if (self.state != READY or self.engine is None or self._healthy_since is None
                         or self._clock() - self._healthy_since < cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS):
@@ -177,7 +179,7 @@ class LocalStandby:
         threading.Thread(target=self._clear_resident, name="LocalStandbyClear", daemon=True).start()
 
     def _clear_resident(self):
-        with self._inspection_lock:
+        with self.model_lock, self._inspection_lock:
             with self._lock:
                 engine = self.engine if self.state == UNLOADED and not self._wanted else None
             if engine is not None and engine.provider is not None:

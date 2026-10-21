@@ -332,6 +332,29 @@ def test_endpoint_kembali_ke_env(client):
     assert runtime_settings.load().get(vlm_selection.SETTINGS_KEY) is None
 
 
+@pytest.mark.parametrize("fallback_provider", ["ollama", "gemini"])
+def test_invalid_env_fallback_warns_and_keeps_startup_running(env, fakes, monkeypatch, caplog, fallback_provider):
+    monkeypatch.setattr(cfg, "VLM_LOCAL_FALLBACK_PROVIDER", fallback_provider)
+    with caplog.at_level(logging.WARNING):
+        analyzer = VLMAnalyzer()
+        analyzer.start()
+    try:
+        assert analyzer.primary is not None and analyzer.backup is not None
+        assert analyzer.current_selection()["local_fallback"] is None
+        assert any(messages.VLM_LOCAL_FALLBACK_ENV_IGNORED.split(":")[0] in r.message for r in caplog.records)
+    finally:
+        for engine in analyzer._engines():
+            engine.close()
+
+
+def test_reset_with_conflicting_local_env_fallback_returns_200(client, monkeypatch):
+    monkeypatch.setattr(cfg, "VLM_LOCAL_FALLBACK_PROVIDER", "ollama")
+    response = client.delete("/api/config/vlm/selection")
+    assert response.status_code == 200
+    assert response.json()["backup"]["provider"] == "ollama"
+    assert response.json()["local_fallback"] is None
+
+
 def test_endpoint_uji(client):
     r = client.post("/api/config/vlm/test", json={"role": "backup", "provider": "openai", "model": "m"})
     assert r.status_code == 200 and r.json()["ok"] is True
