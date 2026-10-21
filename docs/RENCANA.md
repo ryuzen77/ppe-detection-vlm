@@ -380,6 +380,8 @@ Status telemetri tetap tiga (`normal/lambat/putus`); "sangat lambat" hanya atura
 1. Keputusan VLM lokal darurat dicatat di audit `inference_source = "VLM_DARURAT:<penyedia>/<model>"` (utama `VLM_LIVE:`, cadangan `VLM_CADANGAN:` tetap) dan **dihitung terpisah** di laporan (bukan digabung ke cadangan): `GET /api/reports` tambah `local_fallback_count` (di samping `backup_count`); telemetri `api_monitor` tambah `decisions_local` (di samping `decisions_backup`).
 2. `POST /api/config/vlm/apply` dengan VLM lokal (cadangan B atau darurat A) **tidak memuat model** — siaga dingin; model baru dimuat saat dibutuhkan (§4).
 3. `POST /api/config/vlm/test` untuk penyedia lokal (UI mengirim `role: "backup"` untuk darurat, karena kontrak uji T28 hanya utama/cadangan): bila model berstatus `unloaded` sebelum diuji, model **dikeluarkan lagi** setelah uji selesai.
+4. (Tinjauan Codex atas T72b, disetujui pengguna 22-10) `POST /api/monitoring/ping`: setiap baris `engines[]` tambah `standby: boolean` — `true` bila VLM lokal sengaja tidak diuji karena siaga dingin (`unloaded`), `false` selain itu (termasuk habis waktu/gagal sungguhan). UI tidak lagi menebak dari telemetri WebSocket yang bisa basi.
+5. Darurat lokal **tanpa** cadangan (`backup: null`, `local_fallback` lokal) sah — UI menampilkannya dan tidak menghapusnya diam-diam saat Terapkan.
 
 #### 6. Pembagian & tes
 
