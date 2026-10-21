@@ -131,6 +131,11 @@ def image_for_vlm(crop_bgr: np.ndarray, keypoints: Optional[list] = None, zoom: 
     return cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])[1].tobytes()
 
 
+def _engine_jpeg(engine: "VLMEngine", crop: np.ndarray, keypoints: Optional[list]) -> bytes:
+    """T86: gambar per engine — berpanel untuk VLM online, tubuh saja (isi T58 persis) untuk lokal."""
+    return image_for_vlm(crop, keypoints, vlm_selection.uses_zoom(engine.provider_name))
+
+
 def warmup_image_jpeg(zoom: bool = False) -> bytes:
     """Gambar sintetis seukuran gambar pemeriksaan (termasuk panel T86), tanpa foto orang.
 
@@ -617,12 +622,14 @@ class VLMAnalyzer:
         5 dtk lebih & habis waktu. Kini tiap engine menilai gambar contoh seukuran pemeriksaan,
         lewat antrean yang sama dengan gerbang (tidak berebut kuota/GPU dengan pekerja).
         """
-        engines = self._engines()
-        if not engines:
-            return {"status": "OFFLINE", "latency_ms": 0, "message": messages.VLM_NOT_CONFIGURED, "engines": []}
         if not self.api_lock.acquire(timeout=cfg.VLM_PING_LOCK_WAIT_SECONDS):
             return {"status": "BUSY", "latency_ms": 0, "message": messages.VLM_PING_BUSY, "engines": []}
         try:
+            # Diambil SETELAH lock (tinjauan Codex T86): pergantian penyedia (_swap) juga di bawah lock
+            # lalu menutup engine lama, jadi daftar sebelum lock bisa berisi engine yang sudah ditutup.
+            engines = self._engines()
+            if not engines:
+                return {"status": "OFFLINE", "latency_ms": 0, "message": messages.VLM_NOT_CONFIGURED, "engines": []}
             results = [self._ping_engine(engine) for engine in engines]
         finally:
             self.api_lock.release()
@@ -801,46 +808,57 @@ class VLMAnalyzer:
             # Satu potret item aktif untuk seluruh inspeksi, supaya prompt dan
             # penilaian jawaban memakai daftar yang sama walau operator mengubahnya.
             aktif = ppe_rules.get_active_items()
-            # T86: gambar per engine — berpanel untuk VLM online, tubuh saja (isi T58) untuk lokal
-            def jpeg(engine: VLMEngine) -> bytes:
-                return image_for_vlm(person_crop_bgr, keypoints, vlm_selection.uses_zoom(engine.provider_name))
-            reasons = []
-
-            now = time.time()
-            primary = self.primary
-            if primary is not None and self._primary_allowed(now):
-                self.primary_last_attempt = now
-                try:
-                    result = self._try(primary, jpeg(primary), aktif)
-                    self._primary_result(True, time.time())
-                    return self._finish(result, start_t)
-                except Exception as e:
-                    self._primary_result(False, time.time())
-                    reason = self._describe(e, primary)
-                    reasons.append(f"utama: {reason}")
-                    target = self.backup.who if self.backup is not None and self.backup.provider is not None else "-"
-                    logger.warning(f"VLM {primary.who} gagal ({reason}); beralih ke {target}.")
-            elif self.primary is not None and self.primary.provider is not None:
-                reasons.append("utama: dianggap terputus")
-
-            if self.backup is not None and self.backup.provider is not None:
-                try:
-                    return self._finish(self._try(self.backup, jpeg(self.backup), aktif), start_t)
-                except Exception as e:
-                    reason = self._describe(e, self.backup)
-                    reasons.append(f"cadangan: {reason}")
-                    logger.warning(f"VLM {self.backup.who} gagal ({reason}).")
-                    if self.backup.is_local:
-                        # Crash Ollama bisa meninggalkan model sebagian di CPU (T38)
-                        self.local_guard.trigger()
-            else:
-                reasons.append("cadangan: tidak tersedia")
-
+            reasons: list[str] = []
+            result = self._attempt_primary(person_crop_bgr, keypoints, aktif, reasons)
+            if result is None:
+                result = self._attempt_backup(person_crop_bgr, keypoints, aktif, reasons)
+            if result is not None:
+                return self._finish(result, start_t)
             return self._no_decision(start_t, "; ".join(reasons))
         finally:
             self._publish_status()
             api_monitor.set_locked(False)
             self.api_lock.release()
+
+    def _attempt_primary(self, crop: np.ndarray, keypoints: Optional[list], aktif,
+                         reasons: list[str]) -> Optional[InspectionResult]:
+        """VLM utama bila pemutus sirkuit mengizinkan; None = gagal/dilewati (alasan ke `reasons`)."""
+        now, primary = time.time(), self.primary
+        if primary is None or primary.provider is None:
+            return None
+        if not self._primary_allowed(now):
+            reasons.append("utama: dianggap terputus")
+            return None
+        self.primary_last_attempt = now
+        try:
+            result = self._try(primary, _engine_jpeg(primary, crop, keypoints), aktif)
+        except Exception as e:
+            self._primary_result(False, time.time())
+            reason = self._describe(e, primary)
+            reasons.append(f"utama: {reason}")
+            target = self.backup.who if self._has_backup() and self.backup is not None else "-"
+            logger.warning(f"VLM {primary.who} gagal ({reason}); beralih ke {target}.")
+            return None
+        self._primary_result(True, time.time())
+        return result
+
+    def _attempt_backup(self, crop: np.ndarray, keypoints: Optional[list], aktif,
+                        reasons: list[str]) -> Optional[InspectionResult]:
+        """VLM cadangan; None = tidak ada / gagal (alasan ke `reasons`)."""
+        backup = self.backup
+        if backup is None or backup.provider is None:
+            reasons.append("cadangan: tidak tersedia")
+            return None
+        try:
+            return self._try(backup, _engine_jpeg(backup, crop, keypoints), aktif)
+        except Exception as e:
+            reason = self._describe(e, backup)
+            reasons.append(f"cadangan: {reason}")
+            logger.warning(f"VLM {backup.who} gagal ({reason}).")
+            if backup.is_local:
+                # Crash Ollama bisa meninggalkan model sebagian di CPU (T38)
+                self.local_guard.trigger()
+            return None
 
     @staticmethod
     def _finish(result: InspectionResult, start_t: float) -> InspectionResult:

@@ -1,5 +1,6 @@
 """Adaptor penyedia VLM dan jalur VLMAnalyzer di atasnya, tanpa panggilan jaringan."""
 import json
+import threading
 import time
 
 import cv2
@@ -8,7 +9,8 @@ import pytest
 
 from backend import messages, ppe_rules
 from backend.config import cfg
-from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt, confirmation_prompts
+from backend.vlm_analyzer import (USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt, confirmation_prompts,
+                                   image_for_vlm)
 from backend.vlm_providers import VLMProvider, create_provider, parse_json_reply
 from backend.vlm_providers.gemini import GeminiProvider
 from backend.vlm_providers.openai_compatible import OpenAICompatibleProvider
@@ -370,6 +372,45 @@ def test_ping_memakai_gambar_contoh_seukuran_pemeriksaan(analyzer):
     assert image == warmup_image_jpeg(zoom=True) and system_prompt == build_system_prompt(zoom=True)
     row = res["engines"][0]
     assert row["ok"] and row["is_local"] is False and row["timeout_ms"] == round(analyzer.primary.timeout * 1000)
+
+
+def test_cadangan_lokal_menerima_gambar_dan_prompt_isi_t58(analyzer):
+    """Tinjauan Codex T86: utama online gagal -> cadangan LOKAL tetap tanpa panel (gambar & prompt).
+    Validasi lokal 21-10: dengan panel apa pun qwen2.5vl:7b meloloskan APD kurang."""
+    utama = FakeProvider(error=RuntimeError("503 UNAVAILABLE"))
+    cadangan = FakeProvider(reply=_lengkap())
+    crop = person_crop()
+    hasil = analyzer.pasang(utama=utama, cadangan=cadangan).analyze_person(crop, None)
+    assert hasil.decided_by == "cadangan"
+    online_image, online_prompt, _ = utama.calls[0]
+    local_image, local_prompt, _ = cadangan.calls[0]
+    assert online_image == image_for_vlm(crop, None, zoom=True) and online_prompt == build_system_prompt(zoom=True)
+    assert local_image == VLMAnalyzer._optimize_image_for_vlm(crop), "byte JPEG lokal = cara lama (isi T58)"
+    assert local_prompt == build_system_prompt(zoom=False)
+
+
+@pytest.mark.parametrize("shape", [(640, 220), (900, 300), (300, 120), (1080, 1920), (50, 40)])
+def test_gambar_tanpa_panel_identik_cara_lama(shape):
+    """Validasi lokal T58 (84 foto) hanya berlaku bila byte JPEG-nya PERSIS sama dengan sebelum T86."""
+    h, w = shape
+    crop = np.random.default_rng(h * w).integers(0, 255, (h, w, 3), dtype=np.uint8)
+    assert image_for_vlm(crop, None, zoom=False) == VLMAnalyzer._optimize_image_for_vlm(crop)
+
+
+def test_ping_memakai_engine_terbaru_bila_penyedia_diganti_saat_menunggu(analyzer, monkeypatch):
+    """Tinjauan Codex T86: daftar engine diambil setelah lock; engine lama yang ditutup tidak diuji."""
+    monkeypatch.setattr(cfg, "VLM_PING_LOCK_WAIT_SECONDS", 5.0)
+    lama, baru = FakeProvider(reply=_lengkap()), FakeProvider(reply=_lengkap())
+    analyzer.pasang(utama=lama)
+    analyzer.api_lock.acquire()
+    hasil = {}
+    t = threading.Thread(target=lambda: hasil.update(analyzer.ping_api()))
+    t.start()
+    time.sleep(0.2)                       # ping sedang menunggu lock
+    analyzer.pasang(utama=baru)           # pergantian penyedia (di produksi: _swap di bawah lock yang sama)
+    analyzer.api_lock.release()
+    t.join(timeout=5)
+    assert hasil["engines"][0]["ok"] and lama.calls == [] and len(baru.calls) == 1
 
 
 def test_ping_jeda_kuota_tidak_ikut_terukur(analyzer, monkeypatch):
