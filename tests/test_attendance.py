@@ -12,7 +12,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, messages, report_manager, worker_store
+from backend import face_crypto, messages, ppe_rules, report_manager, worker_store
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
@@ -325,7 +325,7 @@ def test_csv_note_headers_seen_not_seen_and_unknown_summary(env):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert messages.ATTENDANCE_CSV_FILENAME.format(date=DAY) in response.headers["content-disposition"]
-    rows = list(csv.reader(io.StringIO(response.text)))
+    rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert rows[0] == [messages.ATTENDANCE_CSV_NOTE]
     assert "bukan absensi resmi" in rows[0][0] and "wajah tidak dikenali" in rows[0][0]
     assert rows[1] == messages.ATTENDANCE_CSV_HEADER
@@ -352,7 +352,7 @@ def test_csv_filter_and_quoting_preserve_snapshot_text(env):
     _audit(env, worker, name='Nama, "Uji"')
     _audit(env, status="unknown", department=None, company=None)
     response = env.client.get(PATHS[1], params={"date": DAY, "company": "Perusahaan Uji"})
-    rows = list(csv.reader(io.StringIO(response.text)))
+    rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert rows[2][2] == 'Nama, "Uji"'
     assert rows[-1][-3:] == ["1", "1", "0"]
 
@@ -365,7 +365,7 @@ def test_csv_unknown_summary_covers_entire_gate_when_filtered(env, filters):
     _audit(env, status="disabled", complete=False, department=None, company=None)
     response = env.client.get(PATHS[1], params={"date": DAY, **filters})
     assert response.status_code == 200
-    rows = list(csv.reader(io.StringIO(response.text)))
+    rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert len(rows) == 3
     assert rows[-1][5:] == [messages.ATTENDANCE_UNKNOWN, "", "", "2", "1", "1"]
 
@@ -374,14 +374,35 @@ def test_csv_unknown_summary_covers_entire_gate_when_filtered(env, filters):
 def test_csv_snapshot_names_cannot_be_spreadsheet_formulas(env, name):
     _audit(env, _worker(env), name=name)
     response = env.client.get(PATHS[1], params={"date": DAY})
-    assert list(csv.reader(io.StringIO(response.text)))[2][2] == "'" + name
+    assert list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))[2][2] == "'" + name
 
 
 def test_empty_day_csv_still_has_note_header_and_unknown_summary(env):
     response = env.client.get(PATHS[1], params={"date": DAY})
-    rows = list(csv.reader(io.StringIO(response.text)))
+    rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert len(rows) == 3
     assert rows[-1][-3:] == ["0", "0", "0"]
+
+
+@pytest.mark.parametrize("path,header_index", [(PATHS[1], 1), ("/api/reports/export", 0)])
+@pytest.mark.parametrize("populated", [False, True])
+def test_csv_exports_have_one_utf8_bom_and_preserve_headers(env, catalog_defaults, path, header_index, populated):
+    name = "Nama Uji — É"
+    if populated:
+        _audit(env, _worker(env), name=name)
+    response = env.client.get(path, params={"date": DAY})
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    assert response.content.count(b"\xef\xbb\xbf") == 1
+    text = response.content.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(text)))
+    expected = messages.ATTENDANCE_CSV_HEADER if header_index else (
+        messages.CSV_HEADER_LEADING
+        + [messages.CSV_HEADER_WORKER_NAME, messages.CSV_HEADER_DEPARTMENT, messages.CSV_HEADER_COMPANY]
+        + [item.label for item in ppe_rules.get_items()] + messages.CSV_HEADER_TRAILING)
+    assert rows[header_index] == expected
+    if populated:
+        assert name in text
 
 
 def _seed_benchmark(env, size, day):

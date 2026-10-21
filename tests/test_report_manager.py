@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from backend import messages
-from backend.report_manager import SCHEMA_VERSION, ReportManager
+from backend.report_manager import CSV_BOM, SCHEMA_VERSION, ReportManager
 
 # Skema versi 0 persis seperti sebelum T4: sebelas kolom tetap per item
 _CREATE_V0 = """
@@ -161,7 +161,9 @@ def test_simpan_baca_dan_ekspor_csv(paths, catalog_defaults):
     stats = mgr.get_reports()
     assert (stats["total_all"], stats["violation_count"]) == (1, 1)
 
-    rows = list(csv.reader(io.StringIO(mgr.export_csv_text())))
+    text = mgr.export_csv_text()
+    assert text.startswith(CSV_BOM)
+    rows = list(csv.reader(io.StringIO(text.removeprefix(CSV_BOM))))
     header, row = rows[0], rows[1]
     assert header[:len(messages.CSV_HEADER_LEADING)] == messages.CSV_HEADER_LEADING
     kolom = dict(zip(header, row))

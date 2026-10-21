@@ -32,6 +32,7 @@ BYTES_PER_MB = 1024 ** 2
 
 # Akhiran foto bukti yang sedang ditulis (lihat _write_snapshot)
 SNAPSHOT_TMP_SUFFIX = ".tmp"
+CSV_BOM = "\ufeff"  # Excel mengenali UTF-8 lewat penanda di awal berkas, termasuk ekspor kosong.
 
 # Filter tanggal dikerjakan sebelum window: hanya audit hari terpilih yang diurutkan.
 _ATTENDANCE_SEEN_SQL = """
@@ -700,7 +701,7 @@ class ReportManager:
 
     def iter_attendance_csv(self, report: dict):
         """Gunakan laporan yang sama dengan JSON agar isi dan ringkasan ekspor tetap konsisten."""
-        yield self._csv_text([[messages.ATTENDANCE_CSV_NOTE], messages.ATTENDANCE_CSV_HEADER])
+        yield CSV_BOM + self._csv_text([[messages.ATTENDANCE_CSV_NOTE], messages.ATTENDANCE_CSV_HEADER])
         number = 0
         for section in ("seen", "not_seen"):
             for row in report[section]:
@@ -749,7 +750,7 @@ class ReportManager:
             messages.CSV_HEADER_DEPARTMENT,
             messages.CSV_HEADER_COMPANY,
         ]
-        yield self._csv_text([header + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
+        yield CSV_BOM + self._csv_text([header + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
         conditions, params = _filter_clause(
             date_from=date_from,
             date_to=date_to,
