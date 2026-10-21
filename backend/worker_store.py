@@ -120,6 +120,7 @@ class WorkerRepository(Protocol):
 
     def face_ready(self) -> bool: ...
     def all(self, q: Optional[str] = None, active: Optional[bool] = None) -> list[Worker]: ...
+    def active_attendance_workers(self) -> list[dict]: ...
     def get(self, worker_id: int) -> Worker: ...
     def next_employee_no(self) -> str: ...
     def create(
@@ -449,6 +450,26 @@ class SqliteWorkerStore:
 
     def active_count(self) -> int:
         return self._run(lambda c: c.execute("SELECT COUNT(*) FROM workers WHERE active = 1").fetchone()[0])
+
+    def active_attendance_workers(self) -> list[dict]:
+        """Identitas aktif untuk T80, tanpa templat/enkripsi, migrasi, atau transaksi tulis."""
+        if not self.path.exists():
+            return []
+        with self._lock:
+            conn = sqlite3.connect(f"{self.path.resolve().as_uri()}?mode=ro", uri=True,
+                                   timeout=cfg.DB_TIMEOUT_SECONDS)
+            try:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT w.id AS worker_id, w.employee_no, w.name, "
+                    "d.name AS department, c.name AS company FROM workers w "
+                    "LEFT JOIN departments d ON d.id = w.department_id "
+                    "LEFT JOIN companies c ON c.id = w.company_id "
+                    "WHERE w.active = 1 ORDER BY w.name COLLATE NOCASE, w.id"
+                )
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
 
     def next_employee_no(self) -> str:
         return self._run(self._next_employee_no)

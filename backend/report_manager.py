@@ -6,6 +6,7 @@ import time
 import os
 import csv
 import io
+from contextlib import closing
 from datetime import date
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -16,6 +17,8 @@ from . import ppe_rules
 from . import report_summary
 from .config import cfg
 from . import messages
+from . import worker_store
+from .face_identity import RECOGNIZED
 from .disk_guard import BYTES_PER_GB
 
 logger = logging.getLogger(__name__)
@@ -29,6 +32,50 @@ BYTES_PER_MB = 1024 ** 2
 
 # Akhiran foto bukti yang sedang ditulis (lihat _write_snapshot)
 SNAPSHOT_TMP_SUFFIX = ".tmp"
+
+# Filter tanggal dikerjakan sebelum window: hanya audit hari terpilih yang diurutkan.
+_ATTENDANCE_SEEN_SQL = """
+    WITH daily AS (
+        SELECT worker_id, employee_no, worker_name AS name, department, company, time_str,
+               is_complete, ROW_NUMBER() OVER worker_day AS latest,
+               MIN(time_str) OVER worker_day AS first_seen,
+               COUNT(*) OVER worker_day AS passes,
+               SUM(is_complete) OVER worker_day AS passed
+        FROM worker_inspections WHERE date_str = ? AND fr_status = ?
+        WINDOW worker_day AS (PARTITION BY worker_id ORDER BY time_str DESC, id DESC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    )
+    SELECT worker_id, employee_no, name, department, company, first_seen,
+           time_str AS last_seen, passes, passed, passes - passed AS rejected,
+           is_complete AS last_complete
+    FROM daily WHERE latest = 1 ORDER BY first_seen, worker_id
+"""
+_ATTENDANCE_UNKNOWN_SQL = """
+    SELECT COUNT(*) AS passes, COALESCE(SUM(is_complete), 0) AS passed,
+           COUNT(*) - COALESCE(SUM(is_complete), 0) AS rejected
+    FROM worker_inspections WHERE date_str = ? AND fr_status IS NOT ?
+"""
+_ATTENDANCE_COUNT_FIELDS = ("first_seen", "last_seen", "passes", "passed", "rejected")
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def _attendance_matches(row: dict, department: Optional[str], company: Optional[str]) -> bool:
+    return (not department or row["department"] == department) and (not company or row["company"] == company)
+
+
+def _attendance_totals(seen: list[dict], unknown: dict, active_workers: int) -> dict:
+    recognized = sum(row["passes"] for row in seen)
+    passes = recognized + unknown["passes"]
+    return {"passes": passes, "recognized": recognized,
+            "recognition_rate": recognized / passes if passes else None,
+            "active_workers": active_workers, "seen_workers": len(seen)}
+
+
+def _attendance_csv_cell(value):
+    """Nama bebas tetap teks ketika CSV dibuka di spreadsheet."""
+    if isinstance(value, str) and value.lstrip().startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
 
 # Jalur data diatur lewat DATA_DIR di config, di luar direktori kode
 DB_PATH = cfg.DB_PATH
@@ -621,6 +668,53 @@ class ReportManager:
         buffer = io.StringIO()
         csv.writer(buffer).writerows(rows)
         return buffer.getvalue()
+
+    def get_attendance(self, date_str: str, department: Optional[str] = None,
+                       company: Optional[str] = None) -> dict:
+        """Informasi lintasan harian, bukan absensi. Identitas audit tidak diambil dari galeri terkini."""
+        with closing(self._get_connection()) as conn, conn:
+            conn.execute("BEGIN")
+            seen = [dict(row) for row in conn.execute(_ATTENDANCE_SEEN_SQL, (date_str, RECOGNIZED))]
+            unknown = self._attendance_unknown(conn, date_str, department, company)
+        seen_ids = {row["worker_id"] for row in seen}
+        for row in seen:
+            row["last_complete"] = bool(row["last_complete"])
+        active = [row for row in worker_store.store.active_attendance_workers()
+                  if _attendance_matches(row, department, company)]
+        filtered_seen = [row for row in seen if _attendance_matches(row, department, company)]
+        return {"date": date_str, "seen": filtered_seen,
+                "not_seen": [row for row in active if row["worker_id"] not in seen_ids],
+                "unknown": unknown, "totals": _attendance_totals(filtered_seen, unknown, len(active))}
+
+    @staticmethod
+    def _attendance_unknown(conn: sqlite3.Connection, date_str: str,
+                            department: Optional[str], company: Optional[str]) -> dict:
+        conditions, params = [], [date_str, RECOGNIZED]
+        for field, value in (("department", department), ("company", company)):
+            if value:
+                conditions.append(f"{field} = ?")
+                params.append(value)
+        suffix = " AND " + " AND ".join(conditions) if conditions else ""
+        return dict(conn.execute(_ATTENDANCE_UNKNOWN_SQL + suffix, params).fetchone())
+
+    @staticmethod
+    def _attendance_csv_row(number: int, row: dict, seen: bool) -> list:
+        status = messages.ATTENDANCE_SEEN if seen else messages.ATTENDANCE_NOT_SEEN
+        counts = [row[key] for key in _ATTENDANCE_COUNT_FIELDS] if seen else [""] * len(_ATTENDANCE_COUNT_FIELDS)
+        values = [number, row["employee_no"], row["name"], row["department"], row["company"], status, *counts]
+        return [_attendance_csv_cell(value) for value in values]
+
+    def iter_attendance_csv(self, report: dict):
+        """Gunakan laporan yang sama dengan JSON agar isi dan ringkasan ekspor tetap konsisten."""
+        yield self._csv_text([[messages.ATTENDANCE_CSV_NOTE], messages.ATTENDANCE_CSV_HEADER])
+        number = 0
+        for section in ("seen", "not_seen"):
+            for row in report[section]:
+                number += 1
+                yield self._csv_text([self._attendance_csv_row(number, row, section == "seen")])
+        unknown = report["unknown"]
+        yield self._csv_text([["", "", "", "", "", messages.ATTENDANCE_UNKNOWN, "", "",
+                              unknown["passes"], unknown["passed"], unknown["rejected"]]])
 
     def _csv_row(self, number: int, row, items) -> list:
         missing_list = _parse_json(row["missing_items"], [])
