@@ -15,6 +15,8 @@ from .config import cfg
 MODE_PRIMARY = "UTAMA"
 MODE_BACKUP = "CADANGAN"
 MODE_DOWN = "GANGGUAN"
+MODE_LOCAL = "LOKAL"
+ROLE_EMERGENCY = "darurat"
 
 
 class EngineStats:
@@ -56,13 +58,27 @@ class EngineStats:
 class APIMonitor:
     def __init__(self):
         self.lock = threading.Lock()
-        self.engines = {"utama": EngineStats(), "cadangan": EngineStats()}
+        self.engines = {role: EngineStats() for role in ("utama", "cadangan", ROLE_EMERGENCY)}
         self.primary_down = False
         self.mode = MODE_DOWN
-        self.decisions = {"utama": 0, "cadangan": 0}
+        self.decisions = {role: 0 for role in self.engines}
         self.no_decisions = 0
         self.last_no_decision_reason = ""
         self.is_locked = False
+        self.internet = {"state": None, "median_ms": None, "checked_at": None}
+        self.local = {"role": None, "state": "unloaded", "since": time.strftime(cfg.TELEMETRY_TIME_FORMAT)}
+
+    def set_internet(self, status: dict):
+        with self.lock:
+            self.internet = dict(status)
+
+    def set_local(self, status: dict):
+        with self.lock:
+            self.local = dict(status)
+
+    def set_emergency(self, info: Optional[dict]):
+        with self.lock:
+            self.engines[ROLE_EMERGENCY].info = info
 
     def set_engines(self, primary: Optional[dict], backup: Optional[dict], primary_down: bool):
         with self.lock:
@@ -114,7 +130,7 @@ class APIMonitor:
                 self.mode = MODE_DOWN
             else:
                 self.decisions[role] += 1
-                self.mode = MODE_PRIMARY if role == "utama" else MODE_BACKUP
+                self.mode = MODE_LOCAL if role == ROLE_EMERGENCY else MODE_PRIMARY if role == "utama" else MODE_BACKUP
 
     def set_locked(self, locked: bool):
         with self.lock:
@@ -124,9 +140,12 @@ class APIMonitor:
         with self.lock:
             primary = self.engines["utama"].as_dict()
             backup = self.engines["cadangan"].as_dict()
-            active = backup if self.mode == MODE_BACKUP else primary
+            active = (self.engines[ROLE_EMERGENCY].as_dict() if self.mode == MODE_LOCAL
+                      else backup if self.mode == MODE_BACKUP else primary)
             return {
                 "mode": self.mode,
+                "internet": dict(self.internet),
+                "local": dict(self.local),
                 "primary_down": self.primary_down,
                 "primary": primary,
                 "backup": backup,

@@ -380,6 +380,19 @@ ATTENDANCE_CSV_HEADER = ["No", "Nomor Pegawai", "Nama", "Divisi", "Perusahaan", 
 ATTENDANCE_SEEN = "Terlihat"
 ATTENDANCE_NOT_SEEN = "Belum terlihat"
 ATTENDANCE_UNKNOWN = "Tidak dikenali"
+
+# T72: internet dibedakan dari kegagalan API; model dingin belum memberi keputusan.
+VLM_LOCAL_FALLBACK_WITH_LOCAL_BACKUP = "VLM darurat tidak boleh dipilih bila cadangan sudah lokal."
+VLM_LOCAL_FALLBACK_NOT_LOCAL = "VLM darurat harus memakai penyedia lokal."
+LOG_INTERNET_STATE = "Status internet berubah menjadi {state} (median {median_ms} ms)."
+LOG_INTERNET_PROBE_FAILED = "Pemeriksaan internet gagal: {error}"
+LOG_LOCAL_STANDBY_STATE = "VLM lokal {role}: {state}."
+LOG_LOCAL_STANDBY_FAILED = "VLM lokal gagal dimuat/dibongkar: {error}"
+VLM_LOCAL_NOT_READY = "VLM lokal belum siap; mohon tunggu pemuatan model."
+VLM_LOCAL_UNLOAD_FAILED = "VLM lokal gagal dibongkar; akan dicoba lagi."
+VLM_QUEUE_FULL = "Antrean VLM penuh; mohon tunggu."
+LOG_VLM_ROUTE_FAILED = "VLM {who} gagal ({reason})."
+VLM_BACKUP_UNAVAILABLE = "cadangan: tidak tersedia"
 # --- VLM cadangan dimatikan (T70) ---
 LOG_VLM_LOCAL_UNLOADED = "Model {who} dikeluarkan dari GPU (tidak dipakai lagi)."
 LOG_VLM_STALE_CHECK_SKIPPED = "Pemeriksaan model {who} sisa sesi lalu dilewati (Ollama tidak terjangkau): {error}"

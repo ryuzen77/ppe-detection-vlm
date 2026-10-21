@@ -402,6 +402,22 @@ class Config:
     VLM_MIN_INTERVAL_SECONDS: float = float(_env("VLM_MIN_INTERVAL_SECONDS", "4.0"))
     # Analisa VLM yang boleh berjalan bersamaan (pool pemanggil di state_manager)
     VLM_MAX_CONCURRENT: int = 2
+    # T72: probe internet tanpa kuota VLM; alamat numerik menghindari DNS yang menggantung.
+    INTERNET_CHECK_TARGETS: tuple = tuple(
+        (host.strip().strip("[]"), int(port)) for host, port in
+        (target.rsplit(":", 1) for target in _env(
+            "INTERNET_CHECK_TARGETS", "1.1.1.1:443,8.8.8.8:443,9.9.9.9:443").split(",")))
+    INTERNET_CHECK_INTERVAL_SECONDS: float = float(_env("INTERNET_CHECK_INTERVAL_SECONDS", "30"))
+    INTERNET_CHECK_TIMEOUT_SECONDS: float = float(_env("INTERNET_CHECK_TIMEOUT_SECONDS", "2"))
+    INTERNET_SLOW_MS: float = float(_env("INTERNET_SLOW_MS", "500"))
+    INTERNET_CONFIRM_CHECKS: int = int(_env("INTERNET_CONFIRM_CHECKS", "2"))
+    VLM_LOCAL_FALLBACK_PROVIDER: str = _env("VLM_LOCAL_FALLBACK_PROVIDER", "none").strip().lower()
+    VLM_LOCAL_FALLBACK_MODEL: str = _env("VLM_LOCAL_FALLBACK_MODEL", vlm_profiles.default_model(VLM_LOCAL_BACKUP_PROVIDER))
+    VLM_LOCAL_PRELOAD: bool = _env("VLM_LOCAL_PRELOAD", "false").lower() == "true"
+    VLM_LOCAL_IDLE_UNLOAD_SECONDS: float = float(_env("VLM_LOCAL_IDLE_UNLOAD_SECONDS", "600"))
+    VLM_LOCAL_RETRY_SECONDS: float = float(_env("VLM_LOCAL_RETRY_SECONDS", "30"))
+    VLM_LOCAL_STANDBY_POLL_SECONDS: float = 1.0
+    TELEMETRY_TIME_FORMAT: str = "%H:%M:%S"
     # Riwayat latensi API untuk rata-rata di panel monitoring
     API_LATENCY_HISTORY: int = 5
     # Panjang maksimum pesan galat yang diteruskan ke dashboard

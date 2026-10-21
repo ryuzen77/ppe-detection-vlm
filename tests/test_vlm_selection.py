@@ -55,7 +55,7 @@ class FakeProvider(VLMProvider):
 
     unloads = 0
     # Porsi model di GPU menurut /api/ps tiruan: 1.0 = dimuat, 0.0 = tidak, Exception = Ollama mati
-    residency: "float | Exception" = 1.0
+    residency: "float | Exception" = 0.0  # T72: cadangan mulai dingin; tes model sisa mengisi 1.0 eksplisit.
 
     def unload(self):
         self.unloads += 1
