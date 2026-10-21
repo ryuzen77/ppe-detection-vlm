@@ -63,12 +63,13 @@ def _attendance_matches(row: dict, department: Optional[str], company: Optional[
     return (not department or row["department"] == department) and (not company or row["company"] == company)
 
 
-def _attendance_totals(seen: list[dict], unknown: dict, active_workers: int) -> dict:
+def _attendance_totals(seen: list[dict], unknown: dict, active_workers: int, seen_workers: int) -> dict:
+    """Mutu pengenalan dihitung atas seluruh gerbang; jumlah pekerja mengikuti filter daftar."""
     recognized = sum(row["passes"] for row in seen)
     passes = recognized + unknown["passes"]
     return {"passes": passes, "recognized": recognized,
             "recognition_rate": recognized / passes if passes else None,
-            "active_workers": active_workers, "seen_workers": len(seen)}
+            "active_workers": active_workers, "seen_workers": seen_workers}
 
 
 def _attendance_csv_cell(value):
@@ -675,7 +676,7 @@ class ReportManager:
         with closing(self._get_connection()) as conn, conn:
             conn.execute("BEGIN")
             seen = [dict(row) for row in conn.execute(_ATTENDANCE_SEEN_SQL, (date_str, RECOGNIZED))]
-            unknown = self._attendance_unknown(conn, date_str, department, company)
+            unknown = self._attendance_unknown(conn, date_str)
         seen_ids = {row["worker_id"] for row in seen}
         for row in seen:
             row["last_complete"] = bool(row["last_complete"])
@@ -684,18 +685,11 @@ class ReportManager:
         filtered_seen = [row for row in seen if _attendance_matches(row, department, company)]
         return {"date": date_str, "seen": filtered_seen,
                 "not_seen": [row for row in active if row["worker_id"] not in seen_ids],
-                "unknown": unknown, "totals": _attendance_totals(filtered_seen, unknown, len(active))}
+                "unknown": unknown, "totals": _attendance_totals(seen, unknown, len(active), len(filtered_seen))}
 
     @staticmethod
-    def _attendance_unknown(conn: sqlite3.Connection, date_str: str,
-                            department: Optional[str], company: Optional[str]) -> dict:
-        conditions, params = [], [date_str, RECOGNIZED]
-        for field, value in (("department", department), ("company", company)):
-            if value:
-                conditions.append(f"{field} = ?")
-                params.append(value)
-        suffix = " AND " + " AND ".join(conditions) if conditions else ""
-        return dict(conn.execute(_ATTENDANCE_UNKNOWN_SQL + suffix, params).fetchone())
+    def _attendance_unknown(conn: sqlite3.Connection, date_str: str) -> dict:
+        return dict(conn.execute(_ATTENDANCE_UNKNOWN_SQL, (date_str, RECOGNIZED)).fetchone())
 
     @staticmethod
     def _attendance_csv_row(number: int, row: dict, seen: bool) -> list:

@@ -172,11 +172,11 @@ def test_filters_use_audit_snapshots_for_seen_and_current_profile_for_not_seen(e
     report = _report(env, **filters)
     assert [row["worker_id"] for row in report["seen"]] == [seen.id]
     assert [row["worker_id"] for row in report["not_seen"]] == [unseen.id]
-    assert report["unknown"]["passes"] == 1
+    assert report["unknown"]["passes"] == 2
     assert report["totals"] == {
-        "passes": 2,
+        "passes": 3,
         "recognized": 1,
-        "recognition_rate": 0.5,
+        "recognition_rate": 1 / 3,
         "active_workers": 1,
         "seen_workers": 1,
     }
@@ -189,7 +189,7 @@ def test_seen_exclusion_precedes_current_department_filter(env):
     report = _report(env, department="Divisi Baru")
     assert report["seen"] == report["not_seen"] == []
     assert report["totals"]["active_workers"] == 1
-    assert report["totals"]["recognition_rate"] is None
+    assert report["totals"]["recognition_rate"] == 1.0
 
 
 def test_department_filter_uses_last_snapshot_for_entire_worker_day(env):
@@ -209,7 +209,40 @@ def test_filters_are_exact_and_parameterized(env, filters):
     _audit(env, _worker(env))
     report = _report(env, **filters)
     assert report["seen"] == report["not_seen"] == []
-    assert report["totals"]["passes"] == 0
+    assert report["totals"]["passes"] == 1
+
+
+@pytest.mark.parametrize("filters,count", [
+    ({"department": "Divisi A"}, 1), ({"company": "Perusahaan A"}, 1),
+    ({"department": "Divisi A", "company": "Perusahaan A"}, 1),
+    ({"department": "Tidak Ada"}, 0),
+])
+def test_recognition_metrics_cover_entire_gate_despite_organization_filters(env, filters, count):
+    first, second = _worker(env), _worker(env, "P-002")
+    _move_worker(env, first, "Divisi A", "Perusahaan A")
+    _move_worker(env, second, "Divisi B", "Perusahaan B")
+    _audit(env, first, department="Divisi A", company="Perusahaan A")
+    _audit(env, second, department="Divisi B", company="Perusahaan B")
+    _audit(env, second, clock="16:00:00", department="Divisi B", company="Perusahaan B")
+    _audit(env, status=None, department=None, company=None)
+    _audit(env, status="disabled", complete=False, department=None, company=None)
+    _audit(env, status="unknown", day=OTHER_DAY)
+    baseline, filtered = _report(env), _report(env, **filters)
+    assert filtered["unknown"] == baseline["unknown"] == {"passes": 2, "passed": 1, "rejected": 1}
+    for key, expected in (("passes", 5), ("recognized", 3), ("recognition_rate", 0.6)):
+        assert filtered["totals"][key] == baseline["totals"][key] == expected
+    assert len(filtered["seen"]) == filtered["totals"]["seen_workers"] == count
+    assert filtered["totals"]["active_workers"] == count
+    assert filtered["not_seen"] == []
+
+
+def test_filtered_report_with_only_unknown_passes_has_zero_recognition_rate(env):
+    _audit(env, status="unknown", department=None, company=None)
+    report = _report(env, department="Divisi A", company="Perusahaan A")
+    assert report["seen"] == report["not_seen"] == []
+    assert report["unknown"]["passes"] == report["totals"]["passes"] == 1
+    assert report["totals"]["recognized"] == 0
+    assert report["totals"]["recognition_rate"] == 0.0
 
 
 @pytest.mark.parametrize("path", PATHS)
@@ -321,7 +354,20 @@ def test_csv_filter_and_quoting_preserve_snapshot_text(env):
     response = env.client.get(PATHS[1], params={"date": DAY, "company": "Perusahaan Uji"})
     rows = list(csv.reader(io.StringIO(response.text)))
     assert rows[2][2] == 'Nama, "Uji"'
-    assert rows[-1][-3:] == ["0", "0", "0"]
+    assert rows[-1][-3:] == ["1", "1", "0"]
+
+
+@pytest.mark.parametrize("filters", [{"department": "Divisi A"}, {"company": "Perusahaan A"},
+                                     {"department": "Divisi A", "company": "Perusahaan A"}])
+def test_csv_unknown_summary_covers_entire_gate_when_filtered(env, filters):
+    _audit(env, _worker(env), department="Divisi B", company="Perusahaan B")
+    _audit(env, status="unknown", department=None, company=None)
+    _audit(env, status="disabled", complete=False, department=None, company=None)
+    response = env.client.get(PATHS[1], params={"date": DAY, **filters})
+    assert response.status_code == 200
+    rows = list(csv.reader(io.StringIO(response.text)))
+    assert len(rows) == 3
+    assert rows[-1][5:] == [messages.ATTENDANCE_UNKNOWN, "", "", "2", "1", "1"]
 
 
 @pytest.mark.parametrize("name", ["=1+1", "+1+1", "-1+1", "@SUM(1)", "  =1+1"])
