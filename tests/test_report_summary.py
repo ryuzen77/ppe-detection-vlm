@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from backend import messages, report_summary as rs
 from backend.app import app
-from backend.report_manager import ReportManager
+from backend.report_manager import CSV_BOM, ReportManager
 
 HELM = "Helm Keselamatan"
 SEPATU = "Sepatu Tertutup"
@@ -121,7 +121,7 @@ def test_tabel_dan_csv_mengikuti_rentang(mgr):
     assert data["filtered_total"] == 2
     r = client.get("/api/reports/export", params={"from": "2026-10-05", "to": "2026-10-11"})
     assert "2026-10-05_2026-10-11" in r.headers["content-disposition"]
-    assert len(list(csv.reader(io.StringIO(r.text)))) == 1 + 2, "header + 2 baris dalam rentang"
+    assert len(list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))) == 1 + 2, "header + 2 baris dalam rentang"
     assert client.get("/api/reports", params={"from": "kemarin"}).status_code == 400
 
 
@@ -145,7 +145,8 @@ def test_ekspor_dikirim_per_potongan_dengan_nomor_berlanjut(mgr, monkeypatch):
     monkeypatch.setattr(cfg, "CSV_EXPORT_BATCH_ROWS", 2)
     chunks = list(mgr.iter_csv_chunks())
     assert len(chunks) == 1 + 2, "header + 2 potongan untuk 4 baris"
-    rows = list(csv.reader(io.StringIO("".join(chunks))))
+    assert chunks[0].startswith(CSV_BOM) and all(CSV_BOM not in chunk for chunk in chunks[1:])
+    rows = list(csv.reader(io.StringIO("".join(chunks).removeprefix(CSV_BOM))))
     assert [r[0] for r in rows[1:]] == ["1", "2", "3", "4"], "nomor urut tidak mulai ulang tiap potongan"
     assert "".join(chunks) == mgr.export_csv_text()
 

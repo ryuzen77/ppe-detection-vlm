@@ -370,6 +370,16 @@ CSV_HEADER_DEPARTMENT = "Divisi"
 CSV_HEADER_COMPANY = "Perusahaan"
 CSV_FACE_RECOGNIZED = "{name} ({employee_no})"
 CSV_FACE_UNKNOWN = "Tidak dikenali"
+
+# T80: informasi lintasan, bukan absensi resmi (CSV khusus admin).
+ATTENDANCE_CSV_FILENAME = "kehadiran_informasi_{date}.csv"
+ATTENDANCE_CSV_NOTE = ("Informasi lewat gerbang — bukan absensi resmi; "
+                       "belum terlihat bisa karena wajah tidak dikenali")
+ATTENDANCE_CSV_HEADER = ["No", "Nomor Pegawai", "Nama", "Divisi", "Perusahaan", "Status",
+                         "Jam pertama", "Jam terakhir", "Jumlah lewat", "Lolos", "Ditolak"]
+ATTENDANCE_SEEN = "Terlihat"
+ATTENDANCE_NOT_SEEN = "Belum terlihat"
+ATTENDANCE_UNKNOWN = "Tidak dikenali"
 # --- VLM cadangan dimatikan (T70) ---
 LOG_VLM_LOCAL_UNLOADED = "Model {who} dikeluarkan dari GPU (tidak dipakai lagi)."
 LOG_VLM_STALE_CHECK_SKIPPED = "Pemeriksaan model {who} sisa sesi lalu dilewati (Ollama tidak terjangkau): {error}"

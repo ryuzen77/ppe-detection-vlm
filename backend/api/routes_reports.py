@@ -3,12 +3,13 @@ import time
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from .. import messages
 from ..report_manager import report_mgr
 from ..api_monitor import api_monitor
+from .deps import require_admin
 
 router = APIRouter()
 
@@ -23,6 +24,32 @@ def _checked_dates(*values: Optional[str]):
                 date.fromisoformat(value)
     except ValueError:
         raise HTTPException(status_code=400, detail=messages.API_REPORT_DATE_INVALID)
+
+
+def _attendance_date(value: Optional[str]) -> str:
+    _checked_dates(value)
+    if not value:
+        return date.today().isoformat()
+    if date.fromisoformat(value).isoformat() != value:
+        raise HTTPException(status_code=400, detail=messages.API_REPORT_DATE_INVALID)
+    return value
+
+
+@router.get("/api/reports/attendance", dependencies=[Depends(require_admin)])
+def get_attendance(date: Optional[str] = None, department: Optional[str] = None,
+                   company: Optional[str] = None):
+    return report_mgr.get_attendance(_attendance_date(date), department, company)
+
+
+@router.get("/api/reports/attendance/export", dependencies=[Depends(require_admin)])
+def export_attendance_csv(date: Optional[str] = None, department: Optional[str] = None,
+                          company: Optional[str] = None):
+    day = _attendance_date(date)
+    report = report_mgr.get_attendance(day, department, company)
+    filename = messages.ATTENDANCE_CSV_FILENAME.format(date=day)
+    return StreamingResponse(report_mgr.iter_attendance_csv(report), media_type="text/csv",
+                             headers={"Content-Disposition": f"attachment; filename={filename}",
+                                      "Cache-Control": "no-store"})
 
 
 @router.get("/api/reports")
