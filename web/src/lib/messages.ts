@@ -269,7 +269,9 @@ export const ATTENDANCE = {
     rate: 'Tingkat pengenalan wajah',
   },
   ofActive: (seen: number, active: number) => `${seen} dari ${active} pekerja aktif`,
-  rateHint: (recognized: number, passes: number) => `${recognized} dari ${passes} lintasan dikenali`,
+  // Wajah tak dikenali tidak punya divisi/perusahaan: angka ini selalu SELURUH gerbang hari itu (tinjauan T80a)
+  rateHint: (recognized: number, passes: number) => `${recognized} dari ${passes} lintasan dikenali (seluruh gerbang)`,
+  unknownHint: (passed: number, rejected: number) => `${passed} lolos · ${rejected} ditolak (seluruh gerbang)`,
   noPasses: 'Belum ada lintasan',
   sections: { seen: 'Terlihat lewat gerbang', notSeen: 'Belum terlihat' },
   cols: {

@@ -32,7 +32,7 @@ export function attendanceTiles(r: AttendanceReport): AttendanceTile[] {
     { label: TEXT.tiles.seen, value: String(t.seen_workers), hint: TEXT.ofActive(t.seen_workers, t.active_workers), tone: 'neutral' },
     { label: TEXT.tiles.notSeen, value: String(r.not_seen.length), hint: TEXT.notSeenNotice, tone: 'neutral' },
     { label: TEXT.tiles.unknown, value: String(r.unknown.passes),
-      hint: TEXT.passResult(r.unknown.passed, r.unknown.rejected), tone: 'neutral' },
+      hint: TEXT.unknownHint(r.unknown.passed, r.unknown.rejected), tone: 'neutral' },
     { label: TEXT.tiles.rate, value: t.recognition_rate === null ? '—' : percent(t.recognition_rate * 100),
       hint: t.passes ? TEXT.rateHint(t.recognized, t.passes) : TEXT.noPasses, tone: rateTone(t.recognition_rate) },
   ]

@@ -32,7 +32,7 @@ describe('attendance (T80)', () => {
     const [seen, notSeen, unknown, rate] = attendanceTiles(report())
     expect(seen).toMatchObject({ value: '1', hint: TEXT.ofActive(1, 4) })
     expect(notSeen).toMatchObject({ value: '1', hint: TEXT.notSeenNotice })
-    expect(unknown).toMatchObject({ value: '5', hint: TEXT.passResult(3, 2) })
+    expect(unknown).toMatchObject({ value: '5', hint: TEXT.unknownHint(3, 2) })
     expect(rate).toMatchObject({ value: percent(37.5), hint: TEXT.rateHint(3, 8), tone: 'danger' })
   })
 
