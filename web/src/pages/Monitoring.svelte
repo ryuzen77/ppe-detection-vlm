@@ -3,6 +3,7 @@
   // checklist APD, dan riwayat (keputusan UX T33) — tanpa ruang kosong.
   import CameraPicker from '../components/monitoring/CameraPicker.svelte'
   import DecisionPanel from '../components/monitoring/DecisionPanel.svelte'
+  import LightTower from '../components/monitoring/LightTower.svelte'
   import PpeChecklist from '../components/monitoring/PpeChecklist.svelte'
   import RecentHistory from '../components/monitoring/RecentHistory.svelte'
   import VideoPanel from '../components/monitoring/VideoPanel.svelte'
@@ -40,6 +41,7 @@
 <div class="monitoring">
   <VideoPanel onPickCamera={pickCamera} />
   <aside>
+    <LightTower />
     <DecisionPanel {gate} />
     <PpeChecklist items={catalog.active} {result} decidedBy={result?.decided_by ?? ''} gateKind={gate.kind} />
     <RecentHistory records={t?.history ?? []} />
@@ -58,7 +60,7 @@
   }
   aside {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     gap: var(--space-4);
     min-height: 0;
   }

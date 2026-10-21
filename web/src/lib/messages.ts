@@ -59,6 +59,21 @@ export const IOT_CHIP = {
   disabled: 'Lampu gerbang: nonaktif'
 } as const
 
+// T88: menara lampu di Monitoring. Merah & hijau = lampu fisik nyata; kuning = perintah server
+// bila perangkat tidak punya lampu kuning (relay USB 2 kanal) — keputusan pengguna 20-10.
+export const LIGHT_TOWER = {
+  title: 'Lampu gerbang',
+  names: { red: 'Merah', yellow: 'Kuning', green: 'Hijau' } as Record<string, string>,
+  states: { red: 'MERAH', yellow: 'KUNING', green: 'HIJAU', off: 'MATI' } as Record<string, string>,
+  unknown: 'tidak diketahui',
+  sourcePhysical: 'lampu fisik',
+  sourcePlan: 'perintah server',
+  noPhysical: 'Tanpa lampu fisik — tampilan mengikuti perintah server.',
+  disconnected: 'Lampu fisik tidak terbaca: pekerja mungkin tidak melihat lampu. Tampilan merah/hijau tidak bisa dipastikan.',
+  mismatch: (command: string) => `Lampu fisik belum sesuai perintah server (${command}).`,
+  yellowPlanOnly: 'Kuning hanya di layar: perangkat lampu tidak punya lampu kuning.',
+} as const
+
 export const SYSTEM_STATUS = {
   ready: 'Sistem siap',
   issues: (n: number) => `${n} perlu perhatian`,
