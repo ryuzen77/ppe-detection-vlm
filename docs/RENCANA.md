@@ -320,7 +320,7 @@ Dicek di latar tiap `INTERNET_CHECK_INTERVAL_SECONDS` (usul 30) dan **segera** s
 
 | Status | Cara mengenali | Contoh |
 | :-- | :-- | :-- |
-| `normal` | ≥ 1 alamat tersambung dan median waktu sambung ≤ `INTERNET_SLOW_MS` (usul 500 ms) | — |
+| `normal` | ≥ 1 alamat tersambung dan median waktu sambung ≤ `INTERNET_SLOW_MS` (**200 ms**, lihat "Ambang internet" di §5) | — |
 | `lambat` (internet bermasalah) | Tersambung tetapi median > `INTERNET_SLOW_MS`, **atau** sebagian alamat gagal/habis waktu | Wi-Fi tersambung tapi browsing lama, sinyal lemah, jaringan padat |
 | `putus` | Tidak ada rute keluar (OS langsung menolak: `ENETUNREACH`/`EHOSTUNREACH`, cek tanpa kirim paket lewat soket UDP), **atau** semua alamat gagal | Kabel LAN lepas, Wi-Fi mati, router/ISP mati |
 
@@ -333,16 +333,16 @@ Dicek di latar tiap `INTERNET_CHECK_INTERVAL_SECONDS` (usul 30) dan **segera** s
 | :-- | :-- | :-- |
 | Internet `normal`, API sehat | Utama | Utama |
 | Internet `normal`, utama gagal | Cadangan API → bila gagal, lokal | Lokal |
-| Internet `lambat` | Utama dicoba (bisa saja masih di bawah batas 5 dtk); cadangan API **dilewati**; bila utama gagal → lokal. Lokal **mulai dimuat** begitu status `lambat` berlaku | Utama → bila gagal, lokal (dimuat saat `lambat`) |
+| Internet `lambat` | Utama dicoba (bisa saja masih di bawah batas 5 dtk) dengan **pemutus sirkuit tetap berlaku**; cadangan API **dilewati**; bila utama gagal → lokal. Lokal **mulai dimuat** begitu status `lambat` berlaku. Median > 500 ms → **langsung lokal** ("Ambang internet" §5) | Utama → bila gagal, lokal (dimuat saat `lambat`) |
 | Internet `putus` | **Langsung lokal** (utama & cadangan API dilewati, tanpa menunggu habis waktu) | Langsung lokal |
 | Internet pulih (`normal`) | Pemeriksaan berikutnya kembali ke utama | Sama |
 
-Pemutus sirkuit lama (T27/T87) tetap berlaku untuk "API bermasalah" saat internet `normal`.
+Pemutus sirkuit lama (T27/T87) tetap berlaku untuk "API bermasalah" saat internet `normal` **dan** `lambat`.
 
 #### 4. Siaga dingin & bongkar
 
 - VLM lokal (darurat A / cadangan B) **tidak dimuat saat start**; VRAM bebas untuk YOLO & FR.
-- **Dimuat** (di latar, satu kali, memegang gembok inspeksi seperti T38) bila: internet `lambat`/`putus` berlaku, **atau** VLM API terakhir dalam rute gagal (A: cadangan gagal; B: utama dinyatakan gangguan).
+- **Dimuat** (di latar, satu kali; **tanpa** gembok inspeksi — model dingin belum dipakai siapa pun, koreksi tinjauan T72a 21-10; gembok inspeksi hanya untuk bongkar & perbaikan T38) bila: internet `lambat`/`putus` berlaku, **atau** VLM API terakhir dalam rute gagal (A: cadangan gagal; B: utama dinyatakan gangguan).
 - Selama memuat: state `loading`; inspeksi yang tidak punya VLM lain → **tidak ada keputusan** (kuning, "mohon tunggu"), dicoba lagi otomatis begitu siap. Gagal memuat (Ollama mati / VRAM kurang) → state `failed`, dicatat, dicoba lagi tiap `VLM_LOCAL_RETRY_SECONDS`.
 - **Dibongkar** setelah internet `normal` **dan** utama sehat terus-menerus `VLM_LOCAL_IDLE_UNLOAD_SECONDS` (usul 600). Kuota habis seharian → utama tidak pernah sehat → model tetap dimuat (tidak muat-ulang berulang).
 - **Penjaga T38** hanya bekerja saat state `ready`; saat `unloaded` sengaja tidak dimuat ulang.
@@ -364,6 +364,17 @@ Pemutus sirkuit lama (T27/T87) tetap berlaku untuk "API bermasalah" saat interne
 - `mode: "LOKAL"` = keputusan terakhir oleh VLM darurat (susunan A). Susunan B tetap `CADANGAN`.
 - `internet.state: null` = pemantau mati (tidak ada VLM lokal yang bisa dialihkan — susunan C).
 - UI operator: chip "Internet: normal / lambat / putus" dan "VLM lokal: siaga / memuat / siap / gagal" — **tanpa nama penyedia/model** (AGENTS §5).
+
+**Ambang internet (disetujui pengguna 21-10; dari data audit + referensi, bukan uji jaringan lambat):**
+Satu pemeriksaan API ≈ waktu Gemini (audit gerbang: median 2,3 dtk; Okt rata-rata 3,4 dtk termasuk konfirmasi larangan) + **±5 RTT**: sambungan selalu baru (httpx menutup sambungan menganggur setelah 5 dtk, pekerja datang lebih jarang) = TCP 1 + TLS 1.3 1 + kirim ±53 KB (gambar ≤40 KB + base64) dalam 3 putaran slow start (jendela awal ±14,6 KB, RFC 6928). Batas waktu API 5 dtk.
+
+| Median RTT pemantau | Status | Rute |
+| :-- | :-- | :-- |
+| ≤ `INTERNET_SLOW_MS` = **200 ms** (dulu 500) dan semua alamat tersambung | `normal` | API seperti biasa (5 RTT ≈ 1 dtk → ≤ 4 dtk saat Gemini ramai) |
+| 200–500 ms, atau sebagian alamat gagal | `lambat` | Utama dicoba; cadangan API dilewati; lokal mulai dimuat; **pemutus sirkuit tetap berlaku** (2 gagal → API dilewati `VLM_PRIMARY_RETRY_AFTER_SECONDS`, langsung lokal) |
+| > `INTERNET_VERY_SLOW_MS` = **500 ms** (baru) | `lambat` | **Langsung lokal** seperti `putus` (5 RTT ≈ 2,5 dtk → median 4,8 dtk, hampir selalu habis waktu) |
+
+Status telemetri tetap tiga (`normal/lambat/putus`); "sangat lambat" hanya aturan rute dari `median_ms`. Angka di `config.py`; disetel ulang setelah ada data gerbang nyata.
 
 **Tambahan kontrak (disetujui pengguna 21-10, temuan saat T72b):**
 1. Keputusan VLM lokal darurat dicatat di audit `inference_source = "VLM_DARURAT:<penyedia>/<model>"` (utama `VLM_LIVE:`, cadangan `VLM_CADANGAN:` tetap) dan **dihitung terpisah** di laporan (bukan digabung ke cadangan): `GET /api/reports` tambah `local_fallback_count` (di samping `backup_count`); telemetri `api_monitor` tambah `decisions_local` (di samping `decisions_backup`).
