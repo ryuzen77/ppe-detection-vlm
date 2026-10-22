@@ -48,8 +48,8 @@ class NewWorker(BaseModel):
     employee_no: Optional[str] = ""
     name: str = ""
     consent: bool = False
-    nickname: str = ""   # T34d: wajib (nama yang diucapkan)
-    gender: str = ""     # T34d: "male" | "female", wajib (sapaan Pak/Bu)
+    nickname: str = ""  # T34d: wajib (nama yang diucapkan)
+    gender: str = ""  # T34d: "male" | "female", wajib (sapaan Pak/Bu)
     department_id: Optional[int] = None
     company_id: Optional[int] = None
 
@@ -96,9 +96,9 @@ def worker_json(worker: worker_store.Worker, last_seen: object = ...) -> dict:
         "salutation": worker.salutation,
         "voice_ready": worker_voice.voice_ready(worker.id),
         "department": {"id": worker.department.id, "name": worker.department.name} if worker.department else None,
-        "company": {"id": worker.company.id, "name": worker.company.name} if worker.company else {
-            "id": 0, "name": cfg.WORKER_DEFAULT_COMPANY
-        },
+        "company": {"id": worker.company.id, "name": worker.company.name}
+        if worker.company
+        else {"id": 0, "name": cfg.WORKER_DEFAULT_COMPANY},
         "last_seen": last_seen,
         "templates": [template_json(t) for t in worker.templates],
     }
@@ -311,7 +311,9 @@ def enrollment_prompt(body: EnrollmentPrompt):
     """Petunjuk suara lewat speaker gerbang untuk pekerja yang berdiri jauh dari layar."""
     _call(_require_enrollment)
     if body.prompt not in messages.ENROLLMENT_VOICE_TEXTS:
-        raise _error(worker_store.WorkerError("invalid_prompt", messages.WORKER_INVALID_PROMPT.format(prompt=body.prompt)))
+        raise _error(
+            worker_store.WorkerError("invalid_prompt", messages.WORKER_INVALID_PROMPT.format(prompt=body.prompt))
+        )
     # Tidak `urgent`: petunjuk berurutan (pakai helm, lalu arah kepala) diantrekan, bukan saling memotong
     audio_player.play(body.prompt)
     return Response(status_code=204)
@@ -320,9 +322,7 @@ def enrollment_prompt(body: EnrollmentPrompt):
 @router.delete("/api/workers/enrollment", status_code=204)
 def release_enrollment(request: Request, user: auth.SessionUser = Depends(require_admin)):
     if state_mgr.release_enrollment():
-        security_log.record(
-            security_log.ENROLLMENT_ENDED, actor=user.username, client=client_address(request), ok=True
-        )
+        security_log.record(security_log.ENROLLMENT_ENDED, actor=user.username, client=client_address(request), ok=True)
     return Response(status_code=204)
 
 
@@ -369,4 +369,3 @@ def worker_inspections(
     """Riwayat pemeriksaan pekerja berhalaman urut terbaru (T79)."""
     _call(lambda: worker_store.store.get(worker_id))
     return report_mgr.get_worker_inspections(worker_id, limit=limit, before=before)
-

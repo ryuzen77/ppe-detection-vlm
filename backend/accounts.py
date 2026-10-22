@@ -12,6 +12,7 @@ Perintah di mesin gerbang (mis. lupa kata sandi admin terakhir):
     python -m backend.accounts create <nama>
     python -m backend.accounts reset-password <nama>
 """
+
 import argparse
 import base64
 import functools
@@ -59,6 +60,7 @@ class Account:
 
 # --- Hash kata sandi ---
 
+
 def hash_password(password: str) -> str:
     n, r, p = cfg.PASSWORD_SCRYPT_N, cfg.PASSWORD_SCRYPT_R, cfg.PASSWORD_SCRYPT_P
     salt = secrets.token_bytes(_SALT_BYTES)
@@ -79,8 +81,7 @@ def verify_password(password: str, stored: str) -> bool:
 
 def _scrypt(password: str, salt: bytes, n: int, r: int, p: int) -> bytes:
     # maxmem dinaikkan sedikit di atas kebutuhan 128*n*r supaya parameter bawaan diterima
-    return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p, dklen=_KEY_BYTES,
-                          maxmem=256 * n * r)
+    return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p, dklen=_KEY_BYTES, maxmem=256 * n * r)
 
 
 def _b64(data: bytes) -> str:
@@ -97,21 +98,34 @@ def _dummy_hash() -> str:
 
 # --- Aturan nama & kata sandi ---
 
+
 def normalize_username(raw: object) -> str:
     username = str(raw or "").strip().lower()
-    if not (cfg.ACCOUNT_USERNAME_MIN_LENGTH <= len(username) <= cfg.ACCOUNT_USERNAME_MAX_LENGTH
-            and _USERNAME_CHARS.fullmatch(username)):
-        raise AccountError("invalid_username", messages.ACCOUNT_INVALID_USERNAME.format(
-            min=cfg.ACCOUNT_USERNAME_MIN_LENGTH, max=cfg.ACCOUNT_USERNAME_MAX_LENGTH))
+    if not (
+        cfg.ACCOUNT_USERNAME_MIN_LENGTH <= len(username) <= cfg.ACCOUNT_USERNAME_MAX_LENGTH
+        and _USERNAME_CHARS.fullmatch(username)
+    ):
+        raise AccountError(
+            "invalid_username",
+            messages.ACCOUNT_INVALID_USERNAME.format(
+                min=cfg.ACCOUNT_USERNAME_MIN_LENGTH, max=cfg.ACCOUNT_USERNAME_MAX_LENGTH
+            ),
+        )
     return username
 
 
 def check_password(password: object, username: str) -> str:
     text = password if isinstance(password, str) else ""
-    if (not cfg.ACCOUNT_PASSWORD_MIN_LENGTH <= len(text) <= cfg.ACCOUNT_PASSWORD_MAX_LENGTH
-            or text.strip().lower() == username):
-        raise AccountError("weak_password", messages.ACCOUNT_WEAK_PASSWORD.format(
-            min=cfg.ACCOUNT_PASSWORD_MIN_LENGTH, max=cfg.ACCOUNT_PASSWORD_MAX_LENGTH))
+    if (
+        not cfg.ACCOUNT_PASSWORD_MIN_LENGTH <= len(text) <= cfg.ACCOUNT_PASSWORD_MAX_LENGTH
+        or text.strip().lower() == username
+    ):
+        raise AccountError(
+            "weak_password",
+            messages.ACCOUNT_WEAK_PASSWORD.format(
+                min=cfg.ACCOUNT_PASSWORD_MIN_LENGTH, max=cfg.ACCOUNT_PASSWORD_MAX_LENGTH
+            ),
+        )
     return text
 
 
@@ -120,6 +134,7 @@ def _now() -> str:
 
 
 # --- Penyimpanan ---
+
 
 class AccountStore:
     def __init__(self, path: Optional[Path] = None):
@@ -136,9 +151,11 @@ class AccountStore:
         conn = sqlite3.connect(self.path, timeout=10, isolation_level=None)
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = FULL;")
-        conn.execute("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, "
-                     "role TEXT NOT NULL, created_at TEXT NOT NULL, password_changed_at TEXT NOT NULL, "
-                     "last_login_at TEXT)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, "
+            "role TEXT NOT NULL, created_at TEXT NOT NULL, password_changed_at TEXT NOT NULL, "
+            "last_login_at TEXT)"
+        )
         return conn
 
     def _run(self, fn):
@@ -160,12 +177,16 @@ class AccountStore:
         return self._run(lambda c: c.execute("SELECT COUNT(*) FROM users").fetchone()[0])
 
     def all(self) -> list[Account]:
-        rows = self._run(lambda c: c.execute(
-            "SELECT username, role, created_at, last_login_at FROM users ORDER BY username").fetchall())
+        rows = self._run(
+            lambda c: c.execute(
+                "SELECT username, role, created_at, last_login_at FROM users ORDER BY username"
+            ).fetchall()
+        )
         return [Account(*row) for row in rows]
 
-    def create(self, username: object, password: object, role: str = ROLE_ADMIN,
-               only_if_empty: bool = False) -> Account:
+    def create(
+        self, username: object, password: object, role: str = ROLE_ADMIN, only_if_empty: bool = False
+    ) -> Account:
         """Akun baru. `only_if_empty`: setup admin pertama — gagal bila sudah ada akun."""
         name = normalize_username(username)
         password_hash = hash_password(check_password(password, name))
@@ -178,14 +199,17 @@ class AccountStore:
             now = _now()
             conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, NULL)", (name, password_hash, role, now, now))
             return Account(name, role, now, None)
+
         return self._run(insert)
 
     def verify(self, username: object, password: object) -> Optional[Account]:
         """Akun bila nama & kata sandi cocok; None bila tidak (tanpa membedakan sebabnya)."""
         name = str(username or "").strip().lower()
-        row = self._run(lambda c: c.execute(
-            "SELECT role, created_at, last_login_at, password_hash FROM users WHERE username = ?",
-            (name,)).fetchone())
+        row = self._run(
+            lambda c: c.execute(
+                "SELECT role, created_at, last_login_at, password_hash FROM users WHERE username = ?", (name,)
+            ).fetchone()
+        )
         ok = verify_password(password if isinstance(password, str) else "", row[3] if row else _dummy_hash())
         return Account(name, *row[:3]) if ok and row else None
 
@@ -195,18 +219,20 @@ class AccountStore:
         if account is None:
             return None
         now = _now()
-        self._run(lambda c: c.execute("UPDATE users SET last_login_at = ? WHERE username = ?",
-                                      (now, account.username)))
+        self._run(lambda c: c.execute("UPDATE users SET last_login_at = ? WHERE username = ?", (now, account.username)))
         return Account(account.username, account.role, account.created_at, now)
 
     def set_password(self, username: str, password: object):
         password_hash = hash_password(check_password(password, username))
 
         def update(conn):
-            changed = conn.execute("UPDATE users SET password_hash = ?, password_changed_at = ? WHERE username = ?",
-                                   (password_hash, _now(), username)).rowcount
+            changed = conn.execute(
+                "UPDATE users SET password_hash = ?, password_changed_at = ? WHERE username = ?",
+                (password_hash, _now(), username),
+            ).rowcount
             if not changed:
                 raise AccountError("not_found", messages.ACCOUNT_NOT_FOUND.format(username=username))
+
         self._run(update)
 
     def delete(self, username: str, actor: str):
@@ -219,6 +245,7 @@ class AccountStore:
             if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] <= 1:
                 raise AccountError("last_account", messages.ACCOUNT_LAST)
             conn.execute("DELETE FROM users WHERE username = ?", (username,))
+
         self._run(remove)
 
 
@@ -227,12 +254,14 @@ store = AccountStore()
 
 # --- Jejak ---
 
+
 def record_event(event: str, username: str = "", actor: str = "", client: str = "", ok: bool = True):
     """Kejadian akun ke security log (T53). Tanpa kata sandi maupun hash."""
     security_log.record(event, username=username, actor=actor, client=client, ok=ok)
 
 
 # --- Perintah di mesin gerbang ---
+
 
 def _ask_password(username: str) -> str:
     first = getpass.getpass(messages.ACCOUNT_CLI_PROMPT.format(username=username))
@@ -272,7 +301,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     from . import logging_setup
-    logging_setup.setup_security_log(cfg)   # kejadian dari terminal ikut tercatat
+
+    logging_setup.setup_security_log(cfg)  # kejadian dari terminal ikut tercatat
     try:
         raise SystemExit(main())
     finally:

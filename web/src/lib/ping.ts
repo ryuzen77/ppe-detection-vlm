@@ -26,7 +26,12 @@ export function pingRows(res: PingResult): PingRow[] {
       return { label, tone: 'muted', text: TEXT.standby, hint: TEXT.standbyHint }
     }
     if (!e.ok) {
-      return { label, tone: 'danger', text: TEXT.failed(e.error ?? ''), hint: e.is_local ? TEXT.localLoading : undefined }
+      return {
+        label,
+        tone: 'danger',
+        text: TEXT.failed(e.error ?? ''),
+        hint: e.is_local ? TEXT.localLoading : undefined,
+      }
     }
     if (e.timeout_ms && e.latency_ms > e.timeout_ms) {
       return { label, tone: 'warn', text: TEXT.answered(e.latency_ms), hint: TEXT.overLimit(e.timeout_ms) }

@@ -11,7 +11,9 @@ import type {
   MonitorStatus,
   PingResult,
   PpeCatalog,
-  ReportsPage, ReportSummary, ReportPeriod,
+  ReportsPage,
+  ReportSummary,
+  ReportPeriod,
   ReportStatusFilter,
   VlmInfo,
   VlmProvidersResponse,
@@ -47,8 +49,6 @@ import { withQuery } from '../url'
 
 export const WS_CLOSE_LOGIN_REQUIRED = 4401
 
-
-
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown
@@ -63,7 +63,6 @@ export class ApiError extends Error {
 
 /** HTTP 401: server menolak karena token admin kosong/salah */
 export const HTTP_UNAUTHORIZED = 401
-
 
 export interface ApiClientOptions {
   /** Awalan URL backend; kosong = asal yang sama (disajikan FastAPI atau proxy Vite) */
@@ -102,9 +101,10 @@ export class ApiClient {
       // Balasan bukan JSON: teks mentah diteruskan dalam galat
     }
     if (!response.ok) {
-      const detail = typeof data === 'object' && data !== null
-        ? ((data as Record<string, unknown>).detail ?? (data as Record<string, unknown>).message)
-        : undefined
+      const detail =
+        typeof data === 'object' && data !== null
+          ? ((data as Record<string, unknown>).detail ?? (data as Record<string, unknown>).message)
+          : undefined
       const error = new ApiError(response.status, String(detail ?? `HTTP ${response.status}`), data)
       if (response.status === HTTP_UNAUTHORIZED) this.onUnauthorized?.(error)
       throw error
@@ -112,17 +112,17 @@ export class ApiClient {
     return data as T
   }
 
-
   // --- Auth & Accounts (T51)
   session = () => this.request<SessionStatus>('GET', '/api/session')
   setup = (req: SetupRequest) => this.request<AuthResponse>('POST', '/api/setup', req)
   login = (req: LoginRequest) => this.request<AuthResponse>('POST', '/api/login', req)
   logout = () => this.request<void>('POST', '/api/logout')
   changePassword = (req: PasswordChangeRequest) => this.request<void>('POST', '/api/account/password', req)
-  
+
   accounts = () => this.request<AccountInfo[]>('GET', '/api/accounts')
   createAccount = (req: CreateAccountRequest) => this.request<AccountInfo>('POST', '/api/accounts', req)
-  resetAccountPassword = (username: string, req: ResetPasswordRequest) => this.request<void>('POST', `/api/accounts/${encodeURIComponent(username)}/password`, req)
+  resetAccountPassword = (username: string, req: ResetPasswordRequest) =>
+    this.request<void>('POST', `/api/accounts/${encodeURIComponent(username)}/password`, req)
   deleteAccount = (username: string) => this.request<void>('DELETE', `/api/accounts/${encodeURIComponent(username)}`)
 
   // --- Sistem
@@ -154,8 +154,10 @@ export class ApiClient {
   cameras = () => this.request<CameraCatalog>('GET', '/api/cameras')
   scanCameras = () => this.request<{ status: string; scanning: boolean; message: string }>('POST', '/api/cameras/scan')
   selectCamera = (index: number | null, mode?: CameraMode | null) =>
-    this.request<{ status: string; pending_index: number | null; message: string }>(
-      'POST', '/api/config/camera', { index, mode: mode ?? null })
+    this.request<{ status: string; pending_index: number | null; message: string }>('POST', '/api/config/camera', {
+      index,
+      mode: mode ?? null,
+    })
 
   // --- Zona Titik Berdiri (T36d)
   zone = () => this.request<Zone>('GET', '/api/config/zone')
@@ -165,8 +167,15 @@ export class ApiClient {
   // --- Laporan
   reportsSummary = (params: { period?: ReportPeriod; date?: string } & ReportWhoFilter = {}) =>
     this.request<ReportSummary>('GET', withQuery('/api/reports/summary', params))
-  reports = (params: { limit?: number; offset?: number; status?: ReportStatusFilter; from?: string; to?: string } & ReportWhoFilter = {}) =>
-    this.request<ReportsPage>('GET', withQuery('/api/reports', params))
+  reports = (
+    params: {
+      limit?: number
+      offset?: number
+      status?: ReportStatusFilter
+      from?: string
+      to?: string
+    } & ReportWhoFilter = {},
+  ) => this.request<ReportsPage>('GET', withQuery('/api/reports', params))
   snapshotUrl = (filename: string) => this.url(`/api/reports/snapshots/${encodeURIComponent(filename)}`)
   exportCsvUrl = (params: { from?: string; to?: string } & ReportWhoFilter = {}) =>
     this.url(withQuery('/api/reports/export', params))
@@ -192,8 +201,7 @@ export class ApiClient {
   deleteWorkerFace = (id: number) => this.request<void>('DELETE', `/api/workers/${id}/face`)
   deleteWorkerTemplate = (workerId: number, templateId: number) =>
     this.request<void>('DELETE', `/api/workers/${workerId}/templates/${templateId}`)
-  updateWorker = (id: number, body: UpdateWorkerRequest) =>
-    this.request<Worker>('PATCH', `/api/workers/${id}`, body)
+  updateWorker = (id: number, body: UpdateWorkerRequest) => this.request<Worker>('PATCH', `/api/workers/${id}`, body)
   addWorkerTemplate = (workerId: number, condition: TemplateCondition) =>
     this.request<AddTemplateResponse>('POST', `/api/workers/${workerId}/templates`, { condition })
   holdEnrollment = () => this.request<EnrollmentHoldResponse>('POST', '/api/workers/enrollment')

@@ -1,4 +1,5 @@
 """Katalog item APD dan pengaturan item yang diwajibkan."""
+
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -12,6 +13,7 @@ router = APIRouter()
 
 
 # --- KATALOG APD ---
+
 
 def _ppe_catalog_payload() -> dict:
     """Katalog lengkap beserta status aktif. Semua item dinilai VLM (utama atau cadangan)."""

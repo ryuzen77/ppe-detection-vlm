@@ -7,6 +7,7 @@ Yang dikirim ke gTTS hanya kalimat tetap ini, tanpa data pekerja.
 
     python -m backend.generate_audio
 """
+
 import json
 
 from gtts import gTTS
@@ -52,8 +53,9 @@ def generate_all():
         print(f"  [{key}] {prompts[key]}")
         gTTS(text=prompts[key], lang=TTS_LANG, slow=False).save(str(AUDIO_DIR / f"{key}.mp3"))
         recorded[key] = prompts[key]
-    TEXTS_MANIFEST.write_text(json.dumps(dict(sorted(recorded.items())), ensure_ascii=False, indent=2) + "\n",
-                              encoding="utf-8")
+    TEXTS_MANIFEST.write_text(
+        json.dumps(dict(sorted(recorded.items())), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print("Selesai.")
 
 

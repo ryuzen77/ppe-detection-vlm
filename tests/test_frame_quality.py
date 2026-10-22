@@ -1,4 +1,5 @@
 """Pemilihan frame terbaik sebelum analisa VLM (T25a)."""
+
 import time
 
 import cv2
@@ -27,6 +28,7 @@ def kandidat(crop, bbox=BBOX, pose=0.9):
 
 # --- Penilaian ----------------------------------------------------------------------
 
+
 def test_foto_buram_lebih_rendah_ketajamannya():
     tajam = person_crop()
     assert frame_quality.sharpness(buram(tajam)) < frame_quality.sharpness(tajam) * 0.5
@@ -43,7 +45,7 @@ def test_ketajaman_tidak_bergantung_ukuran_crop():
 def test_gerakan_relatif_terhadap_tinggi_tubuh():
     assert frame_quality.motion(BBOX, None) == 0.0
     assert frame_quality.motion(BBOX, BBOX) == 0.0
-    geser = [BBOX[0] + 61, BBOX[1], BBOX[2] + 61, BBOX[3]]   # 61 px pada tinggi 610 px = 10%
+    geser = [BBOX[0] + 61, BBOX[1], BBOX[2] + 61, BBOX[3]]  # 61 px pada tinggi 610 px = 10%
     assert frame_quality.motion(geser, BBOX) == pytest.approx(0.1)
 
 
@@ -53,6 +55,7 @@ def test_kejelasan_pose_rata_rata_titik_penting():
 
 
 # --- Pemilihan ------------------------------------------------------------------------
+
 
 def test_frame_tajam_dipilih_di_antara_yang_buram():
     tajam = person_crop()
@@ -95,11 +98,18 @@ def test_penilaian_cepat():
 
 # --- Integrasi state machine ------------------------------------------------------------
 
+
 def _det(crop, full_body=True):
     return DetectionResult(
-        track_id=42, bbox=list(BBOX), is_full_body=full_body,
+        track_id=42,
+        bbox=list(BBOX),
+        is_full_body=full_body,
         reason=messages.POSE_OK if full_body else messages.POSE_FEET_CLIPPED_EDGE,
-        is_inside_corridor=True, crop_img=crop, conf=0.9, keypoints=[[0, 0, 0.9]] * 17)
+        is_inside_corridor=True,
+        crop_img=crop,
+        conf=0.9,
+        keypoints=[[0, 0, 0.9]] * 17,
+    )
 
 
 @pytest.fixture
@@ -108,6 +118,7 @@ def terkirim(monkeypatch, catalog_defaults):
     from backend.audio_engine import audio_player
     from backend.notifier import notifier
     from backend.vlm_analyzer import vlm_analyzer
+
     asli = vlm_analyzer.analyze_person
     dikirim = []
 
@@ -117,7 +128,7 @@ def terkirim(monkeypatch, catalog_defaults):
 
     monkeypatch.setattr(vlm_analyzer, "analyze_person", catat)
     monkeypatch.setattr(cfg, "STABLE_FRAMES_REQUIRED", 3)
-    monkeypatch.setattr(cfg, "READY_HOLD_SECONDS", 0.0)   # jendela diam diuji di test_readiness.py
+    monkeypatch.setattr(cfg, "READY_HOLD_SECONDS", 0.0)  # jendela diam diuji di test_readiness.py
     was_muted = audio_player.is_muted
     audio_player.set_muted(True)
     state_mgr.reset_all()

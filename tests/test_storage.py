@@ -1,4 +1,5 @@
 """Pemindahan data dari tata letak lama (backend/) ke DATA_DIR."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -9,8 +10,11 @@ from backend import storage
 def _cfg(data):
     reports = data / "reports"
     return SimpleNamespace(
-        DATA_DIR=data, REPORTS_DIR=reports, SNAPSHOTS_DIR=reports / "snapshots",
-        DB_PATH=reports / "audit.db", CAMERA_STATE_PATH=data / "camera_state.json",
+        DATA_DIR=data,
+        REPORTS_DIR=reports,
+        SNAPSHOTS_DIR=reports / "snapshots",
+        DB_PATH=reports / "audit.db",
+        CAMERA_STATE_PATH=data / "camera_state.json",
         RUNTIME_SETTINGS_PATH=data / "runtime_settings.json",
     )
 

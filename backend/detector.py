@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 import numpy as np
+
 # Ultralytics memasang paket yang kurang secara otomatis saat berjalan (mis. `lap`
 # untuk pelacak). Dimatikan: semua dependensi berasal dari requirements.lock, dan
 # paket yang hilang harus gagal jelas, bukan diam-diam mengubah environment.
@@ -17,11 +18,22 @@ from . import vlm_image
 
 logger = logging.getLogger(__name__)
 
+
 class DetectionResult:
-    def __init__(self, track_id: int, bbox: list[int], is_full_body: bool, 
-                 reason: str, is_inside_corridor: bool = True, keypoints=None, 
-                 crop_img=None, conf: float = 0.0, clip_type: str = "OPTIMAL",
-                 foot_y: Optional[float] = None, foot_y_box: Optional[float] = None):
+    def __init__(
+        self,
+        track_id: int,
+        bbox: list[int],
+        is_full_body: bool,
+        reason: str,
+        is_inside_corridor: bool = True,
+        keypoints=None,
+        crop_img=None,
+        conf: float = 0.0,
+        clip_type: str = "OPTIMAL",
+        foot_y: Optional[float] = None,
+        foot_y_box: Optional[float] = None,
+    ):
         self.track_id = track_id
         self.bbox = bbox  # [x1, y1, x2, y2]
         self.is_full_body = is_full_body
@@ -40,8 +52,10 @@ class DetectionResult:
         # Posisi yang dipakai zona setelah ingatan per ID (diisi state_manager)
         self.zone_y = foot_y if foot_y is not None else foot_y_box
 
+
 class PersonDetector:
     """YOLO26-Small Pose Detector with tracking & robust Full-Body verification."""
+
     def __init__(self):
         # Model dan GPU baru disentuh di load(), bukan saat modul diimpor
         self.model = None
@@ -54,8 +68,9 @@ class PersonDetector:
             return
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         # Nama perangkat untuk HUD, supaya tidak menyebut GPU yang tidak terpasang
-        self.device_label = (torch.cuda.get_device_name(0).replace("NVIDIA GeForce ", "")
-                             if self.device.startswith("cuda") else "CPU")
+        self.device_label = (
+            torch.cuda.get_device_name(0).replace("NVIDIA GeForce ", "") if self.device.startswith("cuda") else "CPU"
+        )
         logger.info(f"Initializing YOLO with model {cfg.YOLO_MODEL_PATH} on {self.device}...")
         self.model = YOLO(cfg.YOLO_MODEL_PATH)
         logger.info("Model loaded successfully.")
@@ -72,7 +87,7 @@ class PersonDetector:
             conf=cfg.YOLO_CONF,
             iou=cfg.YOLO_IOU,
             device=self.device,
-            verbose=False
+            verbose=False,
         )
         if not results or len(results) == 0:
             return None
@@ -82,8 +97,12 @@ class PersonDetector:
         has_pose = r.keypoints is not None and r.keypoints.data is not None
         # Stub ultralytics menyebut Tensor | ndarray; saat inferensi selalu Tensor (punya .cpu()).
         keypoints_data = r.keypoints.data.cpu().numpy() if has_pose else None  # pyright: ignore
-        return (r.boxes.xyxy.cpu().numpy(), r.boxes.id.int().cpu().numpy(),  # pyright: ignore
-                r.boxes.conf.cpu().numpy(), keypoints_data)  # pyright: ignore
+        return (
+            r.boxes.xyxy.cpu().numpy(),  # pyright: ignore
+            r.boxes.id.int().cpu().numpy(),  # pyright: ignore
+            r.boxes.conf.cpu().numpy(),  # pyright: ignore
+            keypoints_data,
+        )
 
     def detect_and_track(self, frame: np.ndarray) -> list[DetectionResult]:
         """Runs YOLO tracking and height-adaptive full-body filter on the current frame."""
@@ -103,10 +122,17 @@ class PersonDetector:
             kpts_to_save = keypoints_data[idx].tolist() if keypoints_data is not None else None
             window = vlm_image.crop_window(h, w, box)
             detection = DetectionResult(
-                track_id=int(track_id), bbox=list(box), is_full_body=is_full_body, reason=reason,
-                is_inside_corridor=inside, keypoints=kpts_to_save, crop_img=_crop(frame, window),
-                conf=float(conf), clip_type=clip_type,
-                foot_y=zone.ankle_y(kpts_to_save, h), foot_y_box=zone.box_bottom_y(list(box), h),
+                track_id=int(track_id),
+                bbox=list(box),
+                is_full_body=is_full_body,
+                reason=reason,
+                is_inside_corridor=inside,
+                keypoints=kpts_to_save,
+                crop_img=_crop(frame, window),
+                conf=float(conf),
+                clip_type=clip_type,
+                foot_y=zone.ankle_y(kpts_to_save, h),
+                foot_y_box=zone.box_bottom_y(list(box), h),
             )
             # T86: titik pose dalam koordinat crop untuk panel perbesaran kepala & tangan
             detection.crop_keypoints = vlm_image.to_crop_coords(kpts_to_save, window)
@@ -117,10 +143,12 @@ class PersonDetector:
 # --- Pemeriksaan tubuh utuh (dipecah dari detect_and_track, T42a; perilaku dijaga
 # tests/test_detector_fullbody.py). Fungsi murni: mudah dites tanpa YOLO. ----------------
 
+
 @dataclass(frozen=True)
 class FrameMargins:
     """Ambang tepi dalam piksel, dihitung dari tinggi frame agar perilaku gerbang
     full-body tetap sama ketika operator berpindah kamera / resolusi."""
+
     top: int
     bottom: int
     head_touch_top: int
@@ -131,9 +159,14 @@ class FrameMargins:
     def for_height(h: int) -> "FrameMargins":
         def px(ratio: float) -> int:
             return max(int(h * ratio), 1)
-        return FrameMargins(px(cfg.BORDER_MARGIN_TOP_RATIO), px(cfg.BORDER_MARGIN_BOTTOM_RATIO),
-                            px(cfg.HEAD_TOUCH_TOP_RATIO), px(cfg.ANKLE_TOUCH_BOTTOM_RATIO),
-                            px(cfg.KNEE_ONLY_BOTTOM_RATIO))
+
+        return FrameMargins(
+            px(cfg.BORDER_MARGIN_TOP_RATIO),
+            px(cfg.BORDER_MARGIN_BOTTOM_RATIO),
+            px(cfg.HEAD_TOUCH_TOP_RATIO),
+            px(cfg.ANKLE_TOUCH_BOTTOM_RATIO),
+            px(cfg.KNEE_ONLY_BOTTOM_RATIO),
+        )
 
 
 def _clip_box(bbox, w: int, h: int) -> tuple[int, int, int, int]:
@@ -159,9 +192,11 @@ def _head_clipped(kpts, y1: int, box_h: int, margins: FrameMargins) -> bool:
     nose_y = kpts[kp.NOSE][kp.Y]
     shoulders = [kpts[i][kp.Y] for i in (kp.LEFT_SHOULDER, kp.RIGHT_SHOULDER) if _confident(kpts, i)]
     sh_y = float(np.mean(shoulders)) if shoulders else (y1 + box_h * cfg.POSE_SHOULDER_FALLBACK_RATIO)
-    head_scale = (max(sh_y - nose_y, box_h * cfg.POSE_HEAD_SCALE_MIN_RATIO)
-                  if (_confident(kpts, kp.NOSE) and sh_y > nose_y)
-                  else (box_h * cfg.POSE_HEAD_SCALE_FALLBACK_RATIO))
+    head_scale = (
+        max(sh_y - nose_y, box_h * cfg.POSE_HEAD_SCALE_MIN_RATIO)
+        if (_confident(kpts, kp.NOSE) and sh_y > nose_y)
+        else (box_h * cfg.POSE_HEAD_SCALE_FALLBACK_RATIO)
+    )
     expected_helmet_top = nose_y - cfg.POSE_HELMET_HEADROOM_FACTOR * head_scale
     face_invisible = not any(_confident(kpts, i) for i in (kp.NOSE, kp.LEFT_EYE, kp.RIGHT_EYE))
     return y1 <= margins.head_touch_top or expected_helmet_top < 0 or face_invisible
@@ -195,8 +230,14 @@ def _not_standing(kpts) -> bool:
     sisi tidak menghalangi: kaki yang tak terlihat sudah ditangani `_feet_status`, dan
     menolak karena titik hilang akan menahan pekerja patuh yang tertutup rompi.
     """
-    ratios = [r for r in (_thigh_shin_ratio(kpts, kp.LEFT_HIP, kp.LEFT_KNEE, kp.LEFT_ANKLE),
-                          _thigh_shin_ratio(kpts, kp.RIGHT_HIP, kp.RIGHT_KNEE, kp.RIGHT_ANKLE)) if r is not None]
+    ratios = [
+        r
+        for r in (
+            _thigh_shin_ratio(kpts, kp.LEFT_HIP, kp.LEFT_KNEE, kp.LEFT_ANKLE),
+            _thigh_shin_ratio(kpts, kp.RIGHT_HIP, kp.RIGHT_KNEE, kp.RIGHT_ANKLE),
+        )
+        if r is not None
+    ]
     return bool(ratios) and max(ratios) < cfg.STANDING_MIN_THIGH_SHIN_RATIO
 
 
@@ -238,5 +279,6 @@ def _crop(frame: np.ndarray, window) -> np.ndarray:
     """Potongan orang untuk VLM (jendela `vlm_image.crop_window`: kotak + tepi helm & sepatu)."""
     x0, y0, x1, y1 = window
     return frame[y0:y1, x0:x1].copy()
+
 
 detector = PersonDetector()

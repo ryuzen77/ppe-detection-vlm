@@ -6,6 +6,7 @@ lolos. Frame pertama sering tertangkap saat pekerja masih melangkah (buram,
 miring). Semua penilaian murah (~1-2 ms per frame) dan memakai data yang sudah
 dihitung YOLO, sehingga tambahan waktunya hanya menunggu frame kandidat.
 """
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -16,22 +17,31 @@ from . import pose_keypoints as kp
 
 # Titik COCO yang menentukan apakah APD terlihat jelas: kepala (helm), bahu
 # (rompi), lutut (celana), pergelangan kaki (sepatu)
-_POSE_POINTS = (kp.NOSE, kp.LEFT_EYE, kp.RIGHT_EYE, kp.LEFT_SHOULDER, kp.RIGHT_SHOULDER,
-                kp.LEFT_KNEE, kp.RIGHT_KNEE, kp.LEFT_ANKLE, kp.RIGHT_ANKLE)
+_POSE_POINTS = (
+    kp.NOSE,
+    kp.LEFT_EYE,
+    kp.RIGHT_EYE,
+    kp.LEFT_SHOULDER,
+    kp.RIGHT_SHOULDER,
+    kp.LEFT_KNEE,
+    kp.RIGHT_KNEE,
+    kp.LEFT_ANKLE,
+    kp.RIGHT_ANKLE,
+)
 # Tinggi normalisasi ketajaman: crop dari jarak berbeda dinilai pada skala sama
 _SHARPNESS_HEIGHT = 256
 # Bobot skor akhir. Ketajaman paling menentukan mutu bacaan VLM.
 W_SHARPNESS, W_STILLNESS, W_POSE = 0.6, 0.25, 0.15
 
 
-@dataclass(eq=False)   # dibandingkan berdasarkan identitas: berisi array gambar
+@dataclass(eq=False)  # dibandingkan berdasarkan identitas: berisi array gambar
 class FrameCandidate:
     crop: np.ndarray
     bbox: list
     keypoints: Optional[list]
     track_id: int
     sharpness: float = 0.0
-    motion: float = 0.0          # pergeseran relatif terhadap frame sebelumnya
+    motion: float = 0.0  # pergeseran relatif terhadap frame sebelumnya
     pose: float = 0.0
     score: float = 0.0
     # T86: titik pose dalam koordinat `crop` untuk panel perbesaran VLM (None = tanpa pose)
@@ -86,7 +96,7 @@ def choose_best(candidates: list[FrameCandidate], prev_bbox: Optional[list] = No
         previous = c.bbox
     best_sharp = max(c.sharpness for c in candidates) or 1.0
     for c in candidates:
-        stillness = 1.0 / (1.0 + 20.0 * c.motion)   # 5% tinggi tubuh bergeser -> 0,5
+        stillness = 1.0 / (1.0 + 20.0 * c.motion)  # 5% tinggi tubuh bergeser -> 0,5
         c.score = W_SHARPNESS * (c.sharpness / best_sharp) + W_STILLNESS * stillness + W_POSE * c.pose
     best = candidates[0]
     for c in candidates[1:]:

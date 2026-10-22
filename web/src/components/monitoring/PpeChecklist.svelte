@@ -10,7 +10,12 @@
   import { assessItem } from '../../lib/ppe'
   import PpeIcon from '../PpeIcon.svelte'
 
-  let { items, result, decidedBy, gateKind = 'standby' }: {
+  let {
+    items,
+    result,
+    decidedBy,
+    gateKind = 'standby',
+  }: {
     items: PpeItem[]
     result: InspectionResult | null
     decidedBy: string

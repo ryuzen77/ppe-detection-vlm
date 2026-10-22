@@ -26,17 +26,14 @@ export function keepEnrollmentHold(client: EnrollmentClient, onError: () => void
   let closed = false
   // Gagal melepas tidak berbahaya: tanpa denyut, backend mengakhiri jeda sendiri
   const release = () => client.releaseEnrollment().catch(() => {})
-  client.holdEnrollment().then(
-    (res) => {
-      // Modal ditutup sebelum jeda pertama terjawab: lepas lagi supaya gerbang tidak tertahan
-      if (closed) return void release()
-      timer = setInterval(
-        () => client.holdEnrollment().catch(onError),
-        (res.hold_s * 1000) / ENROLLMENT_HOLD.beatsPerHold,
-      )
-    },
-    onError,
-  )
+  client.holdEnrollment().then((res) => {
+    // Modal ditutup sebelum jeda pertama terjawab: lepas lagi supaya gerbang tidak tertahan
+    if (closed) return void release()
+    timer = setInterval(
+      () => client.holdEnrollment().catch(onError),
+      (res.hold_s * 1000) / ENROLLMENT_HOLD.beatsPerHold,
+    )
+  }, onError)
   return () => {
     closed = true
     clearInterval(timer)
@@ -128,8 +125,7 @@ export function pauseAutoShot(now: number, ms: number = ENROLLMENT_AUTO.cooldown
 export function trackAutoShot(state: AutoShot, preview: EnrollmentPreview | null, now: number): AutoShot {
   const px = preview?.fit === 'ok' ? preview.interocular_px : null
   if (now < state.resumeAt || px == null) return { ...state, streak: 0, lastPx: null }
-  const still =
-    state.lastPx != null && Math.abs(px - state.lastPx) / state.lastPx <= ENROLLMENT_AUTO.maxSizeChange
+  const still = state.lastPx != null && Math.abs(px - state.lastPx) / state.lastPx <= ENROLLMENT_AUTO.maxSizeChange
   return { ...state, streak: still ? state.streak + 1 : 1, lastPx: px }
 }
 

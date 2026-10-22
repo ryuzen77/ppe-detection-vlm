@@ -1,4 +1,5 @@
 """Adaptor Claude (T28) diuji terhadap server HTTP lokal yang meniru Messages API (tanpa kuota)."""
+
 import base64
 import json
 import threading
@@ -52,8 +53,15 @@ def server():
 
 
 def _provider(server):
-    return create_provider("anthropic", api_key="kunci-uji", model="model-uji", base_url=server.base_url,
-                           max_tokens=512, temperature=0.1, json_mode=True)
+    return create_provider(
+        "anthropic",
+        api_key="kunci-uji",
+        model="model-uji",
+        base_url=server.base_url,
+        max_tokens=512,
+        temperature=0.1,
+        json_mode=True,
+    )
 
 
 def test_permintaan_messages_api_dengan_gambar_base64(server):
@@ -67,24 +75,27 @@ def test_permintaan_messages_api_dengan_gambar_base64(server):
     assert (body["model"], body["max_tokens"], body["system"]) == ("model-uji", 512, "SISTEM")
     assert "temperature" not in body, "model Claude terbaru menolak temperature"
     image, text = body["messages"][0]["content"]
-    assert image["source"] == {"type": "base64", "media_type": "image/jpeg",
-                               "data": base64.b64encode(jpeg).decode()}
+    assert image["source"] == {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}
     assert text == {"type": "text", "text": "PENGGUNA"}
 
 
 def test_jawaban_berpagar_json_tetap_diurai(server):
-    server.reply["body"] = {"content": [{"type": "thinking", "thinking": ""},
-                                        {"type": "text", "text": '```json\n{"ok": true}\n```'}],
-                            "stop_reason": "end_turn"}
+    server.reply["body"] = {
+        "content": [{"type": "thinking", "thinking": ""}, {"type": "text", "text": '```json\n{"ok": true}\n```'}],
+        "stop_reason": "end_turn",
+    }
     assert _provider(server).analyze(b"x", "S", "U") == {"ok": True}
 
 
-@pytest.mark.parametrize("reply, status, pesan", [
-    ({"type": "error", "error": {"message": "invalid x-api-key"}}, 401, "HTTP 401"),
-    (_text_reply("", stop="refusal"), 200, "menolak"),
-    (_text_reply('{"ok": tr', stop="max_tokens"), 200, "terpotong"),
-    (_text_reply("   "), 200, "kosong"),
-])
+@pytest.mark.parametrize(
+    "reply, status, pesan",
+    [
+        ({"type": "error", "error": {"message": "invalid x-api-key"}}, 401, "HTTP 401"),
+        (_text_reply("", stop="refusal"), 200, "menolak"),
+        (_text_reply('{"ok": tr', stop="max_tokens"), 200, "terpotong"),
+        (_text_reply("   "), 200, "kosong"),
+    ],
+)
 def test_galat_penyedia_dilaporkan_jelas(server, reply, status, pesan):
     server.reply = {"status": status, "body": reply}
     with pytest.raises(RuntimeError, match=pesan):

@@ -3,6 +3,7 @@
 Uji nyata 19-10: orang duduk di depan kamera lolos syarat tubuh utuh (kepala & kaki
 terlihat) dan ikut diperiksa VLM — kuota free tier terbuang, lampu merah & audit palsu.
 """
+
 import numpy as np
 
 from backend import messages
@@ -19,11 +20,18 @@ CONF = 0.9
 def pose(left_leg=(600, 780, 960), right_leg=(600, 780, 960), hips_conf=CONF):
     """Orang menghadap kamera; kaki = (y pinggul, y lutut, y pergelangan kaki) per sisi."""
     k = np.zeros((17, 3))
-    for i, y in ((kp.NOSE, 180), (kp.LEFT_EYE, 170), (kp.RIGHT_EYE, 170),
-                 (kp.LEFT_SHOULDER, 300), (kp.RIGHT_SHOULDER, 300)):
+    for i, y in (
+        (kp.NOSE, 180),
+        (kp.LEFT_EYE, 170),
+        (kp.RIGHT_EYE, 170),
+        (kp.LEFT_SHOULDER, 300),
+        (kp.RIGHT_SHOULDER, 300),
+    ):
         k[i] = (950, y, CONF)
-    for (hip, knee, ankle), (hy, ky, ay) in (((kp.LEFT_HIP, kp.LEFT_KNEE, kp.LEFT_ANKLE), left_leg),
-                                             ((kp.RIGHT_HIP, kp.RIGHT_KNEE, kp.RIGHT_ANKLE), right_leg)):
+    for (hip, knee, ankle), (hy, ky, ay) in (
+        ((kp.LEFT_HIP, kp.LEFT_KNEE, kp.LEFT_ANKLE), left_leg),
+        ((kp.RIGHT_HIP, kp.RIGHT_KNEE, kp.RIGHT_ANKLE), right_leg),
+    ):
         k[hip], k[knee], k[ankle] = (900, hy, hips_conf), (900, ky, CONF), (900, ay, CONF)
     return k
 

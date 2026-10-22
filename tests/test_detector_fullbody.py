@@ -7,6 +7,7 @@ direkam di `golden/detector_fullbody.json`; refaktor tidak boleh mengubahnya.
 Bila perilaku SENGAJA diubah, bangkitkan ulang acuannya:
     python tests/test_detector_fullbody.py --regenerate
 """
+
 import json
 import sys
 from pathlib import Path
@@ -70,7 +71,7 @@ def _person(rng):
     x2 = int(rng.integers(x1 + 60, min(FRAME_W, x1 + 400) + 1))
     kpts = np.zeros((17, 3))
     kpts[:, 0] = rng.uniform(x1, x2, 17)
-    kpts[:, 1] = np.sort(rng.uniform(y1 - 20, y2 + 10, 17))   # kepala di atas, kaki di bawah
+    kpts[:, 1] = np.sort(rng.uniform(y1 - 20, y2 + 10, 17))  # kepala di atas, kaki di bawah
     kpts[:, 2] = rng.choice([0.05, 0.2, 0.34, 0.36, 0.6, 0.95], 17)
     return [x1, y1, x2, y2], kpts
 
@@ -85,8 +86,8 @@ def _head_near_top(rng):
     kpts[:, 0] = (x1 + x2) / 2
     kpts[:, 1] = np.linspace(y1 + 10, y2 - 5, 17)
     kpts[:, 2] = 0.9
-    kpts[0, 1] = rng.uniform(y1 + 2, y1 + 60)            # hidung
-    kpts[5, 1] = kpts[6, 1] = kpts[0, 1] + rng.uniform(30, 120)   # bahu
+    kpts[0, 1] = rng.uniform(y1 + 2, y1 + 60)  # hidung
+    kpts[5, 1] = kpts[6, 1] = kpts[0, 1] + rng.uniform(30, 120)  # bahu
     return [x1, y1, x2, y2], kpts
 
 
@@ -103,8 +104,15 @@ def run_cases():
         model.next = _Result([bbox], [i + 1], [0.9], [kpts] if with_pose else None)
         d = detector.detect_and_track(frame)[0]
         assert d.crop_img is not None
-        out.append([d.is_full_body, d.reason, getattr(d, "clip_type", ""), list(d.crop_img.shape[:2]),
-                    None if d.foot_y is None else round(d.foot_y, 6)])
+        out.append(
+            [
+                d.is_full_body,
+                d.reason,
+                getattr(d, "clip_type", ""),
+                list(d.crop_img.shape[:2]),
+                None if d.foot_y is None else round(d.foot_y, 6),
+            ]
+        )
     return out
 
 
@@ -123,6 +131,7 @@ def test_acuan_mencakup_semua_cabang():
 
 if __name__ == "__main__" and "--regenerate" in sys.argv:
     import conftest  # noqa: F401  lingkungan uji (tanpa .env asli)
+
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(run_cases()), encoding="utf-8")
     print(f"acuan ditulis: {GOLDEN}")

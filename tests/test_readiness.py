@@ -3,6 +3,7 @@
 Regresi uji nyata 28-09: 12 dari 20 sesi dipotret 0,08 dtk setelah sesi mulai,
 saat pekerja masih melangkah masuk.
 """
+
 import time
 
 import pytest
@@ -15,7 +16,7 @@ from backend.state_manager import state_mgr, TrackState
 
 from helpers import person_crop
 
-BBOX = [470, 50, 810, 660]          # tinggi tubuh 610 px
+BBOX = [470, 50, 810, 660]  # tinggi tubuh 610 px
 FACING = [[0, 0, 0.9]] * 17
 SIDEWAYS = [[0, 0, 0.9]] * 5 + [[0, 0, 0.1], [0, 0, 0.1]] + [[0, 0, 0.9]] * 10
 
@@ -35,9 +36,10 @@ def tahan(monkeypatch):
 
 # --- Logika murni ---------------------------------------------------------------------
 
+
 def test_berdiri_diam_siap_setelah_waktu_tahan(tahan):
     t = ReadinessTracker()
-    for i in range(31):                       # 30 FPS selama 1 dtk, goyangan kotak ~1%
+    for i in range(31):  # 30 FPS selama 1 dtk, goyangan kotak ~1%
         t.update(geser(BBOX, dy=(i % 3) * 3), FACING, now=i / 30)
     assert t.ready(now=30 / 30)
     assert not t.ready(now=0.5)
@@ -47,7 +49,7 @@ def test_berjalan_pelan_tidak_pernah_siap(tahan):
     """Tiap frame hanya bergeser 0,5% (tampak diam antar-frame), tetapi terus bergeser."""
     t = ReadinessTracker()
     bbox = BBOX
-    for i in range(90):                       # 3 dtk berjalan
+    for i in range(90):  # 3 dtk berjalan
         bbox = geser(bbox, dy=3)
         t.update(bbox, FACING, now=i / 30)
         assert not t.ready(now=i / 30), f"dipotret saat berjalan, frame {i}"
@@ -93,10 +95,18 @@ def test_syarat_bahu_bisa_dimatikan(tahan, monkeypatch):
 
 # --- Integrasi state machine ------------------------------------------------------------
 
+
 def _det(bbox=BBOX, keypoints=FACING):
     return DetectionResult(
-        track_id=7, bbox=list(bbox), is_full_body=True, reason=messages.POSE_OK,
-        is_inside_corridor=True, crop_img=person_crop(), conf=0.9, keypoints=keypoints)
+        track_id=7,
+        bbox=list(bbox),
+        is_full_body=True,
+        reason=messages.POSE_OK,
+        is_inside_corridor=True,
+        crop_img=person_crop(),
+        conf=0.9,
+        keypoints=keypoints,
+    )
 
 
 @pytest.fixture
@@ -105,6 +115,7 @@ def terkirim(monkeypatch, catalog_defaults):
     from backend.audio_engine import audio_player
     from backend.notifier import notifier
     from backend.vlm_analyzer import vlm_analyzer
+
     asli = vlm_analyzer.analyze_person
     dikirim = []
 

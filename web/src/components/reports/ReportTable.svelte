@@ -15,7 +15,11 @@
   import { REPORTS } from '../../lib/settings'
   import PpeIcon from '../PpeIcon.svelte'
 
-  let { records, items, onOpen }: {
+  let {
+    records,
+    items,
+    onOpen,
+  }: {
     records: ReportRecord[]
     /** Katalog APD; tiap baris hanya menampilkan item yang dinilai pada pemeriksaan itu */
     items: PpeItem[]
@@ -53,8 +57,12 @@
         <tr>
           <td>
             {#if rec.snapshot_filename}
-              <button class="thumb" onclick={() => onOpen(rec)} aria-label={TEXT.table.openPhoto(rec.track_id)}
-                      style:--thumb="{REPORTS.thumbPx}px">
+              <button
+                class="thumb"
+                onclick={() => onOpen(rec)}
+                aria-label={TEXT.table.openPhoto(rec.track_id)}
+                style:--thumb="{REPORTS.thumbPx}px"
+              >
                 <img src={api.snapshotUrl(rec.snapshot_filename)} alt="" loading="lazy" />
               </button>
             {:else}

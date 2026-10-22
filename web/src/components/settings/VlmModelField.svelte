@@ -12,7 +12,13 @@
     model = $bindable(),
     disabled,
     showStats = false,
-  }: { id: string; provider: VlmProviderEntry | undefined; model: string; disabled: boolean; showStats?: boolean } = $props()
+  }: {
+    id: string
+    provider: VlmProviderEntry | undefined
+    model: string
+    disabled: boolean
+    showStats?: boolean
+  } = $props()
 
   const entry = $derived(provider?.models.find((m) => m.model === model))
 </script>
@@ -66,9 +72,18 @@
     font-size: var(--text-xs);
     font-weight: 500;
   }
-  .tone-ok { background: var(--ok); color: var(--text); }
-  .tone-warn { background: var(--warn); color: var(--surface); }
-  .tone-muted { background: var(--border-strong); color: var(--text); }
+  .tone-ok {
+    background: var(--ok);
+    color: var(--text);
+  }
+  .tone-warn {
+    background: var(--warn);
+    color: var(--surface);
+  }
+  .tone-muted {
+    background: var(--border-strong);
+    color: var(--text);
+  }
   .location {
     display: flex;
     align-items: center;

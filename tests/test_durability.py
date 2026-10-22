@@ -1,4 +1,5 @@
 """Ketahanan saat listrik padam/crash (T37): audit, foto bukti, catatan hidup server."""
+
 import json
 import logging
 import threading
@@ -20,11 +21,20 @@ def mgr(tmp_path):
 
 
 def _save(mgr, crop):
-    return mgr.save_inspection(track_id=7, is_complete=True, items={}, missing_items=[], notes="",
-                               inference_source="VLM_LIVE:uji/model", inference_time_ms=1.0, crop_img=crop)
+    return mgr.save_inspection(
+        track_id=7,
+        is_complete=True,
+        items={},
+        missing_items=[],
+        notes="",
+        inference_source="VLM_LIVE:uji/model",
+        inference_time_ms=1.0,
+        crop_img=crop,
+    )
 
 
 # --- Audit ------------------------------------------------------------------------------
+
 
 def test_koneksi_penulis_audit_memakai_synchronous_full(mgr):
     # Pragma berlaku per koneksi; yang dicek koneksi yang dipakai menulis audit
@@ -36,6 +46,7 @@ def test_koneksi_penulis_audit_memakai_synchronous_full(mgr):
 
 
 # --- Foto bukti -------------------------------------------------------------------------
+
 
 def test_foto_bukti_tertulis_utuh_tanpa_berkas_sementara(mgr):
     meta = _save(mgr, np.full((64, 32, 3), 128, np.uint8))
@@ -63,6 +74,7 @@ def test_foto_setengah_jadi_dibuang_saat_start(tmp_path):
 
 
 # --- Catatan hidup server ---------------------------------------------------------------
+
 
 def test_belum_ada_catatan_tidak_melaporkan_apa_pun():
     assert uptime.describe_previous(None, 100.0) is None
@@ -124,7 +136,7 @@ def test_stop_saat_detak_sedang_menulis_tetap_tercatat_rapi(tmp_path, monkeypatc
     assert in_beat.wait(2), "detak tidak berjalan"
     stopper = threading.Thread(target=m.stop)
     stopper.start()
-    time.sleep(0.1)       # stop() sudah dipanggil saat detak masih menulis
+    time.sleep(0.1)  # stop() sudah dipanggil saat detak masih menulis
     release.set()
     stopper.join(2)
     assert m._thread is not None

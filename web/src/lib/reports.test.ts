@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
-import { clampPercent, complianceTone, historyHead, pageInfo, resultKind, sourceText, offsetDate, formatReportRange, calculateYAxis, workerCell } from './reports'
+import {
+  clampPercent,
+  complianceTone,
+  historyHead,
+  pageInfo,
+  resultKind,
+  sourceText,
+  offsetDate,
+  formatReportRange,
+  calculateYAxis,
+  workerCell,
+} from './reports'
 import { REPORTS } from './settings'
 
 describe('resultKind', () => {
@@ -104,10 +115,10 @@ describe('calculateYAxis', () => {
       const ticks = calculateYAxis(maxTotal, paddingY, usableHeight)
 
       expect(ticks.length).toBeGreaterThanOrEqual(2)
-      
-      const values = ticks.map(t => t.value)
+
+      const values = ticks.map((t) => t.value)
       // Semua tick harus integer
-      expect(values.every(v => Number.isInteger(v))).toBe(true)
+      expect(values.every((v) => Number.isInteger(v))).toBe(true)
       // Tidak ada tick duplikat
       expect(new Set(values).size).toBe(values.length)
       // Tick harus dimulai dari 0
@@ -132,18 +143,30 @@ describe('calculateYAxis', () => {
 
   it('menghasilkan step bulat 1 untuk maxTotal kecil (<= 4)', () => {
     const ticks = calculateYAxis(3, 20, 100)
-    expect(ticks.map(t => t.value)).toEqual([0, 1, 2, 3, 4])
+    expect(ticks.map((t) => t.value)).toEqual([0, 1, 2, 3, 4])
   })
 })
 
 describe('workerCell (T79)', () => {
   const base = { track_id: 49, fr_status: null, worker_name: null, employee_no: null, department: null, company: null }
   it('dikenali: nama, lalu nomor · divisi · perusahaan (snapshot saat pemeriksaan)', () => {
-    expect(workerCell({ ...base, fr_status: 'recognized', worker_name: 'Zen', employee_no: 'p001', department: 'Produksi', company: 'Internal' }))
-      .toEqual({ primary: 'Zen', secondary: 'p001 · Produksi · Internal', known: true })
+    expect(
+      workerCell({
+        ...base,
+        fr_status: 'recognized',
+        worker_name: 'Zen',
+        employee_no: 'p001',
+        department: 'Produksi',
+        company: 'Internal',
+      }),
+    ).toEqual({ primary: 'Zen', secondary: 'p001 · Produksi · Internal', known: true })
   })
   it('FR berjalan tanpa kecocokan = "Tidak dikenali" + nomor lintasan', () => {
-    expect(workerCell({ ...base, fr_status: 'unknown' })).toEqual({ primary: TEXT.table.unknownWorker, secondary: '#49', known: false })
+    expect(workerCell({ ...base, fr_status: 'unknown' })).toEqual({
+      primary: TEXT.table.unknownWorker,
+      secondary: '#49',
+      known: false,
+    })
   })
   it('baris lama / FR mati: nomor lintasan seperti sebelumnya', () => {
     expect(workerCell(base)).toEqual({ primary: '#49', secondary: '', known: false })

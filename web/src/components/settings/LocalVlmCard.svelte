@@ -7,7 +7,7 @@
     formatGpuRatio,
     formatLatency,
     formatOtherGpuApps,
-    shouldShowGpuAppsWarning
+    shouldShowGpuAppsWarning,
   } from '../../lib/localVlm'
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert'
 

@@ -16,7 +16,7 @@ function fakeFetch(status: number, body: unknown) {
 describe('ApiClient', () => {
   it('GET tanpa header admin dan mengurai JSON', async () => {
     const { fn, calls } = fakeFetch(200, { muted: true })
-    const api = new ApiClient({ fetch: fn})
+    const api = new ApiClient({ fetch: fn })
     await expect(api.getAudio()).resolves.toEqual({ muted: true })
     expect(calls[0].url).toBe('/api/config/audio')
     expect(calls[0].init.method).toBe('GET')
@@ -24,7 +24,7 @@ describe('ApiClient', () => {
 
   it('POST mengirim JSON', async () => {
     const { fn, calls } = fakeFetch(200, { status: 'success', muted: false })
-    const api = new ApiClient({ fetch: fn})
+    const api = new ApiClient({ fetch: fn })
     await api.setAudioMuted(false)
     const headers = calls[0].init.headers as Record<string, string>
     expect(headers['Content-Type']).toBe('application/json')
@@ -50,7 +50,9 @@ describe('ApiClient', () => {
     const { fn, calls } = fakeFetch(200, { page_records: [] })
     const api = new ApiClient({ fetch: fn, baseUrl: 'http://gerbang:8000/' })
     await api.reports({ limit: 20, offset: 40, status: 'incomplete', from: '2026-09-24', to: '2026-09-24' })
-    expect(calls[0].url).toBe('http://gerbang:8000/api/reports?limit=20&offset=40&status=incomplete&from=2026-09-24&to=2026-09-24')
+    expect(calls[0].url).toBe(
+      'http://gerbang:8000/api/reports?limit=20&offset=40&status=incomplete&from=2026-09-24&to=2026-09-24',
+    )
     expect(api.snapshotUrl('a b/../x.jpg')).toBe('http://gerbang:8000/api/reports/snapshots/a%20b%2F..%2Fx.jpg')
   })
 

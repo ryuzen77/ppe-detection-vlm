@@ -1,4 +1,5 @@
 """Telemetri real-time lewat WebSocket."""
+
 import asyncio
 import json
 
@@ -18,6 +19,7 @@ WS_CLOSE_LOGIN_REQUIRED = 4401
 
 
 # --- WEBSOCKET FOR REAL-TIME TELEMETRY (<10ms) ---
+
 
 class ConnectionManager:
     def __init__(self):
@@ -39,7 +41,9 @@ class ConnectionManager:
             except Exception:
                 self.disconnect(connection)
 
+
 ws_manager = ConnectionManager()
+
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

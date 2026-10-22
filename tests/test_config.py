@@ -1,4 +1,5 @@
 """Pembacaan variabel lingkungan di config."""
+
 import pytest
 
 from backend import config

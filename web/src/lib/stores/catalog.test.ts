@@ -35,7 +35,8 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('catalog.load (T89)', () => {
   it('mengambil ulang setelah muat pertama berhasil', async () => {
-    const spy = vi.spyOn(api, 'ppeRules')
+    const spy = vi
+      .spyOn(api, 'ppeRules')
       .mockResolvedValueOnce(catalogOf({ helm: true }))
       .mockResolvedValueOnce(catalogOf({ helm: false }))
     await catalog.load()
@@ -51,7 +52,8 @@ describe('catalog.load (T89)', () => {
   })
 
   it('setelah gagal, panggilan berikutnya mencoba lagi', async () => {
-    const spy = vi.spyOn(api, 'ppeRules')
+    const spy = vi
+      .spyOn(api, 'ppeRules')
       .mockRejectedValueOnce(new Error('putus'))
       .mockResolvedValueOnce(catalogOf({ helm: true }))
     await catalog.load()
@@ -75,8 +77,8 @@ describe('catalog.setRequired (T89)', () => {
 
   it('dua tab admin: perubahan tab lain tidak dimatikan lagi oleh katalog basi', async () => {
     const server = fakeServer({ helm: true, sarung_tangan: false, kacamata: false })
-    await catalog.load()                       // tab ini memuat: sarung_tangan = false
-    server.state.sarung_tangan = true          // tab lain mewajibkan sarung tangan
+    await catalog.load() // tab ini memuat: sarung_tangan = false
+    server.state.sarung_tangan = true // tab lain mewajibkan sarung tangan
     await catalog.setRequired('kacamata', true)
     expect(server.state.sarung_tangan).toBe(true)
     expect(requiredOf()).toEqual({ helm: true, sarung_tangan: true, kacamata: true })
@@ -87,9 +89,9 @@ describe('catalog.setRequired (T89)', () => {
     await catalog.load()
     const lateGet = deferred<PpeCatalog>()
     vi.spyOn(api, 'ppeRules').mockReturnValueOnce(lateGet.promise)
-    const loading = catalog.load()             // mis. login ulang memicu GET
-    await catalog.setRequired('rompi', false)  // admin menyimpan sebelum GET selesai
-    lateGet.resolve(catalogOf({ helm: true, rompi: true }))  // jawaban basi tiba belakangan
+    const loading = catalog.load() // mis. login ulang memicu GET
+    await catalog.setRequired('rompi', false) // admin menyimpan sebelum GET selesai
+    lateGet.resolve(catalogOf({ helm: true, rompi: true })) // jawaban basi tiba belakangan
     await loading
     expect(server.state.rompi).toBe(false)
     expect(requiredOf()).toEqual({ helm: true, rompi: false })
@@ -108,8 +110,8 @@ describe('catalog.setRequired (T89)', () => {
     const server = fakeServer({ helm: true, rompi: true })
     await catalog.load()
     vi.spyOn(api, 'setPpeActive').mockImplementationOnce(async (active) => {
-      Object.assign(server.state, active)      // tersimpan di server…
-      throw new Error('koneksi terputus')      // …tetapi jawabannya tidak sampai
+      Object.assign(server.state, active) // tersimpan di server…
+      throw new Error('koneksi terputus') // …tetapi jawabannya tidak sampai
     })
     await expect(catalog.setRequired('rompi', false)).rejects.toThrow('koneksi terputus')
     expect(requiredOf()).toEqual({ helm: true, rompi: false })
@@ -122,13 +124,13 @@ describe('catalog.setRequired (T89)', () => {
     await catalog.load()
     const oldGet = deferred<PpeCatalog>()
     vi.spyOn(api, 'ppeRules').mockReturnValueOnce(oldGet.promise)
-    const loading = catalog.load()                              // GET lama dimulai sebelum perubahan
+    const loading = catalog.load() // GET lama dimulai sebelum perubahan
     vi.spyOn(api, 'setPpeActive').mockImplementationOnce(async (active) => {
       Object.assign(server.state, active)
       throw new Error('koneksi terputus')
     })
-    await expect(catalog.setRequired('rompi', false)).rejects.toThrow()   // pemulihan membaca rompi=false
-    oldGet.resolve(catalogOf({ helm: true, rompi: true }))      // jawaban basi tiba paling akhir
+    await expect(catalog.setRequired('rompi', false)).rejects.toThrow() // pemulihan membaca rompi=false
+    oldGet.resolve(catalogOf({ helm: true, rompi: true })) // jawaban basi tiba paling akhir
     await loading
     expect(requiredOf()).toEqual({ helm: true, rompi: false })
     expect(catalog.unconfirmed).toBe(false)
@@ -142,7 +144,7 @@ describe('catalog.setRequired (T89)', () => {
     const saving = catalog.setRequired('rompi', false)
     const midGet = deferred<PpeCatalog>()
     vi.spyOn(api, 'ppeRules').mockReturnValueOnce(midGet.promise)
-    const loading = catalog.load()                              // membaca sebelum POST tersimpan
+    const loading = catalog.load() // membaca sebelum POST tersimpan
     server.state.rompi = false
     post.resolve(catalogOf(server.state))
     await saving

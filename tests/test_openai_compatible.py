@@ -1,4 +1,5 @@
 """Adaptor OpenAI-compatible diuji terhadap server HTTP lokal yang meniru penyedia."""
+
 import base64
 import json
 import threading
@@ -33,7 +34,9 @@ class FakeProviderServer:
                 elif r.get("raw") is not None:
                     payload = json.dumps(r["raw"]).encode()
                 else:
-                    payload = json.dumps({"choices": [{"message": {"role": "assistant", "content": r["content"]}}]}).encode()
+                    payload = json.dumps(
+                        {"choices": [{"message": {"role": "assistant", "content": r["content"]}}]}
+                    ).encode()
                 self.send_response(r["status"])
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
@@ -59,11 +62,17 @@ def server():
 
 
 def _provider(server, **kw):
-    return create_provider("openrouter", api_key=kw.pop("api_key", "kunci-uji"), model="qwen/qwen2.5-vl-72b-instruct",
-                           base_url=server.base_url, **kw)
+    return create_provider(
+        "openrouter",
+        api_key=kw.pop("api_key", "kunci-uji"),
+        model="qwen/qwen2.5-vl-72b-instruct",
+        base_url=server.base_url,
+        **kw,
+    )
 
 
 # --- Bentuk permintaan --------------------------------------------------------------
+
 
 def test_permintaan_berformat_openai_dengan_gambar_base64(server):
     jpeg = b"\xff\xd8isi-jpeg-uji\xff\xd9"
@@ -104,9 +113,14 @@ def test_ping_teks_saja(server):
 
 # --- Jawaban -------------------------------------------------------------------------
 
+
 def test_content_berupa_daftar_bagian_digabung(server):
-    server.reply = {"status": 200, "raw": {"choices": [{"message": {"content": [
-        {"type": "text", "text": '{"a": '}, {"type": "text", "text": "1}"}]}}]}}
+    server.reply = {
+        "status": 200,
+        "raw": {
+            "choices": [{"message": {"content": [{"type": "text", "text": '{"a": '}, {"type": "text", "text": "1}"}]}}]
+        },
+    }
     assert _provider(server).analyze(b"x", "S", "U") == {"a": 1}
 
 
@@ -124,6 +138,7 @@ def test_bentuk_jawaban_asing_ditolak(server):
 
 
 # --- Pemilihan penyedia -------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("nama", ["openai", "openrouter", "qwen", "deepseek", "ollama"])
 def test_preset_alamat_bawaan(nama):
@@ -146,6 +161,7 @@ def test_vllm_wajib_diberi_base_url():
 
 # --- Jalur VLMAnalyzer lengkap lewat HTTP ------------------------------------------------
 
+
 @pytest.fixture
 def analyzer(catalog_defaults):
     a = VLMAnalyzer()
@@ -164,12 +180,21 @@ def analyzer(catalog_defaults):
 
 
 def test_keputusan_vlm_lewat_penyedia_openai_compatible(server, analyzer):
-    server.reply = {"status": 200, "content": json.dumps({"items": {
-        "helm": {"detected": True},
-        "rompi": {"detected": True, "is_valid_color": False, "color": "biru"},
-        "celana": {"detected": True},
-        "sepatu": {"detected": True, "is_closed_shoes": True},
-    }, "missing_items": [], "notes": "rompi biru"})}
+    server.reply = {
+        "status": 200,
+        "content": json.dumps(
+            {
+                "items": {
+                    "helm": {"detected": True},
+                    "rompi": {"detected": True, "is_valid_color": False, "color": "biru"},
+                    "celana": {"detected": True},
+                    "sepatu": {"detected": True, "is_closed_shoes": True},
+                },
+                "missing_items": [],
+                "notes": "rompi biru",
+            }
+        ),
+    }
     analyzer.pasang(_provider(server))
 
     hasil = analyzer.analyze_person(person_crop())
@@ -191,8 +216,9 @@ def test_penyedia_openai_compatible_gagal_tanpa_cadangan_tanpa_keputusan(server,
 def test_batas_waktu_http_terpisah_dari_pemanasan(server):
     # Panggilan inspeksi dibatalkan di batas waktu aplikasi (+1 dtk), tetapi
     # pemuatan model Ollama saat pemanasan boleh jauh lebih lama (T27).
-    p = create_provider("ollama", api_key="", model="m", base_url=server.base_url,
-                        http_timeout=13.0, warmup_timeout=120.0)
+    p = create_provider(
+        "ollama", api_key="", model="m", base_url=server.base_url, http_timeout=13.0, warmup_timeout=120.0
+    )
     assert isinstance(p, OpenAICompatibleProvider)
     assert p._client.timeout.read == 13.0
     assert p.warmup_timeout == 120.0
@@ -200,8 +226,12 @@ def test_batas_waktu_http_terpisah_dari_pemanasan(server):
 
 def test_jawaban_kosong_hanya_berpikir_diberi_pesan_jelas(server):
     # Perilaku nyata qwen3-vl:4b di Ollama 0.34 (T22): content kosong, isi di "reasoning"
-    server.reply = {"status": 200, "raw": {"choices": [{"message": {
-        "role": "assistant", "content": "", "reasoning": "<think>Orang memakai helm..."}}]}}
+    server.reply = {
+        "status": 200,
+        "raw": {
+            "choices": [{"message": {"role": "assistant", "content": "", "reasoning": "<think>Orang memakai helm..."}}]
+        },
+    }
     with pytest.raises(RuntimeError, match="tanpa mode berpikir"):
         _provider(server).analyze(b"x", "S", "U")
 
@@ -213,6 +243,7 @@ def test_jawaban_kosong_ditolak(server):
 
 
 # --- Pemanasan (T23) ------------------------------------------------------------------------
+
 
 def test_pemanasan_ollama_menahan_model_tetap_termuat(server):
     p = create_provider("ollama", api_key="", model="qwen2.5vl:3b", base_url=server.base_url)

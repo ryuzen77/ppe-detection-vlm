@@ -14,6 +14,7 @@ hijau tetap menyala bila server mati mendadak. Karena itu:
 - kabel dicabut / laptop mati = papan tanpa daya = relay lepas (lampu di kontak NO).
 Sisa risiko: server macet tanpa crash; tertulis di IOT_HARDWARE_SPEC.md.
 """
+
 import logging
 import threading
 import time
@@ -28,11 +29,11 @@ VENDOR_ID = 0x16C0
 PRODUCT_ID = 0x05DF
 PRODUCT_PREFIX = "USBRelay"
 REPORT_ID = 0
-REPORT_LENGTH = 9               # report id + 8 byte data
+REPORT_LENGTH = 9  # report id + 8 byte data
 CMD_ON = 0xFF
 CMD_OFF = 0xFD
-SERIAL_BYTES = slice(1, 6)      # 5 byte serial setelah report id
-STATE_INDEX = 8                 # bitmask relay menyala; bit 0 = relay 1
+SERIAL_BYTES = slice(1, 6)  # 5 byte serial setelah report id
+STATE_INDEX = 8  # bitmask relay menyala; bit 0 = relay 1
 
 
 def channel_mask(channel: int) -> int:
@@ -48,7 +49,7 @@ class RelayBoard:
         self._device = device
         self.product = product
         self.serial = serial
-        suffix = product[len(PRODUCT_PREFIX):]
+        suffix = product[len(PRODUCT_PREFIX) :]
         self.channel_count = int(suffix) if suffix.isdigit() else 0
 
     def read_mask(self) -> int:
@@ -72,6 +73,7 @@ class RelayBoard:
 def find_board(serial: str = "") -> Optional[RelayBoard]:
     """Papan USBRelay pertama (atau yang serialnya cocok); None bila tidak ada."""
     import hid
+
     for info in hid.enumerate(VENDOR_ID, PRODUCT_ID):
         product = info.get("product_string") or ""
         if not product.startswith(PRODUCT_PREFIX):
@@ -112,9 +114,14 @@ class RelayMismatch(Exception):
 class UsbRelayLink:
     """Thread tunggal pemegang papan relay; antarmuka sama dengan GateLightLink (ESP32)."""
 
-    def __init__(self, masks: dict[str, int], channels: tuple[int, ...],
-                 opener: Callable[[str], Optional[RelayBoard]] = find_board, clock=time.monotonic):
-        self._masks = masks              # keadaan lampu -> bitmask relay yang menyala
+    def __init__(
+        self,
+        masks: dict[str, int],
+        channels: tuple[int, ...],
+        opener: Callable[[str], Optional[RelayBoard]] = find_board,
+        clock=time.monotonic,
+    ):
+        self._masks = masks  # keadaan lampu -> bitmask relay yang menyala
         self._channels = channels
         self._all = sum(channel_mask(c) for c in channels)
         self._opener = opener
@@ -151,8 +158,9 @@ class UsbRelayLink:
             try:
                 self._apply()
             except Exception as e:
-                logger.error(messages.IOT_RELAY_ALL_OFF_FAILED.format(reason=messages.IOT_RELAY_REASON_STOP,
-                                                                      error=str(e)[:120]))
+                logger.error(
+                    messages.IOT_RELAY_ALL_OFF_FAILED.format(reason=messages.IOT_RELAY_REASON_STOP, error=str(e)[:120])
+                )
         self._close()
 
     def set_state(self, state: str):
@@ -164,18 +172,26 @@ class UsbRelayLink:
         now = self._clock()
         age = None if self.last_ok is None else round(now - self.last_ok, 1)
         connected = age is not None and age <= cfg.IOT_ACK_TIMEOUT_SECONDS
-        return {"enabled": True, "connected": connected, "last_ack_age_s": age,
-                "error": None if connected else (self.error or messages.IOT_NO_ACK),
-                "lamps_on": self._lamps_on(now),
-                "lamps_available": [cfg.IOT_LAMP_GREEN, cfg.IOT_LAMP_RED]}
+        return {
+            "enabled": True,
+            "connected": connected,
+            "last_ack_age_s": age,
+            "error": None if connected else (self.error or messages.IOT_NO_ACK),
+            "lamps_on": self._lamps_on(now),
+            "lamps_available": [cfg.IOT_LAMP_GREEN, cfg.IOT_LAMP_RED],
+        }
 
     def _lamps_on(self, now: float) -> Optional[list[str]]:
         mask = self._verified_mask
-        if (mask is None or self._board is None or self.error is not None or self.last_ok is None
-                or now - self.last_ok > cfg.IOT_ACK_TIMEOUT_SECONDS):
+        if (
+            mask is None
+            or self._board is None
+            or self.error is not None
+            or self.last_ok is None
+            or now - self.last_ok > cfg.IOT_ACK_TIMEOUT_SECONDS
+        ):
             return None
-        channels = ((cfg.IOT_LAMP_GREEN, cfg.IOT_RELAY_GREEN_CHANNEL),
-                    (cfg.IOT_LAMP_RED, cfg.IOT_RELAY_RED_CHANNEL))
+        channels = ((cfg.IOT_LAMP_GREEN, cfg.IOT_RELAY_GREEN_CHANNEL), (cfg.IOT_LAMP_RED, cfg.IOT_RELAY_RED_CHANNEL))
         return [lamp for lamp, channel in channels if mask & channel_mask(channel)]
 
     # --- Satu putaran thread (dipanggil langsung oleh tes) ----------------------------
@@ -230,8 +246,11 @@ class UsbRelayLink:
             return False
         if not self._channels_valid(board.channel_count):
             board.close()
-            self._fail(messages.IOT_RELAY_CHANNEL_INVALID.format(
-                green=self._channels[0], red=self._channels[-1], count=board.channel_count))
+            self._fail(
+                messages.IOT_RELAY_CHANNEL_INVALID.format(
+                    green=self._channels[0], red=self._channels[-1], count=board.channel_count
+                )
+            )
             return False
         self._board = board
         logger.info(messages.IOT_RELAY_CONNECTED.format(product=board.product, serial=board.serial))

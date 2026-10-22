@@ -8,6 +8,7 @@ bisa dibuka satu program):
 Tiap lampu ditahan beberapa detik sambil heartbeat dikirim ulang seperti server.
 Di akhir heartbeat dihentikan: papan harus beralih ke KUNING BERKEDIP sendiri.
 """
+
 import sys
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ WATCHDOG_WAIT_SECONDS = 6.0
 
 def list_ports():
     from serial.tools import list_ports as lp
+
     for p in lp.comports():
         print(f"  {p.device}: {p.description}")
 

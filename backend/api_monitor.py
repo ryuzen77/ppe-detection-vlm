@@ -5,6 +5,7 @@ Status gerbang yang ditampilkan operator:
 - CADANGAN  : utama gagal/terputus, keputusan oleh VLM cadangan (kuning)
 - GANGGUAN  : tidak ada VLM yang menjawab; pekerja diminta menunggu (merah)
 """
+
 import time
 import threading
 from typing import Any, Optional
@@ -24,7 +25,7 @@ class EngineStats:
 
     def __init__(self):
         self.info: Optional[dict] = None
-        self.status = "BELUM_DIPAKAI"      # BELUM_DIPAKAI / OK / GAGAL
+        self.status = "BELUM_DIPAKAI"  # BELUM_DIPAKAI / OK / GAGAL
         self.latency_ms = 0.0
         self.latency_history: deque = deque(maxlen=cfg.API_LATENCY_HISTORY)
         self.calls = 0
@@ -119,14 +120,14 @@ class APIMonitor:
             if "429" in err_msg or "quota" in err_msg.lower():
                 s.rate_limited += 1
             s.last_checked = time.strftime("%H:%M:%S")
-            s.last_error = str(err_msg)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+            s.last_error = str(err_msg)[: cfg.ERROR_MESSAGE_MAX_CHARS]
 
     def record_decision(self, role: Optional[str], reason: str = ""):
         """Siapa yang memutuskan inspeksi terakhir; None = tidak ada keputusan."""
         with self.lock:
             if role is None:
                 self.no_decisions += 1
-                self.last_no_decision_reason = reason[:cfg.ERROR_MESSAGE_MAX_CHARS]
+                self.last_no_decision_reason = reason[: cfg.ERROR_MESSAGE_MAX_CHARS]
                 self.mode = MODE_DOWN
             else:
                 self.decisions[role] += 1
@@ -140,8 +141,13 @@ class APIMonitor:
         with self.lock:
             primary = self.engines["utama"].as_dict()
             backup = self.engines["cadangan"].as_dict()
-            active = (self.engines[ROLE_EMERGENCY].as_dict() if self.mode == MODE_LOCAL
-                      else backup if self.mode == MODE_BACKUP else primary)
+            active = (
+                self.engines[ROLE_EMERGENCY].as_dict()
+                if self.mode == MODE_LOCAL
+                else backup
+                if self.mode == MODE_BACKUP
+                else primary
+            )
             return {
                 "mode": self.mode,
                 "internet": dict(self.internet),

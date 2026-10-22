@@ -5,12 +5,12 @@
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
 
-  let { 
-    period = $bindable(), 
-    date = $bindable(), 
+  let {
+    period = $bindable(),
+    date = $bindable(),
     range,
-    loading = false 
-  }: { 
+    loading = false,
+  }: {
     period: ReportPeriod
     date: string
     range: ReportRange | null
@@ -35,8 +35,15 @@
 <div class="selector" role="group" aria-label={TEXT.period.ariaLabel}>
   <div class="segmented">
     {#each periods as p (p)}
-      <button class:active={period === p} aria-pressed={period === p} disabled={loading}
-              onclick={() => { period = p; date = '' }}>
+      <button
+        class:active={period === p}
+        aria-pressed={period === p}
+        disabled={loading}
+        onclick={() => {
+          period = p
+          date = ''
+        }}
+      >
         {TEXT.period.options[p]}
       </button>
     {/each}
@@ -47,7 +54,7 @@
       <button class="btn icon" onclick={goPrev} disabled={loading || !range} title={TEXT.period.prev}>
         <ChevronLeft size={16} aria-hidden="true" />
       </button>
-      
+
       <span class="range-text" aria-live="polite">
         {#if range}
           {formatReportRange(range.from, range.to, TEXT.period.formatDate)}
@@ -55,18 +62,23 @@
           ...
         {/if}
       </span>
-      
+
       <button class="btn icon" onclick={goNext} disabled={loading || !range} title={TEXT.period.next}>
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </div>
-    
+
     <div class="nav-date">
-      <input type="date" value={date || (range?.from ?? '')} 
-             disabled={loading} 
-             onchange={(e) => { date = e.currentTarget.value }} 
-             class="date-input" 
-             title={TEXT.period.jumpToDate} />
+      <input
+        type="date"
+        value={date || (range?.from ?? '')}
+        disabled={loading}
+        onchange={(e) => {
+          date = e.currentTarget.value
+        }}
+        class="date-input"
+        title={TEXT.period.jumpToDate}
+      />
 
       {#if date !== ''}
         <button class="btn today" onclick={goToday} disabled={loading}>{TEXT.period.today}</button>

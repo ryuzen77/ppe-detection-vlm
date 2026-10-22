@@ -1,4 +1,5 @@
 """T86: gambar VLM = tubuh utuh + panel perbesaran kepala & tangan dari crop resolusi asli."""
+
 import cv2
 import numpy as np
 import pytest

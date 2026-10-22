@@ -144,29 +144,16 @@
 
         <div class="consent-box">
           <label class="consent-label">
-            <input
-              type="checkbox"
-              bind:checked={consent}
-              disabled={adding}
-            />
+            <input type="checkbox" bind:checked={consent} disabled={adding} />
             <span>{WORKERS.fieldConsentLabel}</span>
           </label>
         </div>
 
         <div class="modal-actions">
-          <button
-            type="button"
-            class="btn"
-            onclick={onClose}
-            disabled={adding}
-          >
+          <button type="button" class="btn" onclick={onClose} disabled={adding}>
             {WORKERS.cancelBtn}
           </button>
-          <button
-            type="submit"
-            class="btn btn-primary"
-            disabled={adding || !consent}
-          >
+          <button type="submit" class="btn btn-primary" disabled={adding || !consent}>
             {WORKERS.submitBtn}
           </button>
         </div>
@@ -230,7 +217,7 @@
     color: var(--text-muted);
   }
 
-  input[type="text"],
+  input[type='text'],
   select {
     padding: var(--space-2) var(--space-3);
     border: 1px solid var(--border-strong);
@@ -240,7 +227,7 @@
     font-size: var(--text-sm);
   }
 
-  input[type="text"]:focus,
+  input[type='text']:focus,
   select:focus {
     outline: none;
     border-color: var(--primary);
@@ -268,7 +255,7 @@
     line-height: 1.4;
   }
 
-  .consent-label input[type="checkbox"] {
+  .consent-label input[type='checkbox'] {
     margin-top: 3px;
   }
 

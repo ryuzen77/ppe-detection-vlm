@@ -1,4 +1,5 @@
 """Katalog kamera, pemindaian, dan pergantian sumber video."""
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
@@ -13,6 +14,7 @@ router = APIRouter()
 
 
 # --- CAMERA SOURCE ENDPOINTS ---
+
 
 @router.get("/api/cameras")
 async def list_cameras():
@@ -65,9 +67,7 @@ async def list_cameras():
     # bukan untuk menyambung otomatis.
     catalog["saved"] = camera_manager.load_saved_selection()
     catalog["active"] = active
-    catalog["quality_warning"] = (
-        active["height"] > 0 and active["height"] < cfg.CAMERA_QUALITY_WARN_HEIGHT
-    )
+    catalog["quality_warning"] = active["height"] > 0 and active["height"] < cfg.CAMERA_QUALITY_WARN_HEIGHT
     return catalog
 
 
@@ -93,8 +93,7 @@ async def set_camera_source(request: Request):
     # index null berarti lepaskan kamera dan kembali ke layar pemilihan
     if data.get("index") is None:
         video_service.request_idle()
-        return {"status": "scheduled", "pending_index": None,
-                "message": messages.API_CAMERA_RELEASED}
+        return {"status": "scheduled", "pending_index": None, "message": messages.API_CAMERA_RELEASED}
 
     try:
         index = int(data["index"])

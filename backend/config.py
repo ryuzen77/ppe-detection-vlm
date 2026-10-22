@@ -69,16 +69,13 @@ class Config:
     # Server._detach) membuat shutdown menggantung selamanya dan Ctrl+C kedua
     # pun tidak menolong. Setelah batas ini koneksi yang tersisa diputus.
     SHUTDOWN_TIMEOUT_SECONDS: float = float(_env("SHUTDOWN_TIMEOUT_SECONDS", "5"))
-    LOCALHOST_IPS: set[str] = {'127.0.0.1', '::1', 'localhost'}
+    LOCALHOST_IPS: set[str] = {"127.0.0.1", "::1", "localhost"}
     MAX_PAYLOAD_BYTES: int = int(_env("MAX_PAYLOAD_BYTES", str(1 * 1024 * 1024)))
     # Default dibatasi ke localhost. `allow_origins=["*"]` bersama
     # `allow_credentials=True` ditolak browser sesuai spesifikasi CORS.
     CORS_ORIGINS: list[str] = [
         origin.strip()
-        for origin in _env(
-            "CORS_ORIGINS",
-            "http://localhost:8000,http://127.0.0.1:8000"
-        ).split(",")
+        for origin in _env("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
         if origin.strip()
     ]
 
@@ -96,7 +93,7 @@ class Config:
     ACCOUNT_USERNAME_MAX_LENGTH: int = 32
     # scrypt (bawaan Python): ~16 MB & puluhan ms per hash; parameter ikut tersimpan di
     # hash, jadi bisa dinaikkan kelak tanpa merusak akun lama.
-    PASSWORD_SCRYPT_N: int = 2 ** 14
+    PASSWORD_SCRYPT_N: int = 2**14
     PASSWORD_SCRYPT_R: int = 8
     PASSWORD_SCRYPT_P: int = 1
 
@@ -120,7 +117,7 @@ class Config:
     # butuh ±30 dtk memunculkannya — gerbang menunggu, bukan membuka kamera lain.
     CAMERA_NAME: str = _env("CAMERA_NAME", "")
     CAMERA_AUTO_MODE: bool = _env("CAMERA_AUTO_MODE", "true").lower() == "true"
-    CAMERA_TARGET_FPS: float = 25.0        # Sudah dianggap cukup lancar
+    CAMERA_TARGET_FPS: float = 25.0  # Sudah dianggap cukup lancar
     # Tanpa mode yang mencapai target, laju dalam rentang ini dari yang tercepat dianggap sama
     # lancarnya, lalu resolusi tertinggi dipilih. Di ruang redup C920 menahan SEMUA mode ±24 fps
     # (pencahayaan, bukan resolusi): uji 19-10, 1280x720 / 640x480 menang atas 1080p karena
@@ -142,9 +139,9 @@ class Config:
     # YUY2 yang dibatasi USB 2.0 (uji 18-10, Logitech C920: 1080p YUY2 5 fps vs MJPG 29 fps).
     # Diukur untuk resolusi sebesar ini ke atas; di bawahnya YUY2 sudah cukup lancar.
     CAMERA_MJPG_MIN_HEIGHT: int = 720
-    CAMERA_MJPG_WARMUP_FRAMES: int = 10   # frame dibuang setelah dibuka, sebelum laju diukur
-    CAMERA_MIN_HEIGHT: int = 400           # Di bawah ini, crop untuk VLM terlalu kecil
-    CAMERA_TARGET_ASPECT: float = 16 / 9   # Cocok dengan viewport dashboard
+    CAMERA_MJPG_WARMUP_FRAMES: int = 10  # frame dibuang setelah dibuka, sebelum laju diukur
+    CAMERA_MIN_HEIGHT: int = 400  # Di bawah ini, crop untuk VLM terlalu kecil
+    CAMERA_TARGET_ASPECT: float = 16 / 9  # Cocok dengan viewport dashboard
     CAMERA_ASPECT_TOLERANCE: float = 0.05
     # Crop VLM di bawah tinggi ini ditandai di UI sebagai penurunan kualitas
     CAMERA_QUALITY_WARN_HEIGHT: int = 540
@@ -155,11 +152,13 @@ class Config:
     CAMERA_LOST_THRESHOLD: int = 30
     # Penanda 1 - laju frame ambruk. Kamera USB penguji jatuh dari 25 ke 1,1 FPS
     # saat dicabut sementara pembacaan tetap "berhasil".
-    CAMERA_PROBE_READS: int = 5  # Pembacaan saat membuka kamera; frame terakhir dipakai untuk dimensi (T42d: dulu angka di capture)
+    CAMERA_PROBE_READS: int = (
+        5  # Pembacaan saat membuka kamera; frame terakhir dipakai untuk dimensi (T42d: dulu angka di capture)
+    )
     CAMERA_RATE_WINDOW_SECONDS: float = 1.0  # Jendela ukur laju baca kamera (T42c: dulu angka di capture)
-    CAMERA_STALL_SECONDS: float = 3.0      # Lama laju harus tetap ambruk sebelum divonis
-    CAMERA_STALL_FPS_RATIO: float = 0.25   # Ambang relatif terhadap laju normal kamera itu
-    CAMERA_STALL_MIN_BASELINE: float = 8.0 # Mode yang memang lambat tidak diawasi cara ini
+    CAMERA_STALL_SECONDS: float = 3.0  # Lama laju harus tetap ambruk sebelum divonis
+    CAMERA_STALL_FPS_RATIO: float = 0.25  # Ambang relatif terhadap laju normal kamera itu
+    CAMERA_STALL_MIN_BASELINE: float = 8.0  # Mode yang memang lambat tidak diawasi cara ini
     # Penanda 2 - perangkat hilang dari daftar sistem operasi. Paling tegas, tetapi
     # enumerasi DirectShow tidak murah sehingga dijalankan di thread pengawas sendiri.
     CAMERA_PRESENCE_CHECK_SECONDS: float = 2.0
@@ -202,18 +201,18 @@ class Config:
     CAMERA_SCAN_MAX_INDEX: int = 6
 
     # Ritme thread kamera & inferensi
-    CAMERA_READ_RETRY_SECONDS: float = 0.03      # Jeda setelah satu pembacaan frame gagal
-    STATUS_FRAME_INTERVAL_SECONDS: float = 0.1   # Frame pesan saat kamera belum dipilih/terputus
+    CAMERA_READ_RETRY_SECONDS: float = 0.03  # Jeda setelah satu pembacaan frame gagal
+    STATUS_FRAME_INTERVAL_SECONDS: float = 0.1  # Frame pesan saat kamera belum dipilih/terputus
     SYNTHETIC_FRAME_INTERVAL_SECONDS: float = 0.033  # Frame pengganti saat tidak ada kamera (~30 FPS)
-    INFERENCE_POLL_SECONDS: float = 0.005        # Jeda saat inferensi menunggu frame baru
-    THREAD_STOP_TIMEOUT_SECONDS: float = 5.0     # Batas tunggu thread kamera/inferensi saat shutdown
-    FPS_SMOOTHING: float = 0.1                   # Bobot frame terbaru pada rata-rata FPS (EMA)
+    INFERENCE_POLL_SECONDS: float = 0.005  # Jeda saat inferensi menunggu frame baru
+    THREAD_STOP_TIMEOUT_SECONDS: float = 5.0  # Batas tunggu thread kamera/inferensi saat shutdown
+    FPS_SMOOTHING: float = 0.1  # Bobot frame terbaru pada rata-rata FPS (EMA)
 
     # Aliran video & telemetri ke dashboard
-    STREAM_JPEG_QUALITY: int = 80                # Mutu JPEG aliran MJPEG
-    STREAM_INTERVAL_SECONDS: float = 0.033       # Jeda antar frame MJPEG (~30 FPS)
-    TELEMETRY_INTERVAL_SECONDS: float = 0.05     # Jeda antar pesan WebSocket (20 Hz)
-    TELEMETRY_HISTORY_RECORDS: int = 8           # Riwayat inspeksi yang ikut tiap pesan telemetri
+    STREAM_JPEG_QUALITY: int = 80  # Mutu JPEG aliran MJPEG
+    STREAM_INTERVAL_SECONDS: float = 0.033  # Jeda antar frame MJPEG (~30 FPS)
+    TELEMETRY_INTERVAL_SECONDS: float = 0.05  # Jeda antar pesan WebSocket (20 Hz)
+    TELEMETRY_HISTORY_RECORDS: int = 8  # Riwayat inspeksi yang ikut tiap pesan telemetri
 
     # Model Settings. Harus model pose (keypoint dipakai gerbang full-body).
     # Satu-satunya bobot yang disertakan: yolo26s-pose.pt (YOLO26 Small Pose).
@@ -225,11 +224,10 @@ class Config:
     YOLO_IOU: float = 0.45
     TRACKER_TYPE: str = "bytetrack.yaml"
 
-
     # Virtual Inspection Corridor (Membatasi 1 Orang di Tengah)
     # Area aktif lorong inspeksi (rasio dari lebar frame)
     ENABLE_CORRIDOR_FILTER: bool = True
-    CORRIDOR_LEFT_RATIO: float = 0.28   # Batas kiri lorong (~358px pada 1280px)
+    CORRIDOR_LEFT_RATIO: float = 0.28  # Batas kiri lorong (~358px pada 1280px)
     CORRIDOR_RIGHT_RATIO: float = 0.72  # Batas kanan lorong (~922px pada 1280px)
 
     # HUD koridor & bounding box sudah digambar canvas di frontend (hud_overlay.js).
@@ -241,11 +239,11 @@ class Config:
     # Dinyatakan sebagai rasio tinggi frame, bukan piksel: 15px berarti 2,1% pada
     # 720p tapi 3,1% pada 480p, sehingga ambang piksel absolut membuat panduan
     # "kaki terpotong" lebih cerewet begitu kamera resolusi rendah dipakai.
-    BORDER_MARGIN_TOP_RATIO: float = 0.021     # ≈15px pada 720p
+    BORDER_MARGIN_TOP_RATIO: float = 0.021  # ≈15px pada 720p
     BORDER_MARGIN_BOTTOM_RATIO: float = 0.021  # ≈15px pada 720p
-    HEAD_TOUCH_TOP_RATIO: float = 0.007        # ≈5px pada 720p
-    ANKLE_TOUCH_BOTTOM_RATIO: float = 0.011    # ≈8px pada 720p
-    KNEE_ONLY_BOTTOM_RATIO: float = 0.042      # ≈30px pada 720p
+    HEAD_TOUCH_TOP_RATIO: float = 0.007  # ≈5px pada 720p
+    ANKLE_TOUCH_BOTTOM_RATIO: float = 0.011  # ≈8px pada 720p
+    KNEE_ONLY_BOTTOM_RATIO: float = 0.042  # ≈30px pada 720p
     # Rentang tinggi orang relatif terhadap frame (35% s/d 96%)
     MIN_PERSON_HEIGHT_RATIO: float = 0.35
     MAX_PERSON_HEIGHT_RATIO: float = 0.96
@@ -288,7 +286,8 @@ class Config:
     VLM_API_KEY: str = _env("VLM_API_KEY", provider_api_key(VLM_PROVIDER))
     VLM_MODEL: str = _env(
         "VLM_MODEL",
-        _env("GEMINI_MODEL", vlm_profiles.default_model("gemini")) if VLM_PROVIDER == "gemini"
+        _env("GEMINI_MODEL", vlm_profiles.default_model("gemini"))
+        if VLM_PROVIDER == "gemini"
         else vlm_profiles.default_model(VLM_PROVIDER),
     )
     # Kosong = alamat bawaan penyedia (lihat vlm_providers/openai_compatible.py)
@@ -378,9 +377,9 @@ class Config:
     # Penjaga proses (T29): jeda nyala ulang setelah crash, berlipat bila crash beruntun
     SUPERVISOR_RESTART_DELAY_SECONDS: float = 5.0
     SUPERVISOR_MAX_DELAY_SECONDS: float = 60.0
-    SUPERVISOR_STABLE_SECONDS: float = 60.0   # hidup selama ini = bukan crash beruntun
+    SUPERVISOR_STABLE_SECONDS: float = 60.0  # hidup selama ini = bukan crash beruntun
     SUPERVISOR_LOG_FILE: str = "supervisor.log"
-    VLM_IMAGE_MAX_SIZE: int = 640            # Maksimum resolusi crop VLM (~35KB)
+    VLM_IMAGE_MAX_SIZE: int = 640  # Maksimum resolusi crop VLM (~35KB)
     # T86: panel perbesaran kepala & tangan di sisi kanan gambar VLM, dipotong dari crop resolusi
     # asli. Uji nyata 20-10: rokok di mulut hanya ±3-4 px pada tubuh 640 px -> lolos.
     VLM_ZOOM_ENABLED: bool = _env("VLM_ZOOM_ENABLED", "true").lower() == "true"
@@ -388,15 +387,15 @@ class Config:
     # diperbesar tanpa konteks tubuh lalu dikira dipakai -> APD kurang lolos. Rokok di tangan sudah
     # tertangkap tanpa panel (3/3); yang butuh perbesaran hanya rokok di mulut (panel kepala).
     VLM_ZOOM_HAND_PANELS: bool = _env("VLM_ZOOM_HAND_PANELS", "false").lower() == "true"
-    VLM_ZOOM_PANEL_WIDTH: int = 320          # Lebar kolom panel (kepala PxP, dua tangan P/2 x P/2)
+    VLM_ZOOM_PANEL_WIDTH: int = 320  # Lebar kolom panel (kepala PxP, dua tangan P/2 x P/2)
     VLM_ZOOM_HEAD_RATIO: float = float(_env("VLM_ZOOM_HEAD_RATIO", "0.16"))  # Sisi kotak kepala relatif tinggi crop
-    VLM_ZOOM_HAND_RATIO: float = 0.14        # Sisi kotak tangan relatif tinggi crop tubuh
-    VLM_ZOOM_HAND_REACH: float = 0.35        # Geser pusat dari pergelangan searah lengan bawah (ke jari)
+    VLM_ZOOM_HAND_RATIO: float = 0.14  # Sisi kotak tangan relatif tinggi crop tubuh
+    VLM_ZOOM_HAND_REACH: float = 0.35  # Geser pusat dari pergelangan searah lengan bawah (ke jari)
     VLM_ZOOM_FILL_BGR: tuple = (96, 96, 96)  # Panel tanpa titik pose yakin: abu-abu polos (tidak menebak)
     # T86: uji latensi Pengaturan memakai antrean VLM gerbang; bila pekerja sedang diperiksa,
     # tunggu sebentar lalu jawab "sibuk" (bukan mengantre di belakang pemeriksaan)
     VLM_PING_LOCK_WAIT_SECONDS: float = 2.0
-    VLM_JPEG_QUALITY: int = 75               # Kompresi JPEG hemat kuota & cepat upload
+    VLM_JPEG_QUALITY: int = 75  # Kompresi JPEG hemat kuota & cepat upload
     # Jeda minimum antar panggilan ke VLM cloud untuk menjaga kuota (free tier
     # Gemini 15 RPM). Model lokal tidak berkuota, jadi tanpa jeda.
     VLM_MIN_INTERVAL_SECONDS: float = float(_env("VLM_MIN_INTERVAL_SECONDS", "4.0"))
@@ -404,16 +403,21 @@ class Config:
     VLM_MAX_CONCURRENT: int = 2
     # T72: probe internet tanpa kuota VLM; alamat numerik menghindari DNS yang menggantung.
     INTERNET_CHECK_TARGETS: tuple = tuple(
-        (host.strip().strip("[]"), int(port)) for host, port in
-        (target.rsplit(":", 1) for target in _env(
-            "INTERNET_CHECK_TARGETS", "1.1.1.1:443,8.8.8.8:443,9.9.9.9:443").split(",")))
+        (host.strip().strip("[]"), int(port))
+        for host, port in (
+            target.rsplit(":", 1)
+            for target in _env("INTERNET_CHECK_TARGETS", "1.1.1.1:443,8.8.8.8:443,9.9.9.9:443").split(",")
+        )
+    )
     INTERNET_CHECK_INTERVAL_SECONDS: float = float(_env("INTERNET_CHECK_INTERVAL_SECONDS", "30"))
     INTERNET_CHECK_TIMEOUT_SECONDS: float = float(_env("INTERNET_CHECK_TIMEOUT_SECONDS", "2"))
     INTERNET_SLOW_MS: float = float(_env("INTERNET_SLOW_MS", "200"))
     INTERNET_VERY_SLOW_MS: float = float(_env("INTERNET_VERY_SLOW_MS", "500"))
     INTERNET_CONFIRM_CHECKS: int = int(_env("INTERNET_CONFIRM_CHECKS", "2"))
     VLM_LOCAL_FALLBACK_PROVIDER: str = _env("VLM_LOCAL_FALLBACK_PROVIDER", "none").strip().lower()
-    VLM_LOCAL_FALLBACK_MODEL: str = _env("VLM_LOCAL_FALLBACK_MODEL", vlm_profiles.default_model(VLM_LOCAL_BACKUP_PROVIDER))
+    VLM_LOCAL_FALLBACK_MODEL: str = _env(
+        "VLM_LOCAL_FALLBACK_MODEL", vlm_profiles.default_model(VLM_LOCAL_BACKUP_PROVIDER)
+    )
     VLM_LOCAL_PRELOAD: bool = _env("VLM_LOCAL_PRELOAD", "false").lower() == "true"
     VLM_LOCAL_IDLE_UNLOAD_SECONDS: float = float(_env("VLM_LOCAL_IDLE_UNLOAD_SECONDS", "600"))
     VLM_LOCAL_RETRY_SECONDS: float = float(_env("VLM_LOCAL_RETRY_SECONDS", "30"))
@@ -513,9 +517,9 @@ class Config:
     DISK_CHECK_SECONDS: float = float(_env("DISK_CHECK_SECONDS", "60"))
 
     # Laporan & arsip foto
-    SNAPSHOT_JPEG_QUALITY: int = 80           # Mutu foto bukti (~30-50 KB per foto)
-    DB_TIMEOUT_SECONDS: float = 10.0          # Tunggu kunci SQLite sebelum menyerah
-    CSV_EXPORT_BATCH_ROWS: int = 500          # Baris per potongan ekspor CSV bertahap (T43)
+    SNAPSHOT_JPEG_QUALITY: int = 80  # Mutu foto bukti (~30-50 KB per foto)
+    DB_TIMEOUT_SECONDS: float = 10.0  # Tunggu kunci SQLite sebelum menyerah
+    CSV_EXPORT_BATCH_ROWS: int = 500  # Baris per potongan ekspor CSV bertahap (T43)
     # Keputusan pengguna (27-09): baris audit tidak boleh hilang walau listrik
     # padam mendadak. Pragma ini berlaku per koneksi, jadi disetel di tiap koneksi.
     AUDIT_DB_SYNCHRONOUS: str = "FULL"
@@ -563,12 +567,12 @@ class Config:
     FACE_DETECTOR_FILE: str = "face_detection_yunet_2023mar.onnx"
     FACE_RECOGNIZER_FILE: str = "face-reidentification-retail-0095.xml"
     FACE_MODEL_VERSION: str = "intel_0095"
-    FACE_ALIGN_TEMPLATE: str = "omz"      # templat landmark Open Model Zoo untuk Intel 0095
-    FACE_INPUT_SIZE: int = 128            # potongan wajah ter-align (piksel persegi)
+    FACE_ALIGN_TEMPLATE: str = "omz"  # templat landmark Open Model Zoo untuk Intel 0095
+    FACE_INPUT_SIZE: int = 128  # potongan wajah ter-align (piksel persegi)
     # Thread CPU OpenVINO: dibatasi supaya FR tidak merebut CPU dari YOLO/VLM (uji T34m:
     # 2 thread = embedding p95 4 ms)
     FACE_CPU_THREADS: int = 2
-    FACE_DET_SCORE_MIN: float = 0.6       # skor YuNet minimal sebuah wajah dihitung
+    FACE_DET_SCORE_MIN: float = 0.6  # skor YuNet minimal sebuah wajah dihitung
     # Jarak antar-mata minimal foto pendaftaran. T34a (Logitech 1080p, posisi pemeriksaan):
     # 26-33 px; di 864x480 hanya 16-20 px (terlalu kecil untuk FR yang andal)
     FACE_MIN_INTEROCULAR_PX: float = 24.0
@@ -624,12 +628,13 @@ class Config:
     # Heartbeat lampu (T47): keadaan dikirim ulang tiap ini; firmware menyalakan
     # kuning berkedip bila 3 dtk tanpa perintah, jadi nilai ini harus jauh di bawahnya.
     IOT_HEARTBEAT_SECONDS: float = 1.0
-    IOT_ACK_TIMEOUT_SECONDS: float = 3.0      # tanpa balasan "OK:" selama ini = terputus
-    IOT_RECONNECT_SECONDS: float = 2.0        # jeda mencoba membuka ulang port
-    IOT_RX_MAX_BYTES: int = 256               # sisa data tanpa baris baru yang disimpan
+    IOT_ACK_TIMEOUT_SECONDS: float = 3.0  # tanpa balasan "OK:" selama ini = terputus
+    IOT_RECONNECT_SECONDS: float = 2.0  # jeda mencoba membuka ulang port
+    IOT_RX_MAX_BYTES: int = 256  # sisa data tanpa baris baru yang disimpan
     # Nama warna pada kontrak telemetri lampu fisik (T88).
     IOT_LAMP_GREEN: str = "green"
     IOT_LAMP_RED: str = "red"
     IOT_LAMP_YELLOW: str = "yellow"
+
 
 cfg = Config()

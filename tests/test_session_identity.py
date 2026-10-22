@@ -137,10 +137,10 @@ def test_nama_sesi_lama_tidak_menempel_ke_sesi_baru_yang_sudah_berjalan(gerbang,
     monkeypatch.setattr(cfg, "FACE_IDENTIFY_TIMEOUT_SECONDS", 0.2)
     fake = SequencedIdentifier()
     monkeypatch.setattr(face_identity, "identifier", fake)
-    _analisa_selesai(gerbang)            # sesi pertama: FR tertahan
-    state_mgr.reset_all()                # pekerja pertama pergi
-    _analisa_selesai(gerbang, track_id=77)   # pekerja kedua, sesi baru
-    fake.release.set()                   # hasil FR sesi pertama baru tiba sekarang
+    _analisa_selesai(gerbang)  # sesi pertama: FR tertahan
+    state_mgr.reset_all()  # pekerja pertama pergi
+    _analisa_selesai(gerbang, track_id=77)  # pekerja kedua, sesi baru
+    fake.release.set()  # hasil FR sesi pertama baru tiba sekarang
     assert _wait_for(lambda: fake.seen_at_start)
     assert fake.seen_at_start == [None], "nama pekerja sebelumnya tidak boleh menempel ke sesi baru"
     assert _wait_for(lambda: state_mgr.session is not None and state_mgr.session.identity == ANI)

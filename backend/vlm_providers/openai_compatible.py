@@ -4,6 +4,7 @@ Satu adaptor untuk OpenRouter, Qwen-VL (DashScope compatible-mode), DeepSeek,
 OpenAI, dan model lokal lewat Ollama/vLLM. Syaratnya satu: model yang dipilih
 harus menerima gambar.
 """
+
 import base64
 
 import httpx
@@ -17,9 +18,17 @@ PRESETS = {name: p.base_url for name, p in profiles.PROFILES.items() if p.api ==
 
 
 class OpenAICompatibleProvider(VLMProvider):
-    def __init__(self, api_key: str, model: str, base_url: str, name: str = "openai",
-                 json_mode: bool = True, http_timeout: float = 60.0, warmup_timeout: float = 120.0,
-                 temperature: float | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str,
+        name: str = "openai",
+        json_mode: bool = True,
+        http_timeout: float = 60.0,
+        warmup_timeout: float = 120.0,
+        temperature: float | None = None,
+    ):
         super().__init__(model)
         if not base_url:
             raise ValueError(f"Penyedia '{name}' butuh base URL (VLM_BASE_URL).")
@@ -46,10 +55,13 @@ class OpenAICompatibleProvider(VLMProvider):
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": user_prompt},
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                ]},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
             ],
         }
         if self.temperature is not None:
@@ -69,8 +81,11 @@ class OpenAICompatibleProvider(VLMProvider):
 
     def _keep_alive(self, seconds: int):
         """API asli Ollama: -1 = muat & tahan di GPU, 0 = keluarkan dari GPU sekarang."""
-        response = self._client.post(f"{self._ollama_root()}/api/generate",
-                                     json={"model": self.model, "keep_alive": seconds}, timeout=self.warmup_timeout)
+        response = self._client.post(
+            f"{self._ollama_root()}/api/generate",
+            json={"model": self.model, "keep_alive": seconds},
+            timeout=self.warmup_timeout,
+        )
         if response.status_code >= 400:
             raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
 
@@ -104,11 +119,13 @@ class OpenAICompatibleProvider(VLMProvider):
             self._keep_alive(0)
 
     def ping(self) -> str:
-        return self._chat({
-            "model": self.model,
-            "max_tokens": 10,
-            "messages": [{"role": "user", "content": messages.VLM_PING_PROMPT}],
-        }).strip()
+        return self._chat(
+            {
+                "model": self.model,
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": messages.VLM_PING_PROMPT}],
+            }
+        ).strip()
 
     def _chat(self, body: dict) -> str:
         response = self._client.post("/chat/completions", json=body)
@@ -129,7 +146,9 @@ class OpenAICompatibleProvider(VLMProvider):
             if message.get("reasoning") or message.get("reasoning_content"):
                 # Terukur pada qwen3-vl:4b di Ollama 0.34: model tetap "berpikir"
                 # walau diminta tidak, lalu berhenti sebelum menulis jawaban.
-                raise RuntimeError(f"{self.name}: model {self.model} hanya mengirim proses berpikir tanpa jawaban; "
-                                   f"pilih model vision tanpa mode berpikir (mis. qwen2.5vl).")
+                raise RuntimeError(
+                    f"{self.name}: model {self.model} hanya mengirim proses berpikir tanpa jawaban; "
+                    f"pilih model vision tanpa mode berpikir (mis. qwen2.5vl)."
+                )
             raise RuntimeError(f"{self.name}: model {self.model} mengirim jawaban kosong.")
         return content

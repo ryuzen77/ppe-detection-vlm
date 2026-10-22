@@ -7,6 +7,7 @@ Rambu rancangan yang disetujui 06-10:
 (d) model `unsafe` selalu ditolak, model belum tervalidasi hanya dengan konfirmasi;
 (e) pilihan dashboard disimpan & menang atas .env, bisa dikembalikan ke .env.
 """
+
 import json
 import logging
 import threading
@@ -17,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from backend import messages, runtime_settings, vlm_selection
 from backend.config import cfg
-from backend.vlm_analyzer import (ROLE_BACKUP, ROLE_PRIMARY, EngineFailed, LaneBusy, VLMAnalyzer)
+from backend.vlm_analyzer import ROLE_BACKUP, ROLE_PRIMARY, EngineFailed, LaneBusy, VLMAnalyzer
 from backend.vlm_providers import profiles
 from backend.vlm_providers.base import VLMProvider
 from backend.vlm_selection import Choice, Selection, SelectionError
@@ -25,13 +26,19 @@ from backend.vlm_selection import Choice, Selection, SelectionError
 from helpers import PROVIDER_KEY_ENVS, person_crop
 
 UNSAFE = next(v for v in profiles.VALIDATIONS if v.missed > 0)
-SAFE = next(v for v in profiles.VALIDATIONS if v.missed == 0 and v.prompt_version == messages.PROMPT_VERSION
-            and not any(o.missed for o in profiles.VALIDATIONS if (o.provider, o.model) == (v.provider, v.model)))
+SAFE = next(
+    v
+    for v in profiles.VALIDATIONS
+    if v.missed == 0
+    and v.prompt_version == messages.PROMPT_VERSION
+    and not any(o.missed for o in profiles.VALIDATIONS if (o.provider, o.model) == (v.provider, v.model))
+)
 REPLY = json.dumps({"items": {}, "orang_nyata": True})
 
 
 class FakeProvider(VLMProvider):
     """Penyedia tiruan: mencatat panggilan; bisa dibuat lambat atau gagal."""
+
     made: list = []
 
     def __init__(self, name, model, api_key, fail_warm_up=False, delay=0.0):
@@ -73,12 +80,19 @@ def env(monkeypatch, tmp_path):
         monkeypatch.setenv(name, "")
     monkeypatch.setenv("GEMINI_API_KEY", "kunci-gemini")
     monkeypatch.setenv("OPENAI_API_KEY", "kunci-openai")
-    for attr, value in (("VLM_PROVIDER", "gemini"), ("VLM_MODEL", "gemini-3.5-flash-lite"),
-                        ("VLM_API_KEY", "kunci-gemini"), ("VLM_BASE_URL", ""),
-                        ("VLM_BACKUP_PROVIDER", "ollama"), ("VLM_BACKUP_MODEL", "qwen2.5vl:7b"),
-                        ("VLM_BACKUP_API_KEY", ""), ("VLM_BACKUP_BASE_URL", ""),
-                        ("VLM_CLOUD_TIMEOUT_SECONDS", 2.0), ("VLM_LOCAL_TIMEOUT_SECONDS", 2.0),
-                        ("VLM_MIN_INTERVAL_SECONDS", 0.0)):
+    for attr, value in (
+        ("VLM_PROVIDER", "gemini"),
+        ("VLM_MODEL", "gemini-3.5-flash-lite"),
+        ("VLM_API_KEY", "kunci-gemini"),
+        ("VLM_BASE_URL", ""),
+        ("VLM_BACKUP_PROVIDER", "ollama"),
+        ("VLM_BACKUP_MODEL", "qwen2.5vl:7b"),
+        ("VLM_BACKUP_API_KEY", ""),
+        ("VLM_BACKUP_BASE_URL", ""),
+        ("VLM_CLOUD_TIMEOUT_SECONDS", 2.0),
+        ("VLM_LOCAL_TIMEOUT_SECONDS", 2.0),
+        ("VLM_MIN_INTERVAL_SECONDS", 0.0),
+    ):
         monkeypatch.setattr(cfg, attr, value)
     monkeypatch.setattr(runtime_settings, "SETTINGS_PATH", tmp_path / "runtime_settings.json")
     return tmp_path
@@ -93,6 +107,7 @@ def fakes(monkeypatch):
         provider = FakeProvider(name, model, api_key, **options.get(name, {}))
         made.append(provider)
         return provider
+
     monkeypatch.setattr("backend.vlm_analyzer.create_provider", create)
     return made, options
 
@@ -108,6 +123,7 @@ def analyzer(env, fakes):
 
 
 # --- (a) key hanya dari .env ---------------------------------------------------------
+
 
 def test_key_env_tercatat_untuk_semua_penyedia_cloud_bernama():
     named = {p.key_env for p in profiles.PROFILES.values() if p.key_env}
@@ -140,10 +156,13 @@ def test_katalog_tanpa_key_dan_menandai_penyedia_siap(env):
     assert entry["validated"] == profiles.UNSAFE and entry["missed"] == UNSAFE.missed
 
 
-@pytest.mark.parametrize("text", [
-    "openai HTTP 401: Incorrect API key provided: kunci-op***enai. You can find your API key",
-    "openai HTTP 401: key kunci-openai ditolak",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "openai HTTP 401: Incorrect API key provided: kunci-op***enai. You can find your API key",
+        "openai HTTP 401: key kunci-openai ditolak",
+    ],
+)
 def test_pesan_galat_penyedia_tanpa_key(text):
     clean = vlm_selection.redact(text, "kunci-openai")
     assert "kunci-op" not in clean and "kunci-openai" not in clean and "HTTP 401" in clean
@@ -160,12 +179,16 @@ def test_galat_pemanasan_ke_browser_tanpa_potongan_key(analyzer, fakes, monkeypa
 
 # --- (d) aturan pilihan --------------------------------------------------------------
 
-@pytest.mark.parametrize("choice, code", [
-    (Choice("tidak-ada", "m"), "unknown_provider"),
-    (Choice("openai", ""), "missing_model"),
-    (Choice("deepseek", "deepseek-flash"), "missing_key"),
-    (Choice("vllm", "m"), "missing_base_url"),
-])
+
+@pytest.mark.parametrize(
+    "choice, code",
+    [
+        (Choice("tidak-ada", "m"), "unknown_provider"),
+        (Choice("openai", ""), "missing_model"),
+        (Choice("deepseek", "deepseek-flash"), "missing_key"),
+        (Choice("vllm", "m"), "missing_base_url"),
+    ],
+)
 def test_pilihan_tidak_lengkap_ditolak(env, choice, code):
     with pytest.raises(SelectionError) as e:
         vlm_selection.check_choice(choice, confirm_unvalidated=True)
@@ -192,10 +215,14 @@ def test_model_tervalidasi_tanpa_konfirmasi(env):
 
 # --- (e) pilihan tersimpan -----------------------------------------------------------
 
+
 def test_tanpa_pilihan_tersimpan_memakai_env(env):
     s = vlm_selection.effective_selection()
-    assert (s.primary, s.backup, s.source) == (Choice("gemini", "gemini-3.5-flash-lite"),
-                                              Choice("ollama", "qwen2.5vl:7b"), vlm_selection.SOURCE_ENV)
+    assert (s.primary, s.backup, s.source) == (
+        Choice("gemini", "gemini-3.5-flash-lite"),
+        Choice("ollama", "qwen2.5vl:7b"),
+        vlm_selection.SOURCE_ENV,
+    )
 
 
 def test_pilihan_tersimpan_menang_atas_env(env):
@@ -206,12 +233,15 @@ def test_pilihan_tersimpan_menang_atas_env(env):
     assert vlm_selection.effective_selection().source == vlm_selection.SOURCE_ENV
 
 
-@pytest.mark.parametrize("stored", [
-    {"primary": {"provider": UNSAFE.provider, "model": UNSAFE.model}, "backup": None},
-    {"primary": {"provider": "deepseek", "model": "m"}, "backup": None},
-    {"primary": None, "backup": None},
-    "rusak",
-])
+@pytest.mark.parametrize(
+    "stored",
+    [
+        {"primary": {"provider": UNSAFE.provider, "model": UNSAFE.model}, "backup": None},
+        {"primary": {"provider": "deepseek", "model": "m"}, "backup": None},
+        {"primary": None, "backup": None},
+        "rusak",
+    ],
+)
 def test_pilihan_tersimpan_yang_tidak_boleh_lagi_diabaikan(env, stored):
     """Katalog validasi atau .env bisa berubah sejak pilihan disimpan."""
     runtime_settings.update(vlm_selection.SETTINGS_KEY, stored)
@@ -220,11 +250,15 @@ def test_pilihan_tersimpan_yang_tidak_boleh_lagi_diabaikan(env, stored):
 
 # --- (b) pertukaran engine -----------------------------------------------------------
 
+
 def test_apply_menukar_engine_dan_memakai_ulang_yang_sama(analyzer, fakes):
     made, _ = fakes
     backup_before = analyzer.backup
-    current = analyzer.apply_selection(Selection(Choice("openai", "model-baru"), Choice("ollama", "qwen2.5vl:7b"),
-                                                 vlm_selection.SOURCE_DASHBOARD), lambda: True, client="uji")
+    current = analyzer.apply_selection(
+        Selection(Choice("openai", "model-baru"), Choice("ollama", "qwen2.5vl:7b"), vlm_selection.SOURCE_DASHBOARD),
+        lambda: True,
+        client="uji",
+    )
     assert current["primary"] == {"provider": "openai", "model": "model-baru", "source": "dashboard"}
     assert analyzer.backup is backup_before, "cadangan tidak berubah: tidak dirakit/dipanaskan ulang"
     assert analyzer.primary.provider.api_key == "kunci-openai"
@@ -256,7 +290,7 @@ def test_inspeksi_berjalan_selesai_dengan_engine_lama(analyzer, fakes):
     results = []
     worker = threading.Thread(target=lambda: results.append(analyzer.analyze_person(person_crop())))
     worker.start()
-    time.sleep(0.1)    # inspeksi sudah memegang gembok
+    time.sleep(0.1)  # inspeksi sudah memegang gembok
     analyzer.apply_selection(Selection(Choice("openai", "m"), None, "dashboard"), lambda: True)
     assert results, "pertukaran harus menunggu inspeksi yang sedang berjalan selesai"
     worker.join()
@@ -266,18 +300,23 @@ def test_inspeksi_berjalan_selesai_dengan_engine_lama(analyzer, fakes):
 
 # --- (c) jejak -----------------------------------------------------------------------
 
+
 def test_setiap_pergantian_tercatat(analyzer, security_events):
-    analyzer.apply_selection(Selection(Choice("openai", "model-baru"), None, "dashboard"), lambda: True,
-                             client="10.0.0.5", user="admin-uji")
+    analyzer.apply_selection(
+        Selection(Choice("openai", "model-baru"), None, "dashboard"), lambda: True, client="10.0.0.5", user="admin-uji"
+    )
     lines = [e for e in security_events if e["event"] == "vlm_change"]
     assert [(x["role"], x["to"]) for x in lines] == [
-        (ROLE_PRIMARY, {"provider": "openai", "model": "model-baru"}), (ROLE_BACKUP, None)]
+        (ROLE_PRIMARY, {"provider": "openai", "model": "model-baru"}),
+        (ROLE_BACKUP, None),
+    ]
     assert lines[0]["from"] == {"provider": "gemini", "model": "gemini-3.5-flash-lite"}
     assert lines[0]["validated"] == profiles.UNVALIDATED and lines[0]["client"] == "10.0.0.5"
     assert lines[0]["user"] == "admin-uji", "T51: jejak mencatat siapa yang mengganti"
 
 
 # --- Uji penyedia ---------------------------------------------------------------------
+
 
 def test_uji_penyedia_tidak_menyentuh_engine_gerbang(analyzer):
     before = analyzer.primary
@@ -288,10 +327,12 @@ def test_uji_penyedia_tidak_menyentuh_engine_gerbang(analyzer):
 
 # --- Endpoint -------------------------------------------------------------------------
 
+
 @pytest.fixture
 def client(analyzer, monkeypatch):
     from backend.api import routes_vlm
     from backend.app import app
+
     monkeypatch.setattr(routes_vlm, "vlm_analyzer", analyzer)
     monkeypatch.setattr(routes_vlm.state_mgr, "session", None)
     return TestClient(app)
@@ -307,6 +348,7 @@ def test_endpoint_daftar_penyedia(client):
 def test_endpoint_apply_kode_galat(client):
     def post(body):
         return client.post("/api/config/vlm/apply", json=body)
+
     r = post({"primary": {"provider": UNSAFE.provider, "model": UNSAFE.model}, "confirm_unvalidated": True})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "unsafe_model"
     r = post({"primary": {"provider": "openai", "model": "model-baru"}})
@@ -318,14 +360,16 @@ def test_endpoint_apply_kode_galat(client):
 
 def test_endpoint_apply_409_saat_ada_pekerja(client, monkeypatch):
     from backend.api import routes_vlm
+
     monkeypatch.setattr(routes_vlm.state_mgr, "session", object())
     r = client.post("/api/config/vlm/apply", json={"primary": {"provider": SAFE.provider, "model": SAFE.model}})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "lane_busy"
 
 
 def test_endpoint_kembali_ke_env(client):
-    client.post("/api/config/vlm/apply", json={"primary": {"provider": "openai", "model": "m"},
-                                               "confirm_unvalidated": True})
+    client.post(
+        "/api/config/vlm/apply", json={"primary": {"provider": "openai", "model": "m"}, "confirm_unvalidated": True}
+    )
     r = client.delete("/api/config/vlm/selection")
     assert r.status_code == 200 and r.json()["primary"]["provider"] == "gemini"
     assert r.json()["primary"]["source"] == "env"
@@ -371,6 +415,7 @@ def test_endpoint_uji_tanpa_penyedia_ditolak_400(client, provider):
 
 # --- T70: cadangan dimatikan = model keluar dari GPU -----------------------------------
 
+
 def _wait_unloaded(provider, expected=1, timeout=3.0):
     end = time.time() + timeout
     while time.time() < end and provider.unloads < expected:
@@ -380,24 +425,31 @@ def _wait_unloaded(provider, expected=1, timeout=3.0):
 
 def test_mematikan_cadangan_mengeluarkan_model_dari_gpu(analyzer):
     old_backup = analyzer.backup.provider
-    analyzer.apply_selection(Selection(Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD),
-                             lambda: True)
+    analyzer.apply_selection(
+        Selection(Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD), lambda: True
+    )
     assert analyzer.backup is None
     assert _wait_unloaded(old_backup) == 1
 
 
 def test_cadangan_yang_tetap_dipakai_tidak_dikeluarkan(analyzer):
     backup = analyzer.backup.provider
-    analyzer.apply_selection(Selection(Choice("openai", "model-baru"), Choice("ollama", "qwen2.5vl:7b"),
-                                       vlm_selection.SOURCE_DASHBOARD), lambda: True)
+    analyzer.apply_selection(
+        Selection(Choice("openai", "model-baru"), Choice("ollama", "qwen2.5vl:7b"), vlm_selection.SOURCE_DASHBOARD),
+        lambda: True,
+    )
     time.sleep(0.2)
     assert analyzer.backup.provider is backup and backup.unloads == 0
 
 
 def test_ganti_model_lokal_yang_lama_dikeluarkan(analyzer):
     old = analyzer.backup.provider
-    analyzer.apply_selection(Selection(Choice("gemini", "gemini-3.5-flash-lite"), Choice("ollama", "qwen2.5vl:3b"),
-                                       vlm_selection.SOURCE_DASHBOARD), lambda: True)
+    analyzer.apply_selection(
+        Selection(
+            Choice("gemini", "gemini-3.5-flash-lite"), Choice("ollama", "qwen2.5vl:3b"), vlm_selection.SOURCE_DASHBOARD
+        ),
+        lambda: True,
+    )
     assert _wait_unloaded(old) == 1 and analyzer.backup.provider.unloads == 0
 
 
@@ -406,8 +458,11 @@ def _start_without_backup(monkeypatch, made, residency: "float | Exception" = 1.
     if env_backup is not None:
         monkeypatch.setattr(cfg, "VLM_BACKUP_PROVIDER", env_backup)
     monkeypatch.setattr(FakeProvider, "residency", residency)
-    monkeypatch.setattr(vlm_selection, "effective_selection", lambda: Selection(
-        Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD))
+    monkeypatch.setattr(
+        vlm_selection,
+        "effective_selection",
+        lambda: Selection(Choice("gemini", "gemini-3.5-flash-lite"), None, vlm_selection.SOURCE_DASHBOARD),
+    )
     a = VLMAnalyzer()
     a.start()
     stale = [p for p in made if p.name == "ollama"]
@@ -442,10 +497,10 @@ def test_saat_menyala_model_tidak_dimuat_tidak_dibongkar(env, fakes, monkeypatch
 def test_saat_menyala_ollama_mati_diam_tanpa_peringatan(env, fakes, monkeypatch, caplog):
     """Gerbang tanpa cadangan di mesin tanpa Ollama: bukan masalah, tidak boleh mengotori log."""
     with caplog.at_level(logging.WARNING):
-        a, stale = _start_without_backup(monkeypatch, fakes[0], residency=ConnectionError("ollama mati"),
-                                         env_backup="none")
+        a, stale = _start_without_backup(
+            monkeypatch, fakes[0], residency=ConnectionError("ollama mati"), env_backup="none"
+        )
         time.sleep(0.2)
     stale_logs = [r for r in caplog.records if "Ollama" in r.getMessage() or "GPU" in r.getMessage()]
     assert stale.unloads == 0 and not stale_logs
     a.primary.close()  # pyright: ignore[reportOptionalMemberAccess]
-

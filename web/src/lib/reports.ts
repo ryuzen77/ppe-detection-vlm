@@ -33,7 +33,8 @@ export interface PageInfo {
 }
 
 export function pageInfo(offset: number, shown: number, total: number): PageInfo {
-  if (total <= 0 || shown <= 0) return { from: 0, to: 0, total: Math.max(0, total), hasPrev: offset > 0, hasNext: false }
+  if (total <= 0 || shown <= 0)
+    return { from: 0, to: 0, total: Math.max(0, total), hasPrev: offset > 0, hasNext: false }
   return {
     from: offset + 1,
     to: offset + shown,
@@ -73,8 +74,8 @@ export interface YAxisTick {
 
 export function calculateYAxis(maxTotal: number, paddingY: number, usableHeight: number): YAxisTick[] {
   const safeMax = Math.max(0, Math.ceil(maxTotal))
-  let step = 1
-  let yMax = 4
+  let step: number
+  let yMax: number
 
   if (safeMax <= 4) {
     step = 1
@@ -117,7 +118,9 @@ export const clampPercent = (n: number): number => Math.min(100, Math.max(0, Num
  * Penanda pemeriksaan terbaru dari riwayat telemetri. Berubah → ada baris audit
  * baru, jadi halaman Laporan memuat ulang tanpa polling terpisah.
  */
-export function historyHead(history: ReadonlyArray<Pick<HistoryRecord, 'track_id' | 'timestamp' | 'snapshot_filename'>> | null | undefined): string {
+export function historyHead(
+  history: ReadonlyArray<Pick<HistoryRecord, 'track_id' | 'timestamp' | 'snapshot_filename'>> | null | undefined,
+): string {
   const h = history?.[0]
   return h ? `${h.track_id}|${h.timestamp}|${h.snapshot_filename}` : ''
 }
@@ -126,7 +129,9 @@ export function historyHead(history: ReadonlyArray<Pick<HistoryRecord, 'track_id
  * Isi kolom Pekerja (T79): nama & nomor bila dikenali FR, "Tidak dikenali" bila FR berjalan tanpa
  * kecocokan; baris lama / FR mati tetap memakai nomor lintasan. Divisi & perusahaan = snapshot audit.
  */
-export function workerCell(rec: Pick<ReportRecord, 'track_id' | 'fr_status' | 'worker_name' | 'employee_no' | 'department' | 'company'>): {
+export function workerCell(
+  rec: Pick<ReportRecord, 'track_id' | 'fr_status' | 'worker_name' | 'employee_no' | 'department' | 'company'>,
+): {
   primary: string
   secondary: string
   known: boolean

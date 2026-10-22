@@ -15,11 +15,11 @@ export interface LampView {
 }
 
 export interface TowerView {
-  lamps: LampView[]          // urut atas -> bawah: merah, kuning, hijau
-  state: string              // teks lampu yang menyala (MERAH/KUNING/HIJAU/MATI)
+  lamps: LampView[] // urut atas -> bawah: merah, kuning, hijau
+  state: string // teks lampu yang menyala (MERAH/KUNING/HIJAU/MATI)
   tone: TowerTone
-  message: string            // pesan lampu dari server (mis. "APD lengkap, silakan masuk")
-  notes: string[]            // peringatan untuk operator
+  message: string // pesan lampu dari server (mis. "APD lengkap, silakan masuk")
+  notes: string[] // peringatan untuk operator
 }
 
 const ORDER: GateLamp[] = ['red', 'yellow', 'green']
@@ -44,12 +44,21 @@ export function towerView(t: Telemetry | null): TowerView {
 
   const lit = lamps.filter((l) => l.on).map((l) => l.lamp)
   const state = lit.length ? lit.map((l) => TEXT.states[l]).join(' + ') : TEXT.states.off
-  return { lamps, state, tone: lit.length ? TONE[lit[0]] : 'neutral', message: t?.light?.message ?? '',
-           notes: towerNotes(lamps, commanded, physicalKnown, available) }
+  return {
+    lamps,
+    state,
+    tone: lit.length ? TONE[lit[0]] : 'neutral',
+    message: t?.light?.message ?? '',
+    notes: towerNotes(lamps, commanded, physicalKnown, available),
+  }
 }
 
-function towerNotes(lamps: LampView[], commanded: GateLamp | null, physicalKnown: boolean,
-                    available: Set<GateLamp>): string[] {
+function towerNotes(
+  lamps: LampView[],
+  commanded: GateLamp | null,
+  physicalKnown: boolean,
+  available: Set<GateLamp>,
+): string[] {
   if (!physicalKnown) return [TEXT.noPhysical]
   const notes: string[] = []
   if (lamps.some((l) => l.source === 'unknown')) notes.push(TEXT.disconnected)

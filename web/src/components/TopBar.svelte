@@ -86,13 +86,23 @@
     {/if}
 
     {#if connection === 'signed_out'}
-      <span class="chip" title={CONNECTION.signedOut}><LogIn size={14} aria-hidden="true" /> <span class="label">{CONNECTION.signedOut}</span></span>
+      <span class="chip" title={CONNECTION.signedOut}
+        ><LogIn size={14} aria-hidden="true" /> <span class="label">{CONNECTION.signedOut}</span></span
+      >
     {:else if connection === 'disconnected'}
-      <span class="chip tone-danger" title={CONNECTION.lost}><WifiOff size={14} aria-hidden="true" /> <span class="label">{CONNECTION.lost}</span></span>
+      <span class="chip tone-danger" title={CONNECTION.lost}
+        ><WifiOff size={14} aria-hidden="true" /> <span class="label">{CONNECTION.lost}</span></span
+      >
     {:else}
       <div class="system">
-        <button type="button" class="chip summary tone-{summary.tone}" aria-expanded={open} aria-haspopup="true"
-                title={chipTitle(summary.text, SYSTEM_STATUS.open)} onclick={() => (open = !open)}>
+        <button
+          type="button"
+          class="chip summary tone-{summary.tone}"
+          aria-expanded={open}
+          aria-haspopup="true"
+          title={chipTitle(summary.text, SYSTEM_STATUS.open)}
+          onclick={() => (open = !open)}
+        >
           <span class="dot"></span><span class="label">{summary.text}</span><ChevronDown size={14} aria-hidden="true" />
         </button>
         {#if open}
@@ -103,7 +113,10 @@
                 {@const Icon = item.icon}
                 <li class="tone-{item.tone}">
                   <Icon size={16} aria-hidden="true" />
-                  <span><span class="item-text">{item.text}</span>{#if item.hint}<span class="item-hint">{item.hint}</span>{/if}</span>
+                  <span
+                    ><span class="item-text">{item.text}</span>{#if item.hint}<span class="item-hint">{item.hint}</span
+                      >{/if}</span
+                  >
                 </li>
               {/each}
             </ul>
@@ -113,7 +126,7 @@
     {/if}
     {#if session.authenticated}
       <span class="chip tone-ok" title={AUTH.accounts}>
-        <User size={14} aria-hidden="true" /> 
+        <User size={14} aria-hidden="true" />
         <span class="label">{session.user?.username || 'admin'}</span>
       </span>
       <button class="key" onclick={() => session.logout()} title={LOGIN.logoutBtn} aria-label={LOGIN.logoutBtn}>

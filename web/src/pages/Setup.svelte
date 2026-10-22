@@ -20,7 +20,7 @@
   async function handleSetup(e: Event) {
     e.preventDefault()
     errorMsg = ''
-    
+
     if (password.length < MIN_PASSWORD_LENGTH) {
       errorMsg = AUTH.errorPasswordLength
       return
@@ -48,7 +48,7 @@
 <div class="login-container">
   <div class="login-card">
     <h2>{AUTH.setupTitle}</h2>
-    
+
     {#if !session.setupAllowed}
       <div class="info-box" role="alert">
         {AUTH.setupUrlInfo.replace('{url}', getSetupUrl(window.location.port))}
@@ -59,7 +59,7 @@
           {errorMsg}
         </div>
       {/if}
-      
+
       <form onsubmit={handleSetup} class="form-content">
         <div class="input-group">
           <label for="username">{AUTH.username}</label>
@@ -75,7 +75,7 @@
           <label for="confirm">{AUTH.repeatPassword}</label>
           <PasswordInput id="confirm" bind:value={confirmPassword} autocomplete="new-password" disabled={loading} />
         </div>
-        
+
         <button type="submit" class="btn btn-primary" disabled={!username || !password || !confirmPassword || loading}>
           {AUTH.setupBtn}
         </button>

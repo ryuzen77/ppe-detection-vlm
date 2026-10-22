@@ -2,7 +2,14 @@
 import type { InternetState, LocalStandbyState, Telemetry } from './api/types'
 import type { Tone } from './gate'
 import {
-  CAMERA_CHIP, VLM_CHIP, VLM_CHIP_NO_BACKUP, IOT_CHIP, INTERNET_CHIP, LOCAL_STANDBY_CHIP, SYSTEM_STATUS, cameraChipOk,
+  CAMERA_CHIP,
+  VLM_CHIP,
+  VLM_CHIP_NO_BACKUP,
+  IOT_CHIP,
+  INTERNET_CHIP,
+  LOCAL_STANDBY_CHIP,
+  SYSTEM_STATUS,
+  cameraChipOk,
 } from './messages'
 
 export interface Chip {
@@ -26,13 +33,11 @@ export function vlmChip(t: Telemetry | null): Chip {
   const mode = t?.api_monitor?.mode
   // T71: tanpa cadangan (bawaan) operator perlu tahu bahwa gangguan VLM utama = pekerja menunggu
   // T72: VLM lokal darurat tanpa cadangan API tetap "punya cadangan" (tinjauan Codex 22-10)
-  const noBackup = mode === 'UTAMA' && t?.api_monitor?.backup?.configured === false
-    && t?.api_monitor?.local?.role !== 'darurat'
+  const noBackup =
+    mode === 'UTAMA' && t?.api_monitor?.backup?.configured === false && t?.api_monitor?.local?.role !== 'darurat'
   const label = noBackup ? VLM_CHIP_NO_BACKUP : mode ? VLM_CHIP[mode] : VLM_CHIP.UNKNOWN
   return { tone: (mode && VLM_TONE[mode]) || 'neutral', text: label.text, hint: label.hint }
 }
-
-
 
 const INTERNET_TONE: Record<InternetState, Tone> = { normal: 'ok', lambat: 'warn', putus: 'warn' }
 
@@ -47,7 +52,12 @@ export function internetChip(t: Telemetry | null): Chip | null {
   return { tone: INTERNET_TONE[state], ...INTERNET_CHIP[state] }
 }
 
-const LOCAL_TONE: Record<LocalStandbyState, Tone> = { unloaded: 'neutral', loading: 'warn', ready: 'ok', failed: 'warn' }
+const LOCAL_TONE: Record<LocalStandbyState, Tone> = {
+  unloaded: 'neutral',
+  loading: 'warn',
+  ready: 'ok',
+  failed: 'warn',
+}
 
 /** T72: VLM lokal siaga dingin. Siaga = keadaan normal (netral), bukan masalah di ringkasan. */
 export function localStandbyChip(t: Telemetry | null): Chip | null {
@@ -63,7 +73,7 @@ export function iotChip(t: Telemetry | null): Chip {
   return {
     tone: iot.connected ? 'ok' : 'warn',
     text: iot.connected ? IOT_CHIP.connected : IOT_CHIP.disconnected,
-    hint: iot.error || ''
+    hint: iot.error || '',
   }
 }
 
@@ -76,6 +86,11 @@ const TONE_RANK: Record<Tone, number> = { neutral: 0, ok: 1, warn: 2, danger: 3 
 export function systemSummary(chips: Chip[]): { tone: Tone; text: string; problems: Chip[] } {
   const problems = chips.filter((c) => c.tone === 'warn' || c.tone === 'danger')
   const tone = chips.reduce<Tone>((worst, c) => (TONE_RANK[c.tone] > TONE_RANK[worst] ? c.tone : worst), 'neutral')
-  const text = problems.length === 0 ? SYSTEM_STATUS.ready : problems.length === 1 ? problems[0].text : SYSTEM_STATUS.issues(problems.length)
+  const text =
+    problems.length === 0
+      ? SYSTEM_STATUS.ready
+      : problems.length === 1
+        ? problems[0].text
+        : SYSTEM_STATUS.issues(problems.length)
   return { tone: problems.length ? tone : 'ok', text, problems }
 }

@@ -97,27 +97,43 @@
     </div>
     <div class="head-actions">
       {#if orgs.companies.length}
-        <button type="button" class="btn" onclick={() => (showOrg = true)}><Building2 size={16} /> {TEXT.manageOrg}</button>
+        <button type="button" class="btn" onclick={() => (showOrg = true)}
+          ><Building2 size={16} /> {TEXT.manageOrg}</button
+        >
       {/if}
-      <button type="button" class="btn btn-primary" onclick={() => (showAdd = true)}><UserPlus size={16} /> {WORKERS.addWorkerBtn}</button>
+      <button type="button" class="btn btn-primary" onclick={() => (showAdd = true)}
+        ><UserPlus size={16} /> {WORKERS.addWorkerBtn}</button
+      >
     </div>
   </div>
 
   {#if !faceReady}
     <div class="banner warn" role="alert">
       <ShieldAlert size={20} />
-      <div><p>{WORKERS.faceDisabledBanner}</p><code>{WORKERS.generateKeyHint}</code></div>
+      <div>
+        <p>{WORKERS.faceDisabledBanner}</p>
+        <code>{WORKERS.generateKeyHint}</code>
+      </div>
     </div>
   {/if}
   {#if galleryLimit?.over}
-    <div class="banner danger" role="alert"><AlertTriangle size={20} /><p>{WORKERS.limitOverWarning(galleryLimit.count, galleryLimit.tested)}</p></div>
+    <div class="banner danger" role="alert">
+      <AlertTriangle size={20} />
+      <p>{WORKERS.limitOverWarning(galleryLimit.count, galleryLimit.tested)}</p>
+    </div>
   {/if}
   {#if errorMsg}<p class="error" role="alert">{errorMsg}</p>{/if}
 
   <div class="toolbar">
     <label class="search">
       <Search size={16} aria-hidden="true" />
-      <input class="input" type="search" placeholder={TEXT.searchPlaceholder} aria-label={TEXT.searchLabel} bind:value={q} />
+      <input
+        class="input"
+        type="search"
+        placeholder={TEXT.searchPlaceholder}
+        aria-label={TEXT.searchLabel}
+        bind:value={q}
+      />
     </label>
     <select class="input narrow" aria-label={TEXT.statusLabel} bind:value={status}>
       {#each STATUSES as s (s)}<option value={s}>{TEXT.statusOptions[s]}</option>{/each}
@@ -157,14 +173,38 @@
   </div>
 </div>
 
-<WorkerAddModal show={showAdd} departments={orgs.departments} companies={orgs.companies}
-  onClose={() => (showAdd = false)} onSaved={() => afterSave(() => (showAdd = false))} />
-<WorkerEditModal worker={editing} departments={orgs.departments} companies={orgs.companies}
-  onClose={() => (editing = null)} onSaved={() => afterSave(() => (editing = null))} />
-<WorkerPhotoModal worker={photoWorker} onClose={() => (photoWorker = null)} onSaved={() => afterSave(() => (photoWorker = null))} />
-<WorkerDeleteDialog {deleteFaceWorker} {deleteTemplateTarget}
-  onClose={() => { deleteFaceWorker = null; deleteTemplateTarget = null }}
-  onDeleted={() => afterSave(() => { deleteFaceWorker = null; deleteTemplateTarget = null })} />
+<WorkerAddModal
+  show={showAdd}
+  departments={orgs.departments}
+  companies={orgs.companies}
+  onClose={() => (showAdd = false)}
+  onSaved={() => afterSave(() => (showAdd = false))}
+/>
+<WorkerEditModal
+  worker={editing}
+  departments={orgs.departments}
+  companies={orgs.companies}
+  onClose={() => (editing = null)}
+  onSaved={() => afterSave(() => (editing = null))}
+/>
+<WorkerPhotoModal
+  worker={photoWorker}
+  onClose={() => (photoWorker = null)}
+  onSaved={() => afterSave(() => (photoWorker = null))}
+/>
+<WorkerDeleteDialog
+  {deleteFaceWorker}
+  {deleteTemplateTarget}
+  onClose={() => {
+    deleteFaceWorker = null
+    deleteTemplateTarget = null
+  }}
+  onDeleted={() =>
+    afterSave(() => {
+      deleteFaceWorker = null
+      deleteTemplateTarget = null
+    })}
+/>
 <OrgManager open={showOrg} lists={orgs} onChanged={loadOrgs} onClose={() => (showOrg = false)} />
 
 <style>

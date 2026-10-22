@@ -1,4 +1,5 @@
 """Penggambaran server-side di atas frame video: HUD inspeksi dan layar tunggu."""
+
 import cv2
 import numpy as np
 
@@ -31,12 +32,19 @@ def draw_synthetic_frame(width: int, height: int, message: str = messages.FRAME_
     box_w = max(tw, mw) + pad_x * 2
     box_x = (w - box_w) // 2
     box_y = h // 2 - pad_y - th
-    cv2.rectangle(img, (box_x, box_y), (box_x + box_w, box_y + pad_y * 2 + th),
-                  (0, 180, 255), 2)
-    cv2.putText(img, judul, ((w - tw) // 2, box_y + pad_y + th // 2),
-                cv2.FONT_HERSHEY_SIMPLEX, scale_title, (0, 180, 255), 2)
-    cv2.putText(img, message, ((w - mw) // 2, box_y + pad_y * 2 + th + int(h * 0.06)),
-                cv2.FONT_HERSHEY_SIMPLEX, scale_msg, (150, 150, 150), 1)
+    cv2.rectangle(img, (box_x, box_y), (box_x + box_w, box_y + pad_y * 2 + th), (0, 180, 255), 2)
+    cv2.putText(
+        img, judul, ((w - tw) // 2, box_y + pad_y + th // 2), cv2.FONT_HERSHEY_SIMPLEX, scale_title, (0, 180, 255), 2
+    )
+    cv2.putText(
+        img,
+        message,
+        ((w - mw) // 2, box_y + pad_y * 2 + th + int(h * 0.06)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        scale_msg,
+        (150, 150, 150),
+        1,
+    )
     return img
 
 
@@ -80,7 +88,7 @@ def draw_hud(frame: np.ndarray, detections, fps: float) -> np.ndarray:
     # 3. Draw person bounding boxes
     for det in detections:
         x1, y1, x2, y2 = det.bbox
-        is_inside = getattr(det, 'is_inside_corridor', True)
+        is_inside = getattr(det, "is_inside_corridor", True)
 
         if not is_inside:
             # Dimmed gray for people outside the corridor
@@ -93,17 +101,30 @@ def draw_hud(frame: np.ndarray, detections, fps: float) -> np.ndarray:
             color = (0, 255, 0) if det.is_full_body else (0, 69, 255)
             cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
 
-            label = (messages.HUD_FULL_BODY if det.is_full_body else messages.HUD_STEP_BACK).format(track_id=det.track_id)
+            label = (messages.HUD_FULL_BODY if det.is_full_body else messages.HUD_STEP_BACK).format(
+                track_id=det.track_id
+            )
             cv2.putText(out, label, (x1, max(25, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             if not det.is_full_body:
                 cv2.putText(out, f"! {det.reason}", (x1, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 69, 255), 2)
 
     # Header info
-    cv2.putText(out, messages.HUD_HEADER.format(fps=fps, device=detector.device_label), (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 200), 2)
+    cv2.putText(
+        out,
+        messages.HUD_HEADER.format(fps=fps, device=detector.device_label),
+        (20, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 255, 200),
+        2,
+    )
     status_text = messages.HUD_LIGHT.format(state=notifier.current_state)
-    status_color = (0, 255, 0) if notifier.current_state == "GREEN" else ((0, 0, 255) if notifier.current_state == "RED" else (180, 180, 180))
+    status_color = (
+        (0, 255, 0)
+        if notifier.current_state == "GREEN"
+        else ((0, 0, 255) if notifier.current_state == "RED" else (180, 180, 180))
+    )
     cv2.putText(out, status_text, (w - 200, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-
 
     return out

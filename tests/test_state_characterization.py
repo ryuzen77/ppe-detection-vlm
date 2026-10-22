@@ -9,6 +9,7 @@ Refaktor tidak boleh mengubahnya.
 Bila perilaku SENGAJA diubah, bangkitkan ulang acuannya:
     python tests/test_state_characterization.py --regenerate
 """
+
 import json
 import sys
 import time as real_time
@@ -21,13 +22,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 GOLDEN = Path(__file__).resolve().parent / "golden" / "state_manager.json"
 TELEMETRY_GOLDEN = Path(__file__).resolve().parent / "golden" / "state_telemetry.json"
-TELEMETRY_EVERY = 23   # payload dashboard direkam tiap sekian frame (T42g)
+TELEMETRY_EVERY = 23  # payload dashboard direkam tiap sekian frame (T42g)
 SCENARIOS, FRAMES, FPS = 18, 1200, 15
 VLM_DELAY_FRAMES = 4
-SLOW_VLM_DELAY_FRAMES = 3 * FPS   # > jeda jalur kosong: hasil tiba setelah sesi berakhir (T42e)
-CFG_OVERRIDES = {"STANDBY_RESET_DELAY_SECONDS": 1.5, "READY_HOLD_SECONDS": 1.0, "STABLE_FRAMES_REQUIRED": 3,
-                 "VLM_SYSTEM_RETRY_SECONDS": 2.0, "DECIDED_TRACK_MEMORY_SECONDS": 10.0,
-                 "TELEMETRY_HISTORY_RECORDS": 2}   # < riwayat per skenario: pemotongan ikut teruji (T42g)
+SLOW_VLM_DELAY_FRAMES = 3 * FPS  # > jeda jalur kosong: hasil tiba setelah sesi berakhir (T42e)
+CFG_OVERRIDES = {
+    "STANDBY_RESET_DELAY_SECONDS": 1.5,
+    "READY_HOLD_SECONDS": 1.0,
+    "STABLE_FRAMES_REQUIRED": 3,
+    "VLM_SYSTEM_RETRY_SECONDS": 2.0,
+    "DECIDED_TRACK_MEMORY_SECONDS": 10.0,
+    "TELEMETRY_HISTORY_RECORDS": 2,
+}  # < riwayat per skenario: pemotongan ikut teruji (T42g)
 
 
 class _World:
@@ -35,6 +41,7 @@ class _World:
 
     def __init__(self, sm_module, monkeypatch, first_reply: int = 0, delay_frames: int = VLM_DELAY_FRAMES):
         from backend.vlm_analyzer import InspectionResult
+
         self.delay = delay_frames / FPS
         self.now, self.sounds, self.pending, self.vlm_calls, self.audits = 1000.0, [], [], 0, []
         clock = types.SimpleNamespace(time=lambda: self.now, strftime=real_time.strftime)
@@ -42,12 +49,20 @@ class _World:
         ap = sm_module.audio_player
         monkeypatch.setattr(ap, "play", lambda name, *a, **k: self.sounds.append(name))
         monkeypatch.setattr(ap, "play_step_back", lambda clip_type="": self.sounds.append(f"mundur:{clip_type}"))
-        monkeypatch.setattr(ap, "play_result", lambda is_complete, missing_items=None:
-                            self.sounds.append(f"hasil:{is_complete}:{','.join(missing_items or [])}"))
+        monkeypatch.setattr(
+            ap,
+            "play_result",
+            lambda is_complete, missing_items=None: self.sounds.append(
+                f"hasil:{is_complete}:{','.join(missing_items or [])}"
+            ),
+        )
         monkeypatch.setattr(sm_module.report_mgr, "save_inspection", self._save)
-        replies = [InspectionResult(is_complete=True, inference_source="VLM_LIVE:x"),
-                   InspectionResult(is_complete=False, missing_items=["Helm Keselamatan"], inference_source="VLM_LIVE:x"),
-                   InspectionResult(is_system_unavailable=True), None]
+        replies = [
+            InspectionResult(is_complete=True, inference_source="VLM_LIVE:x"),
+            InspectionResult(is_complete=False, missing_items=["Helm Keselamatan"], inference_source="VLM_LIVE:x"),
+            InspectionResult(is_system_unavailable=True),
+            None,
+        ]
 
         def analyze(crop, keypoints=None):
             self.vlm_calls += 1
@@ -55,6 +70,7 @@ class _World:
             if reply is None:
                 raise RuntimeError("galat VLM tiruan")
             return reply
+
         monkeypatch.setattr(sm_module.vlm_analyzer, "analyze_person", analyze)
         # Info penyedia & kuota bergantung pada .env mesin: diganti nilai tetap (T42g)
         monkeypatch.setattr(sm_module.vlm_analyzer, "is_live_api", lambda: True)
@@ -79,12 +95,13 @@ def _people(rng, frame_i, state):
     """0-2 orang; subjek melangkah lalu berhenti, kadang terpotong/menyamping/keluar jalur."""
     from backend import messages
     from backend.detector import DetectionResult
-    p_leave = 0.004 if state["seed"] % 3 == 2 else 0.04    # seed%3==2: lama di jalur (>12 dtk terpotong)
-    if state["present"] and rng.random() < p_leave:         # pekerja pergi 2-4 dtk (> jeda jalur kosong)
+
+    p_leave = 0.004 if state["seed"] % 3 == 2 else 0.04  # seed%3==2: lama di jalur (>12 dtk terpotong)
+    if state["present"] and rng.random() < p_leave:  # pekerja pergi 2-4 dtk (> jeda jalur kosong)
         state["present"], state["away"] = False, int(rng.integers(2 * FPS, 4 * FPS))
     elif not state["present"]:
         state["away"] -= 1
-        if state["away"] <= 0:                                 # datang: biasanya orang baru
+        if state["away"] <= 0:  # datang: biasanya orang baru
             state["present"], state["y"], state["walking"] = True, 300.0, True
             # Skenario seed%3==1: pekerja yang sama sering kembali (menguji ingatan keputusan lolos)
             state["tid"] += 1 if rng.random() < (0.2 if state["seed"] % 3 == 1 else 0.8) else 0
@@ -101,28 +118,48 @@ def _people(rng, frame_i, state):
         kp = [[0, 0, 0.9]] * 17 if facing else [[0, 0, 0.9]] * 5 + [[0, 0, 0.1]] * 2 + [[0, 0, 0.9]] * 10
         y = state["y"]
         crop = (rng.integers(0, 255, (24, 12, 3))).astype(np.uint8)
-        if state["seed"] % 4 == 3 and rng.random() < 0.3:   # potongan gagal dibuat (T42e)
+        if state["seed"] % 4 == 3 and rng.random() < 0.3:  # potongan gagal dibuat (T42e)
             crop = None
-        out.append(DetectionResult(track_id=state["tid"], bbox=[400, int(y - 250), 500, int(y + 250)], is_full_body=full,
-                                   reason=messages.POSE_OK if full else messages.POSE_FEET_CLIPPED,
-                                   is_inside_corridor=rng.random() > 0.05, keypoints=kp, crop_img=crop, conf=0.9,
-                                   clip_type="OPTIMAL" if full else "FEET_CLIPPED"))
-    if rng.random() < 0.1:   # orang lain lewat, kadang di dalam jalur
-        out.append(DetectionResult(track_id=99, bbox=[100, 50, 160, 400], is_full_body=True, reason=messages.POSE_OK,
-                                   is_inside_corridor=rng.random() < 0.3, keypoints=None, crop_img=None, conf=0.8))
+        out.append(
+            DetectionResult(
+                track_id=state["tid"],
+                bbox=[400, int(y - 250), 500, int(y + 250)],
+                is_full_body=full,
+                reason=messages.POSE_OK if full else messages.POSE_FEET_CLIPPED,
+                is_inside_corridor=rng.random() > 0.05,
+                keypoints=kp,
+                crop_img=crop,
+                conf=0.9,
+                clip_type="OPTIMAL" if full else "FEET_CLIPPED",
+            )
+        )
+    if rng.random() < 0.1:  # orang lain lewat, kadang di dalam jalur
+        out.append(
+            DetectionResult(
+                track_id=99,
+                bbox=[100, 50, 160, 400],
+                is_full_body=True,
+                reason=messages.POSE_OK,
+                is_inside_corridor=rng.random() < 0.3,
+                keypoints=None,
+                crop_img=None,
+                conf=0.8,
+            )
+        )
     return out
 
 
 def _telemetry(mgr, sm, seed, base, monkeypatch):
     """Payload WebSocket (tanpa jam dinding & nomor sesi global); zona aktif di seed ganjil."""
     from backend.zone import Zone
+
     zone = Zone(enabled=True, y_min=500.0, y_max=620.0) if seed % 2 else sm.zone_store.get()
     with monkeypatch.context() as m:
         m.setattr(sm.zone_store, "get", lambda: zone)
         payload = mgr.get_telemetry()
     if payload["active_track"] is not None:
         payload["active_track"]["session_id"] -= base
-    payload["light"].pop("timestamp")   # jam lampu dari jam dinding notifier
+    payload["light"].pop("timestamp")  # jam lampu dari jam dinding notifier
     payload["history"] = [{k: v for k, v in h.items() if k != "timestamp"} for h in payload["history"]]
     return payload
 
@@ -131,17 +168,29 @@ def run_scenarios(monkeypatch, telemetry=None):
     import backend.state_manager as sm
     from backend.config import cfg
     from backend.notifier import notifier
+
     for k, v in CFG_OVERRIDES.items():
         monkeypatch.setattr(cfg, k, v)
     out = []
     for seed in range(SCENARIOS):
-        world = _World(sm, monkeypatch, first_reply=seed,
-                       delay_frames=SLOW_VLM_DELAY_FRAMES if seed % 6 == 4 else VLM_DELAY_FRAMES)
+        world = _World(
+            sm, monkeypatch, first_reply=seed, delay_frames=SLOW_VLM_DELAY_FRAMES if seed % 6 == 4 else VLM_DELAY_FRAMES
+        )
         mgr = sm.StateManager()
         monkeypatch.setattr(mgr, "executor", types.SimpleNamespace(submit=world.submit))
         notifier.set_idle()
-        rng, state = np.random.default_rng(seed), {"present": True, "tid": 1, "y": 300.0, "walking": True,
-                                                  "full": seed % 3 != 2, "facing": True, "seed": seed}
+        rng, state = (
+            np.random.default_rng(seed),
+            {
+                "present": True,
+                "tid": 1,
+                "y": 300.0,
+                "walking": True,
+                "full": seed % 3 != 2,
+                "facing": True,
+                "seed": seed,
+            },
+        )
         base = sm.GateSession._counter
         for i in range(FRAMES):
             world.now += 1 / FPS
@@ -151,13 +200,25 @@ def run_scenarios(monkeypatch, telemetry=None):
             world.run_due()
             s = mgr.session
             newest = None
-            if len(mgr.inspection_history) != history:   # riwayat baru tanpa jam dinding
+            if len(mgr.inspection_history) != history:  # riwayat baru tanpa jam dinding
                 newest = {k: v for k, v in mgr.inspection_history[0].items() if k != "timestamp"}
-            out.append([seed, i, None if s is None else s.session_id - base, None if s is None else s.state,
-                        None if s is None else s.track_id, None if s is None else s.stable_frames,
-                        notifier.current_state, list(world.sounds), world.vlm_calls, len(mgr.inspection_history),
-                        world.audits[audits:], newest,
-                        None if s is None or s.vlm_result is None else s.vlm_result.model_dump()])
+            out.append(
+                [
+                    seed,
+                    i,
+                    None if s is None else s.session_id - base,
+                    None if s is None else s.state,
+                    None if s is None else s.track_id,
+                    None if s is None else s.stable_frames,
+                    notifier.current_state,
+                    list(world.sounds),
+                    world.vlm_calls,
+                    len(mgr.inspection_history),
+                    world.audits[audits:],
+                    newest,
+                    None if s is None or s.vlm_result is None else s.vlm_result.model_dump(),
+                ]
+            )
             if telemetry is not None and i % TELEMETRY_EVERY == 0:
                 telemetry.append(_telemetry(mgr, sm, seed, base, monkeypatch))
     return out
@@ -167,7 +228,9 @@ def test_state_machine_tidak_berubah(monkeypatch, catalog_defaults):
     expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
     actual = json.loads(json.dumps(run_scenarios(monkeypatch)))
     diffs = [i for i, (a, e) in enumerate(zip(actual, expected)) if a != e]
-    assert len(actual) == len(expected) and not diffs, f"{len(diffs)} frame berubah, mis. {[actual[i] for i in diffs[:2]]}"
+    assert len(actual) == len(expected) and not diffs, (
+        f"{len(diffs)} frame berubah, mis. {[actual[i] for i in diffs[:2]]}"
+    )
 
 
 def test_telemetri_tidak_berubah(monkeypatch, catalog_defaults):
@@ -176,7 +239,9 @@ def test_telemetri_tidak_berubah(monkeypatch, catalog_defaults):
     run_scenarios(monkeypatch, actual)
     actual = json.loads(json.dumps(actual))
     diffs = [i for i, (a, e) in enumerate(zip(actual, expected)) if a != e]
-    assert len(actual) == len(expected) and not diffs, f"{len(diffs)} payload berubah, mis. {[actual[i] for i in diffs[:1]]}"
+    assert len(actual) == len(expected) and not diffs, (
+        f"{len(diffs)} payload berubah, mis. {[actual[i] for i in diffs[:1]]}"
+    )
 
 
 def test_acuan_telemetri_mencakup_semua_jalur():
@@ -198,16 +263,21 @@ def test_acuan_mencakup_semua_keadaan():
     # VLM / potongan kosong (ANALYZING → mundur ke awal, sesi sama, tanpa audit)
     assert any(r[10] for r in rows) and any(r[11] for r in rows)
     assert any(r[10] and r[3] != "ANALYZED" for r in rows), "hasil terlambat tidak terekam"
-    retried = [(a, b) for a, b in zip(rows, rows[1:]) if a[0] == b[0] and a[2] == b[2]
-               and a[3] == "ANALYZING" and b[3] in ("INITIAL", "STABILIZING") and not b[10]]
+    retried = [
+        (a, b)
+        for a, b in zip(rows, rows[1:])
+        if a[0] == b[0] and a[2] == b[2] and a[3] == "ANALYZING" and b[3] in ("INITIAL", "STABILIZING") and not b[10]
+    ]
     assert {a[8] == b[8] for a, b in retried} == {True, False}, "galat VLM & potongan kosong harus sama-sama terekam"
+
 
 if __name__ == "__main__" and "--regenerate" in sys.argv:
     import conftest  # noqa: F401
     import pytest
     from backend import ppe_rules
+
     mp = pytest.MonkeyPatch()
-    mp.setattr(ppe_rules, "_active_overrides", {})   # sama dengan fixture catalog_defaults
+    mp.setattr(ppe_rules, "_active_overrides", {})  # sama dengan fixture catalog_defaults
     GOLDEN.parent.mkdir(exist_ok=True)
     telemetry = []
     GOLDEN.write_text(json.dumps(run_scenarios(mp, telemetry)), encoding="utf-8")

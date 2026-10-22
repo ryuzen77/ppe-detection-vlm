@@ -11,7 +11,11 @@ function tele(monitor: Partial<MonitorStatus>): Telemetry {
   return { api_monitor: { mode: 'UTAMA', ...monitor } as MonitorStatus, history: [] } as unknown as Telemetry
 }
 const internet = (state: InternetStatus['state']): InternetStatus => ({ state, median_ms: 40, checked_at: '08:00:00' })
-const local = (state: LocalStandby['state'], role: LocalStandby['role'] = 'darurat'): LocalStandby => ({ role, state, since: null })
+const local = (state: LocalStandby['state'], role: LocalStandby['role'] = 'darurat'): LocalStandby => ({
+  role,
+  state,
+  since: null,
+})
 
 const PROVIDERS = [
   { name: 'gemini', is_local: false },
@@ -28,7 +32,10 @@ describe('chip internet (T72)', () => {
 
   it('normal hijau; lambat & putus kuning — bukan merah (gerbang masih menilai lewat VLM lokal)', () => {
     expect(internetChip(tele({ internet: internet('normal') }))).toMatchObject({ tone: 'ok', text: 'Internet: normal' })
-    expect(internetChip(tele({ internet: internet('lambat') }))).toMatchObject({ tone: 'warn', text: 'Internet: lambat' })
+    expect(internetChip(tele({ internet: internet('lambat') }))).toMatchObject({
+      tone: 'warn',
+      text: 'Internet: lambat',
+    })
     const putus = internetChip(tele({ internet: internet('putus') }))
     expect(putus).toMatchObject({ tone: 'warn', text: 'Internet: putus' })
     expect(putus?.hint).toMatch(/VLM lokal/)
@@ -94,11 +101,19 @@ describe('pilihan VLM lokal darurat (T72)', () => {
     expect(localFallbackAvailability('ollama', PROVIDERS)).toBe('backup_is_local')
     // tanpa cadangan + darurat lokal sah (tinjauan Codex 22-10): pilihan tampil & tidak terhapus
     expect(localFallbackAvailability('', PROVIDERS)).toBe('available')
-    expect(localFallbackAvailability('gemini', PROVIDERS.filter((p) => !p.is_local))).toBe('no_local_provider')
+    expect(
+      localFallbackAvailability(
+        'gemini',
+        PROVIDERS.filter((p) => !p.is_local),
+      ),
+    ).toBe('no_local_provider')
   })
 
   it('isi permintaan apply: null bila tidak tersedia atau tidak dipilih', () => {
-    expect(localFallbackChoice('available', 'ollama', 'qwen2.5vl:7b')).toEqual({ provider: 'ollama', model: 'qwen2.5vl:7b' })
+    expect(localFallbackChoice('available', 'ollama', 'qwen2.5vl:7b')).toEqual({
+      provider: 'ollama',
+      model: 'qwen2.5vl:7b',
+    })
     expect(localFallbackChoice('available', '', '')).toBeNull()
     // Cadangan diganti ke lokal setelah darurat dipilih: pilihan lama tidak ikut terkirim
     expect(localFallbackChoice('backup_is_local', 'ollama', 'qwen2.5vl:7b')).toBeNull()

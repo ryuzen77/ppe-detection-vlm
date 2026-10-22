@@ -42,7 +42,9 @@
       <h2 id="worker-detail-title">{worker.name}</h2>
       {#if worker.department || worker.company}<p class="org">{orgSummary(worker)}</p>{/if}
     </div>
-    <button type="button" class="icon" onclick={onClose} aria-label={TEXT.closeDetail} title={TEXT.closeDetail}><X size={18} /></button>
+    <button type="button" class="icon" onclick={onClose} aria-label={TEXT.closeDetail} title={TEXT.closeDetail}
+      ><X size={18} /></button
+    >
   </header>
 
   <section>
@@ -54,7 +56,10 @@
       <dt>{TEXT.profileNickname}</dt>
       <dd>{formatWorkerSalutation(worker)}</dd>
       <dt>{TEXT.colStatus}</dt>
-      <dd><span class="tag tag-{badge.variant}">{badge.label}</span>{#if badge.hint}<span class="hint">{badge.hint}</span>{/if}</dd>
+      <dd>
+        <span class="tag tag-{badge.variant}">{badge.label}</span>{#if badge.hint}<span class="hint">{badge.hint}</span
+          >{/if}
+      </dd>
       <dt>{TEXT.profileConsent}</dt>
       <dd>{TEXT.consentText(formatDeleteSchedule(worker.consent.at), worker.consent.by)}</dd>
     </dl>
@@ -64,10 +69,13 @@
     <div class="section-head">
       <h3>{TEXT.sectionFace}</h3>
       {#if worker.active}
-        <button type="button" class="btn btn-primary" onclick={() => onEnroll(worker)}><Camera size={14} /> {TEXT.enrollBtn}</button>
+        <button type="button" class="btn btn-primary" onclick={() => onEnroll(worker)}
+          ><Camera size={14} /> {TEXT.enrollBtn}</button
+        >
       {/if}
     </div>
-    <p class="face"><span class="tag tag-{face.tone}">{face.label}</span>
+    <p class="face">
+      <span class="tag tag-{face.tone}">{face.label}</span>
       {#if worker.templates.length}
         {#each templateGroups(worker.templates) as g (g.label)}<span class="hint">{g.label} {g.count}</span>{/each}
       {/if}
@@ -77,12 +85,19 @@
         {#each worker.templates as t (t.id)}
           <li>
             {getConditionLabel(t.condition)}
-            <button type="button" class="icon small" onclick={() => onDeleteTemplate(worker.id, t.id)}
-              aria-label="{WORKERS.deleteTemplateBtn} {getConditionLabel(t.condition)}" title={WORKERS.deleteTemplateBtn}><Trash2 size={12} /></button>
+            <button
+              type="button"
+              class="icon small"
+              onclick={() => onDeleteTemplate(worker.id, t.id)}
+              aria-label="{WORKERS.deleteTemplateBtn} {getConditionLabel(t.condition)}"
+              title={WORKERS.deleteTemplateBtn}><Trash2 size={12} /></button
+            >
           </li>
         {/each}
       </ul>
-      <button type="button" class="btn danger" onclick={() => onDeleteFace(worker)}><Trash2 size={14} /> {WORKERS.deleteFaceBtn}</button>
+      <button type="button" class="btn danger" onclick={() => onDeleteFace(worker)}
+        ><Trash2 size={14} /> {WORKERS.deleteFaceBtn}</button
+      >
     {/if}
   </section>
 
@@ -93,7 +108,8 @@
 
   <footer>
     <button type="button" class="btn" onclick={() => onToggleActive(worker)}>
-      {#if worker.active}<UserX size={14} /> {WORKERS.deactivateBtn}{:else}<UserCheck size={14} /> {WORKERS.activateBtn}{/if}
+      {#if worker.active}<UserX size={14} /> {WORKERS.deactivateBtn}{:else}<UserCheck size={14} />
+        {WORKERS.activateBtn}{/if}
     </button>
   </footer>
 </aside>

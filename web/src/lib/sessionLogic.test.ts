@@ -10,9 +10,24 @@ describe('sessionLogic', () => {
   })
 
   it('shouldLoadData memicu load jika login sukses atau dimuat dalam keadaan login', () => {
-    expect(shouldLoadData({ loaded: true, setupRequired: false, authenticated: false }, { loaded: true, setupRequired: false, authenticated: true })).toBe(true)
-    expect(shouldLoadData({ loaded: false, setupRequired: false, authenticated: false }, { loaded: true, setupRequired: false, authenticated: true })).toBe(true)
-    expect(shouldLoadData({ loaded: true, setupRequired: false, authenticated: true }, { loaded: true, setupRequired: false, authenticated: true })).toBe(false)
+    expect(
+      shouldLoadData(
+        { loaded: true, setupRequired: false, authenticated: false },
+        { loaded: true, setupRequired: false, authenticated: true },
+      ),
+    ).toBe(true)
+    expect(
+      shouldLoadData(
+        { loaded: false, setupRequired: false, authenticated: false },
+        { loaded: true, setupRequired: false, authenticated: true },
+      ),
+    ).toBe(true)
+    expect(
+      shouldLoadData(
+        { loaded: true, setupRequired: false, authenticated: true },
+        { loaded: true, setupRequired: false, authenticated: true },
+      ),
+    ).toBe(false)
   })
 
   it('tickCountdown: hitung mundur yang benar', () => {

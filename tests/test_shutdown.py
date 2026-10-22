@@ -6,6 +6,7 @@ server sungguhan (`python -m backend`) di proses dan port terpisah, lalu mengiri
 sinyal berhenti: CTRL_BREAK_EVENT di Windows (jalur yang sama dengan Ctrl+C),
 SIGTERM di Linux/macOS (yang dikirim systemd dan Docker saat menghentikan layanan).
 """
+
 import os
 import re
 import signal
@@ -39,9 +40,11 @@ def _setup_cookie(base: str) -> str:
     """T51: semua API wajib login. Server uji punya DATA_DIR kosong, jadi admin pertama
     dibuat lewat setup (diizinkan dari localhost) dan cookie sesinya dipakai klien."""
     import json
+
     body = json.dumps({"username": "admin-uji", "password": "kata-sandi-uji-panjang"}).encode()
-    request = urllib.request.Request(base + "/api/setup", data=body, method="POST",
-                                     headers={"Content-Type": "application/json"})
+    request = urllib.request.Request(
+        base + "/api/setup", data=body, method="POST", headers={"Content-Type": "application/json"}
+    )
     with urllib.request.urlopen(request, timeout=10) as r:
         return r.headers["Set-Cookie"].split(";", 1)[0]
 
@@ -71,12 +74,24 @@ def _server_env(tmp_path, port: int, **extra: str) -> dict[str, str]:
     # Proxy warisan dibuang & NO_PROXY=* (tinjauan Codex T91 v2): httpx mengikuti HTTP(S)_PROXY/ALL_PROXY,
     # sehingga sambungan menuju port proxy — bukan port Ollama — lolos dari pengaman `_ISOLATION`
     inherited = {k: v for k, v in os.environ.items() if k.lower() not in _PROXY_VARS}
-    return {**inherited, "NO_PROXY": "*", "no_proxy": "*", "PORT": str(port), "HOST": "127.0.0.1",
-            "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
-            "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1", "SDL_AUDIODRIVER": "dummy",
-            **dict.fromkeys(_api_key_vars(), ""),
-            "VLM_BACKUP_PROVIDER": "none", "VLM_LOCAL_FALLBACK_PROVIDER": "none",
-            "IOT_ENABLED": "false", "CAMERA_AUTOSTART": "false", **extra}
+    return {
+        **inherited,
+        "NO_PROXY": "*",
+        "no_proxy": "*",
+        "PORT": str(port),
+        "HOST": "127.0.0.1",
+        "DATA_DIR": str(tmp_path / "data"),
+        "LOG_TO_FILE": "false",
+        "PYTHONIOENCODING": "utf-8",
+        "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+        "SDL_AUDIODRIVER": "dummy",
+        **dict.fromkeys(_api_key_vars(), ""),
+        "VLM_BACKUP_PROVIDER": "none",
+        "VLM_LOCAL_FALLBACK_PROVIDER": "none",
+        "IOT_ENABLED": "false",
+        "CAMERA_AUTOSTART": "false",
+        **extra,
+    }
 
 
 # Dijalankan lebih dulu di proses server uji (tinjauan Codex T91): startup tetap memeriksa model
@@ -130,7 +145,7 @@ def test_pengaman_menolak_sambungan_ke_port_ollama(isolation_guard):
 def test_proxy_warisan_tidak_melewati_pengaman(isolation_guard, monkeypatch, tmp_path):
     """Proxy di lingkungan pengembang tidak boleh meneruskan /api/ps ke Ollama (tinjauan Codex T91 v2)."""
     for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "all_proxy"):
-        monkeypatch.setenv(name, "http://127.0.0.1:18080")   # proxy palsu, port tertutup
+        monkeypatch.setenv(name, "http://127.0.0.1:18080")  # proxy palsu, port tertutup
     env = _server_env(tmp_path, 1234)
     assert not {k.lower() for k in env} & _PROXY_VARS
     for name in list(os.environ):
@@ -146,15 +161,19 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
     env = _server_env(tmp_path, port)
-    proc = subprocess.Popen([sys.executable, "-c", _RUN_SERVER], cwd=REPO_ROOT, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            **POPEN_FLAGS)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _RUN_SERVER],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        **POPEN_FLAGS,
+    )
     output = []
     # Tanpa text=True keluaran berupa bytes; **POPEN_FLAGS membuat pyright memilih overload teks
     stdout = cast("IO[bytes] | None", proc.stdout)
     assert stdout is not None
-    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in stdout],
-                     daemon=True).start()
+    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in stdout], daemon=True).start()
     try:
         for _ in range(240):
             try:
@@ -179,6 +198,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
                         received[0] += len(chunk)
             except Exception:
                 pass
+
         threading.Thread(target=read_stream, daemon=True).start()
 
         # Klien WebSocket yang terus menerima telemetri
@@ -188,13 +208,16 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
 
             async def run():
                 try:
-                    async with websockets.connect(f"ws://127.0.0.1:{port}/ws",
-                                                  additional_headers={"Cookie": cookie}) as ws:
+                    async with websockets.connect(
+                        f"ws://127.0.0.1:{port}/ws", additional_headers={"Cookie": cookie}
+                    ) as ws:
                         while True:
                             await ws.recv()
                 except Exception:
                     pass
+
             asyncio.run(run())
+
         threading.Thread(target=read_ws, daemon=True).start()
 
         deadline = time.time() + 15
@@ -259,14 +282,19 @@ run()
 def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
     port = _free_port()
     env = _server_env(tmp_path, port, SHUTDOWN_TIMEOUT_SECONDS="1")
-    proc = subprocess.Popen([sys.executable, "-c", _ISOLATION + _WAIT_CLOSED_MACET], cwd=REPO_ROOT, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **POPEN_FLAGS)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _ISOLATION + _WAIT_CLOSED_MACET],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        **POPEN_FLAGS,
+    )
     output = []
     # Tanpa text=True keluaran berupa bytes; **POPEN_FLAGS membuat pyright memilih overload teks
     stdout = cast("IO[bytes] | None", proc.stdout)
     assert stdout is not None
-    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in stdout],
-                     daemon=True).start()
+    threading.Thread(target=lambda: [output.append(l.decode("utf-8", "replace")) for l in stdout], daemon=True).start()
     try:
         for _ in range(240):
             try:

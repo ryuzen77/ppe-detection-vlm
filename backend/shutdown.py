@@ -1,4 +1,5 @@
 """Penanda berhenti server yang dibagi oleh endpoint streaming dan WebSocket."""
+
 import threading
 
 # Disetel saat sinyal berhenti diterima. Endpoint streaming dan WebSocket

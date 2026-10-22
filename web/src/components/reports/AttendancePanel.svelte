@@ -69,8 +69,12 @@
       </select>
     {/if}
     <div class="actions">
-      <button class="btn" onclick={load} disabled={loading}><RefreshCw size={16} aria-hidden="true" />{REPORTS.refresh}</button>
-      <a class="btn" href={api.attendanceCsvUrl(filter)} download><Download size={16} aria-hidden="true" />{TEXT.exportCsv}</a>
+      <button class="btn" onclick={load} disabled={loading}
+        ><RefreshCw size={16} aria-hidden="true" />{REPORTS.refresh}</button
+      >
+      <a class="btn" href={api.attendanceCsvUrl(filter)} download
+        ><Download size={16} aria-hidden="true" />{TEXT.exportCsv}</a
+      >
     </div>
   </div>
 
@@ -81,8 +85,15 @@
   {:else}
     <div class="tiles">
       {#each tiles as tile (tile.label)}
-        <StatTile label={tile.label} value={tile.value} note={tile.hint} tone={tile.tone}
-                  meter={tile.label === TEXT.tiles.rate && report.totals.recognition_rate !== null ? report.totals.recognition_rate * 100 : null} />
+        <StatTile
+          label={tile.label}
+          value={tile.value}
+          note={tile.hint}
+          tone={tile.tone}
+          meter={tile.label === TEXT.tiles.rate && report.totals.recognition_rate !== null
+            ? report.totals.recognition_rate * 100
+            : null}
+        />
       {/each}
     </div>
 
@@ -91,10 +102,13 @@
       {#if report.seen.length}
         <div class="table-wrap">
           <table>
-            <thead><tr>
-              <th>{TEXT.cols.no}</th><th>{TEXT.cols.name}</th><th>{TEXT.cols.org}</th>
-              <th>{TEXT.cols.first}</th><th>{TEXT.cols.last}</th><th>{TEXT.cols.passes}</th><th>{TEXT.cols.result}</th>
-            </tr></thead>
+            <thead
+              ><tr>
+                <th>{TEXT.cols.no}</th><th>{TEXT.cols.name}</th><th>{TEXT.cols.org}</th>
+                <th>{TEXT.cols.first}</th><th>{TEXT.cols.last}</th><th>{TEXT.cols.passes}</th><th>{TEXT.cols.result}</th
+                >
+              </tr></thead
+            >
             <tbody>
               {#each report.seen as w (w.worker_id)}
                 <tr>
@@ -104,7 +118,11 @@
                   <td class="mono">{w.first_seen}</td>
                   <td class="mono">{w.last_seen}</td>
                   <td>{w.passes} <span class="muted">({TEXT.passResult(w.passed, w.rejected)})</span></td>
-                  <td><span class="tag {w.last_complete ? 'tag-ok' : 'tag-danger'}">{w.last_complete ? TEXT.lastPassed : TEXT.lastRejected}</span></td>
+                  <td
+                    ><span class="tag {w.last_complete ? 'tag-ok' : 'tag-danger'}"
+                      >{w.last_complete ? TEXT.lastPassed : TEXT.lastRejected}</span
+                    ></td
+                  >
                 </tr>
               {/each}
             </tbody>
@@ -124,7 +142,11 @@
             <thead><tr><th>{TEXT.cols.no}</th><th>{TEXT.cols.name}</th><th>{TEXT.cols.org}</th></tr></thead>
             <tbody>
               {#each report.not_seen as w (w.worker_id)}
-                <tr><td class="mono">{w.employee_no}</td><td class="name">{w.name}</td><td class="muted">{orgText(w.department, w.company)}</td></tr>
+                <tr
+                  ><td class="mono">{w.employee_no}</td><td class="name">{w.name}</td><td class="muted"
+                    >{orgText(w.department, w.company)}</td
+                  ></tr
+                >
               {/each}
             </tbody>
           </table>

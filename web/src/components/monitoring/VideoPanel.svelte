@@ -95,7 +95,8 @@
       <div class="placeholder">
         <VideoOff size={40} strokeWidth={1.5} aria-hidden="true" />
         <p>{placeholder}</p>
-        {#if t}<button class="btn btn-primary" onclick={onPickCamera}><Camera size={16} /> {VIDEO.pickCamera}</button>{/if}
+        {#if t}<button class="btn btn-primary" onclick={onPickCamera}><Camera size={16} /> {VIDEO.pickCamera}</button
+          >{/if}
       </div>
     {/if}
   </div>
@@ -103,19 +104,22 @@
   <div class="controls">
     <span class="camera-name">
       {#if t?.camera.selected}
-        <Camera size={14} aria-hidden="true" /> {t.camera.name} · <span class="mono">{t.camera.width}×{t.camera.height}</span>
+        <Camera size={14} aria-hidden="true" />
+        {t.camera.name} · <span class="mono">{t.camera.width}×{t.camera.height}</span>
       {/if}
     </span>
     {#if message}<span class="error" role="alert">{message}</span>{/if}
     <button class="btn" onclick={toggleGuides} aria-pressed={guides} title={VIDEO.guidesHint}>
-      {#if guides}<Eye size={16} />{:else}<EyeOff size={16} />{/if} {VIDEO.guides}
+      {#if guides}<Eye size={16} />{:else}<EyeOff size={16} />{/if}
+      {VIDEO.guides}
     </button>
     <button class="btn" onclick={() => run(() => api.setAudioMuted(!muted), VIDEO.soundFailed)} aria-pressed={!muted}>
       {#if muted}<VolumeX size={16} /> {VIDEO.muted}{:else}<Volume2 size={16} /> {VIDEO.sound}{/if}
     </button>
     <button class="btn" onclick={onPickCamera}><Camera size={16} /> {VIDEO.changeCamera}</button>
     <button class="btn" onclick={() => run(() => api.reset(), VIDEO.resetFailed)} title={VIDEO.resetHint}>
-      <RotateCcw size={16} /> {VIDEO.reset}
+      <RotateCcw size={16} />
+      {VIDEO.reset}
     </button>
   </div>
 </section>

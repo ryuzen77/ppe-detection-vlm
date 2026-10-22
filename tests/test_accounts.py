@@ -1,4 +1,5 @@
 """Penyimpanan akun, hash kata sandi, dan perintah terminal (T51)."""
+
 import sqlite3
 
 import pytest

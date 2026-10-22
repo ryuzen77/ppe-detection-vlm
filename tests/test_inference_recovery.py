@@ -3,6 +3,7 @@
 Dulu satu galat (mis. VRAM habis saat YOLO) menghentikan `_capture_loop` selamanya; bila lampu
 hijau sedang menyala, sesi tidak pernah berakhir sehingga hijau bisa bertahan tanpa pemeriksaan.
 """
+
 import time
 import types
 from pathlib import Path
@@ -41,7 +42,7 @@ def _run_inference(monkeypatch, failures: int, frames: int):
             if fed[0] >= frames:
                 return False
             fed[0] += 1
-            with self.raw_lock:   # satu frame baru per putaran
+            with self.raw_lock:  # satu frame baru per putaran
                 self.latest_raw = np.zeros((8, 8, 3), np.uint8)
                 self.raw_seq += 1
             return True
@@ -68,9 +69,10 @@ def test_gerbang_kuning_selama_galat_lalu_pulih(monkeypatch):
     assert faults[:first_error] == [None], "sebelum galat gerbang normal"
     last_system = len(faults) - 1 - faults[::-1].index(FAULT_SYSTEM)
     # Selama galat beruntun gangguan tidak pernah dilepas (tidak naik-turun per frame)
-    assert None not in faults[first_error:last_system + 1]
-    assert faults[last_system + 1:] and all(f is None for f in faults[last_system + 1:]), (
-        "gangguan selesai setelah satu frame berhasil diolah")
+    assert None not in faults[first_error : last_system + 1]
+    assert faults[last_system + 1 :] and all(f is None for f in faults[last_system + 1 :]), (
+        "gangguan selesai setelah satu frame berhasil diolah"
+    )
 
 
 def test_gangguan_system_punya_teks_lampu_dan_suara():

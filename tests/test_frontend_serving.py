@@ -1,4 +1,5 @@
 """UI baru (web/dist) di "/". UI lama telah dihapus."""
+
 import re
 
 import pytest
@@ -31,8 +32,6 @@ def test_ui_baru_di_akar(klien):
 def test_ui_lama_sudah_dihapus_404(klien):
     assert klien.get("/legacy/").status_code == 404
     assert klien.get("/legacy/index.html").status_code == 404
-
-
 
 
 def test_api_tidak_tertutup_mount_frontend(klien):

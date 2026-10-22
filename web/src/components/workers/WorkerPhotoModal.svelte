@@ -163,9 +163,15 @@
             <span>{WORKERS.cameraPreviewTitle}</span>
           </div>
           <div class="video-container">
-            <img src="{api.streamUrl()}?t={streamKey}" alt={WORKERS.cameraPreviewTitle} class="stream-img" class:mirror={mirrorPreview(telemetry.data?.camera)} />
+            <img
+              src="{api.streamUrl()}?t={streamKey}"
+              alt={WORKERS.cameraPreviewTitle}
+              class="stream-img"
+              class:mirror={mirrorPreview(telemetry.data?.camera)}
+            />
           </div>
-          {#if mirrorPreview(telemetry.data?.camera)}<span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span>{/if}
+          {#if mirrorPreview(telemetry.data?.camera)}<span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span
+            >{/if}
           <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
         </div>
       {/if}
@@ -175,13 +181,19 @@
           <p>{ENROLLMENT_GUIDE.askGlasses}</p>
           <span class="preview-hint">{ENROLLMENT_GUIDE.askGlassesHint}</span>
           <div class="row">
-            <button type="button" class="btn btn-primary" onclick={() => start(true)}>{ENROLLMENT_GUIDE.glassesYes}</button>
-            <button type="button" class="btn btn-primary" onclick={() => start(false)}>{ENROLLMENT_GUIDE.glassesNo}</button>
+            <button type="button" class="btn btn-primary" onclick={() => start(true)}
+              >{ENROLLMENT_GUIDE.glassesYes}</button
+            >
+            <button type="button" class="btn btn-primary" onclick={() => start(false)}
+              >{ENROLLMENT_GUIDE.glassesNo}</button
+            >
           </div>
         </div>
       {:else if shot && plan}
         <div class="shot" aria-live="polite">
-          <span class="step">{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span>
+          <span class="step"
+            >{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span
+          >
           {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
           <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
           {#if autoStopped}

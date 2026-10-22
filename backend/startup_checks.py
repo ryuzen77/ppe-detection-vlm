@@ -11,6 +11,7 @@ dan `/api/health`:
 
 Tidak ada yang menghentikan server: gerbang tetap berjalan, peringatan saja.
 """
+
 import logging
 from typing import Callable, Optional
 
@@ -64,6 +65,7 @@ def account_created():
 def ollama_version(base_url: str, get: Optional[Callable] = None) -> Optional[str]:
     """Versi server Ollama lewat /api/version; None bila tidak terjangkau."""
     import httpx
+
     root = base_url[:-3] if base_url.rstrip("/").endswith("/v1") else base_url.rstrip("/")
     try:
         response = (get or httpx.get)(f"{root}/api/version", timeout=cfg.STARTUP_CHECK_TIMEOUT_SECONDS)
@@ -72,12 +74,22 @@ def ollama_version(base_url: str, get: Optional[Callable] = None) -> Optional[st
         return None
 
 
-def run(cuda_available: bool, ollama_base_url: Optional[str], camera_target: str,
-        visible_cameras: Callable[[], list[str]], has_backup: bool = True) -> list[str]:
+def run(
+    cuda_available: bool,
+    ollama_base_url: Optional[str],
+    camera_target: str,
+    visible_cameras: Callable[[], list[str]],
+    has_backup: bool = True,
+) -> list[str]:
     """Menjalankan semua pemeriksaan; hasilnya disimpan di `warnings` & dicatat di log."""
     from .accounts import store
-    results = [check_cuda(cuda_available), check_legacy_admin_token(cfg.LEGACY_ADMIN_TOKEN_SET),
-               check_accounts(store.count()), check_backup(has_backup)]
+
+    results = [
+        check_cuda(cuda_available),
+        check_legacy_admin_token(cfg.LEGACY_ADMIN_TOKEN_SET),
+        check_accounts(store.count()),
+        check_backup(has_backup),
+    ]
     if ollama_base_url:
         results.append(check_ollama_version(ollama_version(ollama_base_url)))
     if camera_target:

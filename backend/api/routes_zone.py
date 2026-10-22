@@ -1,4 +1,5 @@
 """Zona titik berdiri (T36d): baca, ubah, dan kalibrasi. Kontrak di docs/RENCANA.md."""
+
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request

@@ -37,7 +37,8 @@ export const MAX_RECONNECT_MS = TELEMETRY.reconnectMaxMs
 
 export class TelemetryClient {
   private readonly url: string
-  private readonly opts: Required<Omit<TelemetryClientOptions, 'onStatus' | 'onLoginRequired'>> & Pick<TelemetryClientOptions, 'onStatus' | 'onLoginRequired'>
+  private readonly opts: Required<Omit<TelemetryClientOptions, 'onStatus' | 'onLoginRequired'>> &
+    Pick<TelemetryClientOptions, 'onStatus' | 'onLoginRequired'>
   private socket: SocketLike | null = null
   private timer: unknown = null
   private delay: number

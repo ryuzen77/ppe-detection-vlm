@@ -3,6 +3,7 @@
 Tiap kombinasi dijalankan di proses terpisah supaya `config` dibaca ulang dari awal.
 Seluruh variabel VLM ditulis eksplisit agar isi backend/.env tidak ikut terbaca.
 """
+
 import json
 import os
 import subprocess
@@ -33,16 +34,32 @@ print(json.dumps({
 }))
 """
 
-_KOSONG = {k: "" for k in ("VLM_PROVIDER", "VLM_API_KEY", "VLM_MODEL", "VLM_BASE_URL", "GEMINI_API_KEY",
-                          "GEMINI_MODEL", "VLM_MIN_INTERVAL_SECONDS", "VLM_CLOUD_TIMEOUT_SECONDS",
-                          "VLM_LOCAL_TIMEOUT_SECONDS", "VLM_BACKUP_PROVIDER", "VLM_BACKUP_MODEL",
-                          "VLM_BACKUP_BASE_URL", "VLM_BACKUP_API_KEY", *PROVIDER_KEY_ENVS)}
+_KOSONG = {
+    k: ""
+    for k in (
+        "VLM_PROVIDER",
+        "VLM_API_KEY",
+        "VLM_MODEL",
+        "VLM_BASE_URL",
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
+        "VLM_MIN_INTERVAL_SECONDS",
+        "VLM_CLOUD_TIMEOUT_SECONDS",
+        "VLM_LOCAL_TIMEOUT_SECONDS",
+        "VLM_BACKUP_PROVIDER",
+        "VLM_BACKUP_MODEL",
+        "VLM_BACKUP_BASE_URL",
+        "VLM_BACKUP_API_KEY",
+        *PROVIDER_KEY_ENVS,
+    )
+}
 
 
 def _probe(tmp_path, **env):
     full = {**os.environ, **_KOSONG, **env, "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false"}
-    out = subprocess.run([sys.executable, "-c", _PROBE], cwd=REPO_ROOT, env=full,
-                         capture_output=True, text=True, timeout=120)
+    out = subprocess.run(
+        [sys.executable, "-c", _PROBE], cwd=REPO_ROOT, env=full, capture_output=True, text=True, timeout=120
+    )
     assert out.returncode == 0, out.stderr[-2000:]
     return json.loads(out.stdout.strip().splitlines()[-1])
 
@@ -58,14 +75,21 @@ def test_env_lama_gemini_tetap_berfungsi(tmp_path):
 
 def test_cadangan_lokal_diaktifkan_lewat_env(tmp_path):
     r = _probe(tmp_path, GEMINI_API_KEY="kunci-lama", VLM_BACKUP_PROVIDER="ollama")
-    assert r["backup"]["provider"] == "ollama" and r["backup"]["model"] == "qwen2.5vl:7b", \
+    assert r["backup"]["provider"] == "ollama" and r["backup"]["model"] == "qwen2.5vl:7b", (
         "Model bawaan cadangan lokal = hasil evaluasi T26"
+    )
     assert r["backup"]["timeout_s"] == 12.0
 
 
 def test_nama_vlm_baru_menang_atas_nama_lama(tmp_path):
-    r = _probe(tmp_path, VLM_PROVIDER="gemini", VLM_API_KEY="baru", VLM_MODEL="gemini-3.5-flash-lite",
-               GEMINI_API_KEY="lama", GEMINI_MODEL="gemini-3.8-flash")
+    r = _probe(
+        tmp_path,
+        VLM_PROVIDER="gemini",
+        VLM_API_KEY="baru",
+        VLM_MODEL="gemini-3.5-flash-lite",
+        GEMINI_API_KEY="lama",
+        GEMINI_MODEL="gemini-3.8-flash",
+    )
     assert r["model"] == "gemini-3.5-flash-lite"
     assert r["info"]["has_key"] is True
 
@@ -84,17 +108,25 @@ def test_ganti_ke_ollama_hanya_lewat_env(tmp_path):
 
 
 def test_penyedia_openai_compatible_dengan_base_url_sendiri(tmp_path):
-    r = _probe(tmp_path, VLM_PROVIDER="qwen", VLM_API_KEY="k", VLM_MODEL="qwen-vl-max",
-               VLM_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1")
+    r = _probe(
+        tmp_path,
+        VLM_PROVIDER="qwen",
+        VLM_API_KEY="k",
+        VLM_MODEL="qwen-vl-max",
+        VLM_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
     assert r["kelas"] == "OpenAICompatibleProvider"
     assert r["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
-@pytest.mark.parametrize("env, alasan", [
-    ({"VLM_PROVIDER": "openrouter", "VLM_MODEL": "qwen/qwen2.5-vl-72b-instruct"}, "penyedia cloud tanpa API key"),
-    ({"VLM_PROVIDER": "openrouter", "VLM_API_KEY": "k"}, "penyedia tanpa model bawaan dan VLM_MODEL kosong"),
-    ({"VLM_PROVIDER": "vllm", "VLM_MODEL": "m"}, "vLLM tanpa VLM_BASE_URL"),
-])
+@pytest.mark.parametrize(
+    "env, alasan",
+    [
+        ({"VLM_PROVIDER": "openrouter", "VLM_MODEL": "qwen/qwen2.5-vl-72b-instruct"}, "penyedia cloud tanpa API key"),
+        ({"VLM_PROVIDER": "openrouter", "VLM_API_KEY": "k"}, "penyedia tanpa model bawaan dan VLM_MODEL kosong"),
+        ({"VLM_PROVIDER": "vllm", "VLM_MODEL": "m"}, "vLLM tanpa VLM_BASE_URL"),
+    ],
+)
 def test_konfigurasi_tidak_lengkap_membuat_vlm_nonaktif_bukan_crash(tmp_path, env, alasan):
     r = _probe(tmp_path, **env)
     assert r["info"]["is_live"] is False and r["info"]["error"], alasan
@@ -115,6 +147,7 @@ def test_kunci_gemini_lama_tidak_bocor_ke_penyedia_lain(tmp_path, penyedia):
 
 # --- Endpoint dashboard ----------------------------------------------------------------
 
+
 @pytest.fixture
 def klien(monkeypatch):
     """TestClient tanpa lifespan (tidak menyalakan kamera/model); status VLM dipulihkan."""
@@ -122,6 +155,7 @@ def klien(monkeypatch):
     from backend.app import app
     from backend.config import cfg
     from backend.vlm_analyzer import vlm_analyzer
+
     for attr in ("primary", "backup", "primary_failures", "primary_down_since"):
         monkeypatch.setattr(vlm_analyzer, attr, getattr(vlm_analyzer, attr))
     monkeypatch.setattr(cfg, "VLM_API_KEY", cfg.VLM_API_KEY)
@@ -136,13 +170,19 @@ def test_endpoint_ganti_api_key_sudah_dihapus(klien, url):
 
 
 def test_key_per_penyedia_dari_env_sendiri(tmp_path):
-    r = _probe(tmp_path, VLM_PROVIDER="openai", VLM_MODEL="m", OPENAI_API_KEY="kunci-openai",
-               GEMINI_API_KEY="kunci-gemini")
+    r = _probe(
+        tmp_path, VLM_PROVIDER="openai", VLM_MODEL="m", OPENAI_API_KEY="kunci-openai", GEMINI_API_KEY="kunci-gemini"
+    )
     assert r["live"] is True and r["info"]["has_key"] is True, "OPENAI_API_KEY dipakai untuk penyedia openai"
     assert "kunci" not in json.dumps(r["info"])
 
 
 def test_key_cadangan_dari_env_penyedianya(tmp_path):
-    r = _probe(tmp_path, VLM_PROVIDER="ollama", VLM_BACKUP_PROVIDER="deepseek", VLM_BACKUP_MODEL="m",
-               DEEPSEEK_API_KEY="kunci-deepseek")
+    r = _probe(
+        tmp_path,
+        VLM_PROVIDER="ollama",
+        VLM_BACKUP_PROVIDER="deepseek",
+        VLM_BACKUP_MODEL="m",
+        DEEPSEEK_API_KEY="kunci-deepseek",
+    )
     assert r["backup"]["has_key"] is True and r["backup"]["is_live"] is True

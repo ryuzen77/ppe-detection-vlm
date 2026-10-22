@@ -16,6 +16,7 @@ Satu frame buruk tidak dihitung: kondisi harus bertahan beberapa detik
 (angka di `config.py`), dan pulih juga harus stabil sebentar, supaya kedipan
 lampu atau orang yang lewat sangat dekat tidak memicu gangguan.
 """
+
 from typing import Optional
 
 import cv2
@@ -44,8 +45,9 @@ def image_detail(gray: np.ndarray) -> tuple[float, float]:
 
 def is_dark_or_uniform(gray: np.ndarray) -> bool:
     """Terlalu gelap, terlalu terang, atau nyaris seragam (ambang T45, gambar 64x36)."""
-    small = cv2.resize(gray, (cfg.CAMERA_HEALTH_SAMPLE_WIDTH, cfg.CAMERA_HEALTH_SAMPLE_HEIGHT),
-                       interpolation=cv2.INTER_AREA)
+    small = cv2.resize(
+        gray, (cfg.CAMERA_HEALTH_SAMPLE_WIDTH, cfg.CAMERA_HEALTH_SAMPLE_HEIGHT), interpolation=cv2.INTER_AREA
+    )
     mean, std = float(small.mean()), float(small.std())
     return mean < cfg.CAMERA_DARK_MEAN or mean > cfg.CAMERA_BRIGHT_MEAN or std < cfg.CAMERA_UNIFORM_STD
 
@@ -107,8 +109,13 @@ class CameraHealth:
         # dibuka ulang berulang-ulang. Membeku hanya dinilai pada gambar berdetail.
         frozen = not blocked and self._previous is not None and np.array_equal(current, self._previous)
         self._previous = current
-        detected = (FAULT_FROZEN if self._track(FAULT_FROZEN, frozen, now)
-                    else FAULT_BLOCKED if self._track(FAULT_BLOCKED, blocked, now) else None)
+        detected = (
+            FAULT_FROZEN
+            if self._track(FAULT_FROZEN, frozen, now)
+            else FAULT_BLOCKED
+            if self._track(FAULT_BLOCKED, blocked, now)
+            else None
+        )
         if detected is not None:
             self.fault, self._healthy_since = detected, None
         elif self.fault is not None:

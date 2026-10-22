@@ -203,7 +203,9 @@ def normalize_nickname(raw: object) -> str:
     nama Indonesia tidak berpola nama depan/belakang ("Muhammad Zen Fikri" dipanggil "Zen")."""
     nickname = " ".join(str(raw or "").split())
     if not 1 <= len(nickname) <= cfg.WORKER_NICKNAME_MAX_LENGTH or not nickname.isprintable():
-        raise WorkerError("invalid_nickname", messages.WORKER_INVALID_NICKNAME.format(max=cfg.WORKER_NICKNAME_MAX_LENGTH))
+        raise WorkerError(
+            "invalid_nickname", messages.WORKER_INVALID_NICKNAME.format(max=cfg.WORKER_NICKNAME_MAX_LENGTH)
+        )
     return nickname
 
 
@@ -456,8 +458,7 @@ class SqliteWorkerStore:
         if not self.path.exists():
             return []
         with self._lock:
-            conn = sqlite3.connect(f"{self.path.resolve().as_uri()}?mode=ro", uri=True,
-                                   timeout=cfg.DB_TIMEOUT_SECONDS)
+            conn = sqlite3.connect(f"{self.path.resolve().as_uri()}?mode=ro", uri=True, timeout=cfg.DB_TIMEOUT_SECONDS)
             try:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
@@ -549,6 +550,7 @@ class SqliteWorkerStore:
         employee_no: object = None,
     ) -> Worker:
         """Ubah data pekerja (T79, T84). Nomor pegawai terkunci setelah dibuat (T84)."""
+
         def update(conn: sqlite3.Connection):
             current = self._get(conn, worker_id)
             _check_employee_no_lock(current.employee_no, employee_no)
@@ -744,7 +746,9 @@ class SqliteWorkerStore:
                 raise WorkerError("not_found", messages.ORG_NOT_FOUND)
             if k == "companies" and bool(current[1]):
                 raise WorkerError("builtin", messages.ORG_BUILTIN.format(name=current[0]))
-            if conn.execute(f"SELECT 1 FROM {k} WHERE name = ? COLLATE NOCASE AND id != ?", (clean_name, org_id)).fetchone():
+            if conn.execute(
+                f"SELECT 1 FROM {k} WHERE name = ? COLLATE NOCASE AND id != ?", (clean_name, org_id)
+            ).fetchone():
                 raise WorkerError("name_taken", messages.ORG_NAME_TAKEN.format(name=clean_name))
             conn.execute(f"UPDATE {k} SET name = ? WHERE id = ?", (clean_name, org_id))
             active_workers = conn.execute(

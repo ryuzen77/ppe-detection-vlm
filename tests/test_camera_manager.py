@@ -1,4 +1,5 @@
 """Pemilihan mode kamera dan pelacakan kamera tersimpan lewat namanya."""
+
 import sys
 
 import numpy as np
@@ -14,6 +15,7 @@ def mode(w, h, fps):
 
 
 # --- pick_best_mode ---------------------------------------------------------
+
 
 def test_tidak_ada_mode_menghasilkan_none():
     assert pick_best_mode([]) is None
@@ -66,11 +68,14 @@ def test_semua_di_bawah_resolusi_minimum_tetap_memilih_yang_tercepat():
 
 # --- resolve_saved_index ----------------------------------------------------
 
+
 @pytest.fixture
 def perangkat(monkeypatch):
     """Mengganti daftar perangkat OS dengan daftar yang ditentukan tes."""
+
     def pasang(names):
         monkeypatch.setattr(camera_manager, "list_device_names", lambda: list(names))
+
     return pasang
 
 
@@ -103,6 +108,7 @@ def test_daftar_perangkat_tidak_tersedia_memakai_indeks(perangkat):
 
 
 # --- linux_device_names (sysfs palsu) ---------------------------------------
+
 
 def node(root, n, name=None, index=None):
     d = root / f"video{n}"
@@ -160,12 +166,14 @@ def test_linux_tanpa_sysfs_atau_tanpa_kamera_daftar_kosong(tmp_path):
 def test_pembaca_nama_gagal_tidak_menjatuhkan_daftar(monkeypatch):
     def rusak(*a, **k):
         raise PermissionError("ditolak")
+
     monkeypatch.setattr(camera_manager, "linux_device_names", rusak)
     monkeypatch.setattr(camera_manager.sys, "platform", "linux")
     assert camera_manager.list_device_names() == []
 
 
 # --- open_capture ------------------------------------------------------------
+
 
 class CapPalsu:
     def __init__(self, index, backend=None, opened=True):
@@ -185,6 +193,7 @@ def pasang_cv2(monkeypatch, backend_berhasil):
         cap = CapPalsu(index, backend, opened=backend_berhasil or backend is None)
         dibuat.append(cap)
         return cap
+
     monkeypatch.setattr(camera_manager.cv2, "VideoCapture", video_capture)
     monkeypatch.setattr(camera_manager, "CAPTURE_BACKEND", camera_manager.cv2.CAP_V4L2)
     return dibuat
@@ -208,12 +217,14 @@ def test_open_capture_jatuh_ke_backend_bawaan_bila_gagal(monkeypatch):
 
 # --- Nama kamera lintas thread & pemantau keberadaan (24-09) --------------------
 
+
 @pytest.mark.skipif(sys.platform != "win32", reason="DirectShow/COM khusus Windows")
 def test_nama_kamera_terbaca_dari_thread_mana_pun():
     # comtypes hanya menginisialisasi COM di thread yang pertama mengimpornya;
     # thread lain dulu gagal "CoInitialize has not been called" dan memakai
     # label generik, lalu pemantau menganggap kamera itu dicabut.
     import threading
+
     utama = camera_manager.list_device_names()
     hasil = {}
     t = threading.Thread(target=lambda: hasil.setdefault("thread", camera_manager.list_device_names()))
@@ -224,6 +235,7 @@ def test_nama_kamera_terbaca_dari_thread_mana_pun():
 
 def _layanan_kamera(nama, terverifikasi):
     from backend.video.capture import VideoCaptureService
+
     svc = VideoCaptureService()
     svc.camera_status, svc.camera_index = "OK", 1
     svc.camera_name, svc.camera_name_verified = nama, terverifikasi
@@ -298,10 +310,20 @@ def c920(monkeypatch):
         cap = C920Tiruan(index, backend, params)
         dibuat.append((index, params))
         return cap
+
     monkeypatch.setattr(camera_manager.cv2, "VideoCapture", video_capture)
-    monkeypatch.setattr(camera_manager, "time", type("T", (), {
-        "time": staticmethod(lambda: C920Tiruan.clock[0]),
-        "sleep": staticmethod(lambda s: C920Tiruan.clock.__setitem__(0, C920Tiruan.clock[0] + s))}))
+    monkeypatch.setattr(
+        camera_manager,
+        "time",
+        type(
+            "T",
+            (),
+            {
+                "time": staticmethod(lambda: C920Tiruan.clock[0]),
+                "sleep": staticmethod(lambda s: C920Tiruan.clock.__setitem__(0, C920Tiruan.clock[0] + s)),
+            },
+        ),
+    )
     monkeypatch.setattr(camera_manager.cfg, "CAMERA_SETTLE_SECONDS", 0.5)
     return dibuat
 
@@ -310,8 +332,12 @@ def test_open_capture_mjpg_memberi_format_ukuran_dan_laju_saat_membuka(c920):
     camera_manager.open_capture(0, (1920, 1080))
     cv2 = camera_manager.cv2
     params = dict(zip(c920[0][1][::2], c920[0][1][1::2]))
-    assert params == {cv2.CAP_PROP_FOURCC: camera_manager.FOURCC_MJPG, cv2.CAP_PROP_FRAME_WIDTH: 1920,
-                      cv2.CAP_PROP_FRAME_HEIGHT: 1080, cv2.CAP_PROP_FPS: camera_manager.cfg.FPS}
+    assert params == {
+        cv2.CAP_PROP_FOURCC: camera_manager.FOURCC_MJPG,
+        cv2.CAP_PROP_FRAME_WIDTH: 1920,
+        cv2.CAP_PROP_FRAME_HEIGHT: 1080,
+        cv2.CAP_PROP_FPS: camera_manager.cfg.FPS,
+    }
     camera_manager.open_capture(0)
     assert c920[1][1] is None, "tanpa mjpg_size, pembukaan sama seperti sebelum T34c2"
 

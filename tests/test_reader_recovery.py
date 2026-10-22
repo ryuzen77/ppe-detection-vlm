@@ -4,6 +4,7 @@ Uji T75 (19-10): RAM habis -> `cap.read()` melempar `_ArrayMemoryError` -> threa
 berhenti selamanya; gerbang buta sampai operator memilih ulang kamera. Kamera & jam tiruan
 dipinjam dari tes karakterisasi pembaca (`_World`), tanpa kejadian acak.
 """
+
 from test_capture_characterization import _World
 
 from backend import messages

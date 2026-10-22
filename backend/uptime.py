@@ -5,6 +5,7 @@ gerbang tidak aktif, serta apakah ia berhenti rapi (Ctrl+C/restart) atau
 mendadak (listrik padam, crash). Selama hidup, waktu terakhir diperbarui
 berkala, jadi lama mati setelah henti mendadak bisa diperkirakan.
 """
+
 import json
 import logging
 import threading

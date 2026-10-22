@@ -8,7 +8,10 @@ const ESP32: GateLamp[] = ['green', 'red', 'yellow']
 
 function tele(command: LightState, iot: Partial<Telemetry['iot']> | null, message = 'pesan'): Telemetry {
   const base = { enabled: true, connected: true, last_ack_age_s: 0.5, error: null }
-  return { light: { light_state: command, message, timestamp: 0 }, iot: iot === null ? undefined : { ...base, ...iot } } as unknown as Telemetry
+  return {
+    light: { light_state: command, message, timestamp: 0 },
+    iot: iot === null ? undefined : { ...base, ...iot },
+  } as unknown as Telemetry
 }
 
 const on = (view: ReturnType<typeof towerView>) => view.lamps.filter((l) => l.on).map((l) => l.lamp)

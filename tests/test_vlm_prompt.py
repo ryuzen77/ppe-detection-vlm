@@ -1,4 +1,5 @@
 """Prompt VLM dirakit dari katalog: ringkas, dan aturan rompi menilai bentuk (T36a)."""
+
 from backend import ppe_rules
 from backend.vlm_analyzer import build_system_prompt
 

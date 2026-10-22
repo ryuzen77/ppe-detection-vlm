@@ -53,25 +53,33 @@ export const VLM_CHIP_NO_BACKUP = {
   hint: 'Tanpa VLM cadangan: bila VLM utama gangguan atau kuota habis, pekerja diminta menunggu',
 }
 
-
 // T72: koneksi internet gerbang (bukan kesehatan API VLM) & VLM lokal siaga dingin
 export const INTERNET_CHIP = {
   normal: { text: 'Internet: normal', hint: '' },
-  lambat: { text: 'Internet: lambat', hint: 'Tersambung tetapi lambat; VLM lokal disiapkan bila VLM utama tidak menjawab' },
+  lambat: {
+    text: 'Internet: lambat',
+    hint: 'Tersambung tetapi lambat; VLM lokal disiapkan bila VLM utama tidak menjawab',
+  },
   putus: { text: 'Internet: putus', hint: 'Kabel/Wi-Fi/router terputus; penilaian dialihkan ke VLM lokal' },
 } as const
 
 export const LOCAL_STANDBY_CHIP = {
-  unloaded: { text: 'VLM lokal: siaga', hint: 'Belum dimuat di GPU; dimuat otomatis bila internet atau VLM API bermasalah' },
+  unloaded: {
+    text: 'VLM lokal: siaga',
+    hint: 'Belum dimuat di GPU; dimuat otomatis bila internet atau VLM API bermasalah',
+  },
   loading: { text: 'VLM lokal: memuat', hint: 'Menyiapkan model di GPU; pekerja diminta menunggu sebentar' },
   ready: { text: 'VLM lokal: siap', hint: 'Model sudah di GPU dan siap menilai' },
-  failed: { text: 'VLM lokal: gagal dimuat', hint: 'Dicoba lagi otomatis; bila internet putus, pekerja diminta menunggu. Hubungi admin' },
+  failed: {
+    text: 'VLM lokal: gagal dimuat',
+    hint: 'Dicoba lagi otomatis; bila internet putus, pekerja diminta menunggu. Hubungi admin',
+  },
 } as const
 
 export const IOT_CHIP = {
   connected: 'Lampu gerbang: tersambung',
   disconnected: 'Lampu gerbang: terputus',
-  disabled: 'Lampu gerbang: nonaktif'
+  disabled: 'Lampu gerbang: nonaktif',
 } as const
 
 // T88: menara lampu di Monitoring. Merah & hijau = lampu fisik nyata; kuning = perintah server
@@ -84,7 +92,8 @@ export const LIGHT_TOWER = {
   sourcePhysical: 'lampu fisik',
   sourcePlan: 'perintah server',
   noPhysical: 'Tanpa lampu fisik — tampilan mengikuti perintah server.',
-  disconnected: 'Lampu fisik tidak terbaca: pekerja mungkin tidak melihat lampu. Tampilan merah/hijau tidak bisa dipastikan.',
+  disconnected:
+    'Lampu fisik tidak terbaca: pekerja mungkin tidak melihat lampu. Tampilan merah/hijau tidak bisa dipastikan.',
   mismatch: (command: string) => `Lampu fisik belum sesuai perintah server (${command}).`,
   yellowPlanOnly: 'Kuning hanya di layar: perangkat lampu tidak punya lampu kuning.',
 } as const
@@ -152,7 +161,12 @@ export const HUD = {
   outsideLane: 'di luar jalur',
   positionOk: 'posisi pas',
   badge: (trackId: number, label: string) => `#${trackId} · ${label}`,
-  clip: { HEAD_CLIPPED: 'mundur sedikit', FEET_CLIPPED: 'mundur 1 langkah', TOO_FAR: 'mendekat', NOT_STANDING: 'berdiri tegak' } as Record<string, string>,
+  clip: {
+    HEAD_CLIPPED: 'mundur sedikit',
+    FEET_CLIPPED: 'mundur 1 langkah',
+    TOO_FAR: 'mendekat',
+    NOT_STANDING: 'berdiri tegak',
+  } as Record<string, string>,
   clipFallback: 'mundur',
 } as const
 
@@ -201,7 +215,7 @@ export const VIDEO = {
     OPENING: 'Menyiapkan kamera…',
     OPTIMIZING: 'Menyiapkan kamera…',
     OK: '',
-  BLOCKED: 'Kamera terhalang / buram.',
+    BLOCKED: 'Kamera terhalang / buram.',
   } as Record<CameraState, string>,
   pickCamera: 'Pilih kamera',
   changeCamera: 'Ganti kamera',
@@ -229,8 +243,9 @@ export const CAMERA_PICKER = {
   unavailable: 'tidak tersedia',
   inUse: 'sedang dipakai',
   lastUsed: 'terakhir dipakai',
-  lowQuality: 'Resolusi kamera rendah: video lebih lancar, tetapi potongan gambar untuk VLM lebih kecil '
-    + 'sehingga penilaian helm dan sepatu bisa kurang teliti.',
+  lowQuality:
+    'Resolusi kamera rendah: video lebih lancar, tetapi potongan gambar untuk VLM lebih kecil ' +
+    'sehingga penilaian helm dan sepatu bisa kurang teliti.',
   scanning: 'Mengukur kemampuan kamera…',
   lastScan: (time: string) => `Pemindaian terakhir pukul ${time}.`,
   scanOptional: 'Pemindaian bersifat opsional; kamera tetap bisa langsung dipakai.',
@@ -251,16 +266,19 @@ export const modeLabel = (m: { width: number; height: number; fps: number } | nu
   m ? `${m.width}×${m.height}${m.fps ? ` @${Math.round(m.fps)} fps` : ''}` : ''
 
 /** "Pesan dasar: detail galat" dari objek galat apa pun */
-export const withError = (base: string, e: unknown): string =>
-  `${base}: ${e instanceof Error ? e.message : String(e)}`
+export const withError = (base: string, e: unknown): string => `${base}: ${e instanceof Error ? e.message : String(e)}`
 
 /** Tooltip chip status: teks chip + keterangan (tetap terbaca saat chip tinggal ikon) */
 export const chipTitle = (text: string, hint: string): string => (hint ? `${text} · ${hint}` : text)
 
-
 // --- Notifikasi ----------------------------------------------------------------------------------
 
-const VLM_MODE_WORD: Record<VlmMode, string> = { UTAMA: 'utama', CADANGAN: 'cadangan', LOKAL: 'lokal', GANGGUAN: 'gangguan' }
+const VLM_MODE_WORD: Record<VlmMode, string> = {
+  UTAMA: 'utama',
+  CADANGAN: 'cadangan',
+  LOKAL: 'lokal',
+  GANGGUAN: 'gangguan',
+}
 
 export const NOTIFY = {
   close: 'Tutup notifikasi',
@@ -296,8 +314,13 @@ export const ATTENDANCE = {
   noPasses: 'Belum ada lintasan',
   sections: { seen: 'Terlihat lewat gerbang', notSeen: 'Belum terlihat' },
   cols: {
-    no: 'No. pegawai', name: 'Nama', org: 'Divisi · Perusahaan', first: 'Pertama', last: 'Terakhir',
-    passes: 'Lewat', result: 'Hasil terakhir',
+    no: 'No. pegawai',
+    name: 'Nama',
+    org: 'Divisi · Perusahaan',
+    first: 'Pertama',
+    last: 'Terakhir',
+    passes: 'Lewat',
+    result: 'Hasil terakhir',
   },
   passResult: (passed: number, rejected: number) => `${passed} lolos · ${rejected} ditolak`,
   lastPassed: 'Lolos',
@@ -347,7 +370,10 @@ export const REPORTS = {
   },
   filters: {
     ariaLabel: 'Saring riwayat',
-    status: { all: 'Semua', complete: 'Lolos', incomplete: 'Ditolak' } as Record<'all' | 'complete' | 'incomplete', string>,
+    status: { all: 'Semua', complete: 'Lolos', incomplete: 'Ditolak' } as Record<
+      'all' | 'complete' | 'incomplete',
+      string
+    >,
     date: 'Tanggal',
     clearDate: 'Semua tanggal',
     worker: 'Pekerja',
@@ -374,7 +400,13 @@ export const REPORTS = {
     missing: (items: string[]) => (items.length ? `Kurang: ${items.join(', ')}` : ''),
   },
   result: { passed: 'Lolos', denied: 'Ditolak', unverified: 'Tidak terverifikasi' },
-  source: { utama: 'VLM utama', cadangan: 'VLM cadangan', darurat: 'VLM lokal darurat', gangguan: 'Tanpa keputusan', lama: 'Data lama' },
+  source: {
+    utama: 'VLM utama',
+    cadangan: 'VLM cadangan',
+    darurat: 'VLM lokal darurat',
+    gangguan: 'Tanpa keputusan',
+    lama: 'Data lama',
+  },
   loading: 'Memuat riwayat…',
   empty: 'Belum ada pemeriksaan.',
   emptyFiltered: 'Tidak ada pemeriksaan yang cocok dengan saringan.',
@@ -425,12 +457,14 @@ export const SETTINGS_TAB = {
     roles: { utama: 'VLM utama', cadangan: 'VLM cadangan', darurat: 'VLM lokal darurat' } as Record<string, string>,
     // T72: VLM lokal siaga dingin sengaja tidak dimuat hanya untuk uji latensi (VRAM ±6 GB)
     standby: 'siaga, belum dimuat — tidak diuji supaya GPU tetap kosong',
-    standbyHint: 'Dimuat otomatis saat internet atau VLM API bermasalah. Untuk menguji modelnya, pakai tombol "Uji Penyedia" di bagian Penyedia VLM.',
+    standbyHint:
+      'Dimuat otomatis saat internet atau VLM API bermasalah. Untuk menguji modelnya, pakai tombol "Uji Penyedia" di bagian Penyedia VLM.',
     local: 'lokal',
     online: 'online',
     answered: (ms: number) => `menjawab dalam ${seconds(ms)}`,
     failed: (reason: string) => (reason ? `tidak menjawab (${reason})` : 'tidak menjawab'),
-    overLimit: (limitMs: number) => `lebih lama dari batas pemeriksaan ${seconds(limitMs)}: pekerja bisa diminta menunggu`,
+    overLimit: (limitMs: number) =>
+      `lebih lama dari batas pemeriksaan ${seconds(limitMs)}: pekerja bisa diminta menunggu`,
     localLoading: 'model lokal mungkin sedang dimuat ke GPU; uji lagi sebentar',
     noBackup: 'VLM cadangan tidak aktif',
     note: 'Diukur dengan gambar contoh seukuran pemeriksaan (memakai 1 panggilan kuota per VLM online).',
@@ -520,18 +554,18 @@ export const AUTH = {
   repeatPassword: 'Ulangi sandi',
   saveNewPassword: 'Simpan Sandi Baru',
   you: '(Anda)',
-  
+
   errorPasswordLength: `Kata sandi minimal ${MIN_PASSWORD_LENGTH} karakter`,
   errorPasswordMismatch: 'Konfirmasi kata sandi tidak cocok',
   successPasswordChange: 'Kata sandi berhasil diubah.',
-  
+
   deleteConfirmTitle: 'Hapus Akun',
   deleteConfirmPrompt: 'Hapus akun {user}?',
   cancelBtn: 'Batal',
   resetConfirmTitle: 'Reset Sandi',
   resetSuccess: 'Sandi untuk {user} berhasil direset.',
   resetFailed: 'Gagal mereset sandi: {err}',
-  
+
   setupTitle: 'Setup Akun Admin',
   setupInfo: 'Sistem membutuhkan akun admin pertama.',
   setupNotAllowed: 'Demi keamanan, setup admin pertama hanya dapat dilakukan langsung dari mesin gerbang.',
@@ -550,7 +584,7 @@ export const VLM_SETTINGS = {
   sourceEnv: 'berkas konfigurasi server',
   resetToEnvBtn: 'Kembali ke berkas konfigurasi',
   resetConfirmTitle: 'Kembali ke pengaturan di berkas konfigurasi server?',
-  
+
   primaryTitle: 'VLM Utama',
   backupTitle: 'VLM Cadangan',
   providerLabel: 'Penyedia',
@@ -569,33 +603,36 @@ export const VLM_SETTINGS = {
   noLocalFallback: '(Tanpa VLM lokal darurat)',
   localFallbackHint:
     'Tidak dimuat saat server menyala. Dimuat otomatis bila internet putus/lambat atau VLM utama & cadangan gagal; pekerja pertama diminta menunggu selama model disiapkan (lamanya tergantung model & perangkat; uji dengan tombol "Uji Penyedia"). Dikeluarkan lagi dari GPU setelah internet & VLM utama normal kembali.',
-  noLocalFallbackHint: 'Tanpa VLM lokal darurat: bila internet putus atau VLM utama & cadangan gagal, pekerja diminta menunggu.',
-  localFallbackBackupIsLocal: 'Cadangan sudah VLM lokal (siaga dingin: dimuat saat VLM utama gangguan atau internet bermasalah), jadi VLM lokal darurat tidak diperlukan.',
-  noBackupWithLocalHint: 'Tanpa VLM cadangan API: bila VLM utama gangguan atau internet bermasalah, penilaian dialihkan ke VLM lokal darurat.',
+  noLocalFallbackHint:
+    'Tanpa VLM lokal darurat: bila internet putus atau VLM utama & cadangan gagal, pekerja diminta menunggu.',
+  localFallbackBackupIsLocal:
+    'Cadangan sudah VLM lokal (siaga dingin: dimuat saat VLM utama gangguan atau internet bermasalah), jadi VLM lokal darurat tidak diperlukan.',
+  noBackupWithLocalHint:
+    'Tanpa VLM cadangan API: bila VLM utama gangguan atau internet bermasalah, penilaian dialihkan ke VLM lokal darurat.',
   noLocalProvider: 'Belum ada penyedia VLM lokal (mis. Ollama) yang tersedia di server.',
   testResultLocal: 'Hasil Uji VLM Lokal Darurat',
   missingKey: '(API key belum diisi di berkas konfigurasi server)',
   missingBaseUrl: '(alamat VLM_BASE_URL belum diisi di berkas konfigurasi server)',
-  
+
   dataLocation: 'Lokasi Data',
-  stats: (photos: number | null, missed: number | null, falseRejects: number | null, medianSeconds: number | null) => 
+  stats: (photos: number | null, missed: number | null, falseRejects: number | null, medianSeconds: number | null) =>
     `Diuji ${photos ?? 0} foto: APD kurang lolos ${missed ?? 0}, patuh salah ditolak ${falseRejects ?? 0}, ±${medianSeconds ?? 0} dtk per pemeriksaan`,
-  
+
   testBtn: 'Uji Penyedia',
   testingBtn: 'Menguji...',
   testResultPrimary: 'Hasil Uji Utama',
   testResultBackup: 'Hasil Uji Cadangan',
-  testSuccess: (latency: number | null, isJson: boolean) => 
+  testSuccess: (latency: number | null, isJson: boolean) =>
     `Berhasil (${latency}ms, valid JSON: ${isJson ? 'Ya' : 'Tidak'})`,
-    
+
   applyBtn: 'Terapkan',
   applying: 'Menyiapkan...',
   applySuccess: 'Berhasil diterapkan',
-  
+
   warningTitle: 'Peringatan',
   cancelBtn: 'Batal',
   confirmBtn: 'Saya Yakin, Lanjutkan',
-  
+
   errLoad: 'Gagal memuat',
   errApply: 'Gagal menerapkan',
   errTest: 'Gagal uji',
@@ -672,7 +709,8 @@ export const WORKERS = {
   activateBtn: 'Aktifkan',
   editBtn: 'Ubah Profil',
   confirmDeleteFaceTitle: 'Hapus Data Wajah',
-  confirmDeleteFaceMsg: 'Hapus seluruh templat data wajah pekerja ini? Tindakan ini permanen dan tidak dapat dibatalkan (hak hapus UU PDP). Riwayat nama pada audit lama tetap dipertahankan.',
+  confirmDeleteFaceMsg:
+    'Hapus seluruh templat data wajah pekerja ini? Tindakan ini permanen dan tidak dapat dibatalkan (hak hapus UU PDP). Riwayat nama pada audit lama tetap dipertahankan.',
   confirmDeleteTemplateTitle: 'Hapus Satu Foto',
   confirmDeleteTemplateMsg: 'Hapus templat foto wajah ini?',
   statusActive: 'Aktif',
@@ -709,7 +747,6 @@ export const WORKERS = {
   enrollmentHoldHint: 'Pemeriksaan gerbang dijeda selama jendela ini terbuka.',
   errEnrollmentHold: 'Gerbang gagal dijeda: foto bisa ditolak bila ada orang di jalur pemeriksaan.',
 } as const
-
 
 // --- Halaman Pekerja (T79) --------------------------------------------------------------
 

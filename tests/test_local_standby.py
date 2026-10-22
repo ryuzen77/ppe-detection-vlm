@@ -175,8 +175,9 @@ def test_slow_route_uses_cached_median_without_changing_telemetry_state(make_ana
     analyzer = make_analyzer(layout, warm=True)
     _internet(analyzer, SLOW, median_ms)
     direct_local = median_ms is not None and median_ms > cfg.INTERNET_VERY_SLOW_MS
-    route = vlm_selection.inspection_route(SLOW, analyzer.primary, analyzer.backup,
-                                           analyzer.local_fallback, median_ms=median_ms)
+    route = vlm_selection.inspection_route(
+        SLOW, analyzer.primary, analyzer.backup, analyzer.local_fallback, median_ms=median_ms
+    )
     result = analyzer.analyze_person(person_crop())
     assert result.is_complete
     assert result.decided_by == (analyzer.standby.engine.role if direct_local else "utama")
@@ -379,8 +380,13 @@ def test_route_has_no_io_and_benchmark_1_vs_20_inspections(make_analyzer, monkey
             for _ in range(10_000):
                 for _ in range(people):
                     internet = analyzer.internet.status()
-                    vlm_selection.inspection_route(internet["state"], analyzer.primary, analyzer.backup,
-                                                   analyzer.local_fallback, median_ms=internet["median_ms"])
+                    vlm_selection.inspection_route(
+                        internet["state"],
+                        analyzer.primary,
+                        analyzer.backup,
+                        analyzer.local_fallback,
+                        median_ms=internet["median_ms"],
+                    )
             elapsed_us = (perf_counter() - start) / 10000 * 1e6
             print(f"ROUTE {state} median={median_ms} people={people}: {elapsed_us:.3f} us/batch")
 
@@ -476,10 +482,16 @@ def test_cold_ping_does_not_load_or_record_engine_failure(make_analyzer, monkeyp
 
 
 @pytest.mark.parametrize("layout", ["A", "B"])
-@pytest.mark.parametrize("state,error", [
-    (UNLOADED, None), (LOADING, None), (FAILED, None),
-    (READY, None), (READY, TimeoutError("batas waktu uji")),
-])
+@pytest.mark.parametrize(
+    "state,error",
+    [
+        (UNLOADED, None),
+        (LOADING, None),
+        (FAILED, None),
+        (READY, None),
+        (READY, TimeoutError("batas waktu uji")),
+    ],
+)
 def test_ping_response_marks_only_cold_local_as_standby(make_analyzer, monkeypatch, layout, state, error):
     from backend.api import routes_vlm
     from backend.app import app
@@ -537,8 +549,9 @@ def test_local_provider_test_restores_cold_state_but_keeps_ready_model(make_anal
         provider.error = RuntimeError("galat uji tiruan")
     monkeypatch.setattr(analyzer, "_new_engine", lambda role, choice: temporary)
     monkeypatch.setattr(routes_vlm, "vlm_analyzer", analyzer)
-    response = TestClient(app).post("/api/config/vlm/test", json={
-        "role": "backup", "provider": "ollama", "model": temporary.model_name})
+    response = TestClient(app).post(
+        "/api/config/vlm/test", json={"role": "backup", "provider": "ollama", "model": temporary.model_name}
+    )
     assert response.status_code == 200 and response.json()["json_ok"] is (not error)
     assert provider.unloads == (0 if warm else 1)
     assert analyzer.standby.state == (READY if warm else UNLOADED)
@@ -548,8 +561,12 @@ def test_local_provider_test_restores_cold_state_but_keeps_ready_model(make_anal
 def test_apply_local_standby_does_not_warm_it(make_analyzer, layout):
     analyzer = make_analyzer("C")
     local = Choice("ollama", "qwen2.5vl:7b")
-    selection = Selection(analyzer.primary.choice(), local if layout == "B" else analyzer.backup.choice(),
-                          "dashboard", local if layout == "A" else None)
+    selection = Selection(
+        analyzer.primary.choice(),
+        local if layout == "B" else analyzer.backup.choice(),
+        "dashboard",
+        local if layout == "A" else None,
+    )
     current = analyzer.apply_selection(selection, lambda: True)
     assert analyzer.standby.state == UNLOADED and analyzer.standby.engine.provider.warms == 0
     assert current["local_fallback"]["source"] == "dashboard" if layout == "A" else current["local_fallback"] is None

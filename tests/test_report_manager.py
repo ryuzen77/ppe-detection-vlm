@@ -1,4 +1,5 @@
 """Migrasi skema audit.db dan alur simpan-baca-ekspor laporan."""
+
 import csv
 import io
 import json
@@ -48,13 +49,33 @@ def _buat_db_v0(path, baris_dihapus=True):
         (2, 102, 0, 0, 1, "biru", 0, 1, 1, 0),
         (3, 103, 1, 1, 1, "kuning", 1, 1, 1, 1),
     ]
-    for (id_, track, ok, helm, rompi, warna, valid, celana, sepatu, tertutup) in rows:
+    for id_, track, ok, helm, rompi, warna, valid, celana, sepatu, tertutup in rows:
         conn.execute(
             "INSERT INTO worker_inspections VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (id_, track, f"2026-09-2{id_}T08:00:00", f"2026-09-2{id_}", "08:00:00", ok,
-             helm, "helm", rompi, warna, valid, "rompi", celana, "celana", sepatu, tertutup, "sepatu",
-             json.dumps([] if ok else ["Helm Keselamatan"]), "catatan", "GEMINI_LIVE", 700.0,
-             f"worker_{track}.jpg"),
+            (
+                id_,
+                track,
+                f"2026-09-2{id_}T08:00:00",
+                f"2026-09-2{id_}",
+                "08:00:00",
+                ok,
+                helm,
+                "helm",
+                rompi,
+                warna,
+                valid,
+                "rompi",
+                celana,
+                "celana",
+                sepatu,
+                tertutup,
+                "sepatu",
+                json.dumps([] if ok else ["Helm Keselamatan"]),
+                "catatan",
+                "GEMINI_LIVE",
+                700.0,
+                f"worker_{track}.jpg",
+            ),
         )
     if baris_dihapus:
         # Baris terakhir dihapus: id 3 tidak boleh dipakai ulang setelah migrasi
@@ -73,6 +94,7 @@ def _version(db):
 
 
 # --- Migrasi skema ----------------------------------------------------------------
+
 
 def test_migrasi_v0_ke_v1_mempertahankan_semua_baris(paths):
     db, snaps = paths
@@ -108,8 +130,15 @@ def test_migrasi_tidak_memakai_ulang_id_yang_pernah_dihapus(paths):
     db, snaps = paths
     _buat_db_v0(db)
     mgr = ReportManager(db_path=db, snapshots_dir=snaps).open()
-    rec = mgr.save_inspection(track_id=200, is_complete=True, items={}, missing_items=[],
-                              notes="", inference_source="LOCAL_FAST_PASS", inference_time_ms=1.0)
+    rec = mgr.save_inspection(
+        track_id=200,
+        is_complete=True,
+        items={},
+        missing_items=[],
+        notes="",
+        inference_source="LOCAL_FAST_PASS",
+        inference_time_ms=1.0,
+    )
     assert rec["id"] == 4
 
 
@@ -140,6 +169,7 @@ def test_database_dari_versi_aplikasi_lebih_baru_ditolak(paths):
 
 # --- Simpan, baca, ekspor ------------------------------------------------------------
 
+
 def test_simpan_baca_dan_ekspor_csv(paths, catalog_defaults):
     db, snaps = paths
     mgr = ReportManager(db_path=db, snapshots_dir=snaps).open()
@@ -150,10 +180,16 @@ def test_simpan_baca_dan_ekspor_csv(paths, catalog_defaults):
         "sepatu": {"detected": True, "is_closed_shoes": True},
     }
     crop = np.full((100, 50, 3), 120, dtype=np.uint8)
-    rec = mgr.save_inspection(track_id=7, is_complete=False, items=items,
-                              missing_items=["Celana Panjang"], notes="uji",
-                              inference_source="LOCAL_FAST_PASS", inference_time_ms=12.5,
-                              crop_img=crop)
+    rec = mgr.save_inspection(
+        track_id=7,
+        is_complete=False,
+        items=items,
+        missing_items=["Celana Panjang"],
+        notes="uji",
+        inference_source="LOCAL_FAST_PASS",
+        inference_time_ms=12.5,
+        crop_img=crop,
+    )
 
     assert (snaps / rec["snapshot_filename"]).exists()
     assert mgr.get_snapshot_path(rec["snapshot_filename"]) is not None
@@ -165,7 +201,7 @@ def test_simpan_baca_dan_ekspor_csv(paths, catalog_defaults):
     assert text.startswith(CSV_BOM)
     rows = list(csv.reader(io.StringIO(text.removeprefix(CSV_BOM))))
     header, row = rows[0], rows[1]
-    assert header[:len(messages.CSV_HEADER_LEADING)] == messages.CSV_HEADER_LEADING
+    assert header[: len(messages.CSV_HEADER_LEADING)] == messages.CSV_HEADER_LEADING
     kolom = dict(zip(header, row))
     assert kolom["ID Pekerja"] == messages.CSV_WORKER_ID.format(track_id=7)
     assert kolom["Status Kelulusan"] == messages.CSV_STATUS_INCOMPLETE
@@ -178,10 +214,23 @@ def test_statistik_menghitung_keputusan_vlm_cadangan(paths):
     # T27) dengan label lain tidak ikut terhitung.
     db, snaps = paths
     mgr = ReportManager(db_path=db, snapshots_dir=snaps).open()
-    for source in ("VLM_LIVE:gemini/gemini-3.5-flash-lite", "VLM_CADANGAN:ollama/qwen2.5vl:7b",
-                   "VLM_CADANGAN:ollama/qwen2.5vl:7b", "VLM_GAGAL", "LOCAL_FAST_PASS"):
-        mgr.save_inspection(track_id=1, is_complete=True, items={}, missing_items=[], notes="",
-                            inference_source=source, inference_time_ms=1.0, crop_img=None)
+    for source in (
+        "VLM_LIVE:gemini/gemini-3.5-flash-lite",
+        "VLM_CADANGAN:ollama/qwen2.5vl:7b",
+        "VLM_CADANGAN:ollama/qwen2.5vl:7b",
+        "VLM_GAGAL",
+        "LOCAL_FAST_PASS",
+    ):
+        mgr.save_inspection(
+            track_id=1,
+            is_complete=True,
+            items={},
+            missing_items=[],
+            notes="",
+            inference_source=source,
+            inference_time_ms=1.0,
+            crop_img=None,
+        )
     stats = mgr.get_reports()
     assert stats["total_all"] == 5 and stats["backup_count"] == 2
 
@@ -189,6 +238,7 @@ def test_statistik_menghitung_keputusan_vlm_cadangan(paths):
 def test_label_vlm_cadangan_cocok_dengan_prefiks_laporan():
     from backend.report_manager import BACKUP_SOURCE_PREFIX
     from backend.vlm_analyzer import VLMEngine
+
     engine = VLMEngine("cadangan", "ollama", "qwen2.5vl:7b")
     assert engine.label.startswith(BACKUP_SOURCE_PREFIX)
     engine.executor.shutdown(wait=False)

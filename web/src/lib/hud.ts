@@ -72,7 +72,12 @@ export function detectionStyle(d: Detection, palette: HudPalette): { color: stri
 }
 
 export function drawHud(
-  ctx: CanvasRenderingContext2D, w: number, h: number, t: Telemetry | null, guides: boolean, palette: HudPalette,
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  t: Telemetry | null,
+  guides: boolean,
+  palette: HudPalette,
 ): void {
   ctx.clearRect(0, 0, w, h)
   if (!t) return
@@ -92,7 +97,6 @@ export function drawHud(
     }
     ctx.setLineDash([])
   }
-
 
   if (guides && t.corridor?.enabled) {
     const x1 = offsetX + drawW * t.corridor.left_ratio
@@ -129,7 +133,9 @@ export function drawHud(
     const [bx1, by1, bx2, by2] = d.bbox
     const x = offsetX + bx1 * scale
     const y = offsetY + by1 * scale
-    let { color, label } = detectionStyle(d, palette)
+    const style = detectionStyle(d, palette)
+    const label = style.label
+    let color = style.color
     if (t.zone?.enabled && !d.in_zone) {
       color = withAlpha(color, STAND_ZONE.outsideAlpha) // redup di luar zona
     }
@@ -153,7 +159,10 @@ function drawBrackets(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.strokeStyle = color
   ctx.lineWidth = HUD.bracketLineWidth
   const corners: [number, number, number, number][] = [
-    [x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1],
+    [x, y, 1, 1],
+    [x + w, y, -1, 1],
+    [x, y + h, 1, -1],
+    [x + w, y + h, -1, -1],
   ]
   for (const [cx, cy, dx, dy] of corners) {
     ctx.beginPath()
@@ -165,7 +174,12 @@ function drawBrackets(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
 }
 
 function drawBadge(
-  ctx: CanvasRenderingContext2D, x: number, y: number, text: string, color: string, palette: HudPalette,
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  text: string,
+  color: string,
+  palette: HudPalette,
 ): void {
   ctx.font = `${HUD.badgeFont} ${palette.font}`
   ctx.textBaseline = 'middle'

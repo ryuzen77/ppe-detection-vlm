@@ -35,8 +35,17 @@
 </script>
 
 {#if paths}
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width={STROKE}
-       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width={STROKE}
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
     {#each paths as d (d)}<path {d} />{/each}
   </svg>
 {:else}

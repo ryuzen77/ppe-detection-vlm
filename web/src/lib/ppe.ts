@@ -36,7 +36,7 @@ export function ppeItemTone(status: ItemStatus, gateKind: GateKind = 'standby'):
 export function assessItem(
   item: PpeItem,
   result: ItemResult | undefined | null,
-  gateKind: GateKind = 'standby'
+  gateKind: GateKind = 'standby',
 ): ItemAssessment {
   if (!result) {
     return {

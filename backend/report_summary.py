@@ -4,6 +4,7 @@
 rentang, mengisi batang grafik (termasuk yang nol, supaya sumbu waktu UI tidak
 bolong), dan menghitung item APD yang paling sering kurang.
 """
+
 import calendar
 import json
 from dataclasses import dataclass
@@ -20,10 +21,10 @@ DAYS_PER_WEEK = 7
 
 @dataclass(frozen=True)
 class AuditRow:
-    date_str: str          # YYYY-MM-DD (waktu lokal server)
-    time_str: str          # HH:MM:SS
+    date_str: str  # YYYY-MM-DD (waktu lokal server)
+    time_str: str  # HH:MM:SS
     is_complete: bool
-    missing_items: str     # JSON daftar missing_label
+    missing_items: str  # JSON daftar missing_label
 
 
 def parse_date(value: Optional[str], today: date) -> date:
@@ -46,8 +47,10 @@ def period_range(period: str, anchor: date) -> tuple[date, date]:
 
 def _empty_buckets(period: str, start: date, end: date) -> dict[str, dict]:
     if period == PERIOD_DAY:
-        return {f"{h:02d}": {"start": f"{h:02d}:00", "label": f"{h:02d}", "passed": 0, "rejected": 0}
-                for h in range(HOURS_PER_DAY)}
+        return {
+            f"{h:02d}": {"start": f"{h:02d}:00", "label": f"{h:02d}", "passed": 0, "rejected": 0}
+            for h in range(HOURS_PER_DAY)
+        }
     buckets = {}
     day = start
     while day <= end:
@@ -93,8 +96,12 @@ def summarize(period: str, start: date, end: date, rows: list[AuditRow]) -> dict
     return {
         "period": period,
         "range": {"from": start.isoformat(), "to": end.isoformat()},
-        "totals": {"total": total, "passed": passed, "rejected": total - passed,
-                   "compliance_rate": round(passed / total * 100, 1) if total else None},
+        "totals": {
+            "total": total,
+            "passed": passed,
+            "rejected": total - passed,
+            "compliance_rate": round(passed / total * 100, 1) if total else None,
+        },
         "buckets": list(buckets.values()),
         "missing_items": _missing_ranking(r for r in rows if not r.is_complete),
     }

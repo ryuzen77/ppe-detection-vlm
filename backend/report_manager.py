@@ -29,7 +29,7 @@ BACKUP_SOURCE_PREFIX = "VLM_CADANGAN:"
 
 # Retensi (T20): umur data dihitung dalam hari
 SECONDS_PER_DAY = 24 * 60 * 60
-BYTES_PER_MB = 1024 ** 2
+BYTES_PER_MB = 1024**2
 
 # Akhiran foto bukti yang sedang ditulis (lihat _write_snapshot)
 SNAPSHOT_TMP_SUFFIX = ".tmp"
@@ -69,9 +69,13 @@ def _attendance_totals(seen: list[dict], unknown: dict, active_workers: int, see
     """Mutu pengenalan dihitung atas seluruh gerbang; jumlah pekerja mengikuti filter daftar."""
     recognized = sum(row["passes"] for row in seen)
     passes = recognized + unknown["passes"]
-    return {"passes": passes, "recognized": recognized,
-            "recognition_rate": recognized / passes if passes else None,
-            "active_workers": active_workers, "seen_workers": seen_workers}
+    return {
+        "passes": passes,
+        "recognized": recognized,
+        "recognition_rate": recognized / passes if passes else None,
+        "active_workers": active_workers,
+        "seen_workers": seen_workers,
+    }
 
 
 def _attendance_csv_cell(value):
@@ -79,6 +83,7 @@ def _attendance_csv_cell(value):
     if isinstance(value, str) and value.lstrip().startswith(_CSV_FORMULA_PREFIXES):
         return "'" + value
     return value
+
 
 # Jalur data diatur lewat DATA_DIR di config, di luar direktori kode
 DB_PATH = cfg.DB_PATH
@@ -126,8 +131,17 @@ _CREATE_TABLE_V1 = """
 
 # Kolom yang diisi saat audit baru ditulis (id & default diisi SQLite)
 _INSPECTION_COLUMNS = (
-    "track_id", "timestamp", "date_str", "time_str", "is_complete", "items_json",
-    "missing_items", "notes", "inference_source", "inference_time_ms", "snapshot_filename",
+    "track_id",
+    "timestamp",
+    "date_str",
+    "time_str",
+    "is_complete",
+    "items_json",
+    "missing_items",
+    "notes",
+    "inference_source",
+    "inference_time_ms",
+    "snapshot_filename",
     *(name for name, _ in _V2_COLUMNS),
     *(name for name, _ in _V3_COLUMNS),
 )
@@ -135,6 +149,7 @@ _INSERT_INSPECTION = (
     f"INSERT INTO worker_inspections ({', '.join(_INSPECTION_COLUMNS)}) "
     f"VALUES ({', '.join('?' * len(_INSPECTION_COLUMNS))})"
 )
+
 
 def _identity_values(identity: Optional[dict]) -> tuple:
     """Nilai kolom v2 & v3 dari hasil pengenalan wajah; None = tanpa FR."""
@@ -359,9 +374,10 @@ class ReportManager:
                 f"yang dikenali kode ini ({SCHEMA_VERSION}). Perbarui aplikasi."
             )
 
-        has_table = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'worker_inspections'"
-        ).fetchone() is not None
+        has_table = (
+            conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'worker_inspections'").fetchone()
+            is not None
+        )
 
         if has_table:
             self._backup_before_migration(version)
@@ -409,9 +425,7 @@ class ReportManager:
 
     def _migrate_v0_to_v1(self, conn: sqlite3.Connection):
         """Sebelas kolom per item → satu kolom `items_json`. Seluruh baris dipertahankan."""
-        old_seq = conn.execute(
-            "SELECT seq FROM sqlite_sequence WHERE name = 'worker_inspections'"
-        ).fetchone()
+        old_seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'worker_inspections'").fetchone()
 
         conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections_v1"))
         rows = conn.execute("SELECT * FROM worker_inspections ORDER BY id ASC").fetchall()
@@ -425,11 +439,18 @@ class ReportManager:
             """,
             [
                 (
-                    row["id"], row["track_id"], row["timestamp"], row["date_str"],
-                    row["time_str"], row["is_complete"],
+                    row["id"],
+                    row["track_id"],
+                    row["timestamp"],
+                    row["date_str"],
+                    row["time_str"],
+                    row["is_complete"],
                     json.dumps(_legacy_row_to_items(row), ensure_ascii=False),
-                    row["missing_items"], row["notes"], row["inference_source"],
-                    row["inference_time_ms"], row["snapshot_filename"],
+                    row["missing_items"],
+                    row["notes"],
+                    row["inference_source"],
+                    row["inference_time_ms"],
+                    row["snapshot_filename"],
                 )
                 for row in rows
             ],
@@ -485,20 +506,22 @@ class ReportManager:
         iso_timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", now)
         time_str = time.strftime("%H:%M:%S", now)
         snapshot_filename = self._save_snapshot(track_id, crop_img, now)
-        record_id = self._insert_inspection((
-            track_id,
-            iso_timestamp,
-            time.strftime("%Y-%m-%d", now),
-            time_str,
-            1 if is_complete else 0,
-            json.dumps(items, ensure_ascii=False),
-            json.dumps(missing_items, ensure_ascii=False),
-            notes,
-            inference_source,
-            inference_time_ms,
-            snapshot_filename,
-            *_identity_values(identity),
-        ))
+        record_id = self._insert_inspection(
+            (
+                track_id,
+                iso_timestamp,
+                time.strftime("%Y-%m-%d", now),
+                time_str,
+                1 if is_complete else 0,
+                json.dumps(items, ensure_ascii=False),
+                json.dumps(missing_items, ensure_ascii=False),
+                notes,
+                inference_source,
+                inference_time_ms,
+                snapshot_filename,
+                *_identity_values(identity),
+            )
+        )
         return {
             "id": record_id,
             "track_id": track_id,
@@ -508,7 +531,7 @@ class ReportManager:
             "missing_items": missing_items,
             "snapshot_filename": snapshot_filename,
             "inference_source": inference_source,
-            "inference_time_ms": inference_time_ms
+            "inference_time_ms": inference_time_ms,
         }
 
     def _save_snapshot(self, track_id: int, crop_img: Optional[np.ndarray], now: time.struct_time) -> str:
@@ -580,10 +603,12 @@ class ReportManager:
             compliance_rate = round((complete_count / total_count * 100.0), 1) if total_count > 0 else 100.0
 
             # Keputusan oleh VLM cadangan (utama gagal/terputus), T27
-            cursor.execute("""SELECT COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS backup_count,
+            cursor.execute(
+                """SELECT COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS backup_count,
                            COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS local_fallback_count
                            FROM worker_inspections""",
-                           (BACKUP_SOURCE_PREFIX, LOCAL_FALLBACK_SOURCE_PREFIX))
+                (BACKUP_SOURCE_PREFIX, LOCAL_FALLBACK_SOURCE_PREFIX),
+            )
             source_counts = dict(cursor.fetchone())
 
             # Filter query (T79)
@@ -598,9 +623,12 @@ class ReportManager:
             )
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 SELECT COUNT(*) as filtered_total FROM worker_inspections {where_clause}
-            """, params)
+            """,
+                params,
+            )
             filtered_total = cursor.fetchone()["filtered_total"]
 
             query = f"""
@@ -620,7 +648,7 @@ class ReportManager:
                 "compliance_rate": compliance_rate,
                 **source_counts,
                 "filtered_total": filtered_total,
-                "page_records": records
+                "page_records": records,
             }
 
     @staticmethod
@@ -666,8 +694,10 @@ class ReportManager:
                 f"SELECT date_str, time_str, is_complete, missing_items FROM worker_inspections {where}",
                 params,
             ).fetchall()
-        audit = [report_summary.AuditRow(r["date_str"], r["time_str"], bool(r["is_complete"]), r["missing_items"])
-                 for r in rows]
+        audit = [
+            report_summary.AuditRow(r["date_str"], r["time_str"], bool(r["is_complete"]), r["missing_items"])
+            for r in rows
+        ]
         return report_summary.summarize(period, start, end, audit)
 
     @staticmethod
@@ -676,8 +706,7 @@ class ReportManager:
         csv.writer(buffer).writerows(rows)
         return buffer.getvalue()
 
-    def get_attendance(self, date_str: str, department: Optional[str] = None,
-                       company: Optional[str] = None) -> dict:
+    def get_attendance(self, date_str: str, department: Optional[str] = None, company: Optional[str] = None) -> dict:
         """Informasi lintasan harian, bukan absensi. Identitas audit tidak diambil dari galeri terkini."""
         with closing(self._get_connection()) as conn, conn:
             conn.execute("BEGIN")
@@ -686,12 +715,19 @@ class ReportManager:
         seen_ids = {row["worker_id"] for row in seen}
         for row in seen:
             row["last_complete"] = bool(row["last_complete"])
-        active = [row for row in worker_store.store.active_attendance_workers()
-                  if _attendance_matches(row, department, company)]
+        active = [
+            row
+            for row in worker_store.store.active_attendance_workers()
+            if _attendance_matches(row, department, company)
+        ]
         filtered_seen = [row for row in seen if _attendance_matches(row, department, company)]
-        return {"date": date_str, "seen": filtered_seen,
-                "not_seen": [row for row in active if row["worker_id"] not in seen_ids],
-                "unknown": unknown, "totals": _attendance_totals(seen, unknown, len(active), len(filtered_seen))}
+        return {
+            "date": date_str,
+            "seen": filtered_seen,
+            "not_seen": [row for row in active if row["worker_id"] not in seen_ids],
+            "unknown": unknown,
+            "totals": _attendance_totals(seen, unknown, len(active), len(filtered_seen)),
+        }
 
     @staticmethod
     def _attendance_unknown(conn: sqlite3.Connection, date_str: str) -> dict:
@@ -713,20 +749,48 @@ class ReportManager:
                 number += 1
                 yield self._csv_text([self._attendance_csv_row(number, row, section == "seen")])
         unknown = report["unknown"]
-        yield self._csv_text([["", "", "", "", "", messages.ATTENDANCE_UNKNOWN, "", "",
-                              unknown["passes"], unknown["passed"], unknown["rejected"]]])
+        yield self._csv_text(
+            [
+                [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    messages.ATTENDANCE_UNKNOWN,
+                    "",
+                    "",
+                    unknown["passes"],
+                    unknown["passed"],
+                    unknown["rejected"],
+                ]
+            ]
+        )
 
     def _csv_row(self, number: int, row, items) -> list:
         missing_list = _parse_json(row["missing_items"], [])
         results = _parse_json(row["items_json"], {})
         status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
-        return ([number, row["date_str"], row["time_str"], messages.CSV_WORKER_ID.format(track_id=row["track_id"]), status_str,
-                 self._worker_csv_text(row),
-                 row["department"] or messages.CSV_EMPTY,
-                 row["company"] or messages.CSV_EMPTY]
-                + [self._item_csv_text(item, results.get(item.key)) for item in items]
-                + ["; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
-                   row["inference_source"], row["inference_time_ms"], row["notes"], row["snapshot_filename"]])
+        return (
+            [
+                number,
+                row["date_str"],
+                row["time_str"],
+                messages.CSV_WORKER_ID.format(track_id=row["track_id"]),
+                status_str,
+                self._worker_csv_text(row),
+                row["department"] or messages.CSV_EMPTY,
+                row["company"] or messages.CSV_EMPTY,
+            ]
+            + [self._item_csv_text(item, results.get(item.key)) for item in items]
+            + [
+                "; ".join(missing_list) if missing_list else messages.CSV_EMPTY,
+                row["inference_source"],
+                row["inference_time_ms"],
+                row["notes"],
+                row["snapshot_filename"],
+            ]
+        )
 
     @staticmethod
     def _worker_csv_text(row) -> str:
@@ -786,13 +850,15 @@ class ReportManager:
         company: Optional[str] = None,
     ) -> str:
         """Seluruh CSV sebagai satu teks (alat & tes); API memakai iter_csv_chunks."""
-        return "".join(self.iter_csv_chunks(
-            date_from=date_from,
-            date_to=date_to,
-            worker_id=worker_id,
-            department=department,
-            company=company,
-        ))
+        return "".join(
+            self.iter_csv_chunks(
+                date_from=date_from,
+                date_to=date_to,
+                worker_id=worker_id,
+                department=department,
+                company=company,
+            )
+        )
 
     def get_last_seen_batch(self, worker_ids: list[int]) -> dict[int, dict]:
         """Pemeriksaan terakhir per worker_id (T79). Mengembalikan {worker_id: {"at": timestamp, "is_complete": bool}}."""
@@ -885,12 +951,17 @@ class ReportManager:
         now = time.time()
         try:
             with self._get_connection() as conn:
-                steps = (self._expire_audits(conn, now), self._expire_photos(conn, now),
-                         self._enforce_photo_quota(conn))
+                steps = (
+                    self._expire_audits(conn, now),
+                    self._expire_photos(conn, now),
+                    self._enforce_photo_quota(conn),
+                )
             deleted_audits, deleted_photos, reclaimed_bytes = (sum(column) for column in zip(*steps))
             if deleted_photos > 0 or deleted_audits > 0:
-                logger.info(f"Retensi data: menghapus {deleted_audits} audit dan {deleted_photos} foto "
-                            f"(membebaskan {reclaimed_bytes / BYTES_PER_MB:.1f} MB).")
+                logger.info(
+                    f"Retensi data: menghapus {deleted_audits} audit dan {deleted_photos} foto "
+                    f"(membebaskan {reclaimed_bytes / BYTES_PER_MB:.1f} MB)."
+                )
         except Exception as e:
             logger.error(f"Gagal membersihkan data tua: {e}")
 
@@ -900,8 +971,10 @@ class ReportManager:
 
     @staticmethod
     def _photos_before(conn: sqlite3.Connection, cutoff: str) -> list[str]:
-        rows = conn.execute("SELECT snapshot_filename FROM worker_inspections "
-                            "WHERE timestamp < ? AND snapshot_filename != ''", (cutoff,))
+        rows = conn.execute(
+            "SELECT snapshot_filename FROM worker_inspections WHERE timestamp < ? AND snapshot_filename != ''",
+            (cutoff,),
+        )
         return [row["snapshot_filename"] for row in rows.fetchall()]
 
     def _expire_audits(self, conn: sqlite3.Connection, now: float) -> tuple[int, int, int]:
@@ -920,8 +993,10 @@ class ReportManager:
             return 0, 0, 0
         cutoff = self._cutoff(now, cfg.RETENTION_PHOTO_DAYS)
         photos = self._photos_before(conn, cutoff)
-        conn.execute("UPDATE worker_inspections SET snapshot_filename = '' "
-                     "WHERE timestamp < ? AND snapshot_filename != ''", (cutoff,))
+        conn.execute(
+            "UPDATE worker_inspections SET snapshot_filename = '' WHERE timestamp < ? AND snapshot_filename != ''",
+            (cutoff,),
+        )
         conn.commit()
         return (0, *self._delete_photos(photos))
 
@@ -954,5 +1029,6 @@ class ReportManager:
             names.append(name)
             excess -= size
         return names
+
 
 report_mgr = ReportManager()

@@ -21,6 +21,7 @@ from .zone import zone_store
 
 logger = logging.getLogger(__name__)
 
+
 class TrackState:
     INITIAL = "INITIAL"
     STEP_BACK_WARNING = "STEP_BACK_WARNING"
@@ -71,7 +72,7 @@ class GateSession:
     def __init__(self, track_id: int, now: float):
         GateSession._counter += 1
         self.session_id = GateSession._counter
-        self.track_id = track_id          # ID pelacak terkini, hanya untuk tampilan
+        self.track_id = track_id  # ID pelacak terkini, hanya untuk tampilan
         self.state = TrackState.INITIAL
         self.started_at = now
         self.last_seen = now
@@ -114,6 +115,7 @@ class GateSession:
 
 class StateManager:
     """Mesin keadaan gerbang: arahan posisi, satu analisa VLM per sesi, dan keputusan lampu."""
+
     def __init__(self):
         self.session: Optional[GateSession] = None
         self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix="VLM_Worker")
@@ -191,7 +193,7 @@ class StateManager:
             self.enrollment_until = now + cfg.ENROLLMENT_HOLD_SECONDS
             if started:
                 logger.info(messages.LOG_ENROLLMENT_HOLD_START)
-                self.session = None     # hasil VLM yang tiba belakangan diabaikan (cek id sesi)
+                self.session = None  # hasil VLM yang tiba belakangan diabaikan (cek id sesi)
                 self._show_resting_light(now)
             return started
 
@@ -232,8 +234,9 @@ class StateManager:
         audio_player.play(sound, urgent=True)
 
     @staticmethod
-    def _pick_subject(candidates: list[DetectionResult], current_id: Optional[int],
-                      locked: bool = False) -> DetectionResult:
+    def _pick_subject(
+        candidates: list[DetectionResult], current_id: Optional[int], locked: bool = False
+    ) -> DetectionResult:
         """Subjek sesi: ID yang sama bila masih terlihat, bila tidak yang paling dekat (bbox tertinggi).
 
         T59: sebelum keputusan, orang bertubuh utuh didahulukan. Poster K3 bergambar orang
@@ -276,9 +279,9 @@ class StateManager:
         with self.lock:
             self.latest_detections = detections
             if self._enrollment_paused(now):
-                return          # admin memotret wajah pendaftaran: tidak ada sesi (T75)
+                return  # admin memotret wajah pendaftaran: tidak ada sesi (T75)
             if self.camera_fault is not None:
-                return          # gambar tidak bisa dipercaya: tidak ada sesi baru (T45)
+                return  # gambar tidak bisa dipercaya: tidak ada sesi baru (T45)
             in_lane = self._people_in_lane(detections, now)
             if not in_lane:
                 self._close_session_if_lane_empty(now)
@@ -301,11 +304,15 @@ class StateManager:
         (T36d), antrean di belakang zona juga diabaikan, jadi sesi berakhir begitu
         subjek keluar zona dan orang berikutnya maju."""
         for d in detections:
-            d.zone_y = self.foot_memory.resolve(d.track_id, getattr(d, "foot_y", None),
-                                                getattr(d, "foot_y_box", None), now)
+            d.zone_y = self.foot_memory.resolve(
+                d.track_id, getattr(d, "foot_y", None), getattr(d, "foot_y_box", None), now
+            )
         active_zone = zone_store.get()
-        return [d for d in detections if getattr(d, "is_inside_corridor", True)
-                and zones.in_zone(getattr(d, "zone_y", None), active_zone)]
+        return [
+            d
+            for d in detections
+            if getattr(d, "is_inside_corridor", True) and zones.in_zone(getattr(d, "zone_y", None), active_zone)
+        ]
 
     def _close_session_if_lane_empty(self, now: float):
         if self.session is None or (now - self.session.last_seen) <= cfg.STANDBY_RESET_DELAY_SECONDS:
@@ -328,8 +335,10 @@ class StateManager:
             return False
         same = self._same_person_new_id(session, in_lane, now)
         if same is not None:
-            logger.info(f"Sesi #{session.session_id}: Track #{session.track_id} berganti ID menjadi "
-                        f"#{same.track_id} (orang yang sama); keputusan tetap.")
+            logger.info(
+                f"Sesi #{session.session_id}: Track #{session.track_id} berganti ID menjadi "
+                f"#{same.track_id} (orang yang sama); keputusan tetap."
+            )
             session.track_id = same.track_id
             return False
         if now - session.last_seen > cfg.STANDBY_RESET_DELAY_SECONDS:
@@ -337,8 +346,9 @@ class StateManager:
         return True
 
     @staticmethod
-    def _same_person_new_id(session: GateSession, in_lane: list[DetectionResult],
-                            now: float) -> Optional[DetectionResult]:
+    def _same_person_new_id(
+        session: GateSession, in_lane: list[DetectionResult], now: float
+    ) -> Optional[DetectionResult]:
         """ID baru pelacak untuk subjek yang sama (ByteTrack bisa mengganti ID orang yang diam)."""
         if session.subject_bbox is None or now - session.last_seen > cfg.SUBJECT_REID_MAX_GAP_SECONDS:
             return None
@@ -372,13 +382,16 @@ class StateManager:
             session.state = TrackState.ANALYZED
             session.analysis_timestamp = now
             self._show_decision(previous)
-            logger.info(f"Sesi #{session.session_id}: Track #{subject.track_id} baru saja diputuskan; "
-                        f"keputusan dipakai ulang tanpa analisa baru.")
+            logger.info(
+                f"Sesi #{session.session_id}: Track #{subject.track_id} baru saja diputuskan; "
+                f"keputusan dipakai ulang tanpa analisa baru."
+            )
         return session
 
     def _follow_subject(self, session: GateSession, in_lane: list[DetectionResult], now: float) -> DetectionResult:
-        det = self._pick_subject(in_lane, session.track_id,
-                                 locked=session.state in (TrackState.ANALYZING, TrackState.ANALYZED))
+        det = self._pick_subject(
+            in_lane, session.track_id, locked=session.state in (TrackState.ANALYZING, TrackState.ANALYZED)
+        )
         session.track_id = det.track_id
         session.last_seen = now
         session.is_full_body_now = det.is_full_body
@@ -426,9 +439,15 @@ class StateManager:
         if not session.readiness.holding:
             return False
         if det.crop_img is not None:
-            session.add_candidate(frame_quality.FrameCandidate(
-                crop=det.crop_img.copy(), bbox=list(det.bbox), keypoints=det.keypoints, track_id=det.track_id,
-                crop_keypoints=getattr(det, "crop_keypoints", None)))
+            session.add_candidate(
+                frame_quality.FrameCandidate(
+                    crop=det.crop_img.copy(),
+                    bbox=list(det.bbox),
+                    keypoints=det.keypoints,
+                    track_id=det.track_id,
+                    crop_keypoints=getattr(det, "crop_keypoints", None),
+                )
+            )
         else:
             session.stable_frames += 1
         # Setelah pekerja diam READY_HOLD_SECONDS (minimal STABLE_FRAMES_REQUIRED frame)
@@ -437,9 +456,14 @@ class StateManager:
     def _start_analysis(self, session: GateSession, det: DetectionResult, now: float):
         """Kirim SATU frame terbaik (paling tajam, paling diam, pose paling jelas) dari
         jendela diam ke VLM; keputusan sesi terkunci sejak titik ini."""
-        logger.info(messages.LOG_SESSION_READY.format(
-            session=session.session_id, held=session.readiness.held_seconds(now),
-            restarts=session.readiness.restarts, frames=session.stable_frames))
+        logger.info(
+            messages.LOG_SESSION_READY.format(
+                session=session.session_id,
+                held=session.readiness.held_seconds(now),
+                restarts=session.readiness.restarts,
+                frames=session.stable_frames,
+            )
+        )
         session.state = TrackState.ANALYZING
         crop_to_analyze, track_id, identity, crop_keypoints = None, det.track_id, None, None
         if session.candidates:
@@ -448,21 +472,25 @@ class StateManager:
             crop_to_analyze, track_id, crop_keypoints = best.crop, best.track_id, best.crop_keypoints
             logger.info(
                 f"Sesi #{session.session_id}: frame terbaik #{session.candidates.index(best) + 1} dari "
-                f"{len(session.candidates)} | skor " + ", ".join(
+                f"{len(session.candidates)} | skor "
+                + ", ".join(
                     f"{c.score:.2f} (tajam {c.sharpness:.0f}, gerak {c.motion:.3f}, pose {c.pose:.2f})"
-                    for c in session.candidates))
+                    for c in session.candidates
+                )
+            )
         session.candidates = []
         logger.info(f"Sesi #{session.session_id}: analisa VLM untuk Track #{track_id} (1 frame)...")
         audio_player.play("sedang_analisa", min_interval=cfg.AUDIO_ANALYZING_DEBOUNCE_SECONDS)
-        self.executor.submit(self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze, identity,
-                             crop_keypoints)
+        self.executor.submit(
+            self._run_vlm_analysis, session.session_id, track_id, crop_to_analyze, identity, crop_keypoints
+        )
 
     def _start_identity(self, session: GateSession) -> Optional[Future]:
         """FR pada FACE_VOTE_FRAMES potongan terbaik (skor `choose_best`), paralel dengan VLM.
         Nama dipasang ke sesi begitu selesai, supaya Monitoring menampilkannya lebih awal."""
         if not face_identity.identifier.store.face_ready():
             return None  # FR mati (tanpa kunci): gerbang berperilaku persis seperti sebelum T34
-        ranked = sorted(session.candidates, key=lambda c: c.score, reverse=True)[:cfg.FACE_VOTE_FRAMES]
+        ranked = sorted(session.candidates, key=lambda c: c.score, reverse=True)[: cfg.FACE_VOTE_FRAMES]
         return self.fr_executor.submit(self._identify_session, session.session_id, [c.crop for c in ranked])
 
     def _identify_session(self, session_id: int, crops: list[np.ndarray]) -> face_identity.Identity:
@@ -483,12 +511,19 @@ class StateManager:
         try:
             return future.result(timeout=cfg.FACE_IDENTIFY_TIMEOUT_SECONDS)
         except FutureTimeout:
-            logger.warning(messages.LOG_FACE_TIMEOUT.format(session=session_id,
-                                                            seconds=cfg.FACE_IDENTIFY_TIMEOUT_SECONDS))
+            logger.warning(
+                messages.LOG_FACE_TIMEOUT.format(session=session_id, seconds=cfg.FACE_IDENTIFY_TIMEOUT_SECONDS)
+            )
             return face_identity.Identity(face_identity.UNKNOWN)
 
-    def _run_vlm_analysis(self, session_id: int, track_id: int, crop_img: Optional[np.ndarray],
-                          identity_future: Optional[Future] = None, crop_keypoints: Optional[list] = None):
+    def _run_vlm_analysis(
+        self,
+        session_id: int,
+        track_id: int,
+        crop_img: Optional[np.ndarray],
+        identity_future: Optional[Future] = None,
+        crop_keypoints: Optional[list] = None,
+    ):
         if crop_img is None:
             self._retry_session(session_id)
             return
@@ -516,12 +551,28 @@ class StateManager:
     def _items_payload(result: InspectionResult) -> dict:
         return {key: item.model_dump() for key, item in result.items.items()}
 
-    def _save_audit(self, track_id: int, result: InspectionResult, crop_img: np.ndarray,
-                    identity: Optional[face_identity.Identity] = None) -> dict:
-        extra = {} if identity is None else {"identity": {
-            "worker_id": identity.worker_id, "employee_no": identity.employee_no, "name": identity.name,
-            "status": identity.status, "score": identity.score,
-            "department": identity.department, "company": identity.company}}
+    def _save_audit(
+        self,
+        track_id: int,
+        result: InspectionResult,
+        crop_img: np.ndarray,
+        identity: Optional[face_identity.Identity] = None,
+    ) -> dict:
+        extra = (
+            {}
+            if identity is None
+            else {
+                "identity": {
+                    "worker_id": identity.worker_id,
+                    "employee_no": identity.employee_no,
+                    "name": identity.name,
+                    "status": identity.status,
+                    "score": identity.score,
+                    "department": identity.department,
+                    "company": identity.company,
+                }
+            }
+        )
         return report_mgr.save_inspection(
             track_id=track_id,
             is_complete=result.is_complete,
@@ -534,25 +585,33 @@ class StateManager:
             **extra,
         )
 
-    def _record_history(self, track_id: int, result: InspectionResult, saved_meta: dict,
-                        identity: Optional[face_identity.Identity] = None):
+    def _record_history(
+        self,
+        track_id: int,
+        result: InspectionResult,
+        saved_meta: dict,
+        identity: Optional[face_identity.Identity] = None,
+    ):
         """Riwayat dashboard (terbaru di depan, dibatasi MAX_HISTORY_RECORDS). Pemanggil memegang lock."""
-        self.inspection_history.insert(0, {
-            "track_id": track_id,
-            "timestamp": time.strftime("%H:%M:%S"),
-            "is_complete": result.is_complete,
-            "items": self._items_payload(result),
-            "missing_items": result.missing_items,
-            "notes": result.notes,
-            "inference_source": result.inference_source,
-            "inference_time_ms": result.inference_time_ms,
-            "decided_by": result.decided_by,
-            "snapshot_filename": saved_meta.get("snapshot_filename", ""),
-            # Identitas dari pengenalan wajah (T34c1); None = tanpa FR
-            "worker_name": identity.name if identity else None,
-            "employee_no": identity.employee_no if identity else None,
-            "fr_status": identity.status if identity else None,
-        })
+        self.inspection_history.insert(
+            0,
+            {
+                "track_id": track_id,
+                "timestamp": time.strftime("%H:%M:%S"),
+                "is_complete": result.is_complete,
+                "items": self._items_payload(result),
+                "missing_items": result.missing_items,
+                "notes": result.notes,
+                "inference_source": result.inference_source,
+                "inference_time_ms": result.inference_time_ms,
+                "decided_by": result.decided_by,
+                "snapshot_filename": saved_meta.get("snapshot_filename", ""),
+                # Identitas dari pengenalan wajah (T34c1); None = tanpa FR
+                "worker_name": identity.name if identity else None,
+                "employee_no": identity.employee_no if identity else None,
+                "fr_status": identity.status if identity else None,
+            },
+        )
         if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
             self.inspection_history.pop()
 
@@ -575,8 +634,9 @@ class StateManager:
         else:
             logger.info(f"Sesi #{session_id}: APD TIDAK LENGKAP: {result.missing_items}. Red Light ON.")
         self._show_decision(result)
-        audio_player.play_result(is_complete=result.is_complete, missing_items=result.missing_items,
-                                 **self._named_voice(session, result))
+        audio_player.play_result(
+            is_complete=result.is_complete, missing_items=result.missing_items, **self._named_voice(session, result)
+        )
 
     @staticmethod
     def _named_voice(session: GateSession, result: InspectionResult) -> dict:
@@ -603,8 +663,10 @@ class StateManager:
             # vlm_result sengaja tidak diisi: tidak ada item yang dinilai, jadi
             # dashboard menampilkan "belum dinilai" (kuning), bukan hasil kosong.
             session.retry_at = time.time() + cfg.VLM_SYSTEM_RETRY_SECONDS
-            logger.warning(f"Sesi #{session_id}: sistem gangguan, pekerja diminta menunggu; "
-                           f"diperiksa ulang dalam {cfg.VLM_SYSTEM_RETRY_SECONDS:g} dtk.")
+            logger.warning(
+                f"Sesi #{session_id}: sistem gangguan, pekerja diminta menunggu; "
+                f"diperiksa ulang dalam {cfg.VLM_SYSTEM_RETRY_SECONDS:g} dtk."
+            )
             notifier.set_waiting()
             audio_player.play("sistem_gangguan", min_interval=cfg.AUDIO_SYSTEM_WAIT_DEBOUNCE_SECONDS, urgent=True)
 
@@ -642,7 +704,7 @@ class StateManager:
                 "light": notifier.get_status(),
                 "camera_fault": self.camera_fault,
                 "enrollment": self._enrollment_payload(time.time()),
-                "history": self.inspection_history[:cfg.TELEMETRY_HISTORY_RECORDS],
+                "history": self.inspection_history[: cfg.TELEMETRY_HISTORY_RECORDS],
                 # Frontend butuh angka ini untuk indikator "stabil x / y";
                 # dulu ditulis tetap "/ 2" dan akan salah begitu config diubah.
                 "stable_frames_required": cfg.STABLE_FRAMES_REQUIRED,
@@ -661,7 +723,7 @@ class StateManager:
             "corridor": {
                 "enabled": cfg.ENABLE_CORRIDOR_FILTER,
                 "left_ratio": cfg.CORRIDOR_LEFT_RATIO,
-                "right_ratio": cfg.CORRIDOR_RIGHT_RATIO
+                "right_ratio": cfg.CORRIDOR_RIGHT_RATIO,
             },
             "zone": {"enabled": active_zone.enabled, "y_min": active_zone.y_min, "y_max": active_zone.y_max},
         }
@@ -676,9 +738,9 @@ class StateManager:
             "track_id": d.track_id,
             "bbox": d.bbox,
             "is_full_body": d.is_full_body,
-            "is_inside_corridor": getattr(d, 'is_inside_corridor', True),
+            "is_inside_corridor": getattr(d, "is_inside_corridor", True),
             "reason": d.reason,
-            "clip_type": getattr(d, 'clip_type', 'OPTIMAL'),
+            "clip_type": getattr(d, "clip_type", "OPTIMAL"),
             "conf": round(d.conf, 2),
             "keypoints": d.keypoints,
             "foot_y": getattr(d, "zone_y", None),
@@ -698,7 +760,8 @@ class StateManager:
             "clip_type": s.clip_type,
             "stable_frames": s.stable_frames,
             "retry_in_s": max(0.0, round(s.retry_at - time.time(), 1))
-            if s.state == TrackState.WAITING_SYSTEM else None,
+            if s.state == TrackState.WAITING_SYSTEM
+            else None,
             "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None,
             "identity": s.identity.payload() if s.identity else None,
         }

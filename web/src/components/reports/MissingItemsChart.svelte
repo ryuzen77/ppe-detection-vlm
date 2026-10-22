@@ -4,17 +4,13 @@
   import { CHART } from '../../lib/settings'
 
   let { items }: { items: MissingItemStat[] } = $props()
-  
+
   // Show top missing items
   const displayItems = $derived(items.slice(0, CHART.maxMissingItems))
-  const maxCount = $derived(Math.max(1, ...displayItems.map(i => i.count)))
-  
-  const itemHeight = CHART.missingItemHeight
-  const paddingY = 16
+  const maxCount = $derived(Math.max(1, ...displayItems.map((i) => i.count)))
+
   const labelWidth = CHART.missingLabelWidth
-  const height = $derived(displayItems.length * itemHeight + paddingY * 2)
-  const width = '100%'
-  
+
   function getBarWidth(count: number) {
     return `${(count / maxCount) * 100}%`
   }
@@ -24,12 +20,12 @@
   <div class="header">
     <h3>{TEXT.charts.missingItemsTitle}</h3>
   </div>
-  
+
   {#if displayItems.length === 0}
     <div class="empty">{TEXT.charts.noData}</div>
   {:else}
     <div class="chart-content">
-      {#each displayItems as item}
+      {#each displayItems as item (item.label)}
         <div class="row">
           <div class="label" style="width: {labelWidth}px;" title={item.label}>{item.label}</div>
           <div class="bar-area">
