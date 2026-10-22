@@ -1,0 +1,8 @@
+# Commit format massal tanpa perubahan perilaku (T44, 22-10). `git blame` melewatinya:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs   (sekali per clone; GitHub membacanya otomatis)
+# ruff format seluruh Python
+7d02d48f3f22bb7d0f21818f31b149645eaa6049
+# ruff format iot/test_serial_lights.py
+95f1de97c1ad1b2f46868de6a15a9f87f1c4d174
+# prettier --write web/src
+cb5c454e2014496457cf6769e480243440b053b8

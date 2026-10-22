@@ -40,6 +40,9 @@ jobs:
       - name: Ruff
         run: python -m ruff check .
 
+      - name: Ruff format (T44)
+        run: python -m ruff format --check .
+
       # Versi pyright & pengaturannya satu sumber: scripts/check.py + pyrightconfig.json (T66)
       - name: Pyright
         run: python scripts/check.py pyright
@@ -64,6 +67,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - run: npm ci
+      - name: Format (Prettier, T44)
+        run: npm run format:check
+      - name: Lint (ESLint, T44)
+        run: npm run lint
       - name: Cek tipe (svelte-check + tsc)
         run: npm run check
       - name: Tes unit (vitest)

@@ -18,6 +18,8 @@ PYRIGHT_VERSION = "1.1.408"
 
 STEPS = [
     ("ruff", [sys.executable, "-m", "ruff", "check", "."], ROOT),
+    # T44: seluruh Python sudah terformat; kode baru wajib ikut (`ruff format .` untuk merapikan)
+    ("ruff format", [sys.executable, "-m", "ruff", "format", "--check", "."], ROOT),
 ]
 # Pemeriksaan tipe (mesin yang sama dengan Pylance); butuh Node.js (npx)
 _npx = shutil.which("npx")
@@ -30,6 +32,9 @@ STEPS.append(("pytest", [sys.executable, "-m", "pytest", "-q"], ROOT))
 _npm = shutil.which("npm")
 if _npm and (WEB / "node_modules").exists():
     STEPS += [
+        # T44: Prettier (gaya) & ESLint (bug nyata); `npm run format` untuk merapikan
+        ("web: format", [_npm, "run", "format:check"], WEB),
+        ("web: lint", [_npm, "run", "lint"], WEB),
         ("web: cek tipe", [_npm, "run", "check"], WEB),
         ("web: tes unit", [_npm, "test"], WEB),
         ("web: build", [_npm, "run", "build"], WEB),
