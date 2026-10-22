@@ -61,14 +61,38 @@ def _server_env(tmp_path, port: int, **extra: str) -> dict[str, str]:
 
     `load_dotenv` tidak menimpa variabel yang sudah ada dan `_env` membaca string kosong sebagai
     "tidak diisi", jadi key yang dikosongkan di sini menutup key asli `backend/.env`: tanpa
-    panggilan VLM cloud (kuota gerbang), tanpa memuat model lokal, tanpa relay & kamera sungguhan.
+    panggilan VLM cloud (kuota gerbang), relay, kamera, atau kartu suara sungguhan. Ollama tidak
+    bisa dialihkan lewat lingkungan (pemeriksaan model sisa memakai alamat profil) → `_ISOLATION`.
     """
     return {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
             "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
-            "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+            "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1", "SDL_AUDIODRIVER": "dummy",
             **dict.fromkeys(_api_key_vars(), ""),
             "VLM_BACKUP_PROVIDER": "none", "VLM_LOCAL_FALLBACK_PROVIDER": "none",
             "IOT_ENABLED": "false", "CAMERA_AUTOSTART": "false", **extra}
+
+
+# Dijalankan lebih dulu di proses server uji (tinjauan Codex T91): startup tetap memeriksa model
+# Ollama sisa sesi lalu & bisa membongkarnya (keep_alive=0) — model milik server lain bisa keluar
+# dari GPU. Sambungan ke port Ollama (dari katalog profil) ditolak; jalur produksinya tetap jalan.
+GUARD_READY = "T91_ISOLATION_READY"
+_ISOLATION = rf"""
+import socket
+from urllib.parse import urlparse
+from backend.vlm_providers import profiles
+
+_ollama_port = urlparse(profiles.PROFILES["ollama"].base_url).port
+_connect = socket.socket.connect
+
+def _guarded_connect(sock, address):
+    if isinstance(address, tuple) and len(address) >= 2 and address[1] == _ollama_port:
+        raise ConnectionRefusedError("T91: Ollama diblokir di server uji")
+    return _connect(sock, address)
+
+socket.socket.connect = _guarded_connect
+print("{GUARD_READY}", flush=True)
+"""
+_RUN_SERVER = _ISOLATION + "from backend.app import run\nrun()\n"
 
 
 def test_server_uji_tanpa_api_key_dan_perangkat(tmp_path):
@@ -77,13 +101,25 @@ def test_server_uji_tanpa_api_key_dan_perangkat(tmp_path):
     assert all(env[name] == "" for name in _api_key_vars())
     assert env["VLM_BACKUP_PROVIDER"] == env["VLM_LOCAL_FALLBACK_PROVIDER"] == "none"
     assert env["IOT_ENABLED"] == env["CAMERA_AUTOSTART"] == "false"
+    assert env["SDL_AUDIODRIVER"] == "dummy"
+
+
+def test_pengaman_menolak_sambungan_ke_port_ollama():
+    """Pengaman yang sama dengan server uji: port Ollama ditolak sebelum paket keluar."""
+    scope: dict = {}
+    exec(_ISOLATION.replace(f'print("{GUARD_READY}", flush=True)', ""), scope)
+    try:
+        with socket.socket() as sock, pytest.raises(ConnectionRefusedError, match="T91"):
+            sock.connect(("127.0.0.1", scope["_ollama_port"]))
+    finally:
+        socket.socket.connect = scope["_connect"]
 
 
 def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
     env = _server_env(tmp_path, port)
-    proc = subprocess.Popen([sys.executable, "-m", "backend"], cwd=REPO_ROOT, env=env,
+    proc = subprocess.Popen([sys.executable, "-c", _RUN_SERVER], cwd=REPO_ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             **POPEN_FLAGS)
     output = []
@@ -152,6 +188,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
 
     log = "".join(output)
     assert code == 0
+    assert GUARD_READY in log, "pengaman Ollama T91 tidak aktif di server uji"
     # Endpoint kita wajib berhenti sendiri (penanda SHUTTING_DOWN): tidak ada koneksi/tugas yang ditunggu
     assert "Waiting for connections to close" not in log, "stream/WebSocket masih terbuka saat shutdown"
     assert not re.search(r"Cancel [1-9]\d* running task", log), "tugas aplikasi dibatalkan paksa"
@@ -195,7 +232,7 @@ run()
 def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
     port = _free_port()
     env = _server_env(tmp_path, port, SHUTDOWN_TIMEOUT_SECONDS="1")
-    proc = subprocess.Popen([sys.executable, "-c", _WAIT_CLOSED_MACET], cwd=REPO_ROOT, env=env,
+    proc = subprocess.Popen([sys.executable, "-c", _ISOLATION + _WAIT_CLOSED_MACET], cwd=REPO_ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **POPEN_FLAGS)
     output = []
     # Tanpa text=True keluaran berupa bytes; **POPEN_FLAGS membuat pyright memilih overload teks
