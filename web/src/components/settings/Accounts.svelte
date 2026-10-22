@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api, ApiError } from '../../lib/api/client'
+  import { api } from '../../lib/api/client'
   import type { AccountInfo } from '../../lib/api/types'
   import { session } from '../../lib/stores/session.svelte'
   import { AUTH } from '../../lib/messages'

@@ -4,8 +4,8 @@
   // server, jadi hasilnya ditunggu lewat polling sebelum dialog ditutup.
   import { onDestroy } from 'svelte'
   import { api } from '../../lib/api/client'
-  import type { CameraCatalog, CameraDevice } from '../../lib/api/types'
-  import { CAMERA_PICKER as TEXT, modeLabel, withError } from '../../lib/messages'
+  import type { CameraCatalog } from '../../lib/api/types'
+  import { CAMERA_PICKER as TEXT, withError } from '../../lib/messages'
   import { formatDeviceMeta } from '../../lib/formatters'
   import { CAMERA_POLL } from '../../lib/settings'
 

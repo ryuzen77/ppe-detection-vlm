@@ -74,8 +74,8 @@ export interface YAxisTick {
 
 export function calculateYAxis(maxTotal: number, paddingY: number, usableHeight: number): YAxisTick[] {
   const safeMax = Math.max(0, Math.ceil(maxTotal))
-  let step = 1
-  let yMax = 4
+  let step: number
+  let yMax: number
 
   if (safeMax <= 4) {
     step = 1

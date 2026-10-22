@@ -5,7 +5,7 @@
   import VlmProviders from '../components/settings/VlmProviders.svelte'
   import LocalVlmCard from '../components/settings/LocalVlmCard.svelte'
   import { api } from '../lib/api/client'
-  import type { LightTestAction, VlmInfo } from '../lib/api/types'
+  import type { LightTestAction } from '../lib/api/types'
   import { CAMERA_CHIP, SETTINGS_TAB, modeLabel } from '../lib/messages'
   import { LIGHT_TEST } from '../lib/settings'
   import { telemetry } from '../lib/stores/telemetry.svelte'

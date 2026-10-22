@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ActiveTrack, HistoryRecord, InspectionResult, PpeItem, Telemetry } from './api/types'
+import type { ActiveTrack, HistoryRecord, InspectionResult, ItemResult, PpeItem, Telemetry } from './api/types'
 import type { CameraState } from './api/types'
 import { describeSource } from './format'
 import { gateView } from './gate'
@@ -248,12 +248,12 @@ describe('assessItem', () => {
       text: 'Tidak Ada',
       tone: 'ok',
     })
-    expect(assessItem(larangan, { detected: null as any, color: '', description: '' })).toEqual({
+    expect(assessItem(larangan, { detected: null as unknown as boolean, color: '', description: '' })).toEqual({
       status: 'ok',
       text: 'Tidak Ada',
       tone: 'ok',
     })
-    expect(assessItem(larangan, {} as any)).toEqual({
+    expect(assessItem(larangan, {} as ItemResult)).toEqual({
       status: 'ok',
       text: 'Tidak Ada',
       tone: 'ok',
@@ -334,12 +334,12 @@ describe('describeSource', () => {
 
 describe('overlay', () => {
   it('draws zone correctly', () => {
-    const calls: { fn: string; args: any[]; style?: string }[] = []
+    const calls: { fn: string; args: unknown[]; style?: string }[] = []
     const ctx = new Proxy({} as Record<string, unknown>, {
       get(target, prop: string) {
         if (prop in target) return target[prop]
         if (prop === 'measureText') return () => ({ width: 50 })
-        return (...args: any[]) => calls.push({ fn: prop, args, style: String(target.strokeStyle ?? '') })
+        return (...args: unknown[]) => calls.push({ fn: prop, args, style: String(target.strokeStyle ?? '') })
       },
       set(target, prop: string, value) {
         target[prop] = value
@@ -433,7 +433,7 @@ describe('overlay', () => {
       get(target, prop: string) {
         if (prop in target) return target[prop]
         if (prop === 'measureText') return () => ({ width: 50 })
-        return (..._args: unknown[]) => calls.push({ fn: prop, style: String(target.fillStyle ?? '') })
+        return () => calls.push({ fn: prop, style: String(target.fillStyle ?? '') })
       },
       set(target, prop: string, value) {
         target[prop] = value

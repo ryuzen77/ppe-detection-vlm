@@ -133,7 +133,9 @@ export function drawHud(
     const [bx1, by1, bx2, by2] = d.bbox
     const x = offsetX + bx1 * scale
     const y = offsetY + by1 * scale
-    let { color, label } = detectionStyle(d, palette)
+    const style = detectionStyle(d, palette)
+    const label = style.label
+    let color = style.color
     if (t.zone?.enabled && !d.in_zone) {
       color = withAlpha(color, STAND_ZONE.outsideAlpha) // redup di luar zona
     }

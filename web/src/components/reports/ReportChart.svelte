@@ -56,7 +56,7 @@
     <div class="svg-scroll" bind:clientWidth={scrollWidth}>
       <svg {width} {height} viewBox="0 0 {width} {height}">
         <!-- Y Axis Guidelines -->
-        {#each yTicks as t}
+        {#each yTicks as t (t.value)}
           <line x1={axisXStart} y1={t.y} x2={width} y2={t.y} stroke="var(--border-strong)" stroke-dasharray="4 4" />
           <text x={axisXStart - 8} y={t.y + 4} class="axis-label" text-anchor="end">
             {t.value}
@@ -64,7 +64,7 @@
         {/each}
 
         <!-- Bars -->
-        {#each buckets as b, i}
+        {#each buckets as b, i (b.start)}
           {@const slotCenter = axisXStart + gap / 2 + i * slotWidth + slotWidth / 2}
           {@const x = slotCenter - barWidth / 2}
           {@const passedH = getBarHeight(b.passed)}

@@ -1,12 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  INITIAL_RECONNECT_MS,
-  MAX_RECONNECT_MS,
-  TelemetryClient,
-  telemetryUrl,
-  type SocketLike,
-  WS_CLOSE_LOGIN_REQUIRED,
-} from './telemetry'
+import { INITIAL_RECONNECT_MS, MAX_RECONNECT_MS, TelemetryClient, telemetryUrl, type SocketLike } from './telemetry'
 
 class FakeSocket implements SocketLike {
   onopen: ((ev: unknown) => void) | null = null

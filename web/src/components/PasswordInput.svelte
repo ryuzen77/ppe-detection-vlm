@@ -10,7 +10,7 @@
     id?: string
     disabled?: boolean
     required?: boolean
-    autocomplete?: AutoFill
+    autocomplete?: HTMLInputElement['autocomplete']
     placeholder?: string
   }
 

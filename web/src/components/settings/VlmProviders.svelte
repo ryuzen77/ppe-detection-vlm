@@ -106,8 +106,8 @@
         e !== null &&
         'body' in e &&
         typeof (e as { body: unknown }).body === 'object' &&
-        (e as { body: any }).body !== null &&
-        'detail' in (e as { body: any }).body
+        (e as { body: object | null }).body !== null &&
+        'detail' in (e as { body: object }).body
       ) {
         const detail = (e as { body: { detail: { code: string; message: string } } }).body.detail
         const action = handleSelectionError(detail.code, detail.message)
