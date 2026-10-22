@@ -30,12 +30,8 @@ LONG_FUNCTIONS_DEBT = {
     "tools/bench_vlm.py::main",
     "tools/eval_vlm.py::main",
     "backend/video/hud.py::draw_hud",
-    "backend/report_manager.py::get_reports",
     "backend/app.py::run",
     "backend/api/routes_cameras.py::list_cameras",
-    "backend/camera_manager.py::_scan_worker",
-    "backend/vlm_analyzer.py::_parse_vlm_payload",
-    "backend/report_manager.py::_migrate_v0_to_v1",
     "backend/storage.py::migrate_legacy_data",
     "backend/video/capture.py::__init__",
     "backend/app.py::__call__",
@@ -63,11 +59,32 @@ def _text_files(paths: Iterable[str]):
 
 
 def _body_length(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
-    """Panjang badan fungsi tanpa docstring (docstring panjang bukan kerumitan)."""
+    """Panjang badan fungsi tanpa docstring (docstring panjang bukan kerumitan).
+
+    Baris lanjutan satu pernyataan (argumen/isi kurung yang dipecah formatter) tidak dihitung
+    (T44, keputusan pengguna 22-10): `ruff format` tidak boleh membuat fungsi "bertambah panjang".
+    Komentar & baris kosong tetap dihitung seperti sebelumnya.
+    """
     body = node.body
     if isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
         body = body[1:]
-    return (body[-1].end_lineno or body[-1].lineno) - body[0].lineno + 1 if body else 0
+    if not body:
+        return 0
+    start, end = body[0].lineno, body[-1].end_lineno or body[-1].lineno
+    continuation = set()
+    for stmt in (n for top in body for n in ast.walk(top) if isinstance(n, ast.stmt)):
+        continuation.update(range(stmt.lineno + 1, _header_end(stmt) + 1))
+    return end - start + 1 - len(continuation)
+
+
+def _header_end(stmt: ast.stmt) -> int:
+    """Baris terakhir kepala pernyataan: pernyataan biasa = seluruhnya; majemuk (if/for/with/def…)
+    = sebelum baris pertama isinya, supaya isi tidak ikut dianggap lanjutan."""
+    inner = [
+        child.lineno for field in ("body", "orelse", "finalbody", "handlers") for child in getattr(stmt, field, [])
+    ]
+    inner += [case.pattern.lineno for case in getattr(stmt, "cases", [])]
+    return min(inner) - 1 if inner else stmt.end_lineno or stmt.lineno
 
 
 def _long_functions(paths: list[str]) -> set[str]:
@@ -109,6 +126,28 @@ def test_ui_colors_only_in_tokens():
         and any(HEX_COLOR.search(line) for line in text.splitlines() if not line.strip().startswith(("//", "*", "/*")))
     }
     assert not offenders, f"Warna hex di luar {COLOR_SOURCE}: {sorted(offenders)}"
+
+
+def test_body_length_ignores_formatter_wrapping():
+    wrapped = (
+        "def f(a):\n"
+        "    x = call(\n"
+        "        a,\n"
+        "        b,\n"
+        "    )\n"
+        "    # komentar di tengah badan tetap dihitung\n"
+        "\n"
+        "    if (\n"
+        "        x\n"
+        "        and a\n"
+        "    ):\n"
+        "        return x\n"
+        "    return a\n"
+    )
+    fn = ast.parse(wrapped).body[0]
+    assert isinstance(fn, ast.FunctionDef)
+    # x=, komentar, kosong, if, return x, return a = 6 baris (lanjutan call & kondisi if tidak dihitung)
+    assert _body_length(fn) == 6
 
 
 def test_long_functions_do_not_grow():
