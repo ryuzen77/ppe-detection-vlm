@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T92 — perbarui dependensi `web/` (npm audit dev, antrean #11) | Claude (ditugaskan pengguna 22-10) | `claude/t92-npm-update` (dari `master` terbaru) | dikerjakan | **Dependensi** `web/package.json` + `package-lock.json` (giliran dependensi T92) | Risiko Sedang (celah hanya di mesin pengembang). Semua paket ke versi terbaru yang kompatibel; TypeScript tetap 6 (peer `svelte-check` & `typescript-eslint` belum mendukung 7), `@types/node` tetap 24 (runtime Node 24). |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
