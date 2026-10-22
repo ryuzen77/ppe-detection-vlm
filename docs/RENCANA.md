@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T91 — `test_shutdown` tanpa API key asli (antrean #13) | Claude (ditugaskan pengguna 22-10; bawaan `tests/` = Codex) | `claude/t91-shutdown-test-no-key` (dari `master` terbaru) | dikerjakan | `tests/test_shutdown.py` saja | Risiko Rendah: hanya kuota & kerapian tes. Server uji mewarisi `backend/.env` → tiap jalan memanaskan VLM cloud; juga bisa menyentuh relay bila `.env` menyalakan IoT. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
@@ -307,7 +308,7 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a/b) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 11 | Rendah | T44 — formatter & linter web (audit 28-09) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
-| 13 | Rendah | **T91 — `test_shutdown` tanpa API key asli** (temuan 22-10) | Server uji di `tests/test_shutdown.py` mewarisi `os.environ` + `backend/.env` → tiap jalan memanaskan VLM cloud (kuota Gemini terpakai). Usul: kosongkan key VLM / set penyedia tiruan di `env` server uji; tes tetap menguji berhenti bersih. Rendah: hanya kuota & kerapian tes. Area: `tests/` (bawaan Codex) |
+| 13 | Rendah | **T91 — `test_shutdown` tanpa API key asli** (temuan 22-10; dikerjakan Claude 22-10, lihat papan) | Server uji di `tests/test_shutdown.py` mewarisi `os.environ` + `backend/.env` → tiap jalan memanaskan VLM cloud (kuota Gemini terpakai). Usul: kosongkan key VLM / set penyedia tiruan di `env` server uji; tes tetap menguji berhenti bersih. Rendah: hanya kuota & kerapian tes. Area: `tests/` (bawaan Codex) |
 | 12 | **Tinggi** (rencana) | **T34 — identitas wajah (FR) untuk audit per pekerja** (rancangan 18-10, lihat "Rancangan T34") | Mulai dari T34a (uji ukuran wajah di gerbang, perlu pengguna di depan kamera); T34b–e menyusul. Persetujuan & DPIA dari HR/Legal sebelum dipakai sungguhan |
 
 
