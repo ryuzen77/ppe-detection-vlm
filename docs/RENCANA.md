@@ -14,7 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T91 — `test_shutdown` tanpa API key asli (antrean #13) | Claude (ditugaskan pengguna 22-10; bawaan `tests/` = Codex) | `claude/t91-shutdown-test-no-key` (dari `master` terbaru) | dikerjakan | `tests/test_shutdown.py` saja | Risiko Rendah: hanya kuota & kerapian tes. Server uji mewarisi `backend/.env` → tiap jalan memanaskan VLM cloud; juga bisa menyentuh relay bila `.env` menyalakan IoT. |
+| T91 — `test_shutdown` tanpa API key asli (antrean #13) | Claude (ditugaskan pengguna 22-10; bawaan `tests/` = Codex) | `claude/t91-shutdown-test-no-key` (dari `master` terbaru) | tinjau | `tests/test_shutdown.py` saja | Risiko Rendah: hanya kuota & kerapian tes. Server uji mewarisi `backend/.env` → tiap jalan memanaskan VLM cloud; juga bisa menyentuh relay bila `.env` menyalakan IoT. **Tinjau 22-10:** `_server_env` mengosongkan semua key (daftar dari `key_env` katalog profil + `VLM_API_KEY`/`VLM_BACKUP_API_KEY`), cadangan & darurat `none`, IoT & kamera mati; dipakai kedua tes. Bukti: log server uji "VLM utama (gemini) nonaktif: API key gemini belum disetel" walau `.env` asli ada. pytest 977, Pyright Linux 0 galat. Cara uji: `pytest tests/test_shutdown.py` lalu pastikan tidak ada panggilan Gemini di log/kuota. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 

@@ -21,6 +21,7 @@ from typing import IO, Any, cast
 import pytest
 
 from backend.config import cfg
+from backend.vlm_providers import profiles as vlm_profiles
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -50,12 +51,38 @@ def _free_port():
         return s.getsockname()[1]
 
 
+def _api_key_vars() -> set[str]:
+    """Semua variabel API key VLM: milik tiap penyedia (katalog profil) + key utama/cadangan."""
+    return {p.key_env for p in vlm_profiles.PROFILES.values() if p.key_env} | {"VLM_API_KEY", "VLM_BACKUP_API_KEY"}
+
+
+def _server_env(tmp_path, port: int, **extra: str) -> dict[str, str]:
+    """Lingkungan server uji yang tidak menyentuh dunia luar (T91).
+
+    `load_dotenv` tidak menimpa variabel yang sudah ada dan `_env` membaca string kosong sebagai
+    "tidak diisi", jadi key yang dikosongkan di sini menutup key asli `backend/.env`: tanpa
+    panggilan VLM cloud (kuota gerbang), tanpa memuat model lokal, tanpa relay & kamera sungguhan.
+    """
+    return {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
+            "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
+            "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+            **dict.fromkeys(_api_key_vars(), ""),
+            "VLM_BACKUP_PROVIDER": "none", "VLM_LOCAL_FALLBACK_PROVIDER": "none",
+            "IOT_ENABLED": "false", "CAMERA_AUTOSTART": "false", **extra}
+
+
+def test_server_uji_tanpa_api_key_dan_perangkat(tmp_path):
+    env = _server_env(tmp_path, 1234)
+    assert "GEMINI_API_KEY" in _api_key_vars()
+    assert all(env[name] == "" for name in _api_key_vars())
+    assert env["VLM_BACKUP_PROVIDER"] == env["VLM_LOCAL_FALLBACK_PROVIDER"] == "none"
+    assert env["IOT_ENABLED"] == env["CAMERA_AUTOSTART"] == "false"
+
+
 def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
-    env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
-           "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
-           "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1"}
+    env = _server_env(tmp_path, port)
     proc = subprocess.Popen([sys.executable, "-m", "backend"], cwd=REPO_ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             **POPEN_FLAGS)
@@ -167,10 +194,7 @@ run()
 
 def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
     port = _free_port()
-    env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
-           "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
-           "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1",
-           "SHUTDOWN_TIMEOUT_SECONDS": "1"}
+    env = _server_env(tmp_path, port, SHUTDOWN_TIMEOUT_SECONDS="1")
     proc = subprocess.Popen([sys.executable, "-c", _WAIT_CLOSED_MACET], cwd=REPO_ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **POPEN_FLAGS)
     output = []
