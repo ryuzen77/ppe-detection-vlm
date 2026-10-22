@@ -1,12 +1,12 @@
 """Katalog profil penyedia VLM & validasi model (T39b)."""
+
 import hashlib
 import logging
 
 import pytest
 
 from backend import config, messages, ppe_rules, vlm_selection
-from backend.vlm_analyzer import (VLMEngine, build_system_prompt, confirmation_prompts, profile_warnings,
-                                  thinking_option)
+from backend.vlm_analyzer import VLMEngine, build_system_prompt, confirmation_prompts, profile_warnings, thinking_option
 from backend.vlm_providers import OPENAI_COMPATIBLE, profiles
 from backend.vlm_providers.openai_compatible import PRESETS
 
@@ -14,8 +14,12 @@ from backend.vlm_providers.openai_compatible import PRESETS
 # messages.PROMPT_VERSION, tambahkan sidik jari baru di sini, lalu uji ulang model
 # dengan foto berlabel dan perbarui profiles.VALIDATIONS. Tanpa itu, validasi lama
 # diam-diam dianggap berlaku untuk prompt yang belum pernah diuji.
-PROMPT_FINGERPRINTS = {"T36a": "3e5dec9fea79c1c2", "T48": "9fa299193654696e", "T58": "1b4f2a739acb7d79",
-                       "T86": "1e31d0a1525c2f20"}
+PROMPT_FINGERPRINTS = {
+    "T36a": "3e5dec9fea79c1c2",
+    "T48": "9fa299193654696e",
+    "T58": "1b4f2a739acb7d79",
+    "T86": "1e31d0a1525c2f20",
+}
 
 
 def _fingerprint(zoom: bool) -> str:
@@ -28,7 +32,8 @@ def _fingerprint(zoom: bool) -> str:
 def test_prompt_berubah_wajib_menaikkan_versi(catalog_defaults):
     fingerprint = _fingerprint(zoom=True)
     assert PROMPT_FINGERPRINTS.get(messages.PROMPT_VERSION) == fingerprint, (
-        f"Prompt berubah ({fingerprint}) tanpa menaikkan PROMPT_VERSION={messages.PROMPT_VERSION}")
+        f"Prompt berubah ({fingerprint}) tanpa menaikkan PROMPT_VERSION={messages.PROMPT_VERSION}"
+    )
 
 
 def test_prompt_tanpa_panel_identik_versi_lama(catalog_defaults):
@@ -38,6 +43,7 @@ def test_prompt_tanpa_panel_identik_versi_lama(catalog_defaults):
 
 
 # --- Katalog ----------------------------------------------------------------------------
+
 
 def test_resmi_hanya_gemini_dan_ollama():
     official = {n for n, p in profiles.PROFILES.items() if p.support == profiles.OFFICIAL}
@@ -56,6 +62,7 @@ def test_satu_sumber_untuk_adaptor_dan_config():
 
 
 # --- Status validasi ---------------------------------------------------------------------
+
 
 def test_status_model_saat_ini():
     v = messages.PROMPT_VERSION
@@ -87,8 +94,10 @@ def test_model_yang_pernah_meloloskan_apd_kurang_ditandai_tidak_aman():
 
 def test_peringatan_penyedia_eksperimental_dan_model_belum_tervalidasi():
     warnings = profile_warnings("openrouter", "qwen/qwen2.5-vl-72b-instruct", "utama openrouter/x")
-    assert warnings == [messages.VLM_PROVIDER_EXPERIMENTAL.format(who="utama openrouter/x"),
-                        messages.VLM_MODEL_UNVALIDATED.format(who="utama openrouter/x")]
+    assert warnings == [
+        messages.VLM_PROVIDER_EXPERIMENTAL.format(who="utama openrouter/x"),
+        messages.VLM_MODEL_UNVALIDATED.format(who="utama openrouter/x"),
+    ]
     # Tervalidasi penuh untuk prompt berlaku (T58, 84 foto): tanpa peringatan
     assert profile_warnings("ollama", "qwen2.5vl:7b", "cadangan") == []
 
@@ -100,6 +109,7 @@ def test_info_menyertakan_dukungan_dan_validasi():
 
 
 # --- Mode berpikir -----------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("legacy,expected", [("minimal", "off"), ("low", "low"), ("HIGH", "high")])
 def test_nama_lama_gemini_thinking_level_tetap_dibaca(legacy, expected):

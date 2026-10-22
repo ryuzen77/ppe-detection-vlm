@@ -5,6 +5,7 @@ diimpor: `config` membaca variabel lingkungan dan menyiapkan DATA_DIR saat
 diimpor. `load_dotenv` tidak menimpa variabel yang sudah ada, jadi nilai di
 sini menang atas `backend/.env`.
 """
+
 import json
 import logging
 import os
@@ -26,10 +27,22 @@ os.environ["DATA_DIR"] = os.path.join(_TEST_ROOT, "data")
 # (load_dotenv tidak menimpa variabel yang sudah ada, termasuk yang kosong).
 os.environ["VLM_PROVIDER"] = "gemini"
 os.environ["VLM_BACKUP_PROVIDER"] = "none"
-for _nama in ("VLM_API_KEY", "VLM_MODEL", "VLM_BASE_URL", "GEMINI_API_KEY", "GEMINI_MODEL",
-              "VLM_MIN_INTERVAL_SECONDS", "VLM_CLOUD_TIMEOUT_SECONDS", "VLM_LOCAL_TIMEOUT_SECONDS",
-              "VLM_BACKUP_MODEL", "VLM_BACKUP_BASE_URL", "VLM_BACKUP_API_KEY",
-              "VLM_PRIMARY_FAILURES_BEFORE_DOWN", "VLM_PRIMARY_RETRY_AFTER_SECONDS", "VLM_SYSTEM_RETRY_SECONDS"):
+for _nama in (
+    "VLM_API_KEY",
+    "VLM_MODEL",
+    "VLM_BASE_URL",
+    "GEMINI_API_KEY",
+    "GEMINI_MODEL",
+    "VLM_MIN_INTERVAL_SECONDS",
+    "VLM_CLOUD_TIMEOUT_SECONDS",
+    "VLM_LOCAL_TIMEOUT_SECONDS",
+    "VLM_BACKUP_MODEL",
+    "VLM_BACKUP_BASE_URL",
+    "VLM_BACKUP_API_KEY",
+    "VLM_PRIMARY_FAILURES_BEFORE_DOWN",
+    "VLM_PRIMARY_RETRY_AFTER_SECONDS",
+    "VLM_SYSTEM_RETRY_SECONDS",
+):
     os.environ[_nama] = ""
 for _nama in PROVIDER_KEY_ENVS:
     os.environ[_nama] = ""
@@ -65,11 +78,13 @@ def no_cloud_voice(monkeypatch):
     """Suara nama pekerja (T34d) memakai gTTS = layanan Google. Tes tidak pernah mengirim nama
     ke internet: pembuatan suara diganti penulis berkas tiruan."""
     from backend import worker_voice
+
     spoken = []
 
     def fake_save(text, target):
         spoken.append(text)
         target.write_bytes(b"ID3-uji")
+
     monkeypatch.setattr(worker_voice, "_gtts_save", fake_save)
     return spoken
 
@@ -101,6 +116,7 @@ def logged_in_admin(request):
     async def fake_session(request_: Request) -> SessionUser:
         request_.state.user = user
         return user
+
     app.dependency_overrides[require_session] = fake_session
     yield
     app.dependency_overrides.pop(require_session, None)
@@ -114,6 +130,7 @@ def no_ollama_cleanup(request, monkeypatch):
     if request.node.get_closest_marker("stale_model"):
         return
     from backend.vlm_analyzer import VLMAnalyzer
+
     monkeypatch.setattr(VLMAnalyzer, "_unload_if_loaded", staticmethod(lambda engine: engine.close()))
 
 
@@ -130,6 +147,7 @@ class _SecurityCapture(logging.Handler):
 def security_events():
     """Kejadian security log (T53) sebagai daftar dict, tanpa berkas atau antrean."""
     from backend.logging_setup import SECURITY_LOGGER
+
     logger = logging.getLogger(SECURITY_LOGGER)
     capture, previous = _SecurityCapture(), logger.level
     logger.setLevel(logging.INFO)

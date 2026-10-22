@@ -4,6 +4,7 @@ Alur yang diharapkan pengguna (T24): tubuh belum utuh = API terkunci; satu anali
 per sesi; keputusan terkunci sampai jalur inspeksi kosong; LED merah hanya untuk
 APD tidak lengkap.
 """
+
 import json
 import time
 from typing import Any
@@ -36,6 +37,7 @@ def _balasan(**kurang):
 
 class VLMTiruan(VLMProvider):
     """VLM utama tiruan: jawabannya diatur tes, tanpa jaringan dan tanpa kuota."""
+
     name = "tiruan"
 
     def __init__(self):
@@ -77,6 +79,7 @@ def _wait_for(predicate, timeout=5.0):
 def vlm(monkeypatch):
     """VLM utama tiruan tanpa cadangan, dipasang pada analyzer global gerbang."""
     from backend.vlm_analyzer import vlm_analyzer, VLMEngine
+
     tiruan = VLMTiruan()
     engine = VLMEngine("utama", "gemini", "model-tiruan", api_key="kunci-uji")
     engine.provider, engine.min_interval = tiruan, 0.0
@@ -222,6 +225,7 @@ def test_pekerja_pergi_saat_menunggu_sistem_gerbang_kembali_standby(gerbang, vlm
 
 # --- Sesi gerbang (T24) ------------------------------------------------------------
 
+
 def _analisa_selesai(gerbang, crop=None, track_id=TRACK_ID):
     extra = {"crop_img": crop} if crop is not None else {}
     for _ in range(cfg.STABLE_FRAMES_REQUIRED):
@@ -258,7 +262,7 @@ def test_hilang_sesaat_kurang_dari_jeda_tetap_satu_sesi(gerbang):
     riwayat = len(state_mgr.inspection_history)
     sesi = _active()["session_id"]
 
-    gerbang.update_frame_detections([])            # tertutup sesaat
+    gerbang.update_frame_detections([])  # tertutup sesaat
     time.sleep(cfg.STANDBY_RESET_DELAY_SECONDS / 3)
     gerbang.update_frame_detections([])
     for _ in range(cfg.STABLE_FRAMES_REQUIRED + 2):
@@ -301,6 +305,7 @@ def test_orang_lewat_di_luar_jalur_tidak_menahan_reset(gerbang):
 
 def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, monkeypatch):
     from backend.vlm_analyzer import vlm_analyzer
+
     asli = vlm_analyzer.analyze_person
 
     def lambat(crop, keypoints=None):
@@ -325,6 +330,7 @@ def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, m
 
 
 # --- Ingatan keputusan per ID pelacak (T36c) -------------------------------------------
+
 
 def _jalur_kosong(gerbang):
     gerbang.update_frame_detections([])
@@ -402,10 +408,12 @@ def test_reset_operator_menghapus_ingatan_keputusan(gerbang, vlm):
 
 # --- Zona titik berdiri (T36d) ----------------------------------------------------------
 
+
 @pytest.fixture
 def zona(monkeypatch):
     from backend import zone as zones
     import backend.state_manager as sm
+
     store = zones.ZoneStore()
     store.update(enabled=True, y_min=0.70, y_max=0.85)
     monkeypatch.setattr(sm, "zone_store", store)
@@ -470,9 +478,15 @@ POSTER_ID, NEXT_ID = 7, 99
 
 def _poster():
     """Poster K3 bergambar orang (uji 14-10): terdeteksi stabil, tidak pernah tubuh utuh."""
-    return DetectionResult(track_id=POSTER_ID, bbox=[600, 300, 700, 480], is_inside_corridor=True,
-                           is_full_body=False, reason=messages.POSE_FEET_CLIPPED_EDGE,
-                           crop_img=person_crop(), conf=0.88)
+    return DetectionResult(
+        track_id=POSTER_ID,
+        bbox=[600, 300, 700, 480],
+        is_inside_corridor=True,
+        is_full_body=False,
+        reason=messages.POSE_FEET_CLIPPED_EDGE,
+        crop_img=person_crop(),
+        conf=0.88,
+    )
 
 
 def _decide(gerbang, track_id):
@@ -514,7 +528,7 @@ def test_orang_antre_di_koridor_tidak_mewarisi_keputusan(gerbang, vlm):
         gerbang.update_frame_detections([_det(full_body=True), antre()])
     assert _wait_for(lambda: _active()["state"] == TrackState.ANALYZED) and notifier.current_state == "GREEN"
     end = time.time() + cfg.STANDBY_RESET_DELAY_SECONDS + 0.3
-    while time.time() < end:                         # A pergi, B masih di koridor
+    while time.time() < end:  # A pergi, B masih di koridor
         gerbang.update_frame_detections([antre()])
         time.sleep(0.05)
     vlm.reply = _balasan(helm=True)
@@ -534,6 +548,7 @@ def test_id_baru_yang_sudah_terlihat_bersama_subjek_bukan_orang_yang_sama(gerban
 
 def test_bbox_iou():
     from backend.state_manager import bbox_iou
+
     assert bbox_iou([0, 0, 10, 10], [0, 0, 10, 10]) == 1.0
     assert bbox_iou([0, 0, 10, 10], [20, 20, 30, 30]) == 0.0
     assert abs(bbox_iou([0, 0, 10, 10], [5, 0, 15, 10]) - 1 / 3) < 1e-9

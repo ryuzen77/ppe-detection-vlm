@@ -3,6 +3,7 @@
 Semua tes di sini memakai pemeriksaan login sungguhan (penanda `real_auth`), bukan
 admin tiruan dari conftest.
 """
+
 import json
 import threading
 
@@ -38,7 +39,7 @@ def clock(monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "login_limiter", auth.LoginLimiter(clock=c))
     monkeypatch.setattr(accounts, "store", accounts.AccountStore(tmp_path / "accounts.db"))
     # Hash cepat untuk tes; parameter produksi diuji di test_accounts.py
-    monkeypatch.setattr(cfg, "PASSWORD_SCRYPT_N", 2 ** 4)
+    monkeypatch.setattr(cfg, "PASSWORD_SCRYPT_N", 2**4)
     return c
 
 
@@ -65,10 +66,16 @@ def login(client, username=ADMIN, password=PASSWORD):
 
 # --- Setup admin pertama ---------------------------------------------------------------
 
+
 def test_tanpa_akun_semua_tertutup_kecuali_setup(local, finite_stream):
     s = local.get("/api/session").json()
-    assert s == {"authenticated": False, "setup_required": True, "setup_allowed": True, "user": None,
-                 "expires_in_s": None}
+    assert s == {
+        "authenticated": False,
+        "setup_required": True,
+        "setup_allowed": True,
+        "user": None,
+        "expires_in_s": None,
+    }
     assert local.get("/api/health").status_code == 401, "tidak ada lagi mode terbuka tanpa login"
 
 
@@ -83,6 +90,7 @@ def test_setup_hanya_dari_mesin_gerbang(clock, security_events):
 
 def test_setup_membuat_admin_dan_langsung_masuk(local, monkeypatch):
     from backend import startup_checks
+
     monkeypatch.setattr(startup_checks, "warnings", [startup_checks.check_accounts(0), "lain"])
     r = local.post("/api/setup", json={"username": "Admin-Uji", "password": PASSWORD})
     assert startup_checks.warnings == ["lain"], "peringatan 'belum ada akun' hilang setelah setup"
@@ -98,6 +106,7 @@ def test_setup_bersamaan_hanya_satu_admin_pertama(local):
 
     def attempt(name):
         results.append(local.post("/api/setup", json={"username": name, "password": PASSWORD}).status_code)
+
     threads = [threading.Thread(target=attempt, args=(f"admin{i}",)) for i in range(5)]
     [t.start() for t in threads]
     [t.join() for t in threads]
@@ -105,18 +114,22 @@ def test_setup_bersamaan_hanya_satu_admin_pertama(local):
     assert accounts.store.count() == 1
 
 
-@pytest.mark.parametrize("body, code", [
-    ({"username": "ab", "password": PASSWORD}, "invalid_username"),
-    ({"username": "admin uji", "password": PASSWORD}, "invalid_username"),
-    ({"username": ADMIN, "password": "pendek"}, "weak_password"),
-    ({"username": "kata-sandi-sama", "password": "kata-sandi-sama"}, "weak_password"),
-])
+@pytest.mark.parametrize(
+    "body, code",
+    [
+        ({"username": "ab", "password": PASSWORD}, "invalid_username"),
+        ({"username": "admin uji", "password": PASSWORD}, "invalid_username"),
+        ({"username": ADMIN, "password": "pendek"}, "weak_password"),
+        ({"username": "kata-sandi-sama", "password": "kata-sandi-sama"}, "weak_password"),
+    ],
+)
 def test_setup_menolak_nama_atau_sandi_lemah(local, body, code):
     r = local.post("/api/setup", json=body)
     assert r.status_code == 400 and r.json()["detail"]["code"] == code
 
 
 # --- Semua API terlindungi -------------------------------------------------------------
+
 
 @pytest.fixture
 def finite_stream():
@@ -156,6 +169,7 @@ def test_header_token_admin_lama_tidak_berlaku(secured, monkeypatch):
 
 
 # --- Login, sesi, logout ---------------------------------------------------------------
+
 
 def test_login_membuka_api_dan_websocket(secured):
     r = login(secured)
@@ -207,7 +221,7 @@ def test_tebakan_ditahan_per_alamat(secured, clock, security_events):
         login(secured, password="tebakan-salah-xx")
     r = login(secured)
     for _ in range(3):
-        login(secured)   # tebakan selama terkunci tidak menambah catatan penguncian
+        login(secured)  # tebakan selama terkunci tidak menambah catatan penguncian
     lockouts = [e for e in security_events if e["event"] == "lockout_started"]
     assert len(lockouts) == 1 and lockouts[0]["username"] == ADMIN and lockouts[0]["client"] == "192.168.1.20"
     assert r.status_code == 429 and r.json()["retry_after_s"] > 0
@@ -223,6 +237,7 @@ def test_tebakan_ditahan_per_nama_walau_alamat_berganti(secured):
 
 
 # --- Ganti kata sandi & kelola akun ----------------------------------------------------
+
 
 def _admin(secured):
     login(secured)
@@ -246,8 +261,10 @@ def test_kelola_akun(secured):
     me = _admin(secured)
     r = me.post("/api/accounts", json={"username": "petugas", "password": "sandi-petugas-01"})
     assert r.status_code == 201 and r.json()["username"] == "petugas" and "password" not in json.dumps(r.json())
-    assert me.post("/api/accounts", json={"username": "petugas", "password": "sandi-petugas-01"}).json()[
-        "detail"]["code"] == "username_taken"
+    assert (
+        me.post("/api/accounts", json={"username": "petugas", "password": "sandi-petugas-01"}).json()["detail"]["code"]
+        == "username_taken"
+    )
     assert [a["username"] for a in me.get("/api/accounts").json()] == [ADMIN, "petugas"]
     petugas = client_from("192.168.1.50")
     login(petugas, "petugas", "sandi-petugas-01")

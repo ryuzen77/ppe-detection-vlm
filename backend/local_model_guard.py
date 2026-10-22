@@ -10,6 +10,7 @@ setelah cadangan gagal dan berkala, lalu model dimuat ulang bila perlu.
 Muat ulang dilakukan di latar dan hanya di antara inspeksi (memegang gembok
 inspeksi VLM), supaya tidak memutus pekerja yang sedang diperiksa.
 """
+
 import logging
 import threading
 import time
@@ -47,8 +48,11 @@ class LocalStandby:
 
     def status(self) -> dict:
         with self._lock:
-            return {"role": self.engine.role if self.engine is not None else None,
-                    "state": self.state, "since": self.since}
+            return {
+                "role": self.engine.role if self.engine is not None else None,
+                "state": self.state,
+                "since": self.since,
+            }
 
     def owns(self, engine) -> bool:
         with self._lock:
@@ -101,11 +105,16 @@ class LocalStandby:
             if self.engine is None or self._stop.is_set():
                 return False
             self._wanted = True
-            if (self.state in (LOADING, READY) or self._clock() < self._retry_at
-                    or getattr(self.engine, "warm_pending", False)):
+            if (
+                self.state in (LOADING, READY)
+                or self._clock() < self._retry_at
+                or getattr(self.engine, "warm_pending", False)
+            ):
                 return False
             self._set_state(LOADING)
-            self._loader = threading.Thread(target=self._load, args=(self.engine,), name="LocalStandbyLoad", daemon=True)
+            self._loader = threading.Thread(
+                target=self._load, args=(self.engine,), name="LocalStandbyLoad", daemon=True
+            )
             self._loader.start()
         self._publish()
         return True
@@ -148,8 +157,11 @@ class LocalStandby:
     def tick(self):
         with self._lock:
             retry = self.state == FAILED and self._wanted and self._clock() >= self._retry_at
-            retire = (self.state == READY and self._healthy_since is not None
-                      and self._clock() - self._healthy_since >= cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS)
+            retire = (
+                self.state == READY
+                and self._healthy_since is not None
+                and self._clock() - self._healthy_since >= cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS
+            )
         if retry:
             self.request()
         if retire:
@@ -158,8 +170,12 @@ class LocalStandby:
     def _retire(self):
         with self.model_lock, self._inspection_lock:
             with self._lock:
-                if (self.state != READY or self.engine is None or self._healthy_since is None
-                        or self._clock() - self._healthy_since < cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS):
+                if (
+                    self.state != READY
+                    or self.engine is None
+                    or self._healthy_since is None
+                    or self._clock() - self._healthy_since < cfg.VLM_LOCAL_IDLE_UNLOAD_SECONDS
+                ):
                     return
                 engine = self.engine
             try:
@@ -208,13 +224,18 @@ class LocalStandby:
 
 
 class LocalModelGuard:
-    def __init__(self, inspection_lock: threading.Lock, engine_getter: Callable[[], Optional[object]],
-                 on_start=None, on_stop=None):
+    def __init__(
+        self,
+        inspection_lock: threading.Lock,
+        engine_getter: Callable[[], Optional[object]],
+        on_start=None,
+        on_stop=None,
+    ):
         """`engine_getter` mengembalikan VLMEngine lokal yang dijaga (atau None)."""
         self._inspection_lock = inspection_lock
         self._engine_getter = engine_getter
         self._on_start, self._on_stop = on_start, on_stop
-        self._busy = threading.Lock()          # satu pemeriksaan/perbaikan pada satu waktu
+        self._busy = threading.Lock()  # satu pemeriksaan/perbaikan pada satu waktu
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         # Kesehatan untuk /api/health (T56)
@@ -273,8 +294,9 @@ class LocalModelGuard:
 
     def trigger(self, force: bool = False):
         """Periksa di latar (mis. setelah VLM cadangan gagal); tidak menahan inspeksi."""
-        threading.Thread(target=self.check_and_repair, kwargs={"force": force},
-                         name="LocalModelCheck", daemon=True).start()
+        threading.Thread(
+            target=self.check_and_repair, kwargs={"force": force}, name="LocalModelCheck", daemon=True
+        ).start()
 
     # --- Gejala & status (T56) ---------------------------------------------------------
 
@@ -285,8 +307,10 @@ class LocalModelGuard:
             self.last_latency_s = None if latency_s is None else round(latency_s, 2)
             self.slow_streak = self.slow_streak + 1 if slow else 0
             streak = self.slow_streak
-            due = (streak >= cfg.LOCAL_SLOW_STREAK
-                   and now - self._last_slow_reload >= cfg.LOCAL_SLOW_RELOAD_COOLDOWN_SECONDS)
+            due = (
+                streak >= cfg.LOCAL_SLOW_STREAK
+                and now - self._last_slow_reload >= cfg.LOCAL_SLOW_RELOAD_COOLDOWN_SECONDS
+            )
             if due:
                 self._last_slow_reload = now
         if due:
@@ -297,19 +321,30 @@ class LocalModelGuard:
         engine = self._engine_getter()
         self.other_gpu_apps = gpu_processes.other_gpu_apps()
         latency = messages.LOCAL_LATENCY_TIMEOUT if latency_s is None else f"{latency_s:.1f} dtk"
-        logger.warning(messages.LOCAL_MODEL_SLOW.format(
-            who=getattr(engine, "who", "lokal"), n=streak, latency=latency,
-            apps=", ".join(self.other_gpu_apps) or "-"))
+        logger.warning(
+            messages.LOCAL_MODEL_SLOW.format(
+                who=getattr(engine, "who", "lokal"),
+                n=streak,
+                latency=latency,
+                apps=", ".join(self.other_gpu_apps) or "-",
+            )
+        )
 
     def status(self) -> dict:
         """Kontrak `local_vlm` di GET /api/health (docs/RENCANA.md, Kontrak T56)."""
         with self._state_lock:
-            return {"state": self._state(), "gpu_ratio": self.gpu_ratio, "slow_streak": self.slow_streak,
-                    "last_latency_s": self.last_latency_s, "other_gpu_apps": list(self.other_gpu_apps)}
+            return {
+                "state": self._state(),
+                "gpu_ratio": self.gpu_ratio,
+                "slow_streak": self.slow_streak,
+                "last_latency_s": self.last_latency_s,
+                "other_gpu_apps": list(self.other_gpu_apps),
+            }
 
     def _state(self) -> str:
-        if self._engine_getter() is None or (self.gpu_ratio is None and self.last_latency_s is None
-                                             and self.slow_streak == 0):
+        if self._engine_getter() is None or (
+            self.gpu_ratio is None and self.last_latency_s is None and self.slow_streak == 0
+        ):
             return STATE_UNKNOWN
         if self.gpu_ratio is not None and self.gpu_ratio < cfg.LOCAL_MIN_GPU_RATIO:
             return STATE_PARTIAL_GPU

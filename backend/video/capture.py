@@ -1,4 +1,5 @@
 """Layanan kamera: membaca frame, menjalankan inferensi, dan menyiapkan JPEG untuk stream."""
+
 import logging
 import threading
 import time
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _ReaderState:
     """Keadaan thread pembaca di antara putaran (hanya disentuh thread pembaca)."""
+
     # Mode yang berlaku saat kamera hilang, supaya penyambungan ulang memulihkan
     # mode hasil optimasi dan bukan jatuh ke permintaan bawaan.
     lost_mode: dict | None = None
@@ -42,6 +44,7 @@ class _ReaderState:
 @dataclass
 class _InferenceState:
     """Keadaan thread inferensi di antara frame (hanya disentuh thread inferensi)."""
+
     prev_time: float
     last_seq: int = -1
     seen_first_frame: bool = False
@@ -56,6 +59,7 @@ def _error_backoff(streak: int) -> float:
 
 class VideoCaptureService:
     """Manages camera video capture, inference, and MJPEG encoding."""
+
     def __init__(self):
         self.cap = None
         self.is_running = False
@@ -203,8 +207,10 @@ class VideoCaptureService:
             if t is not None and t.is_alive():
                 t.join(timeout=cfg.THREAD_STOP_TIMEOUT_SECONDS)
                 if t.is_alive():
-                    logger.warning(f"Thread {name} belum berhenti setelah "
-                                   f"{cfg.THREAD_STOP_TIMEOUT_SECONDS:.0f} dtk; shutdown dilanjutkan.")
+                    logger.warning(
+                        f"Thread {name} belum berhenti setelah "
+                        f"{cfg.THREAD_STOP_TIMEOUT_SECONDS:.0f} dtk; shutdown dilanjutkan."
+                    )
         with self.lock:
             if self.cap and self.cap.isOpened():
                 try:
@@ -283,9 +289,10 @@ class VideoCaptureService:
         try:
             seen = ", ".join(camera_manager.list_device_names()) or "-"
         except Exception as e:
-            seen = str(e)[:cfg.ERROR_MESSAGE_MAX_CHARS]
-        logger.warning(messages.LOG_CAMERA_WAITING.format(
-            name=self.camera_name, seconds=now - self._waiting_since, seen=seen))
+            seen = str(e)[: cfg.ERROR_MESSAGE_MAX_CHARS]
+        logger.warning(
+            messages.LOG_CAMERA_WAITING.format(name=self.camera_name, seconds=now - self._waiting_since, seen=seen)
+        )
 
     def _find_index_by_name(self, name: str) -> int | None:
         """Mencari indeks terkini sebuah kamera berdasarkan namanya."""
@@ -329,11 +336,14 @@ class VideoCaptureService:
         target_w, target_h = self._requested_size(mode)
         mjpg = bool(mode) and mode.get("fourcc") == camera_manager.MJPG_TEXT  # pyright: ignore[reportOptionalMemberAccess]
         # MJPG (T34c2): ukuran & format diberikan saat membuka; set() sesudahnya kembali ke YUY2
-        self.cap = (camera_manager.open_capture(index, (target_w, target_h)) if mjpg
-                    else camera_manager.open_capture(index))
+        self.cap = (
+            camera_manager.open_capture(index, (target_w, target_h)) if mjpg else camera_manager.open_capture(index)
+        )
         if not self.cap.isOpened():
-            return self._fall_back_to_synthetic(messages.CAMERA_OPEN_FAILED.format(index=index),
-                                                f"Kamera {index} tidak tersedia. Memakai generator sintetis.")
+            return self._fall_back_to_synthetic(
+                messages.CAMERA_OPEN_FAILED.format(index=index),
+                f"Kamera {index} tidak tersedia. Memakai generator sintetis.",
+            )
         self._limit_driver_buffer()
         if not mjpg:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_w)
@@ -342,8 +352,10 @@ class VideoCaptureService:
 
         probe = self._probe_frame()
         if probe is None:
-            return self._fall_back_to_synthetic(messages.CAMERA_NO_FRAMES.format(index=index),
-                                                f"Kamera {index} tidak mengirim frame. Memakai generator sintetis.")
+            return self._fall_back_to_synthetic(
+                messages.CAMERA_NO_FRAMES.format(index=index),
+                f"Kamera {index} tidak mengirim frame. Memakai generator sintetis.",
+            )
         self._activate(index, probe, mode, target_w, target_h)
         return True
 
@@ -434,11 +446,11 @@ class VideoCaptureService:
         logger.info(f"Kamera terbuka: {self.camera_name} {self.frame_width}x{self.frame_height}")
         camera_manager.save_selection(index, self.active_mode, self.camera_name)
 
-
     def _generate_synthetic_frame(self, message: str = messages.FRAME_NO_CAMERA) -> np.ndarray:
         """Pola uji saat tidak ada kamera, supaya aliran video tidak membeku."""
-        return hud.draw_synthetic_frame(self.frame_width or cfg.FRAME_WIDTH,
-                                        self.frame_height or cfg.FRAME_HEIGHT, message)
+        return hud.draw_synthetic_frame(
+            self.frame_width or cfg.FRAME_WIDTH, self.frame_height or cfg.FRAME_HEIGHT, message
+        )
 
     def _reader_loop(self):
         """Membaca kamera terus-menerus dan hanya menyimpan frame terbaru.
@@ -477,7 +489,7 @@ class VideoCaptureService:
         r = self._reader
         r.error_streak += 1
         delay = _error_backoff(r.error_streak)
-        text = str(error)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+        text = str(error)[: cfg.ERROR_MESSAGE_MAX_CHARS]
         logger.exception(messages.LOG_CAMERA_READER_ERROR.format(count=r.error_streak, error=text, delay=delay))
         if self.camera_index is not None:
             try:
@@ -622,8 +634,7 @@ class VideoCaptureService:
         if not ret or raw is None:
             self._reader.consecutive_failures += 1
             if self._reader.consecutive_failures >= cfg.CAMERA_LOST_THRESHOLD:
-                logger.warning("Kamera berhenti mengirim frame. "
-                               "Ditandai terputus, akan dicoba sambung ulang.")
+                logger.warning("Kamera berhenti mengirim frame. Ditandai terputus, akan dicoba sambung ulang.")
                 self._mark_lost(messages.CAMERA_DISCONNECTED)
             time.sleep(cfg.CAMERA_READ_RETRY_SECONDS)
             return None
@@ -707,7 +718,7 @@ class VideoCaptureService:
         detections = detector.detect_and_track(frame)
         state_mgr.update_frame_detections(detections)
         annotated_frame = hud.draw_hud(frame, detections, self.fps)
-        _, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.STREAM_JPEG_QUALITY])
+        _, buffer = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.STREAM_JPEG_QUALITY])
         with self.lock:
             self.current_frame_bytes = buffer.tobytes()
         if st.error_streak:
@@ -723,7 +734,7 @@ class VideoCaptureService:
         """
         st.error_streak += 1
         delay = _error_backoff(st.error_streak)
-        text = str(error)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+        text = str(error)[: cfg.ERROR_MESSAGE_MAX_CHARS]
         logger.exception(messages.LOG_INFERENCE_ERROR.format(count=st.error_streak, error=text, delay=delay))
         try:
             state_mgr.set_camera_fault(FAULT_SYSTEM)
@@ -734,5 +745,6 @@ class VideoCaptureService:
     def get_latest_jpeg(self):
         with self.lock:
             return self.current_frame_bytes
+
 
 video_service = VideoCaptureService()

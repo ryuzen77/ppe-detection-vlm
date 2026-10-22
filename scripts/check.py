@@ -5,6 +5,7 @@ Jalankan dari mana saja dengan Python environment proyek:
     python scripts/check.py pyright    # hanya langkah bernama itu (dipakai CI)
 Keluar dengan kode bukan nol bila salah satu langkah gagal.
 """
+
 import shutil
 import subprocess
 import sys

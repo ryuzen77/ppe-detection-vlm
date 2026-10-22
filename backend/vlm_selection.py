@@ -11,6 +11,7 @@ Rambu (rancangan T28 yang disetujui 06-10):
 - model yang belum tervalidasi untuk prompt sekarang hanya dengan konfirmasi;
 - setiap pergantian dicatat di log dan security log (T53).
 """
+
 import logging
 import re
 from dataclasses import asdict, dataclass
@@ -60,8 +61,11 @@ class Selection:
     local_fallback: Optional[Choice] = None
 
     def stored_form(self) -> dict:
-        return {"primary": asdict(self.primary), "backup": asdict(self.backup) if self.backup else None,
-                "local_fallback": asdict(self.local_fallback) if self.local_fallback else None}
+        return {
+            "primary": asdict(self.primary),
+            "backup": asdict(self.backup) if self.backup else None,
+            "local_fallback": asdict(self.local_fallback) if self.local_fallback else None,
+        }
 
 
 class SelectionError(Exception):
@@ -74,6 +78,7 @@ class SelectionError(Exception):
 
 
 # --- Key & alamat: hanya dari .env ---
+
 
 def api_key_for(provider: str) -> str:
     """Key untuk penyedia ini. VLM_API_KEY / VLM_BACKUP_API_KEY hanya berlaku untuk
@@ -129,6 +134,7 @@ def redact(text: str, api_key: str) -> str:
 
 # --- Gambar berpanel & versi prompt per penyedia (T86) ---
 
+
 def uses_zoom(provider_name: str) -> bool:
     """Panel perbesaran kepala hanya untuk VLM online.
 
@@ -145,8 +151,9 @@ def prompt_version_for(provider_name: str) -> str:
 
 
 def requires_local_route(internet_state, median_ms=None) -> bool:
-    return internet_state == DISCONNECTED or (internet_state == SLOW and median_ms is not None
-                                             and median_ms > cfg.INTERNET_VERY_SLOW_MS)
+    return internet_state == DISCONNECTED or (
+        internet_state == SLOW and median_ms is not None and median_ms > cfg.INTERNET_VERY_SLOW_MS
+    )
 
 
 def inspection_route(internet_state, primary, backup, local_fallback, median_ms=None) -> tuple:
@@ -165,6 +172,7 @@ def inspection_route(internet_state, primary, backup, local_fallback, median_ms=
 
 # --- Aturan pilihan ---
 
+
 def validation_of(choice: Choice) -> tuple[str, Optional[profiles.ModelValidation]]:
     status = profiles.validation_status(choice.provider, choice.model, prompt_version_for(choice.provider))
     return status, profiles.find_validation(choice.provider, choice.model)
@@ -179,8 +187,10 @@ def check_choice(choice: Choice, confirm_unvalidated: bool):
         raise SelectionError("missing_model", messages.VLM_SELECT_MISSING_MODEL.format(provider=choice.provider))
     missing = missing_setting(profile)
     if missing == MISSING_KEY:
-        raise SelectionError("missing_key", messages.VLM_SELECT_MISSING_KEY.format(
-            provider=choice.provider, key_env=profile.key_env or "VLM_API_KEY"))
+        raise SelectionError(
+            "missing_key",
+            messages.VLM_SELECT_MISSING_KEY.format(provider=choice.provider, key_env=profile.key_env or "VLM_API_KEY"),
+        )
     if missing == MISSING_BASE_URL:
         raise SelectionError("missing_base_url", messages.VLM_SELECT_MISSING_BASE_URL.format(provider=choice.provider))
     _check_validation(choice, confirm_unvalidated)
@@ -190,20 +200,35 @@ def _check_validation(choice: Choice, confirm_unvalidated: bool):
     status, record = validation_of(choice)
     if status == profiles.UNSAFE:
         assert record is not None, "status UNSAFE selalu berasal dari catatan validasi"
-        raise SelectionError("unsafe_model", messages.VLM_SELECT_UNSAFE.format(
-            provider=choice.provider, model=choice.model, missed=record.missed, photos=record.photos))
+        raise SelectionError(
+            "unsafe_model",
+            messages.VLM_SELECT_UNSAFE.format(
+                provider=choice.provider, model=choice.model, missed=record.missed, photos=record.photos
+            ),
+        )
     if status in NEEDS_CONFIRMATION and not confirm_unvalidated:
-        raise SelectionError("needs_confirmation", messages.VLM_SELECT_NEEDS_CONFIRMATION.format(
-            provider=choice.provider, model=choice.model, prompt=prompt_version_for(choice.provider), status=status))
+        raise SelectionError(
+            "needs_confirmation",
+            messages.VLM_SELECT_NEEDS_CONFIRMATION.format(
+                provider=choice.provider, model=choice.model, prompt=prompt_version_for(choice.provider), status=status
+            ),
+        )
 
 
 # --- Sumber pilihan: .env atau dashboard ---
 
+
 def env_selection() -> Selection:
-    backup = (Choice(cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL)
-              if cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_PROVIDER != NO_BACKUP else None)
-    fallback = (Choice(cfg.VLM_LOCAL_FALLBACK_PROVIDER, cfg.VLM_LOCAL_FALLBACK_MODEL)
-                if cfg.VLM_LOCAL_FALLBACK_PROVIDER != NO_BACKUP else None)
+    backup = (
+        Choice(cfg.VLM_BACKUP_PROVIDER, cfg.VLM_BACKUP_MODEL)
+        if cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_PROVIDER != NO_BACKUP
+        else None
+    )
+    fallback = (
+        Choice(cfg.VLM_LOCAL_FALLBACK_PROVIDER, cfg.VLM_LOCAL_FALLBACK_MODEL)
+        if cfg.VLM_LOCAL_FALLBACK_PROVIDER != NO_BACKUP
+        else None
+    )
     try:
         check_local_fallback(backup, fallback)
     except SelectionError as error:
@@ -263,39 +288,66 @@ def clear() -> bool:
 
 # --- Jejak pergantian ---
 
-def record_change(role: str, before: Optional[Choice], after: Optional[Choice], source: str, client: str,
-                  user: str = ""):
+
+def record_change(
+    role: str, before: Optional[Choice], after: Optional[Choice], source: str, client: str, user: str = ""
+):
     """Satu baris JSON per peran yang berubah, di-fsync seperti audit inspeksi."""
     status = validation_of(after)[0] if after else None
-    logger.warning(messages.VLM_SELECT_APPLIED.format(
-        role=role, before=before.label() if before else NO_BACKUP, after=after.label() if after else NO_BACKUP,
-        status=status or "-", client=f"{user}@{client}" if user else client))
-    security_log.record(security_log.VLM_CHANGE, role=role,
-                        **{"from": asdict(before) if before else None, "to": asdict(after) if after else None},
-                        validated=status, source=source, user=user, client=client)
+    logger.warning(
+        messages.VLM_SELECT_APPLIED.format(
+            role=role,
+            before=before.label() if before else NO_BACKUP,
+            after=after.label() if after else NO_BACKUP,
+            status=status or "-",
+            client=f"{user}@{client}" if user else client,
+        )
+    )
+    security_log.record(
+        security_log.VLM_CHANGE,
+        role=role,
+        **{"from": asdict(before) if before else None, "to": asdict(after) if after else None},
+        validated=status,
+        source=source,
+        user=user,
+        client=client,
+    )
 
 
 # --- Katalog untuk Pengaturan admin ---
 
+
 def provider_catalog(in_use: list[Choice]) -> list[dict]:
     """Semua penyedia di katalog profil + model yang dikenal & yang sedang dipakai. Tanpa API key."""
-    return [_provider_entry(profile, [c.model for c in in_use if c.provider == name])
-            for name, profile in profiles.PROFILES.items()]
+    return [
+        _provider_entry(profile, [c.model for c in in_use if c.provider == name])
+        for name, profile in profiles.PROFILES.items()
+    ]
 
 
 def _provider_entry(profile: profiles.ProviderProfile, models_in_use: list[str]) -> dict:
     known = [v.model for v in profiles.VALIDATIONS if v.provider == profile.name]
     names = list(dict.fromkeys(filter(None, [*known, profile.default_model, *models_in_use])))
-    return {"name": profile.name, "label": profile.label or profile.name, "support": profile.support,
-            "is_local": profile.is_local, "has_key": is_ready(profile.name),
-            "missing": missing_setting(profile),
-            "data_location": profile.data_location, "default_model": profile.default_model,
-            "models": [_model_entry(Choice(profile.name, m)) for m in names]}
+    return {
+        "name": profile.name,
+        "label": profile.label or profile.name,
+        "support": profile.support,
+        "is_local": profile.is_local,
+        "has_key": is_ready(profile.name),
+        "missing": missing_setting(profile),
+        "data_location": profile.data_location,
+        "default_model": profile.default_model,
+        "models": [_model_entry(Choice(profile.name, m)) for m in names],
+    }
 
 
 def _model_entry(choice: Choice) -> dict:
     status, record = validation_of(choice)
-    return {"model": choice.model, "validated": status,
-            "photos": record.photos if record else None, "missed": record.missed if record else None,
-            "false_rejects": record.false_rejects if record else None,
-            "median_seconds": record.median_seconds if record else None}
+    return {
+        "model": choice.model,
+        "validated": status,
+        "photos": record.photos if record else None,
+        "missed": record.missed if record else None,
+        "false_rejects": record.false_rejects if record else None,
+        "median_seconds": record.median_seconds if record else None,
+    }

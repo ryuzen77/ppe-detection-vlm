@@ -1,4 +1,5 @@
 """Gerbang berjalan sendiri (T29): penjaga proses, kamera otomatis lewat nama, pemeriksaan saat start."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,6 +10,7 @@ from backend.video.capture import VideoCaptureService
 
 
 # --- Penjaga proses -------------------------------------------------------------------------
+
 
 class Clock:
     def __init__(self):
@@ -25,6 +27,7 @@ def _runner(codes, clock, durations):
         calls.append(cmd)
         clock.now += durations.pop(0)
         return codes.pop(0)
+
     return run, calls
 
 
@@ -54,10 +57,12 @@ def test_crash_beruntun_jedanya_berlipat_sampai_batas():
 def test_ctrl_c_menghentikan_penjaga():
     def run(cmd):
         raise KeyboardInterrupt
+
     assert supervisor.supervise(["srv"], run=run, sleep=lambda s: None) == 0
 
 
 # --- Kamera otomatis lewat nama --------------------------------------------------------------
+
 
 @pytest.fixture
 def cam(monkeypatch):
@@ -68,9 +73,13 @@ def cam(monkeypatch):
         opened.append(index)
         svc.camera_status, svc.camera_index = "OK", index
         return True
+
     monkeypatch.setattr(svc, "_init_camera", fake_init)
-    monkeypatch.setattr(camera_manager, "load_saved_selection",
-                        lambda: {"index": 1, "name": "HD Pro Webcam C920", "mode": {"width": 864}})
+    monkeypatch.setattr(
+        camera_manager,
+        "load_saved_selection",
+        lambda: {"index": 1, "name": "HD Pro Webcam C920", "mode": {"width": 864}},
+    )
     return svc, opened
 
 
@@ -109,18 +118,22 @@ def test_tanpa_nama_menunggu_operator(cam, monkeypatch):
 
 # --- Pemeriksaan saat start ------------------------------------------------------------------
 
+
 @pytest.fixture
 def ada_akun(monkeypatch):
     from backend.accounts import store
+
     monkeypatch.setattr(store, "count", lambda: 1)
 
 
 def test_pemeriksaan_start(monkeypatch, ada_akun):
     monkeypatch.setattr(startup_checks, "ollama_version", lambda url: "0.35.1")
     out = startup_checks.run(False, "http://localhost:11434/v1", "HD Pro Webcam C920", lambda: ["Integrated Camera"])
-    assert out == [messages.STARTUP_NO_CUDA,
-                   messages.STARTUP_OLLAMA_VERSION.format(found="0.35.1", expected=cfg.OLLAMA_VALIDATED_VERSION),
-                   messages.STARTUP_CAMERA_MISSING.format(name="HD Pro Webcam C920", seen="Integrated Camera")]
+    assert out == [
+        messages.STARTUP_NO_CUDA,
+        messages.STARTUP_OLLAMA_VERSION.format(found="0.35.1", expected=cfg.OLLAMA_VALIDATED_VERSION),
+        messages.STARTUP_CAMERA_MISSING.format(name="HD Pro Webcam C920", seen="Integrated Camera"),
+    ]
 
 
 def test_pemeriksaan_start_semua_baik(monkeypatch, ada_akun):

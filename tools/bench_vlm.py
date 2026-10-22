@@ -22,6 +22,7 @@ Varian prompt:
     P3  seperti P1, tiap item diawali alasan <=5 kata sebelum nilainya
 Ukuran: sisi terpanjang crop dalam piksel, atau `full` = frame utuh (kontrol).
 """
+
 import argparse
 import base64
 import csv
@@ -64,9 +65,7 @@ SMOKING_RULE = (
     "tusuk gigi BUKAN rokok. Jika tidak terlihat, rokok = false."
 )
 REAL_PERSON_KEY = "orang_nyata"
-REAL_PERSON_RULE = (
-    "orang_nyata = false jika subjek hanya foto/layar HP/laptop/cetakan yang diarahkan ke kamera."
-)
+REAL_PERSON_RULE = "orang_nyata = false jika subjek hanya foto/layar HP/laptop/cetakan yang diarahkan ke kamera."
 # Aturan ringkas per item (P2). Item lain di katalog memakai prompt_rule produksi.
 COMPACT_RULES = {
     "helm": "helm: helm keselamatan proyek, warna bebas. Topi kain/kupluk = false.",
@@ -131,15 +130,17 @@ def build_prompts(variant: str, items) -> tuple[str, str]:
     if variant in ("P1", "P1N", "P3"):
         smoking, reason = variant != "P1N", variant == "P3"
         rules = ppe_rules.build_prompt_rules(items)
-        extra = "\n".join(r for r, on in ((REAL_PERSON_RULE, True), (SMOKING_RULE, smoking),
-                                          (REASON_RULE, reason)) if on)
-        system = (f"{SHORT_HEADER}\n\n{rules}\n\n{extra}\n\n"
-                  f"Bentuk JSON:\n{minimal_shape(items, smoking=smoking, reason=reason)}")
+        extra = "\n".join(
+            r for r, on in ((REAL_PERSON_RULE, True), (SMOKING_RULE, smoking), (REASON_RULE, reason)) if on
+        )
+        system = (
+            f"{SHORT_HEADER}\n\n{rules}\n\n{extra}\n\n"
+            f"Bentuk JSON:\n{minimal_shape(items, smoking=smoking, reason=reason)}"
+        )
         return system, SHORT_USER
     if variant == "P2":
         rules = "\n".join(COMPACT_RULES.get(i.key, i.prompt_rule or "") for i in items)
-        system = (f"{SHORT_HEADER}\n{rules}\n{REAL_PERSON_RULE}\n{SMOKING_RULE}\n"
-                  f"Bentuk JSON:\n{minimal_shape(items)}")
+        system = f"{SHORT_HEADER}\n{rules}\n{REAL_PERSON_RULE}\n{SMOKING_RULE}\nBentuk JSON:\n{minimal_shape(items)}"
         return system, SHORT_USER
     if variant in BIT_VARIANTS:
         keys = [k for k, _ in flag_keys(items, short=variant == "PC")]
@@ -148,8 +149,7 @@ def build_prompts(variant: str, items) -> tuple[str, str]:
         else:
             shape = "[" + ", ".join(keys) + "]  (tulis sebagai larik angka 0/1, urutan persis seperti ini)"
         rule = short_bit_rule(items) if variant == "PC" else BIT_RULE
-        system = (f"{SHORT_HEADER}\n\n{ppe_rules.build_prompt_rules(items)}\n\n{rule}\n\n"
-                  f"Bentuk JSON:\n{shape}")
+        system = f"{SHORT_HEADER}\n\n{ppe_rules.build_prompt_rules(items)}\n\n{rule}\n\nBentuk JSON:\n{shape}"
         return system, SHORT_USER
     raise ValueError(f"varian prompt tidak dikenal: {variant}")
 
@@ -184,16 +184,17 @@ def flag_keys(items, short: bool = False) -> list[tuple[str, tuple[str, str]]]:
 def short_bit_rule(items) -> str:
     """Aturan PC: arti tiap kunci syarat pendek dijelaskan dengan nama di aturan item."""
     pairs = [f"{k} = {field}" for k, (_, field) in flag_keys(items, short=True) if field not in ("detected", "")]
-    return (f"Isi 1 = ya/terpenuhi, 0 = tidak. <item> = item dipakai (detected); {'; '.join(pairs)}; "
-            f"{ppe_rules.REAL_PERSON_KEY} = 1 jika subjek orang fisik nyata.")
+    return (
+        f"Isi 1 = ya/terpenuhi, 0 = tidak. <item> = item dipakai (detected); {'; '.join(pairs)}; "
+        f"{ppe_rules.REAL_PERSON_KEY} = 1 jika subjek orang fisik nyata."
+    )
 
 
 def bit_schema(variant: str, items) -> dict:
     keys = [k for k, _ in flag_keys(items, short=variant == "PC")]
     bit = {"type": "integer", "enum": [0, 1]}
     if variant in ("PA", "PC"):
-        return {"type": "object", "properties": {k: bit for k in keys}, "required": keys,
-                "additionalProperties": False}
+        return {"type": "object", "properties": {k: bit for k in keys}, "required": keys, "additionalProperties": False}
     return {"type": "array", "items": bit, "minItems": len(keys), "maxItems": len(keys)}
 
 
@@ -245,6 +246,7 @@ def to_production_payload(data, variant: str, items=None) -> dict:
 
 # --- Gambar ----------------------------------------------------------------------------
 
+
 def encode(image_bgr, max_side: int) -> tuple[str, str]:
     """Diperkecil & dikompres seperti produksi; hasil base64 + ukuran akhir."""
     h, w = image_bgr.shape[:2]
@@ -257,18 +259,20 @@ def encode(image_bgr, max_side: int) -> tuple[str, str]:
 
 # --- Ollama ----------------------------------------------------------------------------
 
+
 def ollama_root() -> str:
     base = cfg.VLM_BACKUP_BASE_URL or "http://localhost:11434/v1"
     return base[:-3] if base.rstrip("/").endswith("/v1") else base.rstrip("/")
 
 
-def call(client: httpx.Client, model: str, system: str, user: str, image_b64: str,
-         fmt: str | dict = "json") -> dict:
+def call(client: httpx.Client, model: str, system: str, user: str, image_b64: str, fmt: str | dict = "json") -> dict:
     body = {
-        "model": model, "stream": False, "format": fmt, "keep_alive": "10m",
+        "model": model,
+        "stream": False,
+        "format": fmt,
+        "keep_alive": "10m",
         "options": {"temperature": cfg.VLM_TEMPERATURE},
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user, "images": [image_b64]}],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user, "images": [image_b64]}],
     }
     r = client.post(f"{ollama_root()}/api/chat", json=body, timeout=TIMEOUT_S)
     r.raise_for_status()
@@ -276,6 +280,7 @@ def call(client: httpx.Client, model: str, system: str, user: str, image_b64: st
 
 
 # --- Ringkasan -------------------------------------------------------------------------
+
 
 def med(xs):
     xs = [x for x in xs if x is not None]
@@ -294,22 +299,28 @@ def summarize(rows):
         ok = [r for r in rs if r["status"] == "ok"]
         inc = [r for r in rs if not r["label_complete"]]
         out[key] = {
-            "dikirim": len(rs), "jawaban_valid": len(ok),
+            "dikirim": len(rs),
+            "jawaban_valid": len(ok),
             "akurasi": round(sum(r["pred_complete"] == r["label_complete"] for r in ok) / len(rs), 3) if rs else None,
             # Galat server (mis. Ollama crash pada gambar tertentu) dipisah dari salah
             # jawab: masalahnya di runtime, bukan di kemampuan model/prompt.
             "galat_server": sum(r["status"] == "galat" for r in rs),
             "akurasi_tanpa_galat": round(sum(r["pred_complete"] == r["label_complete"] for r in ok) / len(ok), 3)
-            if ok else None,
+            if ok
+            else None,
             "lolos_padahal_kurang": sum(r.get("pred_complete") is True for r in inc),
             "lengkap_ditolak": sum(r.get("pred_complete") is False for r in rs if r["label_complete"]),
             "rokok_true": sum(r.get("rokok") is True for r in ok),
             "rokok_awal_true": sum(r.get("rokok_awal") is True for r in ok),
             "tubuh_utuh_dikirim": sum(r.get("full_body") is True for r in rs),
-            "tubuh_utuh_akurasi": round(sum(r["pred_complete"] == r["label_complete"] for r in ok if r.get("full_body"))
-                                        / max(1, sum(r.get("full_body") is True for r in rs)), 3),
+            "tubuh_utuh_akurasi": round(
+                sum(r["pred_complete"] == r["label_complete"] for r in ok if r.get("full_body"))
+                / max(1, sum(r.get("full_body") is True for r in rs)),
+                3,
+            ),
             "tubuh_utuh_lolos_padahal_kurang": sum(r.get("pred_complete") is True for r in inc if r.get("full_body")),
-            "latensi_median_s": med(r["latency_s"] for r in ok), "latensi_p90_s": p90([r["latency_s"] for r in ok]),
+            "latensi_median_s": med(r["latency_s"] for r in ok),
+            "latensi_p90_s": p90([r["latency_s"] for r in ok]),
             "token_input_median": med(r["prompt_tokens"] for r in ok),
             "baca_input_median_ms": med(r["prompt_ms"] for r in ok),
             "token_output_median": med(r["output_tokens"] for r in ok),
@@ -342,7 +353,7 @@ def main():
         if args.files:
             wanted = set(args.files.split(","))
             fs = [f for f in fs if f.stem in wanted]
-        files += [(f, label) for f in (fs[:args.limit] if args.limit else fs)]
+        files += [(f, label) for f in (fs[: args.limit] if args.limit else fs)]
 
     ppe_rules.load_settings()
     items = ppe_rules.get_active_items()
@@ -356,8 +367,9 @@ def main():
     for f, label in files:
         frame = cv2.imdecode(np.fromfile(str(f), np.uint8), cv2.IMREAD_COLOR)
         det = person_crop(frame)
-        prepared.append((f, label, frame, det.crop_img if det is not None else None,
-                         det.is_full_body if det is not None else None))
+        prepared.append(
+            (f, label, frame, det.crop_img if det is not None else None, det.is_full_body if det is not None else None)
+        )
 
     sampler = GpuSampler()
     sampler.start()
@@ -381,8 +393,12 @@ def main():
         for f, label, frame, crop, full_body in prepared:
             n += 1
             suffix = "+rompi_ketat" if args.vest_strict else ""
-            row = {"variant": f"{prompt}@{size}{suffix}", "file": f"{f.parent.name}/{f.name}",
-                   "label_complete": label, "full_body": full_body}
+            row = {
+                "variant": f"{prompt}@{size}{suffix}",
+                "file": f"{f.parent.name}/{f.name}",
+                "label_complete": label,
+                "full_body": full_body,
+            }
             src = frame if size == FULL else crop
             if src is None:
                 row["status"] = "tanpa_orang"
@@ -402,12 +418,18 @@ def main():
                 if prompt == "P0" and row["rokok_awal"] is True:
                     confirm_production_smoking(client, args.model, img, parsed, row)
                 res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt, items), items)
-                row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items),
-                           rokok=smoking_flag(parsed), output_chars=len(raw))
+                row.update(
+                    status="ok",
+                    pred_complete=res.is_complete,
+                    missing="; ".join(res.missing_items),
+                    rokok=smoking_flag(parsed),
+                    output_chars=len(raw),
+                )
             except Exception as e:
                 row.update(status="galat", error=str(e)[:160])
             row.update(
-                latency_s=round(time.time() - start, 2), image_size=dims,
+                latency_s=round(time.time() - start, 2),
+                image_size=dims,
                 # Model bisa dimuat ulang sebagian ke CPU bila aplikasi lain merebut
                 # VRAM; latensi baris seperti itu tidak sebanding dengan yang lain.
                 gpu=ollama_residency(args.model),
@@ -419,9 +441,11 @@ def main():
             )
             rows.append(row)
             verdict = ("BENAR" if row.get("pred_complete") == label else "SALAH") if row["status"] == "ok" else "GALAT"
-            print(f"[{n}/{total}] {row['variant']:9} {row['file']}: {verdict} {row['latency_s']} dtk "
-                  f"(in {row['prompt_tokens']} tok/{row['prompt_ms']} ms, out {row['output_tokens']} tok/{row['output_ms']} ms)",
-                  flush=True)
+            print(
+                f"[{n}/{total}] {row['variant']:9} {row['file']}: {verdict} {row['latency_s']} dtk "
+                f"(in {row['prompt_tokens']} tok/{row['prompt_ms']} ms, out {row['output_tokens']} tok/{row['output_ms']} ms)",
+                flush=True,
+            )
 
     load.stop_flag.set()
     sampler.stop_flag.set()
@@ -429,9 +453,13 @@ def main():
     client.close()
     unload_ollama(args.model)
 
-    summary = {"model": args.model, "porsi_gpu_ollama": residency,
-               "vram_puncak_mb": max(sampler.samples) if sampler.samples else None,
-               "item_aktif": [i.key for i in items], "varian": summarize(rows)}
+    summary = {
+        "model": args.model,
+        "porsi_gpu_ollama": residency,
+        "vram_puncak_mb": max(sampler.samples) if sampler.samples else None,
+        "item_aktif": [i.key for i in items],
+        "varian": summarize(rows),
+    }
     out_dir = cfg.DATA_DIR / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{time.strftime('%Y%m%d-%H%M%S')}_bench_{args.model.replace(':', '-')}"

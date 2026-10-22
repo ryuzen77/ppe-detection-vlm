@@ -1,4 +1,5 @@
 """Dependensi bersama untuk endpoint: sesi login & hak per peran (T30, T51)."""
+
 from fastapi import Depends, HTTPException, Request
 
 from .. import accounts, auth, messages, security_log
@@ -22,12 +23,20 @@ async def require_session(request: Request) -> auth.SessionUser:
 def require_role(*roles: str):
     """Satu pintu hak per peran (T51). Demo: semua akun `admin`; peran operator kelak
     cukup menambah peran yang diizinkan di endpoint, bukan mengubah alur login."""
+
     async def check(request: Request, user: auth.SessionUser = Depends(require_session)) -> auth.SessionUser:
         if user.role not in roles:
-            security_log.record(security_log.FORBIDDEN, username=user.username, role=user.role,
-                                path=request.url.path, client=client_address(request), ok=False)
+            security_log.record(
+                security_log.FORBIDDEN,
+                username=user.username,
+                role=user.role,
+                path=request.url.path,
+                client=client_address(request),
+                ok=False,
+            )
             raise HTTPException(status_code=403, detail=messages.API_FORBIDDEN)
         return user
+
     return check
 
 

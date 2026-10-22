@@ -1,4 +1,5 @@
 """Antrean suara gerbang: suara hasil memotong suara lain (T36b), tanpa speaker."""
+
 import threading
 import time
 
@@ -92,6 +93,7 @@ def test_suara_dilewati_saat_senyap(engine):
 
 
 # --- Pembangkit MP3 -------------------------------------------------------------------
+
 
 def test_semua_suara_punya_teks():
     prompts = generate_audio.build_prompts()

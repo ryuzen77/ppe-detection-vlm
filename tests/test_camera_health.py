@@ -1,4 +1,5 @@
 """Ketangguhan kamera (T45): tertutup, membeku, terputus — gerbang berhenti memeriksa, lampu kuning."""
+
 import cv2
 import numpy as np
 import pytest
@@ -19,8 +20,7 @@ RNG = np.random.default_rng(45)
 
 # Pemandangan bertekstur tetap (lantai, rak, dinding berpola): pemandangan nyata
 # punya banyak tepi (uji C920 13-10: porsi tepi ~0,09), bidang rata tidak.
-TEXTURE = cv2.resize(RNG.integers(40, 200, (27, 48), dtype=np.uint8), (864, 480),
-                     interpolation=cv2.INTER_NEAREST)
+TEXTURE = cv2.resize(RNG.integers(40, 200, (27, 48), dtype=np.uint8), (864, 480), interpolation=cv2.INTER_NEAREST)
 
 
 def scene():
@@ -48,6 +48,7 @@ def feed(health, frames, start=0.0, fps=10):
 
 # --- Deteksi murni ----------------------------------------------------------------------
 
+
 def test_pemandangan_normal_tidak_dianggap_tertutup():
     assert not ch.is_blocked(scene())
 
@@ -58,7 +59,7 @@ def test_terlalu_gelap_atau_terang_dianggap_tertutup(value):
 
 
 def test_gambar_seragam_dianggap_tertutup():
-    assert ch.is_blocked(np.full((480, 864, 3), 128, np.uint8))     # tangan menempel di lensa
+    assert ch.is_blocked(np.full((480, 864, 3), 128, np.uint8))  # tangan menempel di lensa
 
 
 def test_lensa_buram_dianggap_tertutup_walau_terang():
@@ -122,6 +123,7 @@ def test_pulih_harus_stabil_sebentar():
 
 # --- Gerbang -------------------------------------------------------------------------------
 
+
 @pytest.fixture
 def gate(monkeypatch, catalog_defaults):
     played = []
@@ -135,11 +137,19 @@ def gate(monkeypatch, catalog_defaults):
 
 
 def _det():
-    return DetectionResult(track_id=1, bbox=[470, 50, 810, 660], is_full_body=True, reason=messages.POSE_OK,
-                           is_inside_corridor=True, crop_img=person_crop(), conf=0.9, keypoints=[[0, 0, 0.9]] * 17)
+    return DetectionResult(
+        track_id=1,
+        bbox=[470, 50, 810, 660],
+        is_full_body=True,
+        reason=messages.POSE_OK,
+        is_inside_corridor=True,
+        crop_img=person_crop(),
+        conf=0.9,
+        keypoints=[[0, 0, 0.9]] * 17,
+    )
 
 
-@pytest.mark.parametrize("fault", ["blocked", "system"])   # system = pengolah gambar galat (T77b)
+@pytest.mark.parametrize("fault", ["blocked", "system"])  # system = pengolah gambar galat (T77b)
 def test_gangguan_membatalkan_hijau_dan_menyalakan_kuning(gate, fault):
     """Risiko utama: hijau tertahan untuk pekerja berikutnya saat kamera / pengolah gambar bermasalah."""
     notifier.set_complete()
@@ -171,6 +181,7 @@ def test_pulih_kembali_siaga(gate):
 
 
 # --- Sambungan di thread kamera -------------------------------------------------------------
+
 
 @pytest.fixture
 def cam():
@@ -214,6 +225,7 @@ def test_suara_gangguan_kamera_tersedia():
 
 # --- Regresi uji fisik 06-10 (T45b) --------------------------------------------------------
 
+
 def black():
     """Lensa kamera laptop tertutup rapat: hitam pekat, TANPA derau (frame identik)."""
     return np.zeros((480, 864, 3), np.uint8)
@@ -222,7 +234,7 @@ def black():
 def test_lensa_tertutup_rapat_bukan_membeku(cam):
     """Dulu: hitam pekat identik -> 'membeku' -> kamera dibuka ulang tiap ±7 dtk."""
     fault = None
-    for i in range(10 * 30):                       # ditutup 10 dtk, 30 FPS
+    for i in range(10 * 30):  # ditutup 10 dtk, 30 FPS
         fault = cam._camera_fault(black(), i / 30)
     assert fault == ch.FAULT_BLOCKED
     assert not cam._device_missing, "tidak boleh membuka ulang kamera"
@@ -238,7 +250,7 @@ def test_membeku_tetap_berlaku_selama_dibuka_ulang(cam):
     frozen = scene()
     for i in range(int(cfg.CAMERA_FROZEN_SECONDS * 10) + 2):
         cam._camera_fault(frozen, i / 10)
-    cam._device_missing = False                    # thread pembaca menangani penanda
+    cam._device_missing = False  # thread pembaca menangani penanda
     cam.camera_status = "OPENING"
     assert cam._camera_fault(scene(), 10.0) == ch.FAULT_FROZEN, "sedang dibuka ulang: belum selesai"
     cam.camera_status, cam.camera_error = "OK", ""
@@ -248,12 +260,12 @@ def test_membeku_tetap_berlaku_selama_dibuka_ulang(cam):
 
 def test_reset_gerbang_tidak_menghapus_gangguan(gate):
     state_mgr.set_camera_fault("frozen")
-    state_mgr.reset_all()                          # mis. setelah kamera dibuka ulang
+    state_mgr.reset_all()  # mis. setelah kamera dibuka ulang
     assert state_mgr.camera_fault == "frozen" and notifier.current_state == "YELLOW"
 
 
 def test_suara_tidak_diulang_saat_gangguan_putus_sambung(gate):
-    for _ in range(5):                             # pola log 06-10: mulai, selesai, mulai lagi...
+    for _ in range(5):  # pola log 06-10: mulai, selesai, mulai lagi...
         state_mgr.set_camera_fault("blocked")
         state_mgr.set_camera_fault(None)
     assert gate == ["kamera_terhalang"]
@@ -276,6 +288,7 @@ def test_terputus_dan_terhalang_beda_pesan_lampu(gate):
 def test_log_menunggu_kamera_berkala(cam, monkeypatch, caplog):
     import logging
     from backend import camera_manager
+
     monkeypatch.setattr(camera_manager, "list_device_names", lambda: ["Integrated Camera"])
     cam.camera_name = "HD Pro Webcam C920"
     with caplog.at_level(logging.WARNING):

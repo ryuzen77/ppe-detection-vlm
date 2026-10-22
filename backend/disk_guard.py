@@ -8,6 +8,7 @@ membuktikan keputusannya. Log adalah pengisi disk yang paling mudah dikorbankan:
 Setiap perubahan keadaan dicatat sekali. Penjaga yang sama melaporkan catatan
 log yang dibuang karena antrean penuh (lihat logging_setup).
 """
+
 import logging
 import shutil
 import threading
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 STATE_OK = "ok"
 STATE_LOW = "low"
 STATE_CRITICAL = "critical"
-BYTES_PER_GB = 1024 ** 3
+BYTES_PER_GB = 1024**3
 
 # Level minimum application log berkas per keadaan disk. Kritis = hanya CRITICAL (praktis berhenti;
 # pesan alasan berhentinya sendiri CRITICAL, jadi tetap tertulis)

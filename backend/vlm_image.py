@@ -6,6 +6,7 @@ crop resolusi asli di sekitar titik pose, lalu diperbesar, sehingga benda kecil 
 terbaca. Tetap SATU gambar: semua penyedia VLM (cloud, lokal) menerimanya tanpa perubahan.
 Logika murni (tanpa I/O); dipakai `detector` (jendela crop) dan `vlm_analyzer` (gambar).
 """
+
 from typing import Optional, Sequence
 
 import cv2
@@ -14,7 +15,7 @@ import numpy as np
 from . import pose_keypoints as kp
 from .config import cfg
 
-Box = tuple[int, int, int, int]   # x0, y0, x1, y1 (x1/y1 eksklusif)
+Box = tuple[int, int, int, int]  # x0, y0, x1, y1 (x1/y1 eksklusif)
 _HEAD_POINTS = (kp.NOSE, kp.LEFT_EYE, kp.RIGHT_EYE, kp.LEFT_EAR, kp.RIGHT_EAR)
 _ARMS = ((kp.LEFT_WRIST, kp.LEFT_ELBOW), (kp.RIGHT_WRIST, kp.RIGHT_ELBOW))
 
@@ -28,8 +29,12 @@ def crop_window(frame_height: int, frame_width: int, box: Sequence[int]) -> Box:
     x1, y1, x2, y2 = box
     margin_y = int((y2 - y1) * cfg.CROP_MARGIN_Y_RATIO)
     margin_x = int((x2 - x1) * cfg.CROP_MARGIN_X_RATIO)
-    return (max(0, x1 - margin_x), max(0, y1 - margin_y),
-            min(frame_width, x2 + margin_x), min(frame_height, y2 + margin_y))
+    return (
+        max(0, x1 - margin_x),
+        max(0, y1 - margin_y),
+        min(frame_width, x2 + margin_x),
+        min(frame_height, y2 + margin_y),
+    )
 
 
 def to_crop_coords(keypoints: Optional[list], window: Box) -> Optional[list]:
@@ -118,5 +123,5 @@ def compose(crop: np.ndarray, keypoints: Optional[list]) -> np.ndarray:
     canvas[:side, bw:] = _panel(crop, head_box(keypoints, crop.shape), side)
     if hands:
         for i, box in enumerate(hand_boxes(keypoints, crop.shape)):
-            canvas[side:side + half, bw + i * half:bw + (i + 1) * half] = _panel(crop, box, half)
+            canvas[side : side + half, bw + i * half : bw + (i + 1) * half] = _panel(crop, box, half)
     return canvas

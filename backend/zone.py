@@ -9,6 +9,7 @@ subjek keluar zona.
 Logika murni tanpa kamera/GPU; status aktif dipegang `ZoneStore` dan disimpan
 di runtime_settings.
 """
+
 import threading
 from dataclasses import asdict, dataclass
 from typing import Optional
@@ -145,15 +146,22 @@ class ZoneStore:
         runtime_settings.update(SETTINGS_KEY, asdict(zone))
         return zone
 
-    def update(self, enabled: Optional[bool] = None, y_min: Optional[float] = None,
-               y_max: Optional[float] = None) -> Zone:
+    def update(
+        self, enabled: Optional[bool] = None, y_min: Optional[float] = None, y_max: Optional[float] = None
+    ) -> Zone:
         current = self.get()
         lo = current.y_min if y_min is None else float(y_min)
         hi = current.y_max if y_max is None else float(y_max)
         lo, hi = validated(lo, hi)
         changed_band = (lo, hi) != (current.y_min, current.y_max)
-        return self.set(Zone(current.enabled if enabled is None else bool(enabled), lo, hi,
-                             SOURCE_MANUAL if changed_band else current.source))
+        return self.set(
+            Zone(
+                current.enabled if enabled is None else bool(enabled),
+                lo,
+                hi,
+                SOURCE_MANUAL if changed_band else current.source,
+            )
+        )
 
 
 zone_store = ZoneStore()

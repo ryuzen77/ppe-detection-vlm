@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 ROLE_PRIMARY = "utama"
 ROLE_BACKUP = "cadangan"
 
+
 class ItemResult(BaseModel):
     """Hasil pemeriksaan satu item APD.
 
@@ -59,13 +60,9 @@ class ItemResult(BaseModel):
 class InspectionResult(BaseModel):
     """Hasil inspeksi APD lengkap, dikunci pada katalog `ppe_rules`."""
 
-    items: dict[str, ItemResult] = Field(
-        default_factory=dict, description="Hasil per item APD, dikunci nama item"
-    )
+    items: dict[str, ItemResult] = Field(default_factory=dict, description="Hasil per item APD, dikunci nama item")
     is_complete: bool = Field(default=False, description="True jika seluruh item wajib terpenuhi")
-    missing_items: List[str] = Field(
-        default_factory=list, description="Nama APD yang belum memenuhi syarat"
-    )
+    missing_items: List[str] = Field(default_factory=list, description="Nama APD yang belum memenuhi syarat")
     notes: str = Field(default="", description="Ringkasan hasil inspeksi dalam Bahasa Indonesia")
     inference_source: str = Field(
         default="",
@@ -151,7 +148,9 @@ def warmup_image_jpeg(zoom: bool = False) -> bytes:
 
 def confirmation_prompts(item, zoom: bool = False) -> tuple[str, str]:
     """(prompt sistem, prompt pengguna) konfirmasi kedua satu larangan (T58)."""
-    return messages.VLM_CONFIRM_SYSTEM_PROMPT + (_zoom_note() if zoom else ""), f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
+    return messages.VLM_CONFIRM_SYSTEM_PROMPT + (
+        _zoom_note() if zoom else ""
+    ), f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
 
 
 def parse_confirmation(data) -> tuple[bool, str]:
@@ -164,7 +163,9 @@ def parse_confirmation(data) -> tuple[bool, str]:
 def thinking_option(provider_name: str, level: str) -> Optional[str]:
     """Nilai mode berpikir untuk adaptor; peringatan bila tidak dikenal/tidak didukung (T39b)."""
     if level not in vlm_profiles.THINKING_LEVELS:
-        logger.warning(messages.VLM_THINKING_INVALID.format(value=level, choices=", ".join(vlm_profiles.THINKING_LEVELS)))
+        logger.warning(
+            messages.VLM_THINKING_INVALID.format(value=level, choices=", ".join(vlm_profiles.THINKING_LEVELS))
+        )
         level = "off"
     value = vlm_profiles.thinking_value(provider_name, level)
     if value is None and level != "off":
@@ -188,8 +189,7 @@ def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
     if status == vlm_profiles.UNSAFE and record is not None:
         warnings.append(messages.VLM_MODEL_UNSAFE.format(who=who, missed=record.missed, photos=record.photos))
     elif status == vlm_profiles.OUTDATED and record is not None:
-        warnings.append(messages.VLM_MODEL_OUTDATED.format(who=who, old=record.prompt_version,
-                                                           current=version))
+        warnings.append(messages.VLM_MODEL_OUTDATED.format(who=who, old=record.prompt_version, current=version))
     elif status == vlm_profiles.PARTIAL and record is not None:
         warnings.append(messages.VLM_MODEL_PARTIAL.format(who=who, note=record.note))
     return warnings
@@ -227,8 +227,7 @@ class VLMEngine:
         self.last_call_ok: Optional[bool] = None
         self._warm_future = None
         self.warm_state, self.warm_since = UNLOADED, time.strftime(cfg.TELEMETRY_TIME_FORMAT)
-        self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT,
-                                           thread_name_prefix=f"VLM_{role}")
+        self.executor = ThreadPoolExecutor(max_workers=cfg.VLM_MAX_CONCURRENT, thread_name_prefix=f"VLM_{role}")
 
     @property
     def who(self) -> str:
@@ -254,16 +253,18 @@ class VLMEngine:
             self.error = f"model untuk penyedia '{self.provider_name}' belum diisi"
         else:
             try:
-                self.provider = create_provider(self.provider_name, api_key=self.api_key,
-                                                model=self.model_name, **self._adapter_options())
+                self.provider = create_provider(
+                    self.provider_name, api_key=self.api_key, model=self.model_name, **self._adapter_options()
+                )
                 self.error = ""
             except Exception as e:
                 self.error = str(e)
         if self.provider is None:
             logger.warning(f"VLM {self.role} ({self.provider_name}) nonaktif: {self.error}")
         else:
-            logger.info(f"VLM {self.role} siap: {self.provider_name} ({self.model_name}), "
-                        f"batas waktu {self.timeout:g} dtk")
+            logger.info(
+                f"VLM {self.role} siap: {self.provider_name} ({self.model_name}), batas waktu {self.timeout:g} dtk"
+            )
             for warning in profile_warnings(self.provider_name, self.model_name, self.who):
                 logger.warning(warning)
         return self.provider is not None
@@ -273,8 +274,12 @@ class VLMEngine:
         common = {"http_timeout": self.timeout + 1.0, "temperature": cfg.VLM_TEMPERATURE}
         if self.provider_name == "gemini":
             return {**common, "thinking_level": thinking_option(self.provider_name, cfg.VLM_THINKING) or ""}
-        options = {**common, "base_url": self.base_url, "json_mode": cfg.VLM_JSON_MODE,
-                   "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS}
+        options = {
+            **common,
+            "base_url": self.base_url,
+            "json_mode": cfg.VLM_JSON_MODE,
+            "warmup_timeout": cfg.VLM_WARMUP_TIMEOUT_SECONDS,
+        }
         profile = vlm_profiles.get_profile(self.provider_name)
         if profile is not None and profile.api == vlm_profiles.API_ANTHROPIC:
             options["max_tokens"] = cfg.VLM_ANTHROPIC_MAX_TOKENS
@@ -282,9 +287,12 @@ class VLMEngine:
 
     def matches(self, choice: Choice) -> bool:
         """Engine ini sudah melayani pilihan itu dengan key & alamat yang sama (boleh dipakai ulang)."""
-        return (self.provider is not None and (self.provider_name, self.model_name) == (choice.provider, choice.model)
-                and self.api_key == vlm_selection.api_key_for(choice.provider)
-                and self.base_url == vlm_selection.base_url_for(choice.provider))
+        return (
+            self.provider is not None
+            and (self.provider_name, self.model_name) == (choice.provider, choice.model)
+            and self.api_key == vlm_selection.api_key_for(choice.provider)
+            and self.base_url == vlm_selection.base_url_for(choice.provider)
+        )
 
     def choice(self) -> Choice:
         return Choice(self.provider_name, self.model_name)
@@ -320,15 +328,21 @@ class VLMEngine:
                 self._warm_with_image()
         except Exception as e:
             self._set_warm_state(FAILED)
-            self.warm_error = vlm_selection.redact(str(e), self.api_key)[:cfg.ERROR_MESSAGE_MAX_CHARS] or type(e).__name__
+            self.warm_error = (
+                vlm_selection.redact(str(e), self.api_key)[: cfg.ERROR_MESSAGE_MAX_CHARS] or type(e).__name__
+            )
             # Tidak fatal: server tetap menyala; VLM ini dicoba lagi pada pekerja
             # pertama dan, bila gagal, inspeksi dialihkan ke VLM lain (T27).
-            logger.warning(f"Pemanasan VLM {self.role} {self.provider_name} gagal ({str(e)[:160]}). "
-                           f"Server tetap berjalan; VLM ini dicoba lagi saat inspeksi.")
+            logger.warning(
+                f"Pemanasan VLM {self.role} {self.provider_name} gagal ({str(e)[:160]}). "
+                f"Server tetap berjalan; VLM ini dicoba lagi saat inspeksi."
+            )
             return None
         duration = time.time() - start
         self._set_warm_state(READY)
-        logger.info(f"Pemanasan VLM {self.role} {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk.")
+        logger.info(
+            f"Pemanasan VLM {self.role} {self.provider_name} ({self.model_name}) selesai dalam {duration:.1f} dtk."
+        )
         return duration
 
     def _set_warm_state(self, state: str):
@@ -345,13 +359,14 @@ class VLMEngine:
         start = time.time()
         provider = self.provider
         assert provider is not None, "pemanasan hanya untuk engine yang siap"
-        future = self.executor.submit(provider.analyze, warmup_image_jpeg(),
-                                      system_prompt=build_system_prompt(), user_prompt=USER_PROMPT)
+        future = self.executor.submit(
+            provider.analyze, warmup_image_jpeg(), system_prompt=build_system_prompt(), user_prompt=USER_PROMPT
+        )
         self._warm_future = future
         try:
             future.result(timeout=cfg.VLM_WARMUP_TIMEOUT_SECONDS)
         except ValueError:
-            pass        # jawaban untuk gambar sintetis tidak dipakai; yang penting GPU sudah bekerja
+            pass  # jawaban untuk gambar sintetis tidak dipakai; yang penting GPU sudah bekerja
         logger.info(messages.LOCAL_MODEL_WARMUP_IMAGE.format(who=self.who, seconds=time.time() - start))
 
     def call(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> dict:
@@ -363,8 +378,9 @@ class VLMEngine:
         provider = self.provider
         assert provider is not None, "call() hanya untuk engine yang siap"
         try:
-            future = self.executor.submit(provider.analyze, image_jpeg,
-                                          system_prompt=system_prompt, user_prompt=user_prompt)
+            future = self.executor.submit(
+                provider.analyze, image_jpeg, system_prompt=system_prompt, user_prompt=user_prompt
+            )
             return future.result(timeout=self.timeout)
         finally:
             # Dicatat untuk panggilan gagal juga, agar jeda kuota tetap berlaku
@@ -384,8 +400,9 @@ class VLMEngine:
             "error": self.error,
             # T39b, untuk Pengaturan admin (T28): resmi/eksperimental & status validasi model
             "support": getattr(vlm_profiles.get_profile(self.provider_name), "support", None),
-            "validated": vlm_profiles.validation_status(self.provider_name, self.model_name,
-                                                     vlm_selection.prompt_version_for(self.provider_name)),
+            "validated": vlm_profiles.validation_status(
+                self.provider_name, self.model_name, vlm_selection.prompt_version_for(self.provider_name)
+            ),
         }
 
 
@@ -416,8 +433,7 @@ class VLMAnalyzer:
         self._internet_state = None
         self._internet_recovered = threading.Event()
         self._services_on = self._started = False
-        self.local_guard = LocalModelGuard(self.api_lock, self._local_engine,
-                                           self._start_services, self._stop_services)
+        self.local_guard = LocalModelGuard(self.api_lock, self._local_engine, self._start_services, self._stop_services)
         # Satu pergantian penyedia pada satu waktu (T28)
         self.apply_lock = threading.Lock()
         self.selection_source = vlm_selection.SOURCE_ENV
@@ -427,7 +443,9 @@ class VLMAnalyzer:
         selection = vlm_selection.effective_selection()
         self.primary = self._new_engine(ROLE_PRIMARY, selection.primary)
         self.backup = self._new_engine(ROLE_BACKUP, selection.backup) if selection.backup else None
-        self.local_fallback = self._new_engine(ROLE_EMERGENCY, selection.local_fallback) if selection.local_fallback else None
+        self.local_fallback = (
+            self._new_engine(ROLE_EMERGENCY, selection.local_fallback) if selection.local_fallback else None
+        )
         self._started = True
         self._configure_standby()
         self.selection_source = selection.source
@@ -472,8 +490,13 @@ class VLMAnalyzer:
 
     @staticmethod
     def _new_engine(role: str, choice: Choice) -> VLMEngine:
-        engine = VLMEngine(role, choice.provider, choice.model,
-                           vlm_selection.api_key_for(choice.provider), vlm_selection.base_url_for(choice.provider))
+        engine = VLMEngine(
+            role,
+            choice.provider,
+            choice.model,
+            vlm_selection.api_key_for(choice.provider),
+            vlm_selection.base_url_for(choice.provider),
+        )
         engine.build()
         return engine
 
@@ -485,8 +508,7 @@ class VLMAnalyzer:
     def _configure_standby(self):
         engine = None
         if self.primary is None or not self.primary.is_local:
-            engine = next((e for e in (self.local_fallback, self.backup)
-                           if e is not None and e.is_local), None)
+            engine = next((e for e in (self.local_fallback, self.backup) if e is not None and e.is_local), None)
         self.standby.configure(engine)
         self.internet.configure(engine is not None)
         if self._services_on and engine is not None:
@@ -525,13 +547,15 @@ class VLMAnalyzer:
 
     def current_selection(self) -> dict:
         """Bentuk `current` kontrak T28. Tanpa API key."""
+
         def sel(engine):
             return None if engine is None else {**asdict(engine.choice()), "source": self.selection_source}
-        return {"primary": sel(self.primary), "backup": sel(self.backup),
-                "local_fallback": sel(self.local_fallback)}
 
-    def apply_selection(self, selection: Selection, lane_empty: Callable[[], bool],
-                        client: str = "", user: str = "") -> dict:
+        return {"primary": sel(self.primary), "backup": sel(self.backup), "local_fallback": sel(self.local_fallback)}
+
+    def apply_selection(
+        self, selection: Selection, lane_empty: Callable[[], bool], client: str = "", user: str = ""
+    ) -> dict:
         """Menukar engine utama & cadangan tanpa restart.
 
         Engine baru dirakit & dipanaskan DULU (di luar gembok inspeksi); gagal =
@@ -566,8 +590,10 @@ class VLMAnalyzer:
     def _prepare_selection(self, selection: Selection) -> tuple:
         fresh = []
         try:
-            for role, choice in zip((ROLE_PRIMARY, ROLE_BACKUP, ROLE_EMERGENCY),
-                                    (selection.primary, selection.backup, selection.local_fallback)):
+            for role, choice in zip(
+                (ROLE_PRIMARY, ROLE_BACKUP, ROLE_EMERGENCY),
+                (selection.primary, selection.backup, selection.local_fallback),
+            ):
                 fresh.append(self._prepare(role, choice) if choice else None)
         except Exception:
             self._discard(tuple(fresh), keep=(self.primary, self.backup, self.local_fallback))
@@ -583,9 +609,11 @@ class VLMAnalyzer:
         cold = engine.is_local and role != ROLE_PRIMARY
         if engine.provider is None or (not cold and self._warm_prepared(engine) is None):
             engine.close()
-            raise EngineFailed(messages.VLM_SELECT_ENGINE_FAILED.format(
-                role=role, provider=choice.provider, model=choice.model,
-                error=engine.error or engine.warm_error))
+            raise EngineFailed(
+                messages.VLM_SELECT_ENGINE_FAILED.format(
+                    role=role, provider=choice.provider, model=choice.model, error=engine.error or engine.warm_error
+                )
+            )
         return engine
 
     def _warm_prepared(self, engine: VLMEngine) -> Optional[float]:
@@ -624,8 +652,7 @@ class VLMAnalyzer:
             if engine is not None and all(engine is not k for k in keep):
                 engine.close()
                 if engine.is_local and engine.local_key() not in kept_local:
-                    threading.Thread(target=self._unload_unused, args=(engine,),
-                                     name="VLM_Unload", daemon=True).start()
+                    threading.Thread(target=self._unload_unused, args=(engine,), name="VLM_Unload", daemon=True).start()
 
     def _unload_unused(self, engine: VLMEngine):
         with self.standby.model_lock, self.api_lock:
@@ -650,13 +677,16 @@ class VLMAnalyzer:
                 return {"ok": False, "latency_ms": None, "json_ok": False, "error": engine.error}
             start = time.time()
             provider = engine.provider
-            ping_error = self._attempt(engine, lambda: engine.executor.submit(provider.ping)
-                                       .result(timeout=engine.timeout))
+            ping_error = self._attempt(
+                engine, lambda: engine.executor.submit(provider.ping).result(timeout=engine.timeout)
+            )
             latency = round((time.time() - start) * 1000, 1)
             if ping_error:
                 return {"ok": False, "latency_ms": latency, "json_ok": False, "error": ping_error}
-            json_error = self._attempt(engine, lambda: engine.call(
-                self._test_image(), system_prompt=build_system_prompt(), user_prompt=USER_PROMPT))
+            json_error = self._attempt(
+                engine,
+                lambda: engine.call(self._test_image(), system_prompt=build_system_prompt(), user_prompt=USER_PROMPT),
+            )
             return {"ok": True, "latency_ms": latency, "json_ok": not json_error, "error": json_error}
         finally:
             engine.close()
@@ -664,9 +694,12 @@ class VLMAnalyzer:
                 self._unload_test_engine(engine)
 
     def _tested_local_is_in_use(self, engine: VLMEngine) -> bool:
-        return any(active.is_local and active.local_key() == engine.local_key()
-                   and (not self.standby.owns(active) or self.standby.state != UNLOADED)
-                   for active in self._engines())
+        return any(
+            active.is_local
+            and active.local_key() == engine.local_key()
+            and (not self.standby.owns(active) or self.standby.state != UNLOADED)
+            for active in self._engines()
+        )
 
     def _unload_test_engine(self, engine: VLMEngine):
         # Tidak membongkar saat panggilan uji yang habis waktu masih menyelesaikan I/O.
@@ -680,7 +713,7 @@ class VLMAnalyzer:
             call()
             return ""
         except Exception as e:
-            return vlm_selection.redact(self._describe(e, engine), engine.api_key)[:cfg.ERROR_MESSAGE_MAX_CHARS]
+            return vlm_selection.redact(self._describe(e, engine), engine.api_key)[: cfg.ERROR_MESSAGE_MAX_CHARS]
 
     def _test_image(self) -> bytes:
         side = cfg.VLM_TEST_IMAGE_PX
@@ -736,10 +769,21 @@ class VLMAnalyzer:
 
     def provider_info(self) -> dict:
         """VLM utama (bidang tingkat atas, bentuk lama) + cadangan. Tanpa API key."""
-        info = self.primary.info() if self.primary else {
-            "role": ROLE_PRIMARY, "provider": cfg.VLM_PROVIDER, "model": cfg.VLM_MODEL,
-            "is_local": cfg.VLM_IS_LOCAL, "needs_key": not cfg.VLM_IS_LOCAL, "has_key": False,
-            "is_live": False, "timeout_s": 0, "error": "belum dimulai"}
+        info = (
+            self.primary.info()
+            if self.primary
+            else {
+                "role": ROLE_PRIMARY,
+                "provider": cfg.VLM_PROVIDER,
+                "model": cfg.VLM_MODEL,
+                "is_local": cfg.VLM_IS_LOCAL,
+                "needs_key": not cfg.VLM_IS_LOCAL,
+                "has_key": False,
+                "is_live": False,
+                "timeout_s": 0,
+                "error": "belum dimulai",
+            }
+        )
         info["backup"] = self.backup.info() if self.backup else None
         info["primary_down"] = self.primary_down_since is not None
         return info
@@ -765,25 +809,45 @@ class VLMAnalyzer:
         first = results[0]
         message = "; ".join(
             f"{r['role']}: {'OK ' + str(r['latency_ms']) + ' ms' if r['ok'] else 'gagal (' + r.get('error', '') + ')'}"
-            for r in results)
-        return {"status": "ONLINE" if first["ok"] else "ERROR", "latency_ms": first["latency_ms"],
-                "message": message, "engines": results}
+            for r in results
+        )
+        return {
+            "status": "ONLINE" if first["ok"] else "ERROR",
+            "latency_ms": first["latency_ms"],
+            "message": message,
+            "engines": results,
+        }
 
     def _ping_engine(self, engine: VLMEngine) -> dict:
         """Satu engine menilai gambar contoh; jeda kuota dijalani SEBELUM stopwatch dimulai."""
         if not self.standby.ready(engine):
-            return {"role": engine.role, "ok": False, "latency_ms": 0,
-                    "error": (messages.VLM_LOCAL_STANDBY_UNLOADED if self.standby.state == UNLOADED
-                              else messages.VLM_LOCAL_NOT_READY), "is_local": True,
-                    "timeout_ms": round(engine.timeout * 1000), "standby": self.standby.state == UNLOADED}
+            return {
+                "role": engine.role,
+                "ok": False,
+                "latency_ms": 0,
+                "error": (
+                    messages.VLM_LOCAL_STANDBY_UNLOADED
+                    if self.standby.state == UNLOADED
+                    else messages.VLM_LOCAL_NOT_READY
+                ),
+                "is_local": True,
+                "timeout_ms": round(engine.timeout * 1000),
+                "standby": self.standby.state == UNLOADED,
+            }
         wait = engine.min_interval - (time.time() - engine.last_call_time)
         if wait > 0:
             time.sleep(wait)
         start = time.time()
         error = self._attempt(engine, lambda: self._call_answered(engine))
-        return {"role": engine.role, "ok": not error, "latency_ms": round((time.time() - start) * 1000, 1),
-                "error": error, "is_local": engine.is_local, "timeout_ms": round(engine.timeout * 1000),
-                "standby": False}
+        return {
+            "role": engine.role,
+            "ok": not error,
+            "latency_ms": round((time.time() - start) * 1000, 1),
+            "error": error,
+            "is_local": engine.is_local,
+            "timeout_ms": round(engine.timeout * 1000),
+            "standby": False,
+        }
 
     @staticmethod
     def _call_answered(engine: VLMEngine):
@@ -815,9 +879,9 @@ class VLMAnalyzer:
         assert primary is not None, "hanya dipanggil setelah utama dicoba"
         if ok:
             if self.primary_down_since is not None:
-                logger.info(messages.LOG_VLM_PRIMARY_RECOVERED.format(
-                    who=primary.who, seconds=now - self.primary_down_since
-                ))
+                logger.info(
+                    messages.LOG_VLM_PRIMARY_RECOVERED.format(who=primary.who, seconds=now - self.primary_down_since)
+                )
             self.primary_failures = 0
             self.primary_down_since = None
             return
@@ -825,16 +889,20 @@ class VLMAnalyzer:
         if self.primary_failures >= cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN and self.primary_down_since is None:
             self.primary_down_since = now
             if self._has_backup():
-                logger.warning(messages.LOG_VLM_PRIMARY_DOWN_BACKUP.format(
-                    who=primary.who,
-                    count=self.primary_failures,
-                    retry=cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS,
-                ))
+                logger.warning(
+                    messages.LOG_VLM_PRIMARY_DOWN_BACKUP.format(
+                        who=primary.who,
+                        count=self.primary_failures,
+                        retry=cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS,
+                    )
+                )
             else:
-                logger.warning(messages.LOG_VLM_PRIMARY_DOWN_NO_BACKUP.format(
-                    who=primary.who,
-                    count=self.primary_failures,
-                ))
+                logger.warning(
+                    messages.LOG_VLM_PRIMARY_DOWN_NO_BACKUP.format(
+                        who=primary.who,
+                        count=self.primary_failures,
+                    )
+                )
 
     def _publish_status(self):
         api_monitor.set_internet(self.internet.status())
@@ -880,8 +948,9 @@ class VLMAnalyzer:
             self.local_guard.record_call(time.time() - start, time.time())
         return data
 
-    def _confirm_prohibitions(self, engine: VLMEngine, image_jpeg: bytes, result: InspectionResult,
-                              aktif) -> InspectionResult:
+    def _confirm_prohibitions(
+        self, engine: VLMEngine, image_jpeg: bytes, result: InspectionResult, aktif
+    ) -> InspectionResult:
         """Larangan yang terlihat ditanyakan ulang dengan pertanyaan khusus (T58).
 
         Pekerja ditolak karena larangan hanya bila kedua jawaban sepakat. Bench 13-10:
@@ -909,8 +978,11 @@ class VLMAnalyzer:
             zoom = vlm_selection.uses_zoom(engine.provider_name)
             confirmed, seen = parse_confirmation(engine.call(image_jpeg, *confirmation_prompts(item, zoom)))
         except Exception as e:
-            logger.warning(messages.LOG_VLM_CONFIRM_FAILED.format(
-                item=item.key, who=engine.who, error=str(e)[:80] or type(e).__name__))
+            logger.warning(
+                messages.LOG_VLM_CONFIRM_FAILED.format(
+                    item=item.key, who=engine.who, error=str(e)[:80] or type(e).__name__
+                )
+            )
             raise
         if confirmed:
             logger.info(f"Larangan '{item.key}' dikonfirmasi VLM {engine.who}: {seen}")
@@ -939,8 +1011,9 @@ class VLMAnalyzer:
         if not self._engines():
             return self._no_decision(start_t, messages.VLM_NOT_CONFIGURED)
         internet = self.internet.status()
-        if self.standby.state == LOADING and (vlm_selection.requires_local_route(internet["state"], internet["median_ms"])
-                                             or not self._online_available()):
+        if self.standby.state == LOADING and (
+            vlm_selection.requires_local_route(internet["state"], internet["median_ms"]) or not self._online_available()
+        ):
             return self._no_decision(start_t, messages.VLM_LOCAL_NOT_READY)
 
         # Terburuk: utama habis waktu, lalu cadangan menjawab + satu konfirmasi larangan (T58)
@@ -965,8 +1038,10 @@ class VLMAnalyzer:
             self.api_lock.release()
 
     def _online_available(self) -> bool:
-        return any(e is not None and e.provider is not None and not e.is_local and e.last_call_ok is not False
-                   for e in (self.primary, self.backup))
+        return any(
+            e is not None and e.provider is not None and not e.is_local and e.last_call_ok is not False
+            for e in (self.primary, self.backup)
+        )
 
     def _inspect_route(self, crop, keypoints, items, reasons):
         if self._internet_recovered.is_set():
@@ -976,13 +1051,16 @@ class VLMAnalyzer:
         state = internet["state"]
         if state in (SLOW, DISCONNECTED):
             self.standby.request()
-        route = vlm_selection.inspection_route(state, self.primary, self.backup, self.local_fallback,
-                                               median_ms=internet["median_ms"])
+        route = vlm_selection.inspection_route(
+            state, self.primary, self.backup, self.local_fallback, median_ms=internet["median_ms"]
+        )
         for engine in route:
             internet = self.internet.status()
             state = internet["state"]
-            if not engine.is_local and (vlm_selection.requires_local_route(state, internet["median_ms"])
-                                       or (state == SLOW and engine is not self.primary)):
+            if not engine.is_local and (
+                vlm_selection.requires_local_route(state, internet["median_ms"])
+                or (state == SLOW and engine is not self.primary)
+            ):
                 continue
             if engine is self.primary:
                 result = self._attempt_primary(crop, keypoints, items, reasons)
@@ -994,8 +1072,9 @@ class VLMAnalyzer:
             reasons.append(messages.VLM_BACKUP_UNAVAILABLE)
         return None
 
-    def _attempt_primary(self, crop: np.ndarray, keypoints: Optional[list], aktif,
-                         reasons: list[str]) -> Optional[InspectionResult]:
+    def _attempt_primary(
+        self, crop: np.ndarray, keypoints: Optional[list], aktif, reasons: list[str]
+    ) -> Optional[InspectionResult]:
         """VLM utama bila pemutus sirkuit mengizinkan; None = gagal/dilewati (alasan ke `reasons`)."""
         now, primary = time.time(), self.primary
         if primary is None or primary.provider is None:
@@ -1017,8 +1096,9 @@ class VLMAnalyzer:
         self._primary_result(True, time.time())
         return result
 
-    def _attempt_secondary(self, backup: VLMEngine, crop: np.ndarray, keypoints: Optional[list], aktif,
-                           reasons: list[str]) -> Optional[InspectionResult]:
+    def _attempt_secondary(
+        self, backup: VLMEngine, crop: np.ndarray, keypoints: Optional[list], aktif, reasons: list[str]
+    ) -> Optional[InspectionResult]:
         """VLM cadangan; None = tidak ada / gagal (alasan ke `reasons`)."""
         if backup.provider is None:
             reasons.append("cadangan: tidak tersedia")
@@ -1074,7 +1154,7 @@ class VLMAnalyzer:
 
         # Compress to JPEG in memory. Bytes JPEG ini yang dikirim apa adanya ke
         # penyedia, tanpa didekode dan dikompres ulang.
-        _, buffer = cv2.imencode('.jpg', image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])
+        _, buffer = cv2.imencode(".jpg", image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), cfg.VLM_JPEG_QUALITY])
         return buffer.tobytes()
 
     def _call_vlm_internal(self, image_bgr: np.ndarray, keypoints: Optional[list] = None) -> InspectionResult:
@@ -1112,13 +1192,11 @@ class VLMAnalyzer:
         items = {}
         for item in aktif:
             nilai = mentah.get(item.key)
-            items[item.key] = ItemResult(**nilai) if isinstance(nilai, dict) else ItemResult(
-                description="Tidak dinilai oleh VLM"
+            items[item.key] = (
+                ItemResult(**nilai) if isinstance(nilai, dict) else ItemResult(description="Tidak dinilai oleh VLM")
             )
 
-        is_complete, missing = ppe_rules.evaluate(
-            {k: v.model_dump() for k, v in items.items()}, aktif
-        )
+        is_complete, missing = ppe_rules.evaluate({k: v.model_dump() for k, v in items.items()}, aktif)
 
         # Satu-satunya penolakan dari teks bebas model yang dihormati adalah
         # anti-spoofing: aturan itu ada di prompt tetapi bukan item katalog, jadi
@@ -1139,5 +1217,6 @@ class VLMAnalyzer:
             missing_items=missing,
             notes=str(data.get("notes", "")),
         )
+
 
 vlm_analyzer = VLMAnalyzer()

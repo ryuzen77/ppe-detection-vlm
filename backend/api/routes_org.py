@@ -63,7 +63,9 @@ def create_org(kind: str, body: OrgBody, request: Request, user: auth.SessionUse
 
 
 @router.patch("/api/org/{kind}/{org_id}")
-def update_org(kind: str, org_id: int, body: OrgBody, request: Request, user: auth.SessionUser = Depends(require_admin)):
+def update_org(
+    kind: str, org_id: int, body: OrgBody, request: Request, user: auth.SessionUser = Depends(require_admin)
+):
     result = _call(worker_store.store.update_org, kind, org_id, body.name)
     security_log.record(
         f"org_{kind}_updated",

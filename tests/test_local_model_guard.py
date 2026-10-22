@@ -1,4 +1,5 @@
 """Penjaga model lokal (T38): model yang sebagian jatuh ke CPU dimuat ulang."""
+
 import json
 import logging
 import threading
@@ -89,6 +90,7 @@ def test_hanya_satu_pemeriksaan_sekaligus():
 
 # --- Adaptor Ollama: /api/ps & muat ulang -----------------------------------------------
 
+
 def _ollama(handler):
     p = OpenAICompatibleProvider(api_key="", model="qwen2.5vl:7b", base_url="http://ollama.test/v1", name="ollama")
     p._client = httpx.Client(base_url=p.base_url, transport=httpx.MockTransport(handler))
@@ -99,6 +101,7 @@ def test_porsi_gpu_dari_api_ps():
     def handler(req):
         assert req.url.path == "/api/ps"
         return httpx.Response(200, json={"models": [{"name": "qwen2.5vl:7b", "size": 6_000, "size_vram": 1_560}]})
+
     assert _ollama(handler).gpu_residency() == pytest.approx(0.26)
 
 
@@ -112,6 +115,7 @@ def test_muat_ulang_bongkar_lalu_muat():
     def handler(req):
         calls.append((req.url.path, json.loads(req.content)["keep_alive"]))
         return httpx.Response(200, json={})
+
     _ollama(handler).reload()
     assert calls == [("/api/generate", 0), ("/api/generate", -1)]
 
@@ -122,6 +126,7 @@ def test_penyedia_cloud_tidak_punya_porsi_gpu():
 
 
 # --- Sambungan ke analyzer -------------------------------------------------------------
+
 
 def test_cadangan_lokal_gagal_memicu_pemeriksaan(monkeypatch):
     from backend.vlm_analyzer import VLMAnalyzer, VLMEngine
@@ -134,6 +139,7 @@ def test_cadangan_lokal_gagal_memicu_pemeriksaan(monkeypatch):
     class Crash:
         def analyze(self, *args, **kwargs):
             raise RuntimeError("ollama HTTP 500")
+
     backup.provider = Crash()  # pyright: ignore[reportAttributeAccessIssue]
     a.backup = backup
     triggered = []
@@ -150,6 +156,7 @@ def test_keluarkan_model_dari_gpu_saat_cadangan_dimatikan():
     def handler(req):
         calls.append((req.url.path, json.loads(req.content)["keep_alive"]))
         return httpx.Response(200, json={})
+
     _ollama(handler).unload()
     assert calls == [("/api/generate", 0)]
     OpenAICompatibleProvider(api_key="k", model="m", base_url="http://x.test/v1", name="openrouter").unload()

@@ -1,4 +1,5 @@
 """Adaptor penyedia VLM. Menambah penyedia baru = satu kelas turunan `VLMProvider`."""
+
 from . import profiles
 from .base import VLMProvider, parse_json_reply
 
@@ -16,19 +17,24 @@ def create_provider(name: str, api_key: str, model: str, base_url: str = "", **o
     key = (name or "").strip().lower()
     if key == "gemini":
         from .gemini import GeminiProvider
+
         return GeminiProvider(api_key=api_key, model=model, **options)
     profile = profiles.PROFILES.get(key)
     if profile is not None and profile.api == profiles.API_ANTHROPIC:
         from .anthropic import AnthropicProvider
-        options.pop("temperature", None)    # lihat AnthropicProvider: tidak dikirim
-        options.pop("json_mode", None)      # Messages API tidak punya response_format
-        return AnthropicProvider(api_key=api_key, model=model,
-                                 base_url=base_url or profile.base_url, **options)
+
+        options.pop("temperature", None)  # lihat AnthropicProvider: tidak dikirim
+        options.pop("json_mode", None)  # Messages API tidak punya response_format
+        return AnthropicProvider(api_key=api_key, model=model, base_url=base_url or profile.base_url, **options)
     if key in OPENAI_COMPATIBLE:
         from .openai_compatible import OpenAICompatibleProvider
+
         return OpenAICompatibleProvider(
-            api_key=api_key, model=model, name=key,
-            base_url=base_url or profiles.PROFILES[key].base_url, **options,
+            api_key=api_key,
+            model=model,
+            name=key,
+            base_url=base_url or profiles.PROFILES[key].base_url,
+            **options,
         )
     raise ValueError(f"Penyedia VLM tidak dikenal: {name!r}")
 

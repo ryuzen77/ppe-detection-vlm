@@ -13,6 +13,7 @@ Alternatifnya (T54) relay USB HID 2 kanal (`usb_relay.py`): hijau & merah saja.
 Perintah lewat HTTP/Wi-Fi tanpa tanda tangan bisa dipalsukan siapa pun di jaringan
 yang sama (analisa T47), jadi dibuang.
 """
+
 import logging
 import threading
 import time
@@ -47,12 +48,13 @@ ACK_LAMPS = {
     LightState.OFF.encode(): (),
 }
 SERIAL_LAMPS = (cfg.IOT_LAMP_GREEN, cfg.IOT_LAMP_RED, cfg.IOT_LAMP_YELLOW)
-SERIAL_URL_SCHEMES = ("rfc2217://", "socket://")   # simulator Wokwi
+SERIAL_URL_SCHEMES = ("rfc2217://", "socket://")  # simulator Wokwi
 
 
 def open_serial(port: str, baud: int, timeout: float):
     """Membuka port tanpa memicu auto-reset papan (DTR/RTS diset sebelum open)."""
     import serial
+
     if port.startswith(SERIAL_URL_SCHEMES):
         conn = serial.serial_for_url(port, do_not_open=True)
     else:
@@ -104,7 +106,7 @@ class GateLightLink:
     def set_state(self, state: str):
         with self._lock:
             self._desired = state
-        self._wake.set()   # kirim segera, tidak menunggu heartbeat berikutnya
+        self._wake.set()  # kirim segera, tidak menunggu heartbeat berikutnya
 
     def status(self) -> dict:
         now = self._clock()
@@ -113,10 +115,14 @@ class GateLightLink:
         lamps = ACK_LAMPS.get(self._ack_state) if self._ack_state is not None else None
         fresh = self.last_ack is not None and now - self.last_ack <= cfg.IOT_ACK_TIMEOUT_SECONDS
         known = fresh and self._conn is not None and self.error is None and lamps is not None
-        return {"enabled": True, "connected": connected, "last_ack_age_s": age,
-                "error": None if connected else (self.error or messages.IOT_NO_ACK),
-                "lamps_on": list(lamps) if known and lamps is not None else None,
-                "lamps_available": list(SERIAL_LAMPS)}
+        return {
+            "enabled": True,
+            "connected": connected,
+            "last_ack_age_s": age,
+            "error": None if connected else (self.error or messages.IOT_NO_ACK),
+            "lamps_on": list(lamps) if known and lamps is not None else None,
+            "lamps_available": list(SERIAL_LAMPS),
+        }
 
     # --- Satu putaran thread (dipanggil langsung oleh tes) ----------------------------
 
@@ -166,11 +172,11 @@ class GateLightLink:
         *lines, self._rx = self._rx.split(b"\n")
         for line in lines:
             if line.strip().startswith(ACK_PREFIX):
-                self._ack_state = line.strip()[len(ACK_PREFIX):]
+                self._ack_state = line.strip()[len(ACK_PREFIX) :]
                 self.last_ack = self._clock()
                 self.error = None
         # Sisa tanpa baris baru dibatasi supaya data sampah tidak menumpuk
-        self._rx = self._rx[-cfg.IOT_RX_MAX_BYTES:]
+        self._rx = self._rx[-cfg.IOT_RX_MAX_BYTES :]
 
     def _fail(self, message: str):
         if message != self.error:
@@ -193,6 +199,7 @@ class GateLightLink:
 def _usb_relay_link():
     """Relay USB 2 kanal (T54): hanya hijau & merah; kuning/siaga = semua mati."""
     from .usb_relay import UsbRelayLink, channel_mask
+
     green, red = cfg.IOT_RELAY_GREEN_CHANNEL, cfg.IOT_RELAY_RED_CHANNEL
     return UsbRelayLink({LightState.GREEN: channel_mask(green), LightState.RED: channel_mask(red)}, (green, red))
 
@@ -246,17 +253,19 @@ class NotifierManager:
         self._set(LightState.OFF, messages.LIGHT_IDLE)
 
     def get_status(self) -> dict:
-        return {
-            "light_state": self.current_state,
-            "message": self.message,
-            "timestamp": self.last_change_time
-        }
+        return {"light_state": self.current_state, "message": self.message, "timestamp": self.last_change_time}
 
     def iot_status(self) -> dict:
         """Status lampu fisik untuk telemetri (kontrak T47)."""
         if self.link is None:
-            return {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None,
-                    "lamps_on": None, "lamps_available": None}
+            return {
+                "enabled": False,
+                "connected": False,
+                "last_ack_age_s": None,
+                "error": None,
+                "lamps_on": None,
+                "lamps_available": None,
+            }
         return self.link.status()
 
 

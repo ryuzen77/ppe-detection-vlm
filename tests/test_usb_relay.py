@@ -3,6 +3,7 @@
 Paling penting: hijau HANYA saat APD lengkap, merah HANYA saat APD kurang, dan
 relay yang mengunci tidak boleh tertinggal hijau saat server berhenti/crash.
 """
+
 import sys
 import types
 
@@ -76,6 +77,7 @@ def relay_link(monkeypatch, board):
     def opener(serial):
         dev = boards["current"]
         return None if dev is None else usb_relay.RelayBoard(dev, "USBRelay2", dev.serial.decode())
+
     link = notifier_module._usb_relay_link()
     link._opener, link._clock = opener, clock
     return link, clock, boards
@@ -83,12 +85,16 @@ def relay_link(monkeypatch, board):
 
 # --- Pemetaan keadaan -> lampu -------------------------------------------------------------
 
-@pytest.mark.parametrize("state,expected", [
-    (LightState.GREEN, GREEN_BIT),
-    (LightState.RED, RED_BIT),
-    (LightState.YELLOW, 0),      # kuning tidak ada: peringatan = semua mati, BUKAN merah
-    (LightState.OFF, 0),
-])
+
+@pytest.mark.parametrize(
+    "state,expected",
+    [
+        (LightState.GREEN, GREEN_BIT),
+        (LightState.RED, RED_BIT),
+        (LightState.YELLOW, 0),  # kuning tidak ada: peringatan = semua mati, BUKAN merah
+        (LightState.OFF, 0),
+    ],
+)
 def test_hanya_lengkap_hijau_hanya_kurang_merah(relay_link, board, state, expected):
     link, _, _ = relay_link
     link.set_state(state)
@@ -110,8 +116,8 @@ def test_keadaan_dikoreksi_bila_relay_berubah_sendiri(relay_link, board):
     link, _, _ = relay_link
     link.set_state(LightState.OFF)
     link.tick()
-    board.mask = GREEN_BIT           # mis. disentuh alat lain / gangguan
-    link.tick()                      # heartbeat berikutnya
+    board.mask = GREEN_BIT  # mis. disentuh alat lain / gangguan
+    link.tick()  # heartbeat berikutnya
     assert board.mask == 0
 
 
@@ -127,6 +133,7 @@ def test_perintah_tidak_dijalankan_papan_terdeteksi(relay_link, board):
 
 # --- Sambungan --------------------------------------------------------------------------------
 
+
 def test_dicabut_lalu_dicolok_lagi(relay_link, board):
     link, clock, boards = relay_link
     link.set_state(LightState.RED)
@@ -136,7 +143,7 @@ def test_dicabut_lalu_dicolok_lagi(relay_link, board):
     assert link.status()["connected"] is False
     replacement = FakeDevice()
     boards["current"] = replacement
-    link.tick()                                  # masih dalam jeda sambung ulang
+    link.tick()  # masih dalam jeda sambung ulang
     assert replacement.mask == 0
     clock.now += cfg.IOT_RECONNECT_SECONDS
     link.tick()
@@ -163,6 +170,7 @@ def test_kanal_tidak_sah_tidak_pernah_menyalakan(monkeypatch, board, green, red)
 
 # --- Pengaman relay yang mengunci ---------------------------------------------------------------
 
+
 def test_berhenti_rapi_mematikan_semua_lampu(relay_link, board):
     link, _, _ = relay_link
     link.set_state(LightState.GREEN)
@@ -186,13 +194,19 @@ def test_all_off_tanpa_papan_atau_galat_tidak_melempar(board):
 
 def test_penjaga_mematikan_lampu_setiap_server_keluar():
     codes, events = iter([1, 0]), []
-    supervisor.supervise(["server"], run=lambda cmd: next(codes), sleep=lambda s: events.append("jeda"),
-                         clock=lambda: 0.0, on_exit=lambda code: events.append(f"lampu mati {code}"))
+    supervisor.supervise(
+        ["server"],
+        run=lambda cmd: next(codes),
+        sleep=lambda s: events.append("jeda"),
+        clock=lambda: 0.0,
+        on_exit=lambda code: events.append(f"lampu mati {code}"),
+    )
     assert events == ["lampu mati 1", "jeda", "lampu mati 0"], "lampu mati SEBELUM jeda nyala ulang"
 
 
-@pytest.mark.parametrize("enabled,iot_type,called", [(True, "usb_relay", True), (True, "serial", False),
-                                                     (False, "usb_relay", False)])
+@pytest.mark.parametrize(
+    "enabled,iot_type,called", [(True, "usb_relay", True), (True, "serial", False), (False, "usb_relay", False)]
+)
 def test_penjaga_hanya_menyentuh_relay_bila_dipakai(monkeypatch, enabled, iot_type, called):
     calls = []
     monkeypatch.setattr(cfg, "IOT_ENABLED", enabled)
@@ -204,11 +218,14 @@ def test_penjaga_hanya_menyentuh_relay_bila_dipakai(monkeypatch, enabled, iot_ty
 
 # --- Menemukan papan (hidapi tiruan) --------------------------------------------------------------
 
+
 def fake_hid(devices):
     module = types.SimpleNamespace()
     module.enumerate = lambda vid, pid: [
-        {"product_string": product, "path": i} for i, (product, _) in enumerate(devices)
-        if (vid, pid) == (usb_relay.VENDOR_ID, usb_relay.PRODUCT_ID)]
+        {"product_string": product, "path": i}
+        for i, (product, _) in enumerate(devices)
+        if (vid, pid) == (usb_relay.VENDOR_ID, usb_relay.PRODUCT_ID)
+    ]
     queue = [dev for _, dev in devices]
     module.device = lambda: queue.pop(0)
     return module
@@ -235,6 +252,7 @@ def test_perintah_lewat_feature_report(board):
 
 # --- NotifierManager ------------------------------------------------------------------------------
 
+
 def test_notifier_memakai_relay_bila_dipilih(monkeypatch):
     monkeypatch.setattr(cfg, "IOT_ENABLED", True)
     monkeypatch.setattr(cfg, "IOT_TYPE", "usb_relay")
@@ -256,10 +274,15 @@ def test_keputusan_gerbang_sampai_ke_relay(relay_link, board):
     assert board.mask == 0
 
 
-@pytest.mark.parametrize("state,expected", [
-    (LightState.GREEN, ["green"]), (LightState.RED, ["red"]),
-    (LightState.OFF, []), (LightState.YELLOW, []),
-])
+@pytest.mark.parametrize(
+    "state,expected",
+    [
+        (LightState.GREEN, ["green"]),
+        (LightState.RED, ["red"]),
+        (LightState.OFF, []),
+        (LightState.YELLOW, []),
+    ],
+)
 def test_relay_lamps_follow_verified_readback(relay_link, state, expected):
     link, _, _ = relay_link
     link.set_state(state)

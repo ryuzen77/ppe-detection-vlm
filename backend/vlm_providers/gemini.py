@@ -1,4 +1,5 @@
 """Google Gemini lewat SDK `google-genai` (pengganti `google-generativeai` yang sudah dihentikan)."""
+
 from typing import Any
 
 from .. import messages
@@ -12,8 +13,14 @@ GEMINI_MIN_DEADLINE_SECONDS = 10.0
 class GeminiProvider(VLMProvider):
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str, thinking_level: str = "", http_timeout: float = 0.0,
-                 temperature: float | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        thinking_level: str = "",
+        http_timeout: float = 0.0,
+        temperature: float | None = None,
+    ):
         super().__init__(model)
         # None = bawaan model (tidak dikirim); nilai dari config.VLM_TEMPERATURE
         self.temperature = temperature
@@ -34,8 +41,11 @@ class GeminiProvider(VLMProvider):
         # < 10 dtk ("Minimum allowed deadline is 10s", 400 INVALID_ARGUMENT —
         # terukur 24-09). Aplikasi tetap berhenti menunggu di batasnya sendiri
         # (cloud 4 dtk) lalu beralih ke cadangan; ini hanya melepas thread-nya.
-        http_options = (types.HttpOptions(timeout=int(max(http_timeout, GEMINI_MIN_DEADLINE_SECONDS) * 1000))
-                        if http_timeout > 0 else None)
+        http_options = (
+            types.HttpOptions(timeout=int(max(http_timeout, GEMINI_MIN_DEADLINE_SECONDS) * 1000))
+            if http_timeout > 0
+            else None
+        )
         self._client = genai.Client(api_key=api_key, http_options=http_options)
 
     def generate(self, image_jpeg: bytes, system_prompt: str, user_prompt: str) -> str:
@@ -55,7 +65,8 @@ class GeminiProvider(VLMProvider):
 
     def ping(self) -> str:
         response = self._client.models.generate_content(
-            model=self.model, contents=messages.VLM_PING_PROMPT,
+            model=self.model,
+            contents=messages.VLM_PING_PROMPT,
             config=self._types.GenerateContentConfig(**self._common()),
         )
         return (response.text or "").strip()
@@ -64,11 +75,14 @@ class GeminiProvider(VLMProvider):
         # Automatic function calling (model memanggil fungsi Python) aktif secara
         # bawaan di SDK dan memunculkan peringatan "Direct use of automatic
         # function calling" di setiap panggilan, padahal tidak dipakai di sini.
-        options: dict[str, Any] = {"automatic_function_calling": self._types.AutomaticFunctionCallingConfig(disable=True)}
+        options: dict[str, Any] = {
+            "automatic_function_calling": self._types.AutomaticFunctionCallingConfig(disable=True)
+        }
         if self.temperature is not None:
             options["temperature"] = self.temperature
         if self.thinking_level:
             # SDK menerima nama level berupa str (pydantic mengubahnya ke enum ThinkingLevel)
             options["thinking_config"] = self._types.ThinkingConfig(  # pyright: ignore[reportArgumentType]
-                thinking_level=self.thinking_level)  # pyright: ignore[reportArgumentType]
+                thinking_level=self.thinking_level
+            )  # pyright: ignore[reportArgumentType]
         return options

@@ -51,8 +51,14 @@ def _enroll_with_org(store) -> worker_store.Worker:
     dep = store.create_org("departments", "Konstruksi")
     comp = store.create_org("companies", "PT Kontraktor A")
     worker = store.create(
-        "P-0001", "Budi Santoso", True, "admin-uji", nickname="Budi", gender="male",
-        department_id=dep["id"], company_id=comp["id"],
+        "P-0001",
+        "Budi Santoso",
+        True,
+        "admin-uji",
+        nickname="Budi",
+        gender="male",
+        department_id=dep["id"],
+        company_id=comp["id"],
     )
     store.add_template(worker.id, "bare", cfg.FACE_MODEL_VERSION, _unit(1), "admin-uji")
     return worker
@@ -80,7 +86,11 @@ def test_inspeksi_lewat_state_manager_mengisi_snapshot_audit(store, audit):
     sm.StateManager()._save_audit(7, result, np.zeros((24, 12, 3), np.uint8), who)
     row = _audit_row(audit)
     assert (row["worker_id"], row["employee_no"], row["worker_name"], row["fr_status"]) == (
-        worker.id, "P-0001", "Budi Santoso", "recognized")
+        worker.id,
+        "P-0001",
+        "Budi Santoso",
+        "recognized",
+    )
     assert (row["department"], row["company"]) == ("Konstruksi", "PT Kontraktor A")
 
 

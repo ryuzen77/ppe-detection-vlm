@@ -2,6 +2,7 @@
 
 (Dipindah dari test_local_engine.py saat heuristik OpenCV dibuang di T27.)
 """
+
 import pytest
 
 from backend import ppe_rules
@@ -15,6 +16,7 @@ def missing_label(key):
 
 
 # --- Aturan katalog ------------------------------------------------------------
+
 
 def test_semua_item_tidak_boleh_dimatikan(catalog_defaults):
     semua_mati = {item.key: False for item in ppe_rules.get_items()}
@@ -30,6 +32,7 @@ def test_kunci_item_tidak_dikenal_ditolak(catalog_defaults):
 
 def test_pilihan_item_aktif_tersimpan_di_data_dir(catalog_defaults):
     from backend import runtime_settings
+
     catalog_defaults.set_active({"sarung_tangan": True})
     assert runtime_settings.load()["ppe_active"]["sarung_tangan"] is True
 
@@ -44,6 +47,7 @@ def test_perubahan_sebagian_tidak_mengubah_item_lain(catalog_defaults):
 
 
 # --- Balasan VLM ------------------------------------------------------------------
+
 
 def _balasan_lengkap(**tambahan):
     items = {
@@ -89,6 +93,7 @@ def test_item_aktif_yang_tidak_dinilai_model_dianggap_tidak_ada(catalog_defaults
 def test_pilihan_tersimpan_baru_berlaku_setelah_load_settings(catalog_defaults):
     # Sejak T16 impor tidak membaca disk; startup memanggil load_settings()
     from backend import runtime_settings
+
     runtime_settings.update("ppe_active", {"kacamata": True})
     assert "kacamata" not in [i.key for i in ppe_rules.get_active_items()]
 
@@ -103,18 +108,22 @@ def _balasan_tanpa_apd(missing_items):
 
 def test_ejaan_nama_item_dari_model_tidak_menggandakan_daftar_kurang(catalog_defaults):
     # Jawaban nyata gemini-3.5-flash-lite (T21): nama item huruf kecil + label katalog
-    data = _balasan_tanpa_apd(["Helm keselamatan", "Rompi keselamatan", "Celana panjang",
-                               "Sepatu tertutup", "Helm Keselamatan"])
+    data = _balasan_tanpa_apd(
+        ["Helm keselamatan", "Rompi keselamatan", "Celana panjang", "Sepatu tertutup", "Helm Keselamatan"]
+    )
     result = VLMAnalyzer._parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [missing_label(k) for k in ("helm", "rompi", "celana", "sepatu")]
 
 
-@pytest.mark.parametrize("teks", [
-    ppe_rules.SPOOF_MISSING_LABEL,
-    "bukan orang fisik nyata (foto di layar ponsel)",
-    "BUKAN ORANG FISIK NYATA",
-])
+@pytest.mark.parametrize(
+    "teks",
+    [
+        ppe_rules.SPOOF_MISSING_LABEL,
+        "bukan orang fisik nyata (foto di layar ponsel)",
+        "BUKAN ORANG FISIK NYATA",
+    ],
+)
 def test_penolakan_anti_spoofing_dikenali_dengan_ejaan_apa_pun(catalog_defaults, teks):
     data = _balasan_lengkap(missing_items=[teks])
     result = VLMAnalyzer._parse_vlm_payload(data)
@@ -123,6 +132,7 @@ def test_penolakan_anti_spoofing_dikenali_dengan_ejaan_apa_pun(catalog_defaults,
 
 
 # --- Jawaban ringkas (T36a) -------------------------------------------------------
+
 
 def _balasan_ringkas(orang_nyata=True):
     """Bentuk yang kini diminta prompt: nilai per item + tanda orang nyata, tanpa teks bebas."""
@@ -165,6 +175,7 @@ def test_kunci_tambahan_dari_model_diabaikan(catalog_defaults):
 
 # --- Nilai null dari VLM (T39a, jawaban nyata Gemini) ----------------------------------
 
+
 def test_warna_null_untuk_orang_tanpa_rompi_tidak_menggagalkan_jawaban(catalog_defaults):
     # Jawaban nyata gemini-3.5-flash-lite untuk baju kuning tanpa rompi (no_19)
     data = _balasan_ringkas()
@@ -190,6 +201,7 @@ def test_detected_null_dianggap_tidak_terdeteksi(catalog_defaults):
 
 
 # --- Larangan rokok (T58) ---------------------------------------------------------------
+
 
 def test_rokok_terlihat_menolak_walau_apd_lengkap(catalog_defaults):
     data = _balasan_lengkap()
@@ -225,6 +237,7 @@ def test_hanya_larangan_yang_aktif_ditolak(catalog_defaults):
 
 def test_pengaturan_tersimpan_yang_hanya_menyisakan_larangan_diabaikan(catalog_defaults, monkeypatch):
     from backend import runtime_settings
+
     tersimpan = {item.key: item.prohibited for item in ppe_rules.get_items()}
     monkeypatch.setattr(runtime_settings, "load", lambda: {"ppe_active": tersimpan})
     catalog_defaults.load_settings()

@@ -5,6 +5,7 @@ Sebelum T12, audit, foto bukti, dan pilihan operator tersimpan di dalam
 dijalankan dengan tata letak baru. Berkas yang sudah ada di tujuan tidak pernah
 ditimpa: data lama yang bentrok dibiarkan di tempatnya dan dilaporkan.
 """
+
 import logging
 import shutil
 from pathlib import Path
@@ -49,8 +50,12 @@ def migrate_legacy_data(cfg) -> tuple[list, list]:
             skipped.append(legacy_db)
         else:
             for suffix in ("", "-wal", "-shm"):
-                _move(legacy_db.with_name(legacy_db.name + suffix),
-                      cfg.DB_PATH.with_name(cfg.DB_PATH.name + suffix), moved, skipped)
+                _move(
+                    legacy_db.with_name(legacy_db.name + suffix),
+                    cfg.DB_PATH.with_name(cfg.DB_PATH.name + suffix),
+                    moved,
+                    skipped,
+                )
 
     # Cadangan sebelum migrasi skema (audit.v0.bak, ...)
     if legacy_reports.is_dir():
@@ -78,5 +83,7 @@ def prepare_data_dir(cfg):
     if moved:
         logger.info(f"{len(moved)} berkas data dipindah dari {LEGACY_DIR} ke {cfg.DATA_DIR}")
     for path in skipped:
-        logger.warning(f"{path} tidak dipindah karena tujuan sudah berisi "
-                       f"berkas bernama sama. Periksa dan gabungkan secara manual.")
+        logger.warning(
+            f"{path} tidak dipindah karena tujuan sudah berisi "
+            f"berkas bernama sama. Periksa dan gabungkan secara manual."
+        )

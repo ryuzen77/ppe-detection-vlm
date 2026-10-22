@@ -212,11 +212,15 @@ def test_filters_are_exact_and_parameterized(env, filters):
     assert report["totals"]["passes"] == 1
 
 
-@pytest.mark.parametrize("filters,count", [
-    ({"department": "Divisi A"}, 1), ({"company": "Perusahaan A"}, 1),
-    ({"department": "Divisi A", "company": "Perusahaan A"}, 1),
-    ({"department": "Tidak Ada"}, 0),
-])
+@pytest.mark.parametrize(
+    "filters,count",
+    [
+        ({"department": "Divisi A"}, 1),
+        ({"company": "Perusahaan A"}, 1),
+        ({"department": "Divisi A", "company": "Perusahaan A"}, 1),
+        ({"department": "Tidak Ada"}, 0),
+    ],
+)
 def test_recognition_metrics_cover_entire_gate_despite_organization_filters(env, filters, count):
     first, second = _worker(env), _worker(env, "P-002")
     _move_worker(env, first, "Divisi A", "Perusahaan A")
@@ -357,8 +361,10 @@ def test_csv_filter_and_quoting_preserve_snapshot_text(env):
     assert rows[-1][-3:] == ["1", "1", "0"]
 
 
-@pytest.mark.parametrize("filters", [{"department": "Divisi A"}, {"company": "Perusahaan A"},
-                                     {"department": "Divisi A", "company": "Perusahaan A"}])
+@pytest.mark.parametrize(
+    "filters",
+    [{"department": "Divisi A"}, {"company": "Perusahaan A"}, {"department": "Divisi A", "company": "Perusahaan A"}],
+)
 def test_csv_unknown_summary_covers_entire_gate_when_filtered(env, filters):
     _audit(env, _worker(env), department="Divisi B", company="Perusahaan B")
     _audit(env, status="unknown", department=None, company=None)
@@ -396,10 +402,16 @@ def test_csv_exports_have_one_utf8_bom_and_preserve_headers(env, catalog_default
     assert response.content.count(b"\xef\xbb\xbf") == 1
     text = response.content.decode("utf-8-sig")
     rows = list(csv.reader(io.StringIO(text)))
-    expected = messages.ATTENDANCE_CSV_HEADER if header_index else (
-        messages.CSV_HEADER_LEADING
-        + [messages.CSV_HEADER_WORKER_NAME, messages.CSV_HEADER_DEPARTMENT, messages.CSV_HEADER_COMPANY]
-        + [item.label for item in ppe_rules.get_items()] + messages.CSV_HEADER_TRAILING)
+    expected = (
+        messages.ATTENDANCE_CSV_HEADER
+        if header_index
+        else (
+            messages.CSV_HEADER_LEADING
+            + [messages.CSV_HEADER_WORKER_NAME, messages.CSV_HEADER_DEPARTMENT, messages.CSV_HEADER_COMPANY]
+            + [item.label for item in ppe_rules.get_items()]
+            + messages.CSV_HEADER_TRAILING
+        )
+    )
     assert rows[header_index] == expected
     if populated:
         assert name in text

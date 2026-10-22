@@ -15,6 +15,7 @@ Log yang tidak dikelola bisa menghentikan gerbang, jadi:
 - tiap berkas berotasi menurut ukuran, salinan lama dihapus menurut umur (`prune_rotated_logs`);
 - penjaga disk (`disk_guard.py`) menaikkan level log berkas lewat `set_file_level`.
 """
+
 import atexit
 import logging
 import os
@@ -55,7 +56,7 @@ class DroppingQueueHandler(QueueHandler):
         try:
             self.queue.put_nowait(record)
         except queue.Full:
-            self.dropped += 1   # perkiraan cukup; tanpa kunci supaya tetap murah
+            self.dropped += 1  # perkiraan cukup; tanpa kunci supaya tetap murah
 
 
 class DrainingQueueListener(QueueListener):
@@ -80,7 +81,7 @@ class RepeatFilter(logging.Filter):
         self._window = window_seconds
         self._max_keys = max_keys
         self._clock = clock
-        self._seen: dict[tuple, list] = {}   # kunci -> [waktu lolos terakhir, jumlah ditahan]
+        self._seen: dict[tuple, list] = {}  # kunci -> [waktu lolos terakhir, jumlah ditahan]
         self._lock = threading.Lock()
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -106,7 +107,7 @@ class RepeatFilter(logging.Filter):
     def _forget_expired(self, now: float):
         for key in [k for k, (at, _) in self._seen.items() if now - at >= self._window]:
             del self._seen[key]
-        if len(self._seen) > self._max_keys:   # semua masih baru: buang separuh tertua
+        if len(self._seen) > self._max_keys:  # semua masih baru: buang separuh tertua
             for key in sorted(self._seen, key=lambda k: self._seen[k][0])[: len(self._seen) // 2]:
                 del self._seen[key]
 
@@ -121,16 +122,16 @@ class DurableRotatingFileHandler(RotatingFileHandler):
             try:
                 os.fsync(self.stream.fileno())
             except OSError:
-                pass   # disk penuh / berkas dikunci: catatan sudah di-flush, jangan hentikan listener
+                pass  # disk penuh / berkas dikunci: catatan sudah di-flush, jangan hentikan listener
 
 
-def rotating_file(path: Path, formatter: logging.Formatter, cfg,
-                  handler_class: type = RotatingFileHandler) -> Optional[logging.Handler]:
+def rotating_file(
+    path: Path, formatter: logging.Formatter, cfg, handler_class: type = RotatingFileHandler
+) -> Optional[logging.Handler]:
     """Berkas berotasi menurut ukuran; None (+ peringatan konsol) bila tidak bisa dibuka."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        handler = handler_class(path, maxBytes=cfg.LOG_MAX_BYTES, backupCount=cfg.LOG_BACKUP_COUNT,
-                                encoding="utf-8")
+        handler = handler_class(path, maxBytes=cfg.LOG_MAX_BYTES, backupCount=cfg.LOG_BACKUP_COUNT, encoding="utf-8")
     except OSError as e:
         # Berkas log yang tidak bisa dibuka tidak boleh menghentikan gerbang
         print(messages.LOG_FILE_DISABLED.format(path=path, error=e), file=sys.stderr)
@@ -171,8 +172,9 @@ def setup_security_log(cfg):
     security = logging.getLogger(SECURITY_LOGGER)
     security.propagate = False
     security.setLevel(logging.INFO)
-    handler = rotating_file(cfg.LOG_DIR / cfg.SECURITY_LOG_FILE, logging.Formatter("%(message)s"), cfg,
-                            DurableRotatingFileHandler)
+    handler = rotating_file(
+        cfg.LOG_DIR / cfg.SECURITY_LOG_FILE, logging.Formatter("%(message)s"), cfg, DurableRotatingFileHandler
+    )
     if handler is not None:
         security.addHandler(_queued([handler], cfg, None))
 
@@ -241,5 +243,5 @@ def prune_rotated_logs(log_dir: Path, max_age_seconds: dict[str, float], now: Op
                     path.unlink()
                     removed += 1
             except OSError:
-                pass   # sedang dibuka/dirotasi proses lain (Windows): dicoba lagi di siklus berikutnya
+                pass  # sedang dibuka/dirotasi proses lain (Windows): dicoba lagi di siklus berikutnya
     return removed

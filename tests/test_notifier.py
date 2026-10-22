@@ -1,4 +1,5 @@
 """Lampu gerbang fisik lewat USB serial (T47): heartbeat, balasan, sambung ulang, uji lampu."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -61,6 +62,7 @@ def link():
 
 # --- Heartbeat & balasan -------------------------------------------------------------
 
+
 def test_keadaan_dikirim_ulang_tiap_putaran_sebagai_heartbeat(link):
     lnk, clock, ports = link
     lnk.set_state(LightState.GREEN)
@@ -80,6 +82,7 @@ def test_balasan_ok_menandai_tersambung(link):
 
 def test_balasan_terbaca_walau_in_waiting_bukan_jumlah_byte():
     """Backend socket:// pyserial mengisi in_waiting 0/1 (temuan smoke test T47)."""
+
     class SocketLikePort(FakePort):
         @property
         def in_waiting(self):
@@ -87,7 +90,7 @@ def test_balasan_terbaca_walau_in_waiting_bukan_jumlah_byte():
 
     clock = Clock()
     lnk = GateLightLink(opener=lambda *a: SocketLikePort(), clock=clock)
-    lnk.tick()                 # tulis + balasan masuk
+    lnk.tick()  # tulis + balasan masuk
     lnk.tick()
     assert lnk.status()["connected"] is True
 
@@ -108,7 +111,7 @@ def test_kabel_dicabut_lalu_disambung_ulang(link):
     ports[0].fail_write = True
     lnk.tick()
     assert ports[0].closed and lnk.status()["connected"] is False
-    lnk.tick()                                  # belum waktunya membuka ulang
+    lnk.tick()  # belum waktunya membuka ulang
     assert len(ports) == 1
     clock.now += cfg.IOT_RECONNECT_SECONDS
     lnk.set_state(LightState.RED)
@@ -140,6 +143,7 @@ def test_data_sampah_tanpa_baris_baru_dibatasi(link):
 def test_port_dibuka_tanpa_mereset_papan(monkeypatch):
     """DTR/RTS harus sudah False SEBELUM open(); sesudahnya papan sudah ter-reset."""
     import serial
+
     urutan = []
 
     class SpySerial:
@@ -162,6 +166,7 @@ def test_port_dibuka_tanpa_mereset_papan(monkeypatch):
 
 # --- NotifierManager ----------------------------------------------------------------------
 
+
 def test_gangguan_sistem_kuning_bukan_merah():
     m = NotifierManager()
     m.set_waiting()
@@ -171,16 +176,28 @@ def test_gangguan_sistem_kuning_bukan_merah():
 def test_status_iot_saat_nonaktif():
     m = NotifierManager()
     m.link = None
-    assert m.iot_status() == {"enabled": False, "connected": False, "last_ack_age_s": None, "error": None,
-                              "lamps_on": None, "lamps_available": None}
+    assert m.iot_status() == {
+        "enabled": False,
+        "connected": False,
+        "last_ack_age_s": None,
+        "error": None,
+        "lamps_on": None,
+        "lamps_available": None,
+    }
 
 
-@pytest.mark.parametrize("reply,expected", [
-    (b"OK:GREEN\n", ["green"]), (b"OK:RED\n", ["red"]),
-    (b"OK:YELLOW\n", ["yellow"]), (b"OK:OFF\n", []),
-    (b"OK:UNKNOWN\n", None), (b"OK:GREEN\nOK:OFF\n", []),
-    (b"OK:GREEN\nOK:UNKNOWN\n", None),
-])
+@pytest.mark.parametrize(
+    "reply,expected",
+    [
+        (b"OK:GREEN\n", ["green"]),
+        (b"OK:RED\n", ["red"]),
+        (b"OK:YELLOW\n", ["yellow"]),
+        (b"OK:OFF\n", []),
+        (b"OK:UNKNOWN\n", None),
+        (b"OK:GREEN\nOK:OFF\n", []),
+        (b"OK:GREEN\nOK:UNKNOWN\n", None),
+    ],
+)
 def test_serial_lamps_follow_last_ack_instead_of_command(link, reply, expected):
     lnk, _, ports = link
     lnk.set_state(LightState.RED)
@@ -227,6 +244,7 @@ def test_iot_type_selain_serial_ditolak(monkeypatch, link):
 
 
 # --- Uji lampu dari Pengaturan ---------------------------------------------------------------
+
 
 @pytest.fixture
 def client():

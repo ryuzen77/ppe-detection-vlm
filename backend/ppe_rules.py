@@ -35,27 +35,27 @@ class Qualifier:
     umum yang sama sehingga item baru bisa punya syaratnya sendiri.
     """
 
-    key: str            # Nama field pada hasil VLM, mis. "is_valid_color"
-    prompt_rule: str    # Kalimat syarat untuk prompt VLM
-    fail_label: str     # Teks lencana UI ketika item ada tetapi syarat tidak terpenuhi
+    key: str  # Nama field pada hasil VLM, mis. "is_valid_color"
+    prompt_rule: str  # Kalimat syarat untuk prompt VLM
+    fail_label: str  # Teks lencana UI ketika item ada tetapi syarat tidak terpenuhi
 
 
 @dataclass(frozen=True)
 class PPEItem:
     """Satu item APD beserta seluruh sifat yang dibutuhkan lintas modul."""
 
-    key: str                    # Pengenal internal; dipakai sebagai kunci JSON, DB, dan DOM
-    label: str                  # Nama yang dibaca operator
-    icon: str                   # Emoji untuk lencana dashboard lama (dihapus bersama UI lama)
-    icon_name: str              # Nama ikon garis untuk UI baru (mis. "hard-hat"); kunci ke registri ikon frontend
-    missing_label: str          # Nama yang masuk ke daftar `missing_items`
-    audio_missing: str          # Nama berkas MP3 (tanpa ekstensi) saat item tidak lengkap
-    audio_missing_text: str     # Kalimat TTS untuk berkas tersebut (dipakai generate_audio.py)
-    prompt_rule: str            # Aturan penilaian untuk prompt VLM
-    ok_label: str               # Teks lencana saat lolos
-    fail_label: str             # Teks lencana saat tidak terdeteksi
-    short_label: str = ""       # Nama ringkas untuk lencana sempit; kosong = pakai `label`
-    reports_color: bool = False # Warna item relevan untuk penilaian dan ditampilkan ke operator
+    key: str  # Pengenal internal; dipakai sebagai kunci JSON, DB, dan DOM
+    label: str  # Nama yang dibaca operator
+    icon: str  # Emoji untuk lencana dashboard lama (dihapus bersama UI lama)
+    icon_name: str  # Nama ikon garis untuk UI baru (mis. "hard-hat"); kunci ke registri ikon frontend
+    missing_label: str  # Nama yang masuk ke daftar `missing_items`
+    audio_missing: str  # Nama berkas MP3 (tanpa ekstensi) saat item tidak lengkap
+    audio_missing_text: str  # Kalimat TTS untuk berkas tersebut (dipakai generate_audio.py)
+    prompt_rule: str  # Aturan penilaian untuk prompt VLM
+    ok_label: str  # Teks lencana saat lolos
+    fail_label: str  # Teks lencana saat tidak terdeteksi
+    short_label: str = ""  # Nama ringkas untuk lencana sempit; kosong = pakai `label`
+    reports_color: bool = False  # Warna item relevan untuk penilaian dan ditampilkan ke operator
     required_default: bool = True  # Aktif secara bawaan; operator dapat mengubahnya
     qualifier: Optional[Qualifier] = None
     # Larangan (T58): `detected` = benda terlarang terlihat = melanggar. Bentuk jawaban
@@ -82,7 +82,8 @@ class PPEItem:
             "prohibited": self.prohibited,
             "qualifier": (
                 {"key": self.qualifier.key, "fail_label": self.qualifier.fail_label}
-                if self.qualifier is not None else None
+                if self.qualifier is not None
+                else None
             ),
         }
 
@@ -207,8 +208,7 @@ PPE_ITEMS: list[PPEItem] = [
         qualifier=Qualifier(
             key="is_closed_shoes",
             prompt_rule=(
-                "   - Sandal, selop, sandal jepit, atau telanjang kaki TIDAK DIIZINKAN "
-                "(is_closed_shoes = false)."
+                "   - Sandal, selop, sandal jepit, atau telanjang kaki TIDAK DIIZINKAN (is_closed_shoes = false)."
             ),
             fail_label="Terbuka/Sandal",
         ),
@@ -305,6 +305,7 @@ SPOOF_MISSING_LABEL = "Bukan Orang Fisik Nyata (Terdeteksi Foto/Layar)"
 # Akses katalog
 # ---------------------------------------------------------------------------
 
+
 def get_items() -> list[PPEItem]:
     """Seluruh item di katalog, aktif maupun tidak, dengan status aktif terkini.
 
@@ -354,8 +355,7 @@ def apply_required_overrides(overrides: dict) -> list[PPEItem]:
     if not overrides:
         return list(PPE_ITEMS)
     return [
-        replace(item, required_default=bool(overrides[item.key]))
-        if item.key in overrides else item
+        replace(item, required_default=bool(overrides[item.key])) if item.key in overrides else item
         for item in PPE_ITEMS
     ]
 
@@ -430,6 +430,7 @@ def set_active(changes: dict) -> list[PPEItem]:
 # Perakitan prompt VLM
 # ---------------------------------------------------------------------------
 
+
 def build_prompt_rules(items: Optional[list[PPEItem]] = None) -> str:
     """Bagian aturan penilaian pada prompt, dinomori sesuai urutan katalog."""
     items = items if items is not None else get_active_items()
@@ -462,7 +463,6 @@ def build_json_shape(items: Optional[list[PPEItem]] = None) -> str:
             field.append(f'"{item.qualifier.key}": true/false')
         fields.append(f'"{item.key}": {{' + ", ".join(field) + "}")
     return '{"items": {' + ", ".join(fields) + f'}}, "{REAL_PERSON_KEY}": true/false}}'
-
 
 
 def evaluate(results: dict, items: Optional[list[PPEItem]] = None) -> tuple[bool, list[str]]:

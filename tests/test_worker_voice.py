@@ -130,7 +130,8 @@ def test_hapus_suara(store):
 def test_api_pendaftaran_profil_dan_hapus_wajah(store, no_cloud_voice):
     client = TestClient(app)
     r = client.post(
-        "/api/workers", json={"employee_no": "P-1", "name": "Sari Dewi", "consent": True, "nickname": "Sari", "gender": "female"}
+        "/api/workers",
+        json={"employee_no": "P-1", "name": "Sari Dewi", "consent": True, "nickname": "Sari", "gender": "female"},
     )
     assert r.status_code == 201 and (r.json()["nickname"], r.json()["salutation"]) == ("Sari", "Bu")
     wid = r.json()["id"]

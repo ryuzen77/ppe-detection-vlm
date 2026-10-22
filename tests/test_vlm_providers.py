@@ -1,4 +1,5 @@
 """Adaptor penyedia VLM dan jalur VLMAnalyzer di atasnya, tanpa panggilan jaringan."""
+
 import json
 import threading
 import time
@@ -9,8 +10,14 @@ import pytest
 
 from backend import messages, ppe_rules
 from backend.config import cfg
-from backend.vlm_analyzer import (USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt, confirmation_prompts,
-                                   image_for_vlm)
+from backend.vlm_analyzer import (
+    USER_PROMPT,
+    VLMAnalyzer,
+    VLMEngine,
+    build_system_prompt,
+    confirmation_prompts,
+    image_for_vlm,
+)
 from backend.vlm_providers import VLMProvider, create_provider, parse_json_reply
 from backend.vlm_providers.gemini import GeminiProvider
 from backend.vlm_providers.openai_compatible import OpenAICompatibleProvider
@@ -26,12 +33,16 @@ def _item(key: str) -> ppe_rules.PPEItem:
 
 # --- Penguraian jawaban ---------------------------------------------------------
 
-@pytest.mark.parametrize("text", [
-    '{"a": 1}',
-    '```json\n{"a": 1}\n```',
-    '```\n{"a": 1}\n```',
-    '  {"a": 1}  \n',
-])
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"a": 1}',
+        '```json\n{"a": 1}\n```',
+        '```\n{"a": 1}\n```',
+        '  {"a": 1}  \n',
+    ],
+)
 def test_jawaban_json_diurai_dengan_atau_tanpa_pagar(text):
     assert parse_json_reply(text) == {"a": 1}
 
@@ -47,6 +58,7 @@ def test_penyedia_tidak_dikenal_ditolak():
 
 
 # --- Adaptor Gemini ------------------------------------------------------------------
+
 
 class _Recorder:
     """Pengganti `client.models` yang mencatat permintaan alih-alih mengirimnya."""
@@ -96,6 +108,7 @@ def test_ping_gemini_mengembalikan_teks(monkeypatch):
 
 # --- VLMAnalyzer dengan penyedia tiruan ------------------------------------------------
 
+
 class FakeProvider(VLMProvider):
     name = "palsu"
 
@@ -117,12 +130,18 @@ class FakeProvider(VLMProvider):
 
 
 def _lengkap():
-    return json.dumps({"items": {
-        "helm": {"detected": True},
-        "rompi": {"detected": True, "is_valid_color": True, "color": "orange"},
-        "celana": {"detected": True},
-        "sepatu": {"detected": True, "is_closed_shoes": True},
-    }, "missing_items": [], "notes": "lengkap"})
+    return json.dumps(
+        {
+            "items": {
+                "helm": {"detected": True},
+                "rompi": {"detected": True, "is_valid_color": True, "color": "orange"},
+                "celana": {"detected": True},
+                "sepatu": {"detected": True, "is_closed_shoes": True},
+            },
+            "missing_items": [],
+            "notes": "lengkap",
+        }
+    )
 
 
 def _engine(role, provider, local=False, timeout=None):
@@ -160,7 +179,7 @@ def test_jawaban_utama_menjadi_keputusan(analyzer):
     assert hasil.is_complete is True and hasil.is_system_unavailable is False
     assert analyzer.backup.provider.calls == [], "Cadangan tidak disentuh selama utama menjawab"
 
-    (jpeg, system_prompt, user_prompt), = utama.calls
+    ((jpeg, system_prompt, user_prompt),) = utama.calls
     assert user_prompt == USER_PROMPT
     assert cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR) is not None, "Gambar harus JPEG utuh"
     # Prompt menyebut item lewat kuncinya di bentuk JSON yang diminta
@@ -192,8 +211,9 @@ def test_utama_galat_cadangan_memutuskan_di_inspeksi_yang_sama(analyzer):
 
 
 def test_utama_lambat_dibatasi_waktu_lalu_cadangan_memutuskan(analyzer):
-    analyzer.pasang(utama=FakeProvider(reply=_lengkap(), delay=1.0), cadangan=FakeProvider(reply=_lengkap()),
-                    timeout_utama=0.2)
+    analyzer.pasang(
+        utama=FakeProvider(reply=_lengkap(), delay=1.0), cadangan=FakeProvider(reply=_lengkap()), timeout_utama=0.2
+    )
     start = time.time()
     hasil = analyzer.analyze_person(person_crop())
     assert time.time() - start < 0.8, "Gerbang tidak menunggu utama melewati batas waktunya"
@@ -214,8 +234,10 @@ def _assert_tanpa_keputusan(hasil):
 
 
 def test_utama_dan_cadangan_gagal_tanpa_keputusan(analyzer):
-    analyzer.pasang(utama=FakeProvider(error=RuntimeError("503 UNAVAILABLE")),
-                    cadangan=FakeProvider(error=RuntimeError("connection refused")))
+    analyzer.pasang(
+        utama=FakeProvider(error=RuntimeError("503 UNAVAILABLE")),
+        cadangan=FakeProvider(error=RuntimeError("connection refused")),
+    )
     hasil = analyzer.analyze_person(person_crop())
     _assert_tanpa_keputusan(hasil)
     assert "503" in hasil.notes and "connection refused" in hasil.notes
@@ -303,6 +325,7 @@ def test_cadangan_tanpa_provider_dianggap_tidak_aktif(analyzer, monkeypatch):
 def test_pesan_log_pemutus_sirkuit_dengan_dan_tanpa_cadangan(analyzer, monkeypatch, caplog):
     """T87: log pemutus sirkuit membedakan apakah ada cadangan atau tidak."""
     import logging
+
     monkeypatch.setattr(cfg, "VLM_PRIMARY_FAILURES_BEFORE_DOWN", 1)
 
     # 1. Tanpa cadangan: log mencatat setiap inspeksi tetap mencoba utama
@@ -364,6 +387,7 @@ def test_ping_menguji_utama_dan_cadangan(analyzer):
 def test_ping_memakai_gambar_contoh_seukuran_pemeriksaan(analyzer):
     """T86: dulu ping teks (±0,5 dtk) sementara pemeriksaan foto > 5 dtk -> "latensi aman" menyesatkan."""
     from backend.vlm_analyzer import warmup_image_jpeg
+
     utama = FakeProvider(reply=_lengkap())
     analyzer.pasang(utama=utama)
     res = analyzer.ping_api()
@@ -406,8 +430,8 @@ def test_ping_memakai_engine_terbaru_bila_penyedia_diganti_saat_menunggu(analyze
     hasil = {}
     t = threading.Thread(target=lambda: hasil.update(analyzer.ping_api()))
     t.start()
-    time.sleep(0.2)                       # ping sedang menunggu lock
-    analyzer.pasang(utama=baru)           # pergantian penyedia (di produksi: _swap di bawah lock yang sama)
+    time.sleep(0.2)  # ping sedang menunggu lock
+    analyzer.pasang(utama=baru)  # pergantian penyedia (di produksi: _swap di bawah lock yang sama)
     analyzer.api_lock.release()
     t.join(timeout=5)
     assert hasil["engines"][0]["ok"] and lama.calls == [] and len(baru.calls) == 1
@@ -440,6 +464,7 @@ def test_ping_sibuk_saat_gerbang_memeriksa(analyzer, monkeypatch):
 
 def test_status_dashboard_mengikuti_siapa_yang_memutuskan(analyzer):
     from backend.api_monitor import api_monitor
+
     analyzer.pasang(utama=FakeProvider(error=RuntimeError("503")), cadangan=FakeProvider(reply=_lengkap()))
     analyzer.analyze_person(person_crop())
     assert api_monitor.get_status()["mode"] == "CADANGAN"
@@ -457,6 +482,7 @@ def test_klien_gemini_membatalkan_panggilan_lewat_batas_waktu(monkeypatch):
     # Tanpa batas waktu HTTP, panggilan saat Google kelebihan beban menggantung
     # ~60 dtk dan menyandera thread walau aplikasi berhenti menunggu (T27).
     from google import genai
+
     dibuat = {}
 
     class ClientPalsu:
@@ -513,6 +539,7 @@ def test_engine_meneruskan_suhu_dari_config(monkeypatch):
 
 
 # --- Konfirmasi kedua larangan (T58) -------------------------------------------------------
+
 
 class SequenceProvider(FakeProvider):
     """Jawaban berurutan per panggilan; Exception di daftar dilempar sebagai galat."""

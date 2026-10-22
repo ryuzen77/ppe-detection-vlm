@@ -1,4 +1,5 @@
 """Bootstrap aplikasi: FastAPI, middleware, router, frontend statis, dan server."""
+
 import logging
 import sys
 
@@ -36,6 +37,7 @@ from .api.deps import require_session
 
 logger = logging.getLogger(__name__)
 
+
 class PayloadTooLargeError(Exception):
     pass
 
@@ -50,6 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     runtime.stop()
 
+
 app = FastAPI(title="DEPRO - Digital Safety Protection API", version="1.0.0", lifespan=lifespan)
 
 # Enable CORS for decoupled frontend.
@@ -57,16 +60,17 @@ app = FastAPI(title="DEPRO - Digital Safety Protection API", version="1.0.0", li
 # kombinasi wildcard + credentials.
 _allow_wildcard_origin = "*" in cfg.CORS_ORIGINS
 
+
 class LimitPayloadSizeMiddleware:
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         from .messages import PAYLOAD_TOO_LARGE
-        
+
         if scope["type"] != "http" or scope["method"] not in ("POST", "PUT", "PATCH"):
             return await self.app(scope, receive, send)
-            
+
         content_length = None
         for name, value in scope.get("headers", []):
             if name == b"content-length":
@@ -75,12 +79,13 @@ class LimitPayloadSizeMiddleware:
                 except ValueError:
                     pass
                 break
-                
+
         if content_length is not None and content_length > cfg.MAX_PAYLOAD_BYTES:
             await self._send_413(send, PAYLOAD_TOO_LARGE)
             return
-            
+
         received_bytes = 0
+
         async def custom_receive():
             nonlocal received_bytes
             message = await receive()
@@ -89,25 +94,34 @@ class LimitPayloadSizeMiddleware:
                 if received_bytes > cfg.MAX_PAYLOAD_BYTES:
                     raise PayloadTooLargeError(PAYLOAD_TOO_LARGE)
             return message
-            
+
         try:
             return await self.app(scope, custom_receive, send)
         except PayloadTooLargeError as e:
             await self._send_413(send, str(e))
             return
-            
+
     async def _send_413(self, send, detail):
         import json
+
         body = json.dumps({"detail": detail}).encode("utf-8")
-        await send({
-            "type": "http.response.start",
-            "status": 413,
-            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("utf-8"))],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("utf-8")),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body,
+            }
+        )
+
 
 app.add_middleware(LimitPayloadSizeMiddleware)
 
@@ -123,8 +137,18 @@ app.add_middleware(
 # sesi/setup/login yang bebas.
 # WebSocket memeriksa sesinya sendiri (dependensi HTTP tidak berlaku untuk /ws).
 app.include_router(routes_auth.router)
-for _module in (routes_system, routes_vlm, routes_cameras, routes_ppe,
-                routes_reports, routes_stream, routes_zone, routes_accounts, routes_workers, routes_org):
+for _module in (
+    routes_system,
+    routes_vlm,
+    routes_cameras,
+    routes_ppe,
+    routes_reports,
+    routes_stream,
+    routes_zone,
+    routes_accounts,
+    routes_workers,
+    routes_org,
+):
     app.include_router(_module.router, dependencies=[Depends(require_session)])
 app.include_router(websocket.router)
 
@@ -152,6 +176,7 @@ web_dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
 if web_dist_dir.exists():
     app.mount("/", RevalidatingStaticFiles(directory=str(web_dist_dir), html=True), name="web")
 
+
 def server_config():
     """Konfigurasi uvicorn. log_config=None: uvicorn tidak memasang handler sendiri,
     sehingga lognya mengalir ke root logger dan ikut tercatat di DATA_DIR/logs.
@@ -159,10 +184,17 @@ def server_config():
     uvicorn.Config menyetel level `uvicorn.access` ke `log_level` saat dibuat
     (configure_logging), menimpa setup_logging; level log akses (T53) dipasang ulang di sini."""
     import uvicorn
-    config = uvicorn.Config(app, host=cfg.HOST, port=cfg.PORT, reload=False,
-                            log_level=cfg.LOG_LEVEL.lower(), log_config=None,
-                            # anotasi uvicorn int, tetapi nilainya dipakai asyncio.wait_for (float boleh)
-                            timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS)  # pyright: ignore[reportArgumentType]
+
+    config = uvicorn.Config(
+        app,
+        host=cfg.HOST,
+        port=cfg.PORT,
+        reload=False,
+        log_level=cfg.LOG_LEVEL.lower(),
+        log_config=None,
+        # anotasi uvicorn int, tetapi nilainya dipakai asyncio.wait_for (float boleh)
+        timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS,
+    )  # pyright: ignore[reportArgumentType]
     logging.getLogger(ACCESS_LOGGER).setLevel(cfg.LOG_ACCESS_LEVEL)
     return config
 
@@ -182,6 +214,7 @@ def run():
 
     class GracefulServer(uvicorn.Server):
         """Custom Uvicorn Server that suppresses Windows SIGINT/CancelledError traceback on Ctrl+C."""
+
         @contextlib.contextmanager
         def capture_signals(self):
             original_handlers = {}

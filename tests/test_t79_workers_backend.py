@@ -51,6 +51,7 @@ def client():
 
 # --- 1. Hak Admin (403 untuk non-admin) ---
 
+
 def test_endpoint_baru_403_untuk_non_admin(client, store, rep_mgr):
     async def operator_user(request: Request) -> SessionUser:
         user = SessionUser("operator-uji", "operator")
@@ -73,12 +74,15 @@ def test_endpoint_baru_403_untuk_non_admin(client, store, rep_mgr):
         ]
         for method, path in endpoints:
             r = getattr(client, method)(path)
-            assert r.status_code == 403, f"Endpoint {method.upper()} {path} seharusnya 403 untuk non-admin, dapat {r.status_code}"
+            assert r.status_code == 403, (
+                f"Endpoint {method.upper()} {path} seharusnya 403 untuk non-admin, dapat {r.status_code}"
+            )
     finally:
         app.dependency_overrides.pop(require_session, None)
 
 
 # --- 2. Organisasi CRUD & Proteksi ---
+
 
 def test_organisasi_crud_dan_proteksi(client, store):
     # GET awal: departments kosong, companies berisi bawaan "Internal" dengan builtin=True
@@ -211,6 +215,7 @@ def test_patch_gender_saja_meminta_suara_ulang(client, store, monkeypatch):
 
 # --- 3. Nomor Pegawai Otomatis & Relasi Pekerja ---
 
+
 def test_nomor_pegawai_otomatis_dan_pembaharuan(client, store):
     # Preview next-employee-no saat awal
     r_next = client.get("/api/workers/next-employee-no").json()
@@ -277,8 +282,14 @@ def test_nomor_pegawai_otomatis_dan_pembaharuan(client, store):
 
 def test_pencarian_dan_filter_pekerja(client, store):
     # Buat 2 pekerja
-    client.post("/api/workers", json={"employee_no": "P-0010", "name": "Budi Santoso", "consent": True, "nickname": "Budi", "gender": "male"})
-    w2 = client.post("/api/workers", json={"employee_no": "P-0020", "name": "Dewi Sartika", "consent": True, "nickname": "Dewi", "gender": "female"}).json()
+    client.post(
+        "/api/workers",
+        json={"employee_no": "P-0010", "name": "Budi Santoso", "consent": True, "nickname": "Budi", "gender": "male"},
+    )
+    w2 = client.post(
+        "/api/workers",
+        json={"employee_no": "P-0020", "name": "Dewi Sartika", "consent": True, "nickname": "Dewi", "gender": "female"},
+    ).json()
     # Nonaktifkan w2
     client.post(f"/api/workers/{w2['id']}/deactivate")
 
@@ -305,8 +316,12 @@ def test_pencarian_dan_filter_pekerja(client, store):
 
 # --- 4. Riwayat Berhalaman & EXPLAIN QUERY PLAN ---
 
+
 def test_riwayat_berhalaman_dan_explain_query_plan(client, store, rep_mgr):
-    w = client.post("/api/workers", json={"employee_no": "P-0001", "name": "Eko", "consent": True, "nickname": "Eko", "gender": "male"}).json()
+    w = client.post(
+        "/api/workers",
+        json={"employee_no": "P-0001", "name": "Eko", "consent": True, "nickname": "Eko", "gender": "male"},
+    ).json()
     wid = w["id"]
 
     # Simpan 5 inspeksi untuk pekerja ini
@@ -352,6 +367,7 @@ def test_riwayat_berhalaman_dan_explain_query_plan(client, store, rep_mgr):
 
 
 # --- 5. Migrasi Skema Lama workers.db & audit.db ---
+
 
 def test_migrasi_workers_db_dari_skema_lama(tmp_path):
     old_db = tmp_path / "old_workers.db"
@@ -445,6 +461,7 @@ def test_migrasi_audit_db_dari_skema_v2(tmp_path):
 
 
 # --- 6. Snapshot & Filter Laporan ---
+
 
 def test_laporan_snapshot_dan_filter(client, store, rep_mgr):
     # Buat divisi dan kontraktor

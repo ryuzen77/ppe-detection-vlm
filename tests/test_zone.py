@@ -1,4 +1,5 @@
 """Zona titik berdiri (T36d): posisi kaki, pita zona, penyimpanan, dan API."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -29,6 +30,7 @@ def store(monkeypatch):
 
 # --- Posisi kaki ------------------------------------------------------------------------
 
+
 def test_posisi_kaki_dari_pergelangan_paling_bawah():
     # Saat melangkah satu kaki terangkat; yang menapak (paling bawah) yang dipakai
     assert zones.ankle_y(_kpts(800), FRAME_H) == pytest.approx(0.81)
@@ -52,6 +54,7 @@ def test_posisi_kaki_dibatasi_0_sampai_1():
 
 # --- Ingatan posisi kaki (kaki tertutup orang lain) ------------------------------------
 
+
 def test_kaki_tertutup_memakai_posisi_terakhir_yang_jelas():
     m = zones.FootMemory()
     assert m.resolve(5, 0.78, 0.80, now=0.0) == 0.78
@@ -72,6 +75,7 @@ def test_ingatan_kaki_per_id():
 
 
 # --- Pita zona --------------------------------------------------------------------------
+
 
 def test_zona_nonaktif_menghitung_semua_orang():
     z = zones.Zone(False, 0.7, 0.85)
@@ -106,6 +110,7 @@ def test_kalibrasi_mengaktifkan_pita_di_sekitar_kaki():
 
 # --- Penyimpanan ------------------------------------------------------------------------
 
+
 def test_bawaan_nonaktif(store):
     assert store.get().enabled is False
     assert store.get().source == zones.SOURCE_DEFAULT
@@ -127,11 +132,13 @@ def test_berkas_rusak_kembali_ke_bawaan(store):
 
 # --- API --------------------------------------------------------------------------------
 
+
 @pytest.fixture
 def client(monkeypatch):
     s = zones.ZoneStore()
     import backend.api.routes_zone as routes
     import backend.state_manager as sm
+
     monkeypatch.setattr(routes, "zone_store", s)
     monkeypatch.setattr(sm, "zone_store", s)
     monkeypatch.setattr(state_mgr, "latest_detections", [])
@@ -139,8 +146,9 @@ def client(monkeypatch):
 
 
 def _det(foot, bbox=(400, 100, 600, 900), corridor=True):
-    return DetectionResult(track_id=5, bbox=list(bbox), is_full_body=True, reason="",
-                           is_inside_corridor=corridor, foot_y=foot)
+    return DetectionResult(
+        track_id=5, bbox=list(bbox), is_full_body=True, reason="", is_inside_corridor=corridor, foot_y=foot
+    )
 
 
 def test_api_baca_dan_ubah(client):
@@ -172,11 +180,15 @@ def test_api_kalibrasi_kaki_tidak_terlihat_409(client, monkeypatch):
 
 def test_api_kalibrasi_dari_orang_terdekat_di_lorong(client, monkeypatch):
     c, s = client
-    monkeypatch.setattr(state_mgr, "latest_detections", [
-        _det(0.5, bbox=(400, 300, 500, 600)),               # antrean, lebih kecil
-        _det(0.8, bbox=(400, 100, 600, 900)),               # berdiri di titik
-        _det(0.95, bbox=(0, 0, 900, 999), corridor=False),  # di luar lorong
-    ])
+    monkeypatch.setattr(
+        state_mgr,
+        "latest_detections",
+        [
+            _det(0.5, bbox=(400, 300, 500, 600)),  # antrean, lebih kecil
+            _det(0.8, bbox=(400, 100, 600, 900)),  # berdiri di titik
+            _det(0.95, bbox=(0, 0, 900, 999), corridor=False),  # di luar lorong
+        ],
+    )
     r = c.post("/api/config/zone/calibrate")
     assert r.status_code == 200
     assert r.json()["enabled"] is True and r.json()["source"] == zones.SOURCE_CALIBRATED

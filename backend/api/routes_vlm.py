@@ -3,6 +3,7 @@
 API key tidak pernah lewat sini: key hanya di backend/.env (keputusan T28 e).
 Endpoint ganti key lama (`/api/config/vlm-key`, `/api/config/gemini-key`) dihapus.
 """
+
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -49,8 +50,7 @@ def _apply(selection: Selection, request: Request) -> dict:
     if not _lane_empty():
         raise _error(409, "lane_busy", messages.VLM_SELECT_LANE_BUSY)
     try:
-        return vlm_analyzer.apply_selection(selection, _lane_empty, client=client_address(request),
-                                            user=actor(request))
+        return vlm_analyzer.apply_selection(selection, _lane_empty, client=client_address(request), user=actor(request))
     except LaneBusy as e:
         raise _error(409, "lane_busy", str(e))
     except EngineFailed as e:
@@ -65,15 +65,18 @@ async def get_vlm_config():
 
 @router.get("/api/config/vlm/providers", dependencies=[Depends(require_admin)])
 async def list_vlm_providers():
-    return {"current": vlm_analyzer.current_selection(), "prompt_version": messages.PROMPT_VERSION,
-            "providers": vlm_selection.provider_catalog(vlm_analyzer.active_choices())}
+    return {
+        "current": vlm_analyzer.current_selection(),
+        "prompt_version": messages.PROMPT_VERSION,
+        "providers": vlm_selection.provider_catalog(vlm_analyzer.active_choices()),
+    }
 
 
 @router.post("/api/config/vlm/test", dependencies=[Depends(require_admin)])
 def test_vlm_provider(body: TestBody):
     """1 ping + 1 gambar sintetis ke penyedia itu (memakai kuota penyedia itu)."""
     choice = Choice.parse(body.model_dump())
-    if choice is None:   # penyedia kosong / "none": tidak ada yang bisa diuji (dulu HTTP 500, T65)
+    if choice is None:  # penyedia kosong / "none": tidak ada yang bisa diuji (dulu HTTP 500, T65)
         raise _error(400, "unknown_provider", messages.VLM_SELECT_UNKNOWN_PROVIDER.format(provider=body.provider))
     try:
         vlm_selection.check_choice(choice, confirm_unvalidated=True)
@@ -110,6 +113,7 @@ def reset_vlm_selection(request: Request):
 # --- PEMANTAUAN VLM ---
 # Tidak ada lagi sakelar mode engine: operator tidak mengubah cara gerbang
 # memutuskan saat berjalan; peralihan ke cadangan terjadi otomatis (T27).
+
 
 @router.get("/api/monitoring/status")
 async def get_monitoring_status():

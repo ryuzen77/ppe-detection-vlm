@@ -20,6 +20,7 @@ selesai di bawah batas waktu produksi (VLM_CLOUD/LOCAL_TIMEOUT_SECONDS) dilapork
 terpisah. Yang dievaluasi hanya VLM utama; cadangan dimatikan agar tidak ikut
 memakan VRAM dan mengacaukan pengukuran.
 """
+
 import csv
 import json
 import os
@@ -60,8 +61,12 @@ class GpuSampler(threading.Thread):
     def run(self):
         while not self.stop_flag.is_set():
             try:
-                out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-                                     capture_output=True, text=True, timeout=5).stdout
+                out = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                ).stdout
                 self.samples.append(int(out.split()[0]))
             except Exception:
                 pass
@@ -111,6 +116,7 @@ def ollama_residency(model: str) -> str:
     """Porsi model di GPU menurut Ollama (mis. '100% GPU' atau '23% CPU')."""
     try:
         import httpx
+
         base = (cfg.VLM_BASE_URL or "http://localhost:11434/v1").rsplit("/v1", 1)[0]
         for m in httpx.get(f"{base}/api/ps", timeout=5).json().get("models", []):
             names = {model, model if ":" in model else f"{model}:latest"}
@@ -131,6 +137,7 @@ def unload_ollama(model: str):
     beberapa GB tetap terpakai setelah skrip selesai."""
     try:
         import httpx
+
         base = (cfg.VLM_BASE_URL or "http://localhost:11434/v1").rsplit("/v1", 1)[0]
         httpx.post(f"{base}/api/generate", json={"model": model, "keep_alive": 0}, timeout=30)
     except Exception as e:
@@ -142,9 +149,12 @@ def main():
     # --files a,b,c : hanya foto dengan nama (tanpa ekstensi) ini — menghemat kuota
     # VLM cloud saat cukup menguji sebagian foto (mis. T39a, 10 gambar)
     wanted = set(sys.argv[sys.argv.index("--files") + 1].split(",")) if "--files" in sys.argv else None
-    files = [(f, label) for sub, label in CLASSES.items()
-             for f in sorted((data / sub).glob("*")) if f.suffix.lower() in (".jpg", ".jpeg", ".png")
-             and (wanted is None or f.stem in wanted)]
+    files = [
+        (f, label)
+        for sub, label in CLASSES.items()
+        for f in sorted((data / sub).glob("*"))
+        if f.suffix.lower() in (".jpg", ".jpeg", ".png") and (wanted is None or f.stem in wanted)
+    ]
     if not files:
         sys.exit(f"Tidak ada foto di {data}/ppe_complete atau ppe_incomplete")
 
@@ -197,8 +207,9 @@ def main():
         start = time.time()
         try:
             # T86: titik pose ikut, supaya gambar yang dinilai sama dengan di gerbang (panel kepala & tangan)
-            res = pool.submit(analyzer._call_vlm_internal, det.crop_img,
-                              getattr(det, "crop_keypoints", None)).result(timeout=EVAL_TIMEOUT_SECONDS)
+            res = pool.submit(analyzer._call_vlm_internal, det.crop_img, getattr(det, "crop_keypoints", None)).result(
+                timeout=EVAL_TIMEOUT_SECONDS
+            )
             row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items))
         except Exception as e:
             kind = "timeout" if e.__class__.__name__ == "TimeoutError" else "galat"
@@ -206,9 +217,14 @@ def main():
         row["latency_s"] = round(time.time() - start, 2)
         last_call = time.time()
         rows.append(row)
-        verdict = ("BENAR" if row["pred_complete"] == label else "SALAH") if row["status"] == "ok" else row["status"].upper()
-        print(f"[{n}/{len(crops)}] {row['file']}: {verdict} {row['latency_s']} dtk "
-              f"(pred {'lengkap' if row.get('pred_complete') else 'tidak'}; kurang: {row.get('missing', '-')})", flush=True)
+        verdict = (
+            ("BENAR" if row["pred_complete"] == label else "SALAH") if row["status"] == "ok" else row["status"].upper()
+        )
+        print(
+            f"[{n}/{len(crops)}] {row['file']}: {verdict} {row['latency_s']} dtk "
+            f"(pred {'lengkap' if row.get('pred_complete') else 'tidak'}; kurang: {row.get('missing', '-')})",
+            flush=True,
+        )
 
     load.stop_flag.set()
     sampler.stop_flag.set()
@@ -228,8 +244,12 @@ def main():
     assert analyzer.primary is not None
     limit = analyzer.primary.timeout
     summary = {
-        "provider": provider, "model": model, "foto": len(rows), "dikirim": len(sent),
-        "jawaban_valid": len(ok), "galat_format_atau_lainnya": sum(r["status"] == "galat" for r in rows),
+        "provider": provider,
+        "model": model,
+        "foto": len(rows),
+        "dikirim": len(sent),
+        "jawaban_valid": len(ok),
+        "galat_format_atau_lainnya": sum(r["status"] == "galat" for r in rows),
         "timeout": sum(r["status"] == "timeout" for r in rows),
         # Semua kegagalan dihitung SALAH: di produksi pekerja itu ditolak "tidak dapat diverifikasi"
         "akurasi": round(sum(r["pred_complete"] == r["label_complete"] for r in ok) / len(sent), 3) if sent else None,
@@ -239,7 +259,8 @@ def main():
         "latensi_median_s": round(statistics.median(lat), 2) if lat else None,
         "latensi_p95_s": round(q[-1], 2) if lat else None,
         "selesai_dalam_batas_produksi": f"{sum(x <= limit for x in lat)}/{len(sent)} (<= {limit:g} dtk)",
-        "vram_sebelum_mb": vram_before, "vram_puncak_mb": max(sampler.samples) if sampler.samples else None,
+        "vram_sebelum_mb": vram_before,
+        "vram_puncak_mb": max(sampler.samples) if sampler.samples else None,
         "porsi_gpu_ollama": residency,
         "yolo_paralel_fps": round(load.frames / elapsed, 1),
         "tubuh_utuh_ditolak": sum(r.get("full_body") is False for r in rows),

@@ -2,6 +2,7 @@
 
 Demo: semua akun `admin`, jadi kelola akun memakai `require_admin`.
 """
+
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -42,8 +43,9 @@ def change_own_password(body: PasswordChange, request: Request, user: auth.Sessi
         raise account_error(400, e)
     # Sesi lain akun ini berakhir; sesi yang sedang dipakai tetap
     auth.sessions.revoke_user(user.username, keep=request.cookies.get(auth.SESSION_COOKIE))
-    accounts.record_event("change_password", username=user.username, actor=user.username,
-                          client=client_address(request))
+    accounts.record_event(
+        "change_password", username=user.username, actor=user.username, client=client_address(request)
+    )
     return Response(status_code=204)
 
 
@@ -63,8 +65,9 @@ def create_account(body: NewAccount, request: Request, user: auth.SessionUser = 
 
 
 @router.post("/api/accounts/{username}/password", status_code=204)
-def reset_password(username: str, body: PasswordReset, request: Request,
-                   user: auth.SessionUser = Depends(require_admin)):
+def reset_password(
+    username: str, body: PasswordReset, request: Request, user: auth.SessionUser = Depends(require_admin)
+):
     try:
         accounts.store.set_password(username, body.new_password)
     except accounts.AccountError as e:

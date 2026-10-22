@@ -17,8 +17,10 @@ POSITION_SOUNDS = {
     "NOT_STANDING": "berdiri_tegak",
 }
 
+
 class AudioEngine:
     """Thread-safe, non-blocking audio player using pygame.mixer."""
+
     def __init__(self):
         self.audio_dir = cfg.AUDIO_DIR
         self.queue: Queue = Queue()
@@ -53,7 +55,7 @@ class AudioEngine:
 
     def set_muted(self, muted: bool) -> bool:
         self.is_muted = bool(muted)
-        if self.is_muted and hasattr(self, 'channel') and self.channel:
+        if self.is_muted and hasattr(self, "channel") and self.channel:
             try:
                 self.channel.stop()
             except Exception:
@@ -157,8 +159,9 @@ class AudioEngine:
                 return item.audio_missing
         return "tidak_lengkap"
 
-    def play_result(self, is_complete: bool, missing_items: Optional[list[str]] = None,
-                    named_voice: Optional[Path] = None):
+    def play_result(
+        self, is_complete: bool, missing_items: Optional[list[str]] = None, named_voice: Optional[Path] = None
+    ):
         """Suara keputusan. `named_voice` (T34d): MP3 "... Silakan masuk, Pak/Bu <nama>." pekerja yang
         dikenali — hanya dipakai saat LOLOS; ditolak tetap tanpa nama (keputusan pengguna)."""
         sound: "str | Path" = self.result_sound(is_complete, missing_items)
@@ -170,5 +173,6 @@ class AudioEngine:
         self.is_running = False
         if self.enabled:
             pygame.mixer.stop()
+
 
 audio_player = AudioEngine()

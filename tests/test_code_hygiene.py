@@ -3,6 +3,7 @@
 Hanya membaca berkas yang dilacak git; `backend/.env` tidak pernah dibaca
 (berkas itu memang tidak boleh terlacak, lihat tes kedua).
 """
+
 import ast
 import re
 import shutil
@@ -16,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MAX_FUNCTION_LINES = 30
 BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".ico", ".mp3", ".wav", ".woff", ".woff2", ".pt", ".onnx", ".db"}
 SECRET_PATTERN = re.compile(
-    r"AIza[0-9A-Za-z_\-]{30,}"                       # Google API key
-    r"|sk-[A-Za-z0-9_\-]{20,}"                       # OpenAI/OpenRouter
+    r"AIza[0-9A-Za-z_\-]{30,}"  # Google API key
+    r"|sk-[A-Za-z0-9_\-]{20,}"  # OpenAI/OpenRouter
     r"|(?i:password|passwd|secret|api_key|token)\s*=\s*['\"][A-Za-z0-9_\-]{24,}['\"]"
 )
 HEX_COLOR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
@@ -79,8 +80,12 @@ def _long_functions(paths: list[str]) -> set[str]:
 
 
 def test_no_secrets_in_tracked_files():
-    hits = [f"{rel}:{i}" for rel, text in _text_files(_tracked_files())
-            for i, line in enumerate(text.splitlines(), 1) if SECRET_PATTERN.search(line)]
+    hits = [
+        f"{rel}:{i}"
+        for rel, text in _text_files(_tracked_files())
+        for i, line in enumerate(text.splitlines(), 1)
+        if SECRET_PATTERN.search(line)
+    ]
     assert not hits, f"Pola rahasia di berkas terlacak (nilai tidak dicetak): {hits}"
 
 
@@ -89,12 +94,20 @@ def test_env_file_is_not_tracked():
 
 
 def test_ui_colors_only_in_tokens():
-    web = [p for p in _tracked_files()
-           if p.startswith("web/src/") and p.endswith((".svelte", ".ts", ".css"))
-           and p != COLOR_SOURCE and ".test." not in p]  # tes boleh memakai warna contoh
-    offenders = {rel for rel, text in _text_files(web) if rel not in HEX_COLOR_DEBT
-                 and any(HEX_COLOR.search(line) for line in text.splitlines()
-                         if not line.strip().startswith(("//", "*", "/*")))}
+    web = [
+        p
+        for p in _tracked_files()
+        if p.startswith("web/src/")
+        and p.endswith((".svelte", ".ts", ".css"))
+        and p != COLOR_SOURCE
+        and ".test." not in p
+    ]  # tes boleh memakai warna contoh
+    offenders = {
+        rel
+        for rel, text in _text_files(web)
+        if rel not in HEX_COLOR_DEBT
+        and any(HEX_COLOR.search(line) for line in text.splitlines() if not line.strip().startswith(("//", "*", "/*")))
+    }
     assert not offenders, f"Warna hex di luar {COLOR_SOURCE}: {sorted(offenders)}"
 
 
@@ -114,13 +127,18 @@ def test_secret_pattern_catches_real_shapes():
 
 
 # Indeks titik pose COCO ditulis langsung, mis. kpts[15] atau LEFT_ANKLE = 15 (T41)
-POSE_INDEX_LITERAL = re.compile(r"(kpts|keypoints|points|pts)\[\s*\d+\s*\]|^\s*(NOSE|LEFT_\w+|RIGHT_\w+)\s*(,\s*\w+\s*)*=\s*\d+",
-                                re.MULTILINE)
+POSE_INDEX_LITERAL = re.compile(
+    r"(kpts|keypoints|points|pts)\[\s*\d+\s*\]|^\s*(NOSE|LEFT_\w+|RIGHT_\w+)\s*(,\s*\w+\s*)*=\s*\d+", re.MULTILINE
+)
 POSE_SOURCE = "backend/pose_keypoints.py"
 
 
 def test_indeks_pose_hanya_di_satu_sumber():
-    offenders = [rel for rel, text in _text_files(p for p in _tracked_files()
-                                                  if p.startswith("backend/") and p.endswith(".py") and p != POSE_SOURCE)
-                 if POSE_INDEX_LITERAL.search(text)]
+    offenders = [
+        rel
+        for rel, text in _text_files(
+            p for p in _tracked_files() if p.startswith("backend/") and p.endswith(".py") and p != POSE_SOURCE
+        )
+        if POSE_INDEX_LITERAL.search(text)
+    ]
     assert not offenders, f"Indeks titik pose ditulis langsung (pakai {POSE_SOURCE}): {offenders}"

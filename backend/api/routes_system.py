@@ -1,4 +1,5 @@
 """Status server, reset pelacakan, koridor, audio, dan uji lampu IoT."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..config import cfg
@@ -21,7 +22,7 @@ async def health_check():
         "status": "online",
         "fps": round(video_service.fps, 1),
         "is_live_vlm": vlm_analyzer.is_live_api(),
-        "is_live_gemini": vlm_analyzer.is_live_api(),   # nama lama, untuk klien lama
+        "is_live_gemini": vlm_analyzer.is_live_api(),  # nama lama, untuk klien lama
         "vlm": vlm_analyzer.provider_info(),
         "camera_selected": video_service.camera_index is not None,
         "camera_index": video_service.camera_index,
@@ -38,6 +39,7 @@ async def health_check():
         "local_vlm": vlm_analyzer.local_guard.status(),
     }
 
+
 @router.post("/api/reset", dependencies=[Depends(require_admin)])
 async def reset_tracking():
     state_mgr.reset_all()
@@ -53,6 +55,7 @@ async def set_corridor_filter(request: Request):
 
 
 # --- IOT HARDWARE TEST ENDPOINT ---
+
 
 @router.post("/api/iot/test", dependencies=[Depends(require_admin)])
 async def test_iot_light(request: Request):
@@ -71,17 +74,16 @@ async def test_iot_light(request: Request):
     if state_mgr.session is not None:
         raise HTTPException(status_code=409, detail=messages.API_LIGHT_TEST_BUSY)
     tests[action]()
-    return {
-        "status": "success",
-        "action": action,
-        "light_state": notifier.current_state
-    }
+    return {"status": "success", "action": action, "light_state": notifier.current_state}
+
 
 # --- AUDIO MUTE CONFIG ENDPOINTS ---
+
 
 @router.get("/api/config/audio")
 async def get_audio_config():
     return {"muted": audio_player.is_muted}
+
 
 @router.post("/api/config/audio", dependencies=[Depends(require_admin)])
 async def set_audio_config(request: Request):

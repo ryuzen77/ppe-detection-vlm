@@ -9,6 +9,7 @@ semua kejadian keamanan punya satu tempat, satu bentuk, satu masa simpan.
 Ditulis lewat logger `security` (antrean + fsync di thread listener, lihat
 `logging_setup.py`), jadi pemanggil di jalur permintaan tidak menunggu disk.
 """
+
 import json
 import logging
 import time

@@ -10,6 +10,7 @@ Refaktor tidak boleh mengubahnya.
 Bila perilaku SENGAJA diubah, bangkitkan ulang acuannya:
     python tests/test_capture_characterization.py --regenerate
 """
+
 import json
 import sys
 import types
@@ -31,14 +32,14 @@ class _Cap:
 
     def __init__(self, world, name, mjpg_size=None):
         self.world, self.name, self.open = world, name, name is not None and world.behavior[name] != "noopen"
-        if mjpg_size is not None and self.open:   # T34c2: MJPG = parameter pembukaan (hanya bila terbuka)
+        if mjpg_size is not None and self.open:  # T34c2: MJPG = parameter pembukaan (hanya bila terbuka)
             world.requests.append(["mjpg", *mjpg_size])
 
     def isOpened(self):
         return self.open
 
     def set(self, prop, value):
-        self.world.requests.append([int(prop), value])   # permintaan ke driver (T42d)
+        self.world.requests.append([int(prop), value])  # permintaan ke driver (T42d)
         return True
 
     def release(self):
@@ -54,13 +55,14 @@ class _Cap:
         if not self.open or self.name not in w.visible or behavior in ("fail", "noframes"):
             return False, None
         i = DEVICES.index(self.name)
-        return True, np.full((3 + i, 4 + i, 1), 100 + i, np.uint8)   # ukuran beda per kamera
+        return True, np.full((3 + i, 4 + i, 1), 100 + i, np.uint8)  # ukuran beda per kamera
 
 
 class _World:
     def __init__(self, seed, capture_mod, monkeypatch):
         from backend import camera_manager
         from backend.camera_manager import CameraMode
+
         self.rng = np.random.default_rng(seed)
         self.seed, self.now, self.raise_next, self.enum_fails = seed, 1000.0, False, False
         self.visible = list(DEVICES)
@@ -87,18 +89,40 @@ class _World:
 
         monkeypatch.setattr(capture_mod, "time", types.SimpleNamespace(time=lambda: self.now, sleep=sleep))
         monkeypatch.setattr(camera_manager, "list_device_names", names)
-        monkeypatch.setattr(camera_manager, "open_capture",
-                            lambda i, mjpg_size=None: _Cap(
-                                self, self.visible[i] if i is not None and 0 <= i < len(self.visible) else None,
-                                mjpg_size))  # seperti OpenCV: indeks None/tak ada = tidak terbuka
+        monkeypatch.setattr(
+            camera_manager,
+            "open_capture",
+            lambda i, mjpg_size=None: _Cap(
+                self, self.visible[i] if i is not None and 0 <= i < len(self.visible) else None, mjpg_size
+            ),
+        )  # seperti OpenCV: indeks None/tak ada = tidak terbuka
         monkeypatch.setattr(camera_manager, "probe_modes", probe)
         monkeypatch.setattr(camera_manager, "save_selection", lambda i, m, n="": self.saved.append([i, n]))
-        monkeypatch.setattr(camera_manager, "autostart_target",
-                            lambda: (DEVICES[1], {"width": 64, "height": 48, "req_width": 800, "req_height": 600}, 1))
-        monkeypatch.setattr(capture_mod.camera_mgr, "get_device",
-                            lambda i: {"selected_mode": {"width": 64, "height": 48}} if i == 2
-                            else {"selected_mode": {"width": 64, "height": 48, "req_width": 1280, "req_height": 720,
-                                                    "fps": 25.0, "fourcc": "YUY2"}} if i == 0 else None)
+        monkeypatch.setattr(
+            camera_manager,
+            "autostart_target",
+            lambda: (DEVICES[1], {"width": 64, "height": 48, "req_width": 800, "req_height": 600}, 1),
+        )
+        monkeypatch.setattr(
+            capture_mod.camera_mgr,
+            "get_device",
+            lambda i: (
+                {"selected_mode": {"width": 64, "height": 48}}
+                if i == 2
+                else {
+                    "selected_mode": {
+                        "width": 64,
+                        "height": 48,
+                        "req_width": 1280,
+                        "req_height": 720,
+                        "fps": 25.0,
+                        "fourcc": "YUY2",
+                    }
+                }
+                if i == 0
+                else None
+            ),
+        )
         monkeypatch.setattr(capture_mod.camera_mgr, "record_device_modes", lambda *a: None)
         monkeypatch.setattr(capture_mod.state_mgr, "reset_all", self._reset)
         monkeypatch.setattr(capture_mod.hud, "draw_synthetic_frame", synthetic)
@@ -109,6 +133,7 @@ class _World:
     def inject(self, svc):
         """Kejadian acak di antara dua putaran pembaca."""
         from backend import messages
+
         r = self.rng.random
         if r() < 0.004:
             svc.request_camera(int(self.rng.integers(0, 4)), None if r() < 0.5 else {"width": 64, "height": 48})
@@ -121,7 +146,7 @@ class _World:
             svc._device_missing = True
         name = DEVICES[int(self.rng.integers(0, len(DEVICES)))]
         if name in self.visible and r() < 0.004:
-            self.visible.remove(name)                       # dicabut
+            self.visible.remove(name)  # dicabut
         elif name not in self.visible and r() < 0.02:
             self.visible.insert(int(self.rng.integers(0, len(self.visible) + 1)), name)  # dicolok, indeks bisa berubah
         if r() < 0.004:
@@ -134,20 +159,33 @@ class _World:
 
 def _snapshot(svc, world):
     raw = svc.latest_raw
-    return [svc.camera_status, svc.camera_error, svc.camera_index, svc.camera_name, svc.camera_name_verified,
-            svc.use_synthetic, svc.active_mode,
-            svc.frame_width, svc.frame_height, None if raw is None else int(raw.flat[0]),
-            world.resets, len(world.saved), svc._device_missing, world.requests[-3:]]
+    return [
+        svc.camera_status,
+        svc.camera_error,
+        svc.camera_index,
+        svc.camera_name,
+        svc.camera_name_verified,
+        svc.use_synthetic,
+        svc.active_mode,
+        svc.frame_width,
+        svc.frame_height,
+        None if raw is None else int(raw.flat[0]),
+        world.resets,
+        len(world.saved),
+        svc._device_missing,
+        world.requests[-3:],
+    ]
 
 
 def run_scenarios(monkeypatch):
     from backend.config import cfg
     from backend.video import capture
+
     out = []
     for seed in range(SCENARIOS):
         monkeypatch.setattr(cfg, "CAMERA_AUTOSTART", seed % 2 == 1)
         monkeypatch.setattr(cfg, "CAMERA_AUTO_MODE", seed % 3 != 2)
-        monkeypatch.setattr(cfg, "FRAME_WIDTH", 1024)    # beda dari semua mode tiruan: cabang mode manual terlihat
+        monkeypatch.setattr(cfg, "FRAME_WIDTH", 1024)  # beda dari semua mode tiruan: cabang mode manual terlihat
         monkeypatch.setattr(cfg, "FRAME_HEIGHT", 576)
         world = _World(seed, capture, monkeypatch)
         rows, step = [], [0]
@@ -172,8 +210,9 @@ def run_scenarios(monkeypatch):
         if seed % 4 == 0:
             svc.request_camera(1)
         svc._reader_loop()
-        rows.append(["akhir", round(world.now, 3), svc.raw_seq, world.saved, world.messages, step[0]]
-                    + _snapshot(svc, world))
+        rows.append(
+            ["akhir", round(world.now, 3), svc.raw_seq, world.saved, world.messages, step[0]] + _snapshot(svc, world)
+        )
         out.append(rows)
     return out
 
@@ -185,7 +224,8 @@ def test_pembaca_kamera_tidak_berubah(monkeypatch):
         first = next((i for i, (x, y) in enumerate(zip(a, e)) if x != y), None)
         assert len(a) == len(e) and first is None, (
             f"skenario {seed} berubah di baris {first}: {a[first] if first is not None else len(a)} "
-            f"vs {e[first] if first is not None else len(e)}")
+            f"vs {e[first] if first is not None else len(e)}"
+        )
     assert len(actual) == len(expected)
 
 
@@ -194,9 +234,14 @@ def test_acuan_mencakup_semua_jalur():
     rows = [r for s in scenarios for r in s if r[0] != "akhir"]
     assert {"IDLE", "OK", "LOST", "SYNTHETIC"} <= {r[2] for r in rows}
     from backend import messages
+
     errors = {r[3] for r in rows}
-    for expected in (messages.CAMERA_STALLED, messages.CAMERA_DISCONNECTED, messages.CAMERA_FROZEN,
-                     messages.CAMERA_UNPLUGGED):
+    for expected in (
+        messages.CAMERA_STALLED,
+        messages.CAMERA_DISCONNECTED,
+        messages.CAMERA_FROZEN,
+        messages.CAMERA_UNPLUGGED,
+    ):
         assert expected in errors, expected
     # T77: galat tak terduga tidak lagi menghentikan pembaca; kamera divonis lepas lalu disambung ulang
     reader_error = messages.CAMERA_READER_ERROR.format(error="galat driver tiruan")
@@ -208,6 +253,7 @@ def test_acuan_mencakup_semua_jalur():
 if __name__ == "__main__" and "--regenerate" in sys.argv:
     import conftest  # noqa: F401
     import pytest
+
     mp = pytest.MonkeyPatch()
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(run_scenarios(mp)), encoding="utf-8")

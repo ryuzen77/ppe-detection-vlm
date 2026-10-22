@@ -51,7 +51,10 @@ def client():
 
 
 def _create(client, number="P-001", name="Budi", consent=True):
-    return client.post("/api/workers", json={"employee_no": number, "name": name, "consent": consent, "nickname": "Budi", "gender": "male"})
+    return client.post(
+        "/api/workers",
+        json={"employee_no": number, "name": name, "consent": consent, "nickname": "Budi", "gender": "male"},
+    )
 
 
 def test_daftar_kosong_dan_status_fitur(client, store):
@@ -86,7 +89,11 @@ def test_buat_pekerja_sesuai_kontrak_tanpa_data_wajah(client, store, security_ev
     [
         ({"employee_no": "P-1", "name": "Budi", "consent": False}, 400, "consent_required"),
         ({"employee_no": "P-1", "name": "Budi"}, 400, "consent_required"),
-        ({"employee_no": "P#1", "name": "Budi", "consent": True, "nickname": "Budi", "gender": "male"}, 400, "invalid_employee_no"),
+        (
+            {"employee_no": "P#1", "name": "Budi", "consent": True, "nickname": "Budi", "gender": "male"},
+            400,
+            "invalid_employee_no",
+        ),
         ({"employee_no": "P-1", "name": "", "consent": True}, 400, "invalid_name"),
     ],
 )
@@ -235,7 +242,13 @@ def test_foto_pendaftaran_menjadi_templat_terenkripsi(client, store, camera, sec
 
 @pytest.mark.parametrize(
     "code, status",
-    [("no_face", 422), ("multiple_faces", 422), ("face_too_small", 422), ("face_too_close", 422), ("camera_low_resolution", 409)],
+    [
+        ("no_face", 422),
+        ("multiple_faces", 422),
+        ("face_too_small", 422),
+        ("face_too_close", 422),
+        ("camera_low_resolution", 409),
+    ],
 )
 def test_foto_tidak_layak_tidak_menyimpan_apa_pun(client, store, camera, code, status):
     wid = _create(client).json()["id"]

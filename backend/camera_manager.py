@@ -49,9 +49,20 @@ def open_capture(index: int, mjpg_size: Optional[tuple[int, int]] = None) -> cv2
     harus menjadi parameter PEMBUKAAN — lihat CAMERA_MJPG_MIN_HEIGHT — dan pemanggil tidak
     boleh mengubah resolusi sesudahnya.
     """
-    params = [] if mjpg_size is None else [
-        cv2.CAP_PROP_FOURCC, FOURCC_MJPG, cv2.CAP_PROP_FRAME_WIDTH, mjpg_size[0],
-        cv2.CAP_PROP_FRAME_HEIGHT, mjpg_size[1], cv2.CAP_PROP_FPS, int(cfg.FPS)]
+    params = (
+        []
+        if mjpg_size is None
+        else [
+            cv2.CAP_PROP_FOURCC,
+            FOURCC_MJPG,
+            cv2.CAP_PROP_FRAME_WIDTH,
+            mjpg_size[0],
+            cv2.CAP_PROP_FRAME_HEIGHT,
+            mjpg_size[1],
+            cv2.CAP_PROP_FPS,
+            int(cfg.FPS),
+        ]
+    )
     cap = cv2.VideoCapture(index, CAPTURE_BACKEND, params) if params else cv2.VideoCapture(index, CAPTURE_BACKEND)
     if cap.isOpened() or CAPTURE_BACKEND == cv2.CAP_ANY:
         return cap
@@ -107,9 +118,9 @@ def _fourcc_to_text(value: int) -> str:
 
 @dataclass
 class CameraMode:
-    width: int          # Hasil aktual dari kamera
+    width: int  # Hasil aktual dari kamera
     height: int
-    fps: float          # Laju frame terukur, bukan yang dilaporkan driver
+    fps: float  # Laju frame terukur, bukan yang dilaporkan driver
     fourcc: str
     req_width: int = 0  # Permintaan yang menghasilkan pengukuran ini
     req_height: int = 0
@@ -165,7 +176,7 @@ def linux_device_names(sysfs: Optional[Path] = None) -> list[str]:
         return []
     nodes = {}
     for d in root.iterdir():
-        suffix = d.name[len("video"):]
+        suffix = d.name[len("video") :]
         if not d.name.startswith("video") or not suffix.isdigit():
             continue
         n = int(suffix)
@@ -235,8 +246,9 @@ def probe_modes(index: int, measure_seconds: float = 0.8) -> list[CameraMode]:
     return list(found.values())
 
 
-def _measure_mode(cap: cv2.VideoCapture, req_w: int, req_h: int, measure_seconds: float,
-                  warmup_frames: int) -> Optional[CameraMode]:
+def _measure_mode(
+    cap: cv2.VideoCapture, req_w: int, req_h: int, measure_seconds: float, warmup_frames: int
+) -> Optional[CameraMode]:
     """Laju frame TERUKUR mode yang sedang aktif di `cap`; None bila tidak ada frame."""
     ok, frame = False, None
     for _ in range(warmup_frames):
@@ -250,8 +262,14 @@ def _measure_mode(cap: cv2.VideoCapture, req_w: int, req_h: int, measure_seconds
             frames += 1
     elapsed = time.time() - t0
     height, width = frame.shape[:2]
-    return CameraMode(width=width, height=height, fps=round(frames / elapsed if elapsed > 0 else 0.0, 1),
-                      fourcc=_fourcc_to_text(int(cap.get(cv2.CAP_PROP_FOURCC))), req_width=req_w, req_height=req_h)
+    return CameraMode(
+        width=width,
+        height=height,
+        fps=round(frames / elapsed if elapsed > 0 else 0.0, 1),
+        fourcc=_fourcc_to_text(int(cap.get(cv2.CAP_PROP_FOURCC))),
+        req_width=req_w,
+        req_height=req_h,
+    )
 
 
 def _probe_mjpg_modes(index: int, measure_seconds: float, found: dict):
@@ -263,8 +281,11 @@ def _probe_mjpg_modes(index: int, measure_seconds: float, found: dict):
             continue
         cap = open_capture(index, (req_w, req_h))
         try:
-            mode = _measure_mode(cap, req_w, req_h, measure_seconds, cfg.CAMERA_MJPG_WARMUP_FRAMES) \
-                if cap.isOpened() else None
+            mode = (
+                _measure_mode(cap, req_w, req_h, measure_seconds, cfg.CAMERA_MJPG_WARMUP_FRAMES)
+                if cap.isOpened()
+                else None
+            )
         finally:
             cap.release()
         if mode is not None and mode.fourcc == MJPG_TEXT:
@@ -369,12 +390,12 @@ def resolve_saved_index(saved: dict) -> Optional[int]:
 
     if name in names:
         new_index = names.index(name)
-        logger.info(f"'{name}' berpindah dari indeks {index} ke {new_index} "
-                    f"(daftar perangkat berubah); mengikuti namanya.")
+        logger.info(
+            f"'{name}' berpindah dari indeks {index} ke {new_index} (daftar perangkat berubah); mengikuti namanya."
+        )
         return new_index
 
-    logger.warning(f"Kamera tersimpan '{name}' sudah tidak terhubung; "
-                   f"kembali ke kamera bawaan.")
+    logger.warning(f"Kamera tersimpan '{name}' sudah tidak terhubung; kembali ke kamera bawaan.")
     return None
 
 
@@ -400,9 +421,7 @@ class CameraManager:
                 return False
             self.scanning = True
 
-        self._thread = threading.Thread(
-            target=self._scan_worker, args=(skip_index,), daemon=True, name="CameraScan"
-        )
+        self._thread = threading.Thread(target=self._scan_worker, args=(skip_index,), daemon=True, name="CameraScan")
         self._thread.start()
         return True
 
@@ -418,28 +437,32 @@ class CameraManager:
                 if skip_index is not None and idx == skip_index:
                     # Perangkat terkunci oleh aliran video yang sedang berjalan.
                     # Datanya diisi pemanggil dari service yang aktif.
-                    results.append({
-                        "index": idx,
-                        "name": name,
-                        "available": True,
-                        "scanned": True,
-                        "in_use": True,
-                        "modes": [],
-                        "selected_mode": None,
-                    })
+                    results.append(
+                        {
+                            "index": idx,
+                            "name": name,
+                            "available": True,
+                            "scanned": True,
+                            "in_use": True,
+                            "modes": [],
+                            "selected_mode": None,
+                        }
+                    )
                     continue
 
                 modes = probe_modes(idx)
                 best = pick_best_mode(modes)
-                results.append({
-                    "index": idx,
-                    "name": name,
-                    "available": bool(modes),
-                    "scanned": True,
-                    "in_use": False,
-                    "modes": [asdict(m) for m in modes],
-                    "selected_mode": asdict(best) if best else None,
-                })
+                results.append(
+                    {
+                        "index": idx,
+                        "name": name,
+                        "available": bool(modes),
+                        "scanned": True,
+                        "in_use": False,
+                        "modes": [asdict(m) for m in modes],
+                        "selected_mode": asdict(best) if best else None,
+                    }
+                )
 
             with self.lock:
                 self.devices = results

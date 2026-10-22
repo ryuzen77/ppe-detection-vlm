@@ -8,6 +8,7 @@ bergeser dari posisi awal jendela selama `READY_HOLD_SECONDS`. Pergeseran
 dibandingkan dengan frame pertama jendela (bukan frame sebelumnya), sehingga
 langkah pelan pun terhitung.
 """
+
 from typing import Optional
 
 from . import frame_quality
@@ -23,8 +24,9 @@ def shoulders_visible(keypoints: Optional[list]) -> bool:
     """
     if not keypoints or len(keypoints) <= kp.RIGHT_SHOULDER:
         return True
-    return all(keypoints[i][kp.CONFIDENCE] >= cfg.KEYPOINT_CONF_THRESHOLD
-               for i in (kp.LEFT_SHOULDER, kp.RIGHT_SHOULDER))
+    return all(
+        keypoints[i][kp.CONFIDENCE] >= cfg.KEYPOINT_CONF_THRESHOLD for i in (kp.LEFT_SHOULDER, kp.RIGHT_SHOULDER)
+    )
 
 
 def drift(bbox: list, anchor: list) -> float:

@@ -5,6 +5,7 @@ atau port serial. Semua itu terjadi di sini, dalam urutan yang disengaja,
 supaya pengujian dan alat bantu bisa memakai modul-modulnya tanpa perangkat
 keras lengkap.
 """
+
 import logging
 import threading
 
@@ -31,13 +32,17 @@ SECONDS_PER_HOUR = 60 * 60
 _cleanup_thread = None
 _cleanup_stop = threading.Event()
 
+
 def _prune_logs():
     """Salinan log lama dihapus menurut umur (T53), di siklus yang sama dengan retensi audit."""
-    removed = prune_rotated_logs(cfg.LOG_DIR, {
-        cfg.LOG_FILE: cfg.LOG_RETENTION_DAYS * SECONDS_PER_DAY,
-        cfg.SUPERVISOR_LOG_FILE: cfg.LOG_RETENTION_DAYS * SECONDS_PER_DAY,
-        cfg.SECURITY_LOG_FILE: cfg.SECURITY_LOG_RETENTION_DAYS * SECONDS_PER_DAY,
-    })
+    removed = prune_rotated_logs(
+        cfg.LOG_DIR,
+        {
+            cfg.LOG_FILE: cfg.LOG_RETENTION_DAYS * SECONDS_PER_DAY,
+            cfg.SUPERVISOR_LOG_FILE: cfg.LOG_RETENTION_DAYS * SECONDS_PER_DAY,
+            cfg.SECURITY_LOG_FILE: cfg.SECURITY_LOG_RETENTION_DAYS * SECONDS_PER_DAY,
+        },
+    )
     if removed:
         logger.info(messages.LOG_PRUNED.format(count=removed, path=cfg.LOG_DIR))
 
@@ -53,17 +58,25 @@ def _retention_loop():
         _cleanup_stop.wait(cfg.RETENTION_INTERVAL_HOURS * SECONDS_PER_HOUR)
 
 
-
 def _run_startup_checks():
     """Peringatan kesehatan saat menyala (T29); tidak pernah menghentikan server."""
     import torch
     from . import camera_manager, startup_checks
+
     local = vlm_analyzer._local_engine()
-    ollama_url = (getattr(local.provider, "base_url", None) if local is not None and local.provider_name == "ollama"
-                  and local.provider is not None else None)
+    ollama_url = (
+        getattr(local.provider, "base_url", None)
+        if local is not None and local.provider_name == "ollama" and local.provider is not None
+        else None
+    )
     camera = camera_manager.autostart_target()[0] if cfg.CAMERA_AUTOSTART else ""
-    startup_checks.run(torch.cuda.is_available(), ollama_url, camera, camera_manager.list_device_names,
-                       has_backup=vlm_analyzer.backup is not None)
+    startup_checks.run(
+        torch.cuda.is_available(),
+        ollama_url,
+        camera,
+        camera_manager.list_device_names,
+        has_backup=vlm_analyzer.backup is not None,
+    )
     # Kunci templat wajah: kosong/rusak = FR mati, gerbang tetap jalan (T34b)
     worker_store.log_key_status()
 
@@ -92,12 +105,12 @@ def start():
     vlm_analyzer.local_guard.start()
     _run_startup_checks()
     video_service.start()
-    
+
     global _cleanup_thread
     _cleanup_stop.clear()
     _cleanup_thread = threading.Thread(target=_retention_loop, name="RetentionCleanup", daemon=True)
     _cleanup_thread.start()
-    
+
     logger.info("Seluruh layanan siap. Data: %s", cfg.DATA_DIR)
 
 
