@@ -20,7 +20,7 @@ export function validationBadge(status: VlmValidationStatus): { text: string; to
   }
 }
 
-export type ActionRequired = 
+export type ActionRequired =
   | { type: 'none' }
   | { type: 'confirm'; code: string; message: string }
   | { type: 'error'; code: string; message: string; isWarn: boolean }
@@ -53,7 +53,10 @@ type ProviderKind = { name: string; is_local: boolean }
  * tinjauan Codex 22-10). Cadangan lokal (susunan B) sudah siaga dingin sendiri — backend
  * menolak kombinasi itu (`local_fallback_with_local_backup`).
  */
-export function localFallbackAvailability(backupProvider: string, providers: ProviderKind[]): LocalFallbackAvailability {
+export function localFallbackAvailability(
+  backupProvider: string,
+  providers: ProviderKind[],
+): LocalFallbackAvailability {
   if (!providers.some((p) => p.is_local)) return 'no_local_provider'
   return providers.find((p) => p.name === backupProvider)?.is_local ? 'backup_is_local' : 'available'
 }

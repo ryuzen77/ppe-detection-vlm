@@ -31,7 +31,9 @@
       <button class="btn icon" onclick={() => (record = null)} aria-label={TEXT.photo.close}><X size={16} /></button>
     </header>
     <img src={api.snapshotUrl(record.snapshot_filename)} alt={TEXT.photo.title(record.track_id)} />
-    <p class="caption">{TEXT.photo.caption(shortDate(record.date_str), record.time_str, TEXT.result[resultKind(record)])}</p>
+    <p class="caption">
+      {TEXT.photo.caption(shortDate(record.date_str), record.time_str, TEXT.result[resultKind(record)])}
+    </p>
   {/if}
 </dialog>
 

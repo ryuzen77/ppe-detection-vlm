@@ -72,7 +72,14 @@
       <form class="form-layout" onsubmit={handleUpdateWorker}>
         <div class="form-group">
           <label for="edit-emp-no">{WORKERS.fieldEmployeeNo}</label>
-          <input id="edit-emp-no" type="text" class="locked mono" value={worker.employee_no} readonly aria-describedby="edit-emp-no-hint" />
+          <input
+            id="edit-emp-no"
+            type="text"
+            class="locked mono"
+            value={worker.employee_no}
+            readonly
+            aria-describedby="edit-emp-no-hint"
+          />
           <span id="edit-emp-no-hint" class="form-hint">{WORKERS.employeeNoLockedHint}</span>
         </div>
 
@@ -100,19 +107,10 @@
         </div>
 
         <div class="modal-actions">
-          <button
-            type="button"
-            class="btn"
-            onclick={onClose}
-            disabled={updating}
-          >
+          <button type="button" class="btn" onclick={onClose} disabled={updating}>
             {WORKERS.cancelBtn}
           </button>
-          <button
-            type="submit"
-            class="btn btn-primary"
-            disabled={updating || !nickname.trim()}
-          >
+          <button type="submit" class="btn btn-primary" disabled={updating || !nickname.trim()}>
             {WORKERS.saveBtn}
           </button>
         </div>
@@ -167,7 +165,7 @@
     color: var(--text-muted);
   }
 
-  input[type="text"],
+  input[type='text'],
   select {
     padding: var(--space-2) var(--space-3);
     border: 1px solid var(--border-strong);
@@ -177,7 +175,7 @@
     font-size: var(--text-sm);
   }
 
-  input[type="text"]:focus,
+  input[type='text']:focus,
   select:focus {
     outline: none;
     border-color: var(--primary);

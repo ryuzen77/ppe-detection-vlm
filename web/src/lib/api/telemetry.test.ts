@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { INITIAL_RECONNECT_MS, MAX_RECONNECT_MS, TelemetryClient, telemetryUrl, type SocketLike, WS_CLOSE_LOGIN_REQUIRED } from './telemetry'
+import {
+  INITIAL_RECONNECT_MS,
+  MAX_RECONNECT_MS,
+  TelemetryClient,
+  telemetryUrl,
+  type SocketLike,
+  WS_CLOSE_LOGIN_REQUIRED,
+} from './telemetry'
 
 class FakeSocket implements SocketLike {
   onopen: ((ev: unknown) => void) | null = null
@@ -104,23 +111,23 @@ describe('TelemetryClient', () => {
   })
 })
 
-  it('stop() lalu start() lagi -> koneksi baru dibuat', () => {
-    const { client, sockets } = setup()
-    client.start()
-    client.stop()
-    expect(sockets[0].closed).toBe(true)
-    client.start()
-    expect(sockets).toHaveLength(2)
-    expect(sockets[1].closed).toBe(false)
-  })
+it('stop() lalu start() lagi -> koneksi baru dibuat', () => {
+  const { client, sockets } = setup()
+  client.start()
+  client.stop()
+  expect(sockets[0].closed).toBe(true)
+  client.start()
+  expect(sockets).toHaveLength(2)
+  expect(sockets[1].closed).toBe(false)
+})
 
-  it('tutup biasa (mis. 1006) -> tetap sambung ulang', () => {
-    const { client, sockets, timers, onLoginRequired } = setup()
-    client.start()
-    sockets[0].close(1006)
-    expect(timers).toHaveLength(1)
-    expect(onLoginRequired).not.toHaveBeenCalled()
-  })
+it('tutup biasa (mis. 1006) -> tetap sambung ulang', () => {
+  const { client, sockets, timers, onLoginRequired } = setup()
+  client.start()
+  sockets[0].close(1006)
+  expect(timers).toHaveLength(1)
+  expect(onLoginRequired).not.toHaveBeenCalled()
+})
 
 describe('telemetryUrl', () => {
   it('mengikuti protokol halaman', () => {

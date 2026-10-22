@@ -8,7 +8,7 @@ class SessionStore {
   user = $state<User | null>(null)
   loaded = $state(false)
   expiresInS = $state<number | null>(null)
-  
+
   private timer: ReturnType<typeof setInterval> | null = null
 
   async load() {

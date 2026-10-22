@@ -13,7 +13,9 @@
   {#each toasts.items as toast (toast.id)}
     <div class="toast kind-{toast.kind}" role="status">
       <span class="icon">
-        {#if toast.kind === 'denied'}<CircleX size={18} />{:else if toast.kind === 'outage'}<TriangleAlert size={18} />{:else}<CircleCheck size={18} />{/if}
+        {#if toast.kind === 'denied'}<CircleX size={18} />{:else if toast.kind === 'outage'}<TriangleAlert
+            size={18}
+          />{:else}<CircleCheck size={18} />{/if}
       </span>
       <a class="body" href={href('monitoring')} onclick={() => toasts.dismiss(toast.id)}>
         <strong>{toast.title}</strong>

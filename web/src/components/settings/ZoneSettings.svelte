@@ -20,11 +20,18 @@
   }
 
   $effect(() => {
-    api.zone().then(z => zone = z).catch(() => {})
+    api
+      .zone()
+      .then((z) => (zone = z))
+      .catch(() => {})
   })
 
   async function reload() {
-    try { zone = await api.zone() } catch { /* biarkan zone lama */ }
+    try {
+      zone = await api.zone()
+    } catch {
+      /* biarkan zone lama */
+    }
   }
 
   async function toggleZone(e: Event) {
@@ -62,7 +69,7 @@
       zone = await api.calibrateZone()
       errorMsg = ''
       successMsg = SETTINGS_TAB.zoneCalibrated
-      setTimeout(() => successMsg = '', STAND_ZONE.successMessageMs)
+      setTimeout(() => (successMsg = ''), STAND_ZONE.successMessageMs)
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         errorMsg = e.message || SETTINGS_TAB.zoneNoPerson
@@ -84,7 +91,7 @@
       <input type="checkbox" checked={zone.enabled} onchange={toggleZone} />
       {SETTINGS_TAB.zoneEnabled}
     </label>
-    
+
     <div class="zone-controls" class:disabled={!zone.enabled}>
       <div class="slider-group">
         <div class="control-row">
@@ -155,7 +162,9 @@
       </div>
 
       <div class="calibrate-section">
-        <button class="btn btn-primary" onclick={calibrate} disabled={!zone.enabled}>{SETTINGS_TAB.zoneCalibrate}</button>
+        <button class="btn btn-primary" onclick={calibrate} disabled={!zone.enabled}
+          >{SETTINGS_TAB.zoneCalibrate}</button
+        >
         <span class="source-label">{SETTINGS_TAB.zoneSource(zone.source)}</span>
       </div>
     </div>
@@ -220,7 +229,7 @@
     align-items: center;
     gap: var(--space-3);
   }
-  .inputs-pair input[type="range"] {
+  .inputs-pair input[type='range'] {
     flex: 1;
     min-width: 0;
   }
@@ -230,7 +239,7 @@
     gap: var(--space-1);
     flex-shrink: 0;
   }
-  .number-input-wrap input[type="number"] {
+  .number-input-wrap input[type='number'] {
     width: 60px;
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-sm);

@@ -13,7 +13,16 @@
   import MissingItemsChart from '../components/reports/MissingItemsChart.svelte'
   import AttendancePanel from '../components/reports/AttendancePanel.svelte'
   import { api } from '../lib/api/client'
-  import type { OrgEntry, ReportRecord, ReportsPage, ReportStatusFilter, ReportPeriod, ReportSummary, ReportWhoFilter, Worker } from '../lib/api/types'
+  import type {
+    OrgEntry,
+    ReportRecord,
+    ReportsPage,
+    ReportStatusFilter,
+    ReportPeriod,
+    ReportSummary,
+    ReportWhoFilter,
+    Worker,
+  } from '../lib/api/types'
   import { ATTENDANCE, REPORTS as TEXT, count, percent, withError } from '../lib/messages'
   import { complianceTone, historyHead, pageInfo } from '../lib/reports'
   import { REPORTS } from '../lib/settings'
@@ -25,15 +34,14 @@
   const TABS = ['apd', 'attendance'] as const
   let tab = $state<(typeof TABS)[number]>('apd')
 
-
   let status = $state<ReportStatusFilter>('all')
   let period = $state<ReportPeriod>('day')
   let date = $state('')
   let offset = $state(0)
-  
+
   let summary = $state<ReportSummary | null>(null)
   let page = $state<ReportsPage | null>(null)
-  
+
   let loading = $state(false)
   let error = $state('')
   let photo = $state<ReportRecord | null>(null)
@@ -52,14 +60,22 @@
   })
 
   onMount(() => {
-    api.workers().then((r) => (workerOptions = r.workers), () => {})
-    api.orgList('departments').then((d) => (departments = d), () => {})
-    api.orgList('companies').then((c) => (companies = c), () => {})
+    api.workers().then(
+      (r) => (workerOptions = r.workers),
+      () => {},
+    )
+    api.orgList('departments').then(
+      (d) => (departments = d),
+      () => {},
+    )
+    api.orgList('companies').then(
+      (c) => (companies = c),
+      () => {},
+    )
   })
 
   // Hanya balasan permintaan terakhir yang dipakai (saringan bisa berganti cepat)
   let requestSeq = 0
-
 
   async function load() {
     const seq = ++requestSeq
@@ -70,17 +86,17 @@
       summary = sumData
 
       // Use summary's range to fetch the table data so they match exactly
-      const pageData = await api.reports({ 
-        limit: REPORTS.pageSize, 
-        offset, 
-        status, 
+      const pageData = await api.reports({
+        limit: REPORTS.pageSize,
+        offset,
+        status,
         from: summary.range.from,
         to: summary.range.to,
         ...who,
       })
       if (seq !== requestSeq) return
       page = pageData
-      
+
       error = ''
     } catch (e) {
       if (seq !== requestSeq) return
@@ -95,7 +111,6 @@
     void [period, date, status, offset, who]
     if (tab === 'apd') load()
   })
-
 
   function setFilter(apply: () => void) {
     apply()
@@ -131,14 +146,19 @@
       <p class="subtitle">{TEXT.subtitle}</p>
     </div>
     {#if tab === 'apd'}
-    <div class="actions">
-      <button class="btn" onclick={load} disabled={loading}>
-        <RefreshCw size={16} aria-hidden="true" />{TEXT.refresh}
-      </button>
-      <a class="btn" href={api.exportCsvUrl({ from: summary?.range.from, to: summary?.range.to, ...who })} download title={TEXT.exportHint}>
-        <Download size={16} aria-hidden="true" />{TEXT.exportCsv}
-      </a>
-    </div>
+      <div class="actions">
+        <button class="btn" onclick={load} disabled={loading}>
+          <RefreshCw size={16} aria-hidden="true" />{TEXT.refresh}
+        </button>
+        <a
+          class="btn"
+          href={api.exportCsvUrl({ from: summary?.range.from, to: summary?.range.to, ...who })}
+          download
+          title={TEXT.exportHint}
+        >
+          <Download size={16} aria-hidden="true" />{TEXT.exportCsv}
+        </a>
+      </div>
     {/if}
   </header>
 
@@ -151,91 +171,126 @@
   {#if tab === 'attendance'}
     <AttendancePanel {departments} {companies} />
   {:else}
-  <PeriodSelector bind:period bind:date range={summary?.range ?? null} {loading} />
+    <PeriodSelector bind:period bind:date range={summary?.range ?? null} {loading} />
 
-  <section aria-label={TEXT.stats.ariaLabel}>
-    <p class="scope">
-      {#if summary}
-        {#if summary.range.from === summary.range.to}
-          {TEXT.period.formatDate(summary.range.from)}
+    <section aria-label={TEXT.stats.ariaLabel}>
+      <p class="scope">
+        {#if summary}
+          {#if summary.range.from === summary.range.to}
+            {TEXT.period.formatDate(summary.range.from)}
+          {:else}
+            {TEXT.period.formatDate(summary.range.from)} – {TEXT.period.formatDate(summary.range.to)}
+          {/if}
         {:else}
-          {TEXT.period.formatDate(summary.range.from)} – {TEXT.period.formatDate(summary.range.to)}
+          {TEXT.stats.scopeAll}
         {/if}
-      {:else}
-        {TEXT.stats.scopeAll}
-      {/if}
-    </p>
-    <div class="tiles">
-      <StatTile label={TEXT.stats.total} value={count(summary?.totals.total)} />
-      <StatTile label={TEXT.stats.passed} value={count(summary?.totals.passed)} />
-      <StatTile label={TEXT.stats.denied} value={count(summary?.totals.rejected)} />
-      <StatTile label={TEXT.stats.compliance} value={summary?.totals.compliance_rate === null ? '–' : percent(summary?.totals.compliance_rate)}
-                meter={summary?.totals.compliance_rate ?? null} tone={complianceTone(summary?.totals.compliance_rate ?? null)} />
-      <StatTile label={TEXT.stats.backup} value={count(page?.backup_count)} />
-      {#if page?.local_fallback_count !== undefined}
-        <StatTile label={TEXT.stats.localFallback} value={count(page.local_fallback_count)} />
-      {/if}
-      <StatTile label={TEXT.stats.outages} value={count(page?.system_outages)} 
-                note={TEXT.stats.scopeSinceStart} hint={TEXT.stats.outagesHint} />
-    </div>
-  </section>
-
-  <div class="chart-row">
-    <ReportChart buckets={summary?.buckets ?? []} totals={{ total: summary?.totals.total ?? 0 }} />
-    <MissingItemsChart items={summary?.missing_items ?? []} />
-  </div>
-
-  <section class="card">
-    <div class="filters" role="group" aria-label={TEXT.filters.ariaLabel}>
-      <div class="segmented">
-        {#each STATUSES as s (s)}
-          <button class:active={status === s} aria-pressed={status === s}
-                  onclick={() => setFilter(() => (status = s))}>{TEXT.filters.status[s]}</button>
-        {/each}
+      </p>
+      <div class="tiles">
+        <StatTile label={TEXT.stats.total} value={count(summary?.totals.total)} />
+        <StatTile label={TEXT.stats.passed} value={count(summary?.totals.passed)} />
+        <StatTile label={TEXT.stats.denied} value={count(summary?.totals.rejected)} />
+        <StatTile
+          label={TEXT.stats.compliance}
+          value={summary?.totals.compliance_rate === null ? '–' : percent(summary?.totals.compliance_rate)}
+          meter={summary?.totals.compliance_rate ?? null}
+          tone={complianceTone(summary?.totals.compliance_rate ?? null)}
+        />
+        <StatTile label={TEXT.stats.backup} value={count(page?.backup_count)} />
+        {#if page?.local_fallback_count !== undefined}
+          <StatTile label={TEXT.stats.localFallback} value={count(page.local_fallback_count)} />
+        {/if}
+        <StatTile
+          label={TEXT.stats.outages}
+          value={count(page?.system_outages)}
+          note={TEXT.stats.scopeSinceStart}
+          hint={TEXT.stats.outagesHint}
+        />
       </div>
-      {#if workerOptions.length}
-        <select class="input who" aria-label={TEXT.filters.worker} value={workerId ?? ""}
-                onchange={(e) => setFilter(() => (workerId = e.currentTarget.value ? Number(e.currentTarget.value) : null))}>
-          <option value="">{TEXT.filters.allWorkers}</option>
-          {#each workerOptions as w (w.id)}<option value={w.id}>{w.name} · {w.employee_no}</option>{/each}
-        </select>
-      {/if}
-      {#if departments.length}
-        <select class="input who" aria-label={TEXT.filters.department} value={department}
-                onchange={(e) => setFilter(() => (department = e.currentTarget.value))}>
-          <option value="">{TEXT.filters.allDepartments}</option>
-          {#each departments as d (d.id)}<option value={d.name}>{d.name}</option>{/each}
-        </select>
-      {/if}
-      {#if companies.length}
-        <select class="input who" aria-label={TEXT.filters.company} value={company}
-                onchange={(e) => setFilter(() => (company = e.currentTarget.value))}>
-          <option value="">{TEXT.filters.allCompanies}</option>
-          {#each companies as c (c.id)}<option value={c.name}>{c.name}</option>{/each}
-        </select>
-      {/if}
+    </section>
+
+    <div class="chart-row">
+      <ReportChart buckets={summary?.buckets ?? []} totals={{ total: summary?.totals.total ?? 0 }} />
+      <MissingItemsChart items={summary?.missing_items ?? []} />
     </div>
 
-    {#if error}
-      <p class="state error" role="alert">{error}</p>
-    {/if}
+    <section class="card">
+      <div class="filters" role="group" aria-label={TEXT.filters.ariaLabel}>
+        <div class="segmented">
+          {#each STATUSES as s (s)}
+            <button
+              class:active={status === s}
+              aria-pressed={status === s}
+              onclick={() => setFilter(() => (status = s))}>{TEXT.filters.status[s]}</button
+            >
+          {/each}
+        </div>
+        {#if workerOptions.length}
+          <select
+            class="input who"
+            aria-label={TEXT.filters.worker}
+            value={workerId ?? ''}
+            onchange={(e) => setFilter(() => (workerId = e.currentTarget.value ? Number(e.currentTarget.value) : null))}
+          >
+            <option value="">{TEXT.filters.allWorkers}</option>
+            {#each workerOptions as w (w.id)}<option value={w.id}>{w.name} · {w.employee_no}</option>{/each}
+          </select>
+        {/if}
+        {#if departments.length}
+          <select
+            class="input who"
+            aria-label={TEXT.filters.department}
+            value={department}
+            onchange={(e) => setFilter(() => (department = e.currentTarget.value))}
+          >
+            <option value="">{TEXT.filters.allDepartments}</option>
+            {#each departments as d (d.id)}<option value={d.name}>{d.name}</option>{/each}
+          </select>
+        {/if}
+        {#if companies.length}
+          <select
+            class="input who"
+            aria-label={TEXT.filters.company}
+            value={company}
+            onchange={(e) => setFilter(() => (company = e.currentTarget.value))}
+          >
+            <option value="">{TEXT.filters.allCompanies}</option>
+            {#each companies as c (c.id)}<option value={c.name}>{c.name}</option>{/each}
+          </select>
+        {/if}
+      </div>
 
-    {#if records.length}
-      <ReportTable {records} items={catalog.items} onOpen={(r) => (photo = r)} />
-    {:else if !error}
-      <p class="state">{loading ? TEXT.loading : (summary?.totals.total === 0 ? TEXT.emptyPeriod : (filtered ? TEXT.emptyFiltered : TEXT.empty))}</p>
-    {/if}
+      {#if error}
+        <p class="state error" role="alert">{error}</p>
+      {/if}
 
-    {#if info.total > 0 || info.hasPrev}
-      <nav class="pager" aria-label={TEXT.page.ariaLabel}>
-        <span class="mono range">{TEXT.page.range(info.from, info.to, info.total)}</span>
-        <button class="btn" disabled={!info.hasPrev || loading}
-                onclick={() => (offset = Math.max(0, offset - REPORTS.pageSize))}>{TEXT.page.prev}</button>
-        <button class="btn" disabled={!info.hasNext || loading}
-                onclick={() => (offset += REPORTS.pageSize)}>{TEXT.page.next}</button>
-      </nav>
-    {/if}
-  </section>
+      {#if records.length}
+        <ReportTable {records} items={catalog.items} onOpen={(r) => (photo = r)} />
+      {:else if !error}
+        <p class="state">
+          {loading
+            ? TEXT.loading
+            : summary?.totals.total === 0
+              ? TEXT.emptyPeriod
+              : filtered
+                ? TEXT.emptyFiltered
+                : TEXT.empty}
+        </p>
+      {/if}
+
+      {#if info.total > 0 || info.hasPrev}
+        <nav class="pager" aria-label={TEXT.page.ariaLabel}>
+          <span class="mono range">{TEXT.page.range(info.from, info.to, info.total)}</span>
+          <button
+            class="btn"
+            disabled={!info.hasPrev || loading}
+            onclick={() => (offset = Math.max(0, offset - REPORTS.pageSize))}>{TEXT.page.prev}</button
+          >
+          <button class="btn" disabled={!info.hasNext || loading} onclick={() => (offset += REPORTS.pageSize)}
+            >{TEXT.page.next}</button
+          >
+        </nav>
+      {/if}
+    </section>
   {/if}
 </div>
 

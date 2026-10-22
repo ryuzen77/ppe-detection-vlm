@@ -4,7 +4,11 @@
   import type { VlmChoice, VlmProvidersResponse, VlmTestResponse } from '../../lib/api/types'
   import { SETTINGS_TAB, VLM_SETTINGS } from '../../lib/messages'
   import {
-    handleSelectionError, backupChange, providerOptionLabel, localFallbackAvailability, localFallbackChoice,
+    handleSelectionError,
+    backupChange,
+    providerOptionLabel,
+    localFallbackAvailability,
+    localFallbackChoice,
   } from '../../lib/vlmSelection'
   import { extractApiError } from '../../lib/api/error'
   import VlmModelField from './VlmModelField.svelte'
@@ -27,9 +31,13 @@
   let applyStatus = $state('')
 
   let testing = $state<TestRole | null>(null)
-  let testResult = $state<{role: TestRole | '', res: VlmTestResponse | null, err: string}>({ role: '', res: null, err: '' })
+  let testResult = $state<{ role: TestRole | ''; res: VlmTestResponse | null; err: string }>({
+    role: '',
+    res: null,
+    err: '',
+  })
 
-  let confirmation = $state<{code: string, message: string} | null>(null)
+  let confirmation = $state<{ code: string; message: string } | null>(null)
   let resetConfirmation = $state(false)
   let disableConfirmation = $state(false)
 
@@ -85,23 +93,30 @@
         primary,
         backup,
         local_fallback: localFallbackChoice(localAvailability, localProvider, localModel),
-        confirm_unvalidated: confirmUnvalidated
+        confirm_unvalidated: confirmUnvalidated,
       })
 
       if (data) data.current = res
       applyStatus = VLM_SETTINGS.applySuccess
-      setTimeout(() => applyStatus = '', 3000)
+      setTimeout(() => (applyStatus = ''), 3000)
     } catch (e) {
       applyStatus = ''
-      if (typeof e === 'object' && e !== null && 'body' in e && typeof (e as {body: unknown}).body === 'object' && (e as {body: any}).body !== null && 'detail' in (e as {body: any}).body) {
-        const detail = (e as {body: {detail: {code: string, message: string}}}).body.detail
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        'body' in e &&
+        typeof (e as { body: unknown }).body === 'object' &&
+        (e as { body: any }).body !== null &&
+        'detail' in (e as { body: any }).body
+      ) {
+        const detail = (e as { body: { detail: { code: string; message: string } } }).body.detail
         const action = handleSelectionError(detail.code, detail.message)
         if (action.type === 'confirm') {
           confirmation = { code: action.code, message: action.message }
         } else if (action.type === 'error') {
           errorMsg = action.message
         } else {
-           errorMsg = extractApiError(e, VLM_SETTINGS.errApply)
+          errorMsg = extractApiError(e, VLM_SETTINGS.errApply)
         }
       } else {
         errorMsg = extractApiError(e, VLM_SETTINGS.errApply)
@@ -157,147 +172,188 @@
   {#if loading}
     <p>{VLM_SETTINGS.loading}</p>
   {:else if data}
-  <div class="header-info">
-    <p class="source-info">
-      {VLM_SETTINGS.activeSource}: <strong>{data.current.primary?.source === 'dashboard' ? VLM_SETTINGS.sourceDashboard : VLM_SETTINGS.sourceEnv}</strong>
-      {#if data.current.primary?.source === 'dashboard'}
-        <button class="btn btn-secondary btn-sm" onclick={() => resetConfirmation = true} disabled={applying}>{VLM_SETTINGS.resetToEnvBtn}</button>
-      {/if}
-    </p>
-  </div>
-
-  {#if errorMsg}
-    <p class="error">{errorMsg}</p>
-  {/if}
-
-  <div class="roles">
-    <!-- Utama -->
-    <div class="role-box">
-      <h3>{VLM_SETTINGS.primaryTitle}</h3>
-      <label>
-        <span>{VLM_SETTINGS.providerLabel}</span>
-        <select bind:value={primaryProvider} disabled={applying}>
-          {#each providers as p (p.name)}
-            <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
-          {/each}
-        </select>
-      </label>
-
-      {#if primaryProvider}
-        <VlmModelField id="primary" provider={providers.find(p => p.name === primaryProvider)}
-                       bind:model={primaryModel} disabled={applying} showStats />
-        <button class="btn btn-secondary mt-2" onclick={() => handleTest('primary')} disabled={testing !== null || applying || !primaryModel}>
-          {testing === 'primary' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
-        </button>
-      {/if}
+    <div class="header-info">
+      <p class="source-info">
+        {VLM_SETTINGS.activeSource}:
+        <strong
+          >{data.current.primary?.source === 'dashboard'
+            ? VLM_SETTINGS.sourceDashboard
+            : VLM_SETTINGS.sourceEnv}</strong
+        >
+        {#if data.current.primary?.source === 'dashboard'}
+          <button class="btn btn-secondary btn-sm" onclick={() => (resetConfirmation = true)} disabled={applying}
+            >{VLM_SETTINGS.resetToEnvBtn}</button
+          >
+        {/if}
+      </p>
     </div>
 
-    <!-- Cadangan -->
-    <div class="role-box">
-      <h3>{VLM_SETTINGS.backupTitle}</h3>
-      <label>
-        <span>{VLM_SETTINGS.providerLabel}</span>
-        <select bind:value={backupProvider} disabled={applying}>
-          <option value="">{VLM_SETTINGS.noBackup}</option>
-          {#each providers as p (p.name)}
-            <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
-          {/each}
-        </select>
-      </label>
-      {#if !backupProvider}
-        <p class="hint">{localChosen ? VLM_SETTINGS.noBackupWithLocalHint : VLM_SETTINGS.noBackupHint}</p>
-      {/if}
+    {#if errorMsg}
+      <p class="error">{errorMsg}</p>
+    {/if}
 
-      {#if backupProvider}
-        <VlmModelField id="backup" provider={providers.find(p => p.name === backupProvider)}
-                       bind:model={backupModel} disabled={applying} />
-        <button class="btn btn-secondary mt-2" onclick={() => handleTest('backup')} disabled={testing !== null || applying || !backupModel}>
-          {testing === 'backup' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
-        </button>
-      {/if}
-    </div>
-
-    <!-- Lokal darurat (T72, susunan A): hanya bila cadangan = API -->
-    <div class="role-box">
-      <h3>{VLM_SETTINGS.localFallbackTitle}</h3>
-      {#if localAvailability === 'available'}
+    <div class="roles">
+      <!-- Utama -->
+      <div class="role-box">
+        <h3>{VLM_SETTINGS.primaryTitle}</h3>
         <label>
           <span>{VLM_SETTINGS.providerLabel}</span>
-          <select bind:value={localProvider} disabled={applying}>
-            <option value="">{VLM_SETTINGS.noLocalFallback}</option>
-            {#each localProviders as p (p.name)}
+          <select bind:value={primaryProvider} disabled={applying}>
+            {#each providers as p (p.name)}
               <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
             {/each}
           </select>
         </label>
-        {#if localProvider}
-          <VlmModelField id="local" provider={providers.find(p => p.name === localProvider)}
-                         bind:model={localModel} disabled={applying} />
-          <p class="hint">{VLM_SETTINGS.localFallbackHint}</p>
-          <button class="btn btn-secondary mt-2" onclick={() => handleTest('local')} disabled={testing !== null || applying || !localModel}>
-            {testing === 'local' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
+
+        {#if primaryProvider}
+          <VlmModelField
+            id="primary"
+            provider={providers.find((p) => p.name === primaryProvider)}
+            bind:model={primaryModel}
+            disabled={applying}
+            showStats
+          />
+          <button
+            class="btn btn-secondary mt-2"
+            onclick={() => handleTest('primary')}
+            disabled={testing !== null || applying || !primaryModel}
+          >
+            {testing === 'primary' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
           </button>
-        {:else}
-          <p class="hint">{VLM_SETTINGS.noLocalFallbackHint}</p>
         {/if}
-      {:else}
-        <p class="hint">{LOCAL_UNAVAILABLE_HINT[localAvailability]}</p>
-      {/if}
-    </div>
-  </div>
+      </div>
 
-  {#if testResult.role}
-    <div class="test-result">
-      <strong>{TEST_TITLE[testResult.role]}:</strong>
-      {#if testResult.err}
-        <span class="error">{testResult.err}</span>
-      {:else if testResult.res}
-        {#if testResult.res.error}
-          <span class="error">{testResult.res.error}</span>
-        {:else}
-          <span class="ok">{VLM_SETTINGS.testSuccess(testResult.res.latency_ms, testResult.res.json_ok)}</span>
+      <!-- Cadangan -->
+      <div class="role-box">
+        <h3>{VLM_SETTINGS.backupTitle}</h3>
+        <label>
+          <span>{VLM_SETTINGS.providerLabel}</span>
+          <select bind:value={backupProvider} disabled={applying}>
+            <option value="">{VLM_SETTINGS.noBackup}</option>
+            {#each providers as p (p.name)}
+              <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
+            {/each}
+          </select>
+        </label>
+        {#if !backupProvider}
+          <p class="hint">{localChosen ? VLM_SETTINGS.noBackupWithLocalHint : VLM_SETTINGS.noBackupHint}</p>
         {/if}
-      {/if}
-    </div>
-  {/if}
 
-  {#if confirmation}
-    <div class="confirmation-box">
-      <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {confirmation.message}</p>
-      <div class="actions">
-        <button class="btn btn-secondary" onclick={() => confirmation = null} disabled={applying}>{VLM_SETTINGS.cancelBtn}</button>
-        <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
+        {#if backupProvider}
+          <VlmModelField
+            id="backup"
+            provider={providers.find((p) => p.name === backupProvider)}
+            bind:model={backupModel}
+            disabled={applying}
+          />
+          <button
+            class="btn btn-secondary mt-2"
+            onclick={() => handleTest('backup')}
+            disabled={testing !== null || applying || !backupModel}
+          >
+            {testing === 'backup' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
+          </button>
+        {/if}
+      </div>
+
+      <!-- Lokal darurat (T72, susunan A): hanya bila cadangan = API -->
+      <div class="role-box">
+        <h3>{VLM_SETTINGS.localFallbackTitle}</h3>
+        {#if localAvailability === 'available'}
+          <label>
+            <span>{VLM_SETTINGS.providerLabel}</span>
+            <select bind:value={localProvider} disabled={applying}>
+              <option value="">{VLM_SETTINGS.noLocalFallback}</option>
+              {#each localProviders as p (p.name)}
+                <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
+              {/each}
+            </select>
+          </label>
+          {#if localProvider}
+            <VlmModelField
+              id="local"
+              provider={providers.find((p) => p.name === localProvider)}
+              bind:model={localModel}
+              disabled={applying}
+            />
+            <p class="hint">{VLM_SETTINGS.localFallbackHint}</p>
+            <button
+              class="btn btn-secondary mt-2"
+              onclick={() => handleTest('local')}
+              disabled={testing !== null || applying || !localModel}
+            >
+              {testing === 'local' ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testBtn}
+            </button>
+          {:else}
+            <p class="hint">{VLM_SETTINGS.noLocalFallbackHint}</p>
+          {/if}
+        {:else}
+          <p class="hint">{LOCAL_UNAVAILABLE_HINT[localAvailability]}</p>
+        {/if}
       </div>
     </div>
-  {/if}
 
-  {#if resetConfirmation}
-    <div class="confirmation-box">
-      <p><strong>{VLM_SETTINGS.resetConfirmTitle}</strong></p>
-      <div class="actions">
-        <button class="btn btn-secondary" onclick={() => resetConfirmation = false} disabled={applying}>{VLM_SETTINGS.cancelBtn}</button>
-        <button class="btn btn-primary" onclick={handleReset} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
+    {#if testResult.role}
+      <div class="test-result">
+        <strong>{TEST_TITLE[testResult.role]}:</strong>
+        {#if testResult.err}
+          <span class="error">{testResult.err}</span>
+        {:else if testResult.res}
+          {#if testResult.res.error}
+            <span class="error">{testResult.res.error}</span>
+          {:else}
+            <span class="ok">{VLM_SETTINGS.testSuccess(testResult.res.latency_ms, testResult.res.json_ok)}</span>
+          {/if}
+        {/if}
       </div>
-    </div>
-  {/if}
-
-  {#if disableConfirmation}
-    <div class="confirmation-box">
-      <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {VLM_SETTINGS.disableBackupConfirm}</p>
-      <div class="actions">
-        <button class="btn btn-secondary" onclick={() => disableConfirmation = false} disabled={applying}>{VLM_SETTINGS.cancelBtn}</button>
-        <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
-      </div>
-    </div>
-  {/if}
-
-  <div class="footer-actions">
-    <button class="btn btn-primary" onclick={requestApply} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
-    {#if applyStatus}
-      <span class="status-msg">{applyStatus}</span>
     {/if}
-  </div>
 
+    {#if confirmation}
+      <div class="confirmation-box">
+        <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {confirmation.message}</p>
+        <div class="actions">
+          <button class="btn btn-secondary" onclick={() => (confirmation = null)} disabled={applying}
+            >{VLM_SETTINGS.cancelBtn}</button
+          >
+          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applying}
+            >{VLM_SETTINGS.confirmBtn}</button
+          >
+        </div>
+      </div>
+    {/if}
+
+    {#if resetConfirmation}
+      <div class="confirmation-box">
+        <p><strong>{VLM_SETTINGS.resetConfirmTitle}</strong></p>
+        <div class="actions">
+          <button class="btn btn-secondary" onclick={() => (resetConfirmation = false)} disabled={applying}
+            >{VLM_SETTINGS.cancelBtn}</button
+          >
+          <button class="btn btn-primary" onclick={handleReset} disabled={applying}>{VLM_SETTINGS.confirmBtn}</button>
+        </div>
+      </div>
+    {/if}
+
+    {#if disableConfirmation}
+      <div class="confirmation-box">
+        <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {VLM_SETTINGS.disableBackupConfirm}</p>
+        <div class="actions">
+          <button class="btn btn-secondary" onclick={() => (disableConfirmation = false)} disabled={applying}
+            >{VLM_SETTINGS.cancelBtn}</button
+          >
+          <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}
+            >{VLM_SETTINGS.confirmBtn}</button
+          >
+        </div>
+      </div>
+    {/if}
+
+    <div class="footer-actions">
+      <button class="btn btn-primary" onclick={requestApply} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
+      {#if applyStatus}
+        <span class="status-msg">{applyStatus}</span>
+      {/if}
+    </div>
   {/if}
 </section>
 
@@ -353,7 +409,11 @@
     color: var(--text);
   }
   /* T70: konsekuensi cadangan mati; T72: penjelasan VLM lokal darurat */
-  .hint { font-size: var(--text-sm); color: var(--text-muted); margin: 0.25rem 0 0; }
+  .hint {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin: 0.25rem 0 0;
+  }
   .test-result {
     margin-top: var(--space-4);
     padding: var(--space-3);
@@ -372,15 +432,30 @@
     color: var(--warn);
     font-weight: 500;
   }
-  .actions, .footer-actions {
+  .actions,
+  .footer-actions {
     display: flex;
     align-items: center;
     gap: var(--space-3);
     margin-top: var(--space-4);
   }
-  .error { color: var(--danger); font-size: var(--text-sm); font-weight: 500; }
-  .ok { color: var(--ok); font-weight: 500; }
-  .status-msg { color: var(--text-muted); }
-  .mt-2 { margin-top: var(--space-2); }
-  .btn-sm { padding: 4px 10px; font-size: var(--text-sm); }
+  .error {
+    color: var(--danger);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+  .ok {
+    color: var(--ok);
+    font-weight: 500;
+  }
+  .status-msg {
+    color: var(--text-muted);
+  }
+  .mt-2 {
+    margin-top: var(--space-2);
+  }
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: var(--text-sm);
+  }
 </style>

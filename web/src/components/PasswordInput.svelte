@@ -19,11 +19,27 @@
 </script>
 
 <div class="wrap">
-  <input {id} class="input" type={shown ? 'text' : 'password'} bind:value {disabled} {required} {autocomplete} {placeholder}
-    autocapitalize="off" spellcheck="false" />
-  <button type="button" class="toggle" onclick={() => (shown = !shown)} {disabled}
-    aria-label={shown ? AUTH.hidePassword : AUTH.showPassword} aria-pressed={shown}
-    title={shown ? AUTH.hidePassword : AUTH.showPassword}>
+  <input
+    {id}
+    class="input"
+    type={shown ? 'text' : 'password'}
+    bind:value
+    {disabled}
+    {required}
+    {autocomplete}
+    {placeholder}
+    autocapitalize="off"
+    spellcheck="false"
+  />
+  <button
+    type="button"
+    class="toggle"
+    onclick={() => (shown = !shown)}
+    {disabled}
+    aria-label={shown ? AUTH.hidePassword : AUTH.showPassword}
+    aria-pressed={shown}
+    title={shown ? AUTH.hidePassword : AUTH.showPassword}
+  >
     {#if shown}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
   </button>
 </div>

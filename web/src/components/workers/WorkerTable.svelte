@@ -3,7 +3,13 @@
   // nonaktifkan, hapus wajah) ada di panel detail supaya tabel tetap terbaca selebar layar.
   import type { Worker } from '../../lib/api/types'
   import { WORKERS, WORKERS_PAGE } from '../../lib/messages'
-  import { faceStatus, formatShortDateTime, formatWorkerSalutation, getWorkerBadge, orgSummary } from '../../lib/workers'
+  import {
+    faceStatus,
+    formatShortDateTime,
+    formatWorkerSalutation,
+    getWorkerBadge,
+    orgSummary,
+  } from '../../lib/workers'
 
   interface Props {
     workers: Worker[]
@@ -39,7 +45,12 @@
           <tr class:selected={worker.id === selectedId} class:inactive={!worker.active}>
             <td class="mono">{worker.employee_no}</td>
             <td>
-              <button type="button" class="name" onclick={() => onSelect(worker)} aria-current={worker.id === selectedId ? 'true' : undefined}>
+              <button
+                type="button"
+                class="name"
+                onclick={() => onSelect(worker)}
+                aria-current={worker.id === selectedId ? 'true' : undefined}
+              >
                 <span class="primary">{worker.name}</span>
                 <span class="secondary">{formatWorkerSalutation(worker)}</span>
               </button>

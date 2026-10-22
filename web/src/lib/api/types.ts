@@ -166,13 +166,7 @@ export interface Detection {
   in_zone: boolean
 }
 
-export type TrackState =
-  | 'INITIAL'
-  | 'STEP_BACK_WARNING'
-  | 'STABILIZING'
-  | 'ANALYZING'
-  | 'ANALYZED'
-  | 'WAITING_SYSTEM'
+export type TrackState = 'INITIAL' | 'STEP_BACK_WARNING' | 'STABILIZING' | 'ANALYZING' | 'ANALYZED' | 'WAITING_SYSTEM'
 
 export interface TrackIdentity {
   status: 'recognized' | 'unknown' | 'disabled'
@@ -264,7 +258,7 @@ export interface Telemetry {
     lamps_on?: GateLamp[] | null
     lamps_available?: GateLamp[] | null
   }
-  camera_fault: 'lost' | 'blocked' | 'frozen' | 'system' | null   // 'system' = pengolah gambar galat (T77b)
+  camera_fault: 'lost' | 'blocked' | 'frozen' | 'system' | null // 'system' = pengolah gambar galat (T77b)
   enrollment?: EnrollmentStatus
   history: HistoryRecord[]
   stable_frames_required: number
@@ -315,7 +309,6 @@ export interface ReportSummary {
   missing_items: MissingItemStat[]
 }
 
-
 export interface ReportRecord {
   id: number
   track_id: number
@@ -353,7 +346,7 @@ export interface AttendanceSeen {
   name: string
   department: string | null
   company: string | null
-  first_seen: string           // HH:MM:SS
+  first_seen: string // HH:MM:SS
   last_seen: string
   passes: number
   passed: number
@@ -374,7 +367,13 @@ export interface AttendanceReport {
   seen: AttendanceSeen[]
   not_seen: AttendanceNotSeen[]
   unknown: { passes: number; passed: number; rejected: number }
-  totals: { passes: number; recognized: number; recognition_rate: number | null; active_workers: number; seen_workers: number }
+  totals: {
+    passes: number
+    recognized: number
+    recognition_rate: number | null
+    active_workers: number
+    seen_workers: number
+  }
 }
 
 export type AttendanceFilter = { date?: string; department?: string; company?: string }
@@ -476,7 +475,6 @@ export interface CreateAccountRequest {
 export interface ResetPasswordRequest {
   new_password: string
 }
-
 
 export type LocalVlmState = 'ok' | 'slow' | 'partial_gpu' | 'unknown'
 
@@ -737,4 +735,3 @@ export interface WorkerInspectionsPage {
   items: WorkerInspection[]
   next_before: number | null
 }
-

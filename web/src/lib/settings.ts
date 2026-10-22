@@ -7,9 +7,7 @@
 /** Bahasa & format angka/tanggal/jam di seluruh UI */
 export const LOCALE = 'id-ID'
 
-export const URLS = {
-  /** Tampilan lama (cadangan) selama redesign belum lengkap */
-} as const
+export const URLS = {/** Tampilan lama (cadangan) selama redesign belum lengkap */} as const
 
 /**
  * Saat UI dibuka lewat Vite dev server, tautan setup harus menunjuk backend
@@ -93,15 +91,15 @@ export const STORAGE = {
 } as const
 
 export const STAND_ZONE = {
-  minHeight: 0.04,          // sama dengan ZONE_MIN_HEIGHT di backend/config.py
+  minHeight: 0.04, // sama dengan ZONE_MIN_HEIGHT di backend/config.py
   sliderStep: 0.01,
-  outsideAlpha: 0.4,        // redup untuk deteksi di luar zona
+  outsideAlpha: 0.4, // redup untuk deteksi di luar zona
   successMessageMs: 3000,
-} as const;
+} as const
 
 export const LIGHT_TEST = {
   offDelayMs: 2000,
-} as const;
+} as const
 
 export const CHART = {
   height: 240,
@@ -115,18 +113,18 @@ export const CHART = {
   maxMissingItems: 5,
 } as const
 
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 12
 
 export const HEALTH_POLL = {
   intervalMs: 10000,
-} as const;
+} as const
 
 /** Mode pendaftaran wajah (T75): denyut per batas waktu jeda (batasnya dari backend, `hold_s`) */
 export const ENROLLMENT_HOLD = {
   beatsPerHold: 3,
   /** Indikator jarak (T76): jeda antar-pemeriksaan wajah di kamera gerbang */
   previewIntervalMs: 1000,
-} as const;
+} as const
 
 /** Foto pendaftaran otomatis (T76): diambil sendiri saat jarak pas & wajah diam */
 export const ENROLLMENT_AUTO = {
@@ -138,10 +136,10 @@ export const ENROLLMENT_AUTO = {
   cooldownMs: 3000,
   /** Waktu memakai helm sebelum foto kondisi kedua: pekerja bisa mendaftar sendiri tanpa menekan tombol */
   switchCooldownMs: 10000,
-} as const;
+} as const
 
 /** Halaman Pekerja (T79) */
 export const WORKERS_PAGE = {
   /** Baris riwayat pemeriksaan per muatan ("Muat lebih lama" untuk berikutnya) */
   historyPageSize: 20,
-} as const;
+} as const

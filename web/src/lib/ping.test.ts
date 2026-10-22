@@ -10,8 +10,9 @@ function result(engines: PingResult['engines']): PingResult {
 }
 
 describe('pingRows — VLM lokal siaga (T72)', () => {
-  const darurat = (standby?: boolean, error = 'Siaga (belum dimuat).') =>
-    [{ role: 'darurat' as const, ok: false, latency_ms: 0, error, is_local: true, timeout_ms: 12000, standby }]
+  const darurat = (standby?: boolean, error = 'Siaga (belum dimuat).') => [
+    { role: 'darurat' as const, ok: false, latency_ms: 0, error, is_local: true, timeout_ms: 12000, standby },
+  ]
 
   it('standby dari jawaban ping = baris netral, bukan "tidak menjawab"', () => {
     const [row] = pingRows(result(darurat(true)))
@@ -26,11 +27,16 @@ describe('pingRows — VLM lokal siaga (T72)', () => {
 
 describe('pingRows (T86)', () => {
   it('satu baris per VLM aktif, dengan jenis online/lokal', () => {
-    const rows = pingRows(result([
-      { role: 'utama', ok: true, latency_ms: 2100, is_local: false, timeout_ms: 5000 },
-      { role: 'cadangan', ok: true, latency_ms: 8400, is_local: true, timeout_ms: 12000 },
-    ]))
-    expect(rows.map((r) => r.label)).toEqual([`${TEXT.roles.utama} (${TEXT.online})`, `${TEXT.roles.cadangan} (${TEXT.local})`])
+    const rows = pingRows(
+      result([
+        { role: 'utama', ok: true, latency_ms: 2100, is_local: false, timeout_ms: 5000 },
+        { role: 'cadangan', ok: true, latency_ms: 8400, is_local: true, timeout_ms: 12000 },
+      ]),
+    )
+    expect(rows.map((r) => r.label)).toEqual([
+      `${TEXT.roles.utama} (${TEXT.online})`,
+      `${TEXT.roles.cadangan} (${TEXT.local})`,
+    ])
     expect(rows.every((r) => r.tone === 'ok')).toBe(true)
     expect(rows[0].text).toBe(TEXT.answered(2100))
   })
@@ -42,10 +48,19 @@ describe('pingRows (T86)', () => {
   })
 
   it('gagal: alasan tampil; VLM lokal diberi petunjuk sedang dimuat', () => {
-    const rows = pingRows(result([
-      { role: 'utama', ok: false, latency_ms: 5000, error: 'timeout > 5 dtk', is_local: false, timeout_ms: 5000 },
-      { role: 'cadangan', ok: false, latency_ms: 12000, error: 'timeout > 12 dtk', is_local: true, timeout_ms: 12000 },
-    ]))
+    const rows = pingRows(
+      result([
+        { role: 'utama', ok: false, latency_ms: 5000, error: 'timeout > 5 dtk', is_local: false, timeout_ms: 5000 },
+        {
+          role: 'cadangan',
+          ok: false,
+          latency_ms: 12000,
+          error: 'timeout > 12 dtk',
+          is_local: true,
+          timeout_ms: 12000,
+        },
+      ]),
+    )
     expect(rows[0]).toMatchObject({ tone: 'danger', text: TEXT.failed('timeout > 5 dtk') })
     expect(rows[0].hint).toBeUndefined()
     expect(rows[1].hint).toBe(TEXT.localLoading)

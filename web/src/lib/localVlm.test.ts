@@ -15,20 +15,24 @@ describe('localVlm - shouldShowLocalVlmChip', () => {
   it('tidak menampilkan chip saat data kosong, ok, atau unknown', () => {
     expect(shouldShowLocalVlmChip(null)).toBe(false)
     expect(shouldShowLocalVlmChip(undefined)).toBe(false)
-    expect(shouldShowLocalVlmChip({
-      state: 'ok',
-      gpu_ratio: 1.0,
-      slow_streak: 0,
-      last_latency_s: 3.5,
-      other_gpu_apps: [],
-    })).toBe(false)
-    expect(shouldShowLocalVlmChip({
-      state: 'unknown',
-      gpu_ratio: null,
-      slow_streak: 0,
-      last_latency_s: null,
-      other_gpu_apps: [],
-    })).toBe(false)
+    expect(
+      shouldShowLocalVlmChip({
+        state: 'ok',
+        gpu_ratio: 1.0,
+        slow_streak: 0,
+        last_latency_s: 3.5,
+        other_gpu_apps: [],
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowLocalVlmChip({
+        state: 'unknown',
+        gpu_ratio: null,
+        slow_streak: 0,
+        last_latency_s: null,
+        other_gpu_apps: [],
+      }),
+    ).toBe(false)
   })
 
   it('menampilkan chip saat state slow atau partial_gpu', () => {
@@ -55,20 +59,24 @@ describe('localVlm - shouldShowLocalVlmChip', () => {
 describe('localVlm - localVlmChipView', () => {
   it('mengembalikan null saat chip tidak perlu tampil', () => {
     expect(localVlmChipView(null)).toBeNull()
-    expect(localVlmChipView({
-      state: 'ok',
-      gpu_ratio: 1.0,
-      slow_streak: 0,
-      last_latency_s: 3.5,
-      other_gpu_apps: [],
-    })).toBeNull()
-    expect(localVlmChipView({
-      state: 'unknown',
-      gpu_ratio: null,
-      slow_streak: 0,
-      last_latency_s: null,
-      other_gpu_apps: [],
-    })).toBeNull()
+    expect(
+      localVlmChipView({
+        state: 'ok',
+        gpu_ratio: 1.0,
+        slow_streak: 0,
+        last_latency_s: 3.5,
+        other_gpu_apps: [],
+      }),
+    ).toBeNull()
+    expect(
+      localVlmChipView({
+        state: 'unknown',
+        gpu_ratio: null,
+        slow_streak: 0,
+        last_latency_s: null,
+        other_gpu_apps: [],
+      }),
+    ).toBeNull()
   })
 
   it('mengembalikan konfigurasi chip tone-warn untuk slow dan partial_gpu', () => {
@@ -160,48 +168,58 @@ describe('localVlm - shouldShowGpuAppsWarning', () => {
   it('tidak menampilkan peringatan bila data kosong atau tidak ada aplikasi lain', () => {
     expect(shouldShowGpuAppsWarning(null)).toBe(false)
     expect(shouldShowGpuAppsWarning(undefined)).toBe(false)
-    expect(shouldShowGpuAppsWarning({
-      state: 'slow',
-      gpu_ratio: 1.0,
-      slow_streak: 2,
-      last_latency_s: 9.0,
-      other_gpu_apps: [],
-    })).toBe(false)
+    expect(
+      shouldShowGpuAppsWarning({
+        state: 'slow',
+        gpu_ratio: 1.0,
+        slow_streak: 2,
+        last_latency_s: 9.0,
+        other_gpu_apps: [],
+      }),
+    ).toBe(false)
   })
 
   it('tidak menampilkan peringatan saat state normal (ok atau unknown) meski ada aplikasi lain', () => {
-    expect(shouldShowGpuAppsWarning({
-      state: 'ok',
-      gpu_ratio: 1.0,
-      slow_streak: 0,
-      last_latency_s: 3.5,
-      other_gpu_apps: ['Code.exe'],
-    })).toBe(false)
+    expect(
+      shouldShowGpuAppsWarning({
+        state: 'ok',
+        gpu_ratio: 1.0,
+        slow_streak: 0,
+        last_latency_s: 3.5,
+        other_gpu_apps: ['Code.exe'],
+      }),
+    ).toBe(false)
 
-    expect(shouldShowGpuAppsWarning({
-      state: 'unknown',
-      gpu_ratio: null,
-      slow_streak: 0,
-      last_latency_s: null,
-      other_gpu_apps: ['Code.exe'],
-    })).toBe(false)
+    expect(
+      shouldShowGpuAppsWarning({
+        state: 'unknown',
+        gpu_ratio: null,
+        slow_streak: 0,
+        last_latency_s: null,
+        other_gpu_apps: ['Code.exe'],
+      }),
+    ).toBe(false)
   })
 
   it('menampilkan peringatan hanya bila state slow atau partial_gpu dan ada aplikasi lain', () => {
-    expect(shouldShowGpuAppsWarning({
-      state: 'slow',
-      gpu_ratio: 1.0,
-      slow_streak: 2,
-      last_latency_s: 9.0,
-      other_gpu_apps: ['Code.exe'],
-    })).toBe(true)
+    expect(
+      shouldShowGpuAppsWarning({
+        state: 'slow',
+        gpu_ratio: 1.0,
+        slow_streak: 2,
+        last_latency_s: 9.0,
+        other_gpu_apps: ['Code.exe'],
+      }),
+    ).toBe(true)
 
-    expect(shouldShowGpuAppsWarning({
-      state: 'partial_gpu',
-      gpu_ratio: 0.5,
-      slow_streak: 0,
-      last_latency_s: 18.0,
-      other_gpu_apps: ['Discord.exe'],
-    })).toBe(true)
+    expect(
+      shouldShowGpuAppsWarning({
+        state: 'partial_gpu',
+        gpu_ratio: 0.5,
+        slow_streak: 0,
+        last_latency_s: 18.0,
+        other_gpu_apps: ['Discord.exe'],
+      }),
+    ).toBe(true)
   })
 })

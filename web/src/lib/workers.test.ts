@@ -97,9 +97,7 @@ describe('getWorkerBadge', () => {
     deactivated_at: null,
     delete_after: null,
     face_deleted_at: null,
-    templates: [
-      { id: 10, condition: 'bare', model_version: 'intel_0095', created_at: '2026-10-18T10:05:00' }
-    ],
+    templates: [{ id: 10, condition: 'bare', model_version: 'intel_0095', created_at: '2026-10-18T10:05:00' }],
   }
 
   it('aktif = Aktif; status foto ada di kolom sendiri (faceStatus)', () => {
@@ -222,8 +220,6 @@ describe('formatTemplateQuality', () => {
   })
 })
 
-
-
 // --- Halaman Pekerja (T79) ---
 
 const worker = (over: Partial<Worker>): Worker => ({
@@ -257,8 +253,21 @@ describe('faceStatus', () => {
 
 describe('filterWorkers', () => {
   const list = [
-    worker({ id: 1, employee_no: 'P-0001', name: 'Budi', department: { id: 1, name: 'Produksi' }, company: { id: 1, name: 'Internal' } }),
-    worker({ id: 2, employee_no: 'K-77', name: 'Siti', nickname: 'Ti', active: false, company: { id: 2, name: 'PT Maju' } }),
+    worker({
+      id: 1,
+      employee_no: 'P-0001',
+      name: 'Budi',
+      department: { id: 1, name: 'Produksi' },
+      company: { id: 1, name: 'Internal' },
+    }),
+    worker({
+      id: 2,
+      employee_no: 'K-77',
+      name: 'Siti',
+      nickname: 'Ti',
+      active: false,
+      company: { id: 2, name: 'PT Maju' },
+    }),
   ]
   const all = { q: '', status: 'all' as const, departmentId: null, companyId: null }
 
@@ -292,7 +301,9 @@ describe('templateGroups & orgSummary', () => {
     ])
   })
   it('divisi · perusahaan; kosong = tanda pisah (backend lama tanpa kolom T79)', () => {
-    expect(orgSummary({ department: { id: 1, name: 'Produksi' }, company: { id: 2, name: 'PT Maju' } })).toBe('Produksi · PT Maju')
+    expect(orgSummary({ department: { id: 1, name: 'Produksi' }, company: { id: 2, name: 'PT Maju' } })).toBe(
+      'Produksi · PT Maju',
+    )
     expect(orgSummary({ department: null, company: { id: 1, name: 'Internal' } })).toBe('Internal')
     expect(orgSummary({})).toBe('—')
   })

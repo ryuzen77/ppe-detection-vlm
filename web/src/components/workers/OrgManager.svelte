@@ -77,25 +77,46 @@
                       <button class="btn btn-primary" disabled={busy || !editing.name.trim()}>{TEXT.saveBtn}</button>
                     </form>
                   {:else}
-                    <span class="name">{entry.name}{#if entry.builtin}<span class="meta"> · {TEXT.builtin}</span>{/if}</span>
+                    <span class="name"
+                      >{entry.name}{#if entry.builtin}<span class="meta"> · {TEXT.builtin}</span>{/if}</span
+                    >
                     <span class="meta">{TEXT.workers(entry.workers)}</span>
                     {#if !entry.builtin}
-                      <button type="button" class="btn" disabled={busy} onclick={() => (editing = { kind, id: entry.id, name: entry.name })}>{TEXT.renameBtn}</button>
-                      <button type="button" class="btn" disabled={busy} onclick={() => run(() => api.deleteOrg(kind, entry.id), TEXT.errDelete)}>{TEXT.deleteBtn}</button>
+                      <button
+                        type="button"
+                        class="btn"
+                        disabled={busy}
+                        onclick={() => (editing = { kind, id: entry.id, name: entry.name })}>{TEXT.renameBtn}</button
+                      >
+                      <button
+                        type="button"
+                        class="btn"
+                        disabled={busy}
+                        onclick={() => run(() => api.deleteOrg(kind, entry.id), TEXT.errDelete)}
+                        >{TEXT.deleteBtn}</button
+                      >
                     {/if}
                   {/if}
                 </li>
               {/each}
             </ul>
             <form class="row" onsubmit={(e) => add(kind, e)}>
-              <input class="input" placeholder={TEXT.addPlaceholder[kind]} bind:value={drafts[kind]} disabled={busy} aria-label={TEXT.addPlaceholder[kind]} />
+              <input
+                class="input"
+                placeholder={TEXT.addPlaceholder[kind]}
+                bind:value={drafts[kind]}
+                disabled={busy}
+                aria-label={TEXT.addPlaceholder[kind]}
+              />
               <button class="btn" disabled={busy || !drafts[kind].trim()}>{TEXT.addBtn}</button>
             </form>
           </section>
         {/each}
       </div>
 
-      <div class="actions"><button type="button" class="btn" onclick={onClose} disabled={busy}>{TEXT.close}</button></div>
+      <div class="actions">
+        <button type="button" class="btn" onclick={onClose} disabled={busy}>{TEXT.close}</button>
+      </div>
     </div>
   </div>
 {/if}

@@ -61,4 +61,3 @@ describe('formatDeviceMeta', () => {
     expect(formatDeviceMeta(dev)).toBe('Kamera 2 · tidak tersedia')
   })
 })
-

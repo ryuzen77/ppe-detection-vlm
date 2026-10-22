@@ -73,19 +73,10 @@
 
       <form onsubmit={executeDeleteFace}>
         <div class="modal-actions">
-          <button
-            type="button"
-            class="btn"
-            onclick={onClose}
-            disabled={deletingFace}
-          >
+          <button type="button" class="btn" onclick={onClose} disabled={deletingFace}>
             {WORKERS.cancelBtn}
           </button>
-          <button
-            type="submit"
-            class="btn btn-danger"
-            disabled={deletingFace}
-          >
+          <button type="submit" class="btn btn-danger" disabled={deletingFace}>
             {WORKERS.deleteFaceBtn}
           </button>
         </div>
@@ -106,19 +97,10 @@
 
       <form onsubmit={executeDeleteTemplate}>
         <div class="modal-actions">
-          <button
-            type="button"
-            class="btn"
-            onclick={onClose}
-            disabled={deletingTemplate}
-          >
+          <button type="button" class="btn" onclick={onClose} disabled={deletingTemplate}>
             {WORKERS.cancelBtn}
           </button>
-          <button
-            type="submit"
-            class="btn btn-danger"
-            disabled={deletingTemplate}
-          >
+          <button type="submit" class="btn btn-danger" disabled={deletingTemplate}>
             {WORKERS.deleteTemplateBtn}
           </button>
         </div>

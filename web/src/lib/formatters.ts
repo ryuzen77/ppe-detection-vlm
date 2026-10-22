@@ -16,8 +16,7 @@ export function formatDeviceMeta(dev: CameraDevice): string {
       ? modeLabel(dev.selected_mode)
       : dev.scanned === false
         ? CAMERA_PICKER.capabilityNotScanned
-        : CAMERA_PICKER.unavailable
+        : CAMERA_PICKER.unavailable,
   )
   return parts.join(' · ')
 }
-

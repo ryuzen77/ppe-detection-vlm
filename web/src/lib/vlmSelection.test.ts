@@ -11,9 +11,23 @@ describe('vlmSelection', () => {
   })
 
   it('handleSelectionError merespons code dengan benar', () => {
-    expect(handleSelectionError('needs_confirmation', 'msg')).toEqual({ type: 'confirm', code: 'needs_confirmation', message: 'msg' })
-    expect(handleSelectionError('lane_busy', 'msg')).toEqual({ type: 'error', code: 'lane_busy', message: 'msg', isWarn: true })
-    expect(handleSelectionError('unsafe_model', 'msg')).toEqual({ type: 'error', code: 'unsafe_model', message: 'msg', isWarn: false })
+    expect(handleSelectionError('needs_confirmation', 'msg')).toEqual({
+      type: 'confirm',
+      code: 'needs_confirmation',
+      message: 'msg',
+    })
+    expect(handleSelectionError('lane_busy', 'msg')).toEqual({
+      type: 'error',
+      code: 'lane_busy',
+      message: 'msg',
+      isWarn: true,
+    })
+    expect(handleSelectionError('unsafe_model', 'msg')).toEqual({
+      type: 'error',
+      code: 'unsafe_model',
+      message: 'msg',
+      isWarn: false,
+    })
   })
 })
 

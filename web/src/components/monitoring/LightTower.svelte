@@ -20,8 +20,17 @@
   <ul class="lamps">
     {#each view.lamps as lamp (lamp.lamp)}
       <li class="lamp-item">
-        <span class="lamp lamp-{lamp.lamp}" class:on={lamp.on} class:unknown={lamp.source === 'unknown'}
-          role="img" aria-label="{TEXT.names[lamp.lamp]}: {lamp.source === 'unknown' ? TEXT.unknown : lamp.on ? TEXT.states[lamp.lamp] : TEXT.states.off}">
+        <span
+          class="lamp lamp-{lamp.lamp}"
+          class:on={lamp.on}
+          class:unknown={lamp.source === 'unknown'}
+          role="img"
+          aria-label="{TEXT.names[lamp.lamp]}: {lamp.source === 'unknown'
+            ? TEXT.unknown
+            : lamp.on
+              ? TEXT.states[lamp.lamp]
+              : TEXT.states.off}"
+        >
           {#if lamp.source === 'unknown'}?{/if}
         </span>
         <span class="name">{TEXT.names[lamp.lamp]}</span>
@@ -93,7 +102,9 @@
     background: var(--surface-2);
     color: var(--text-muted);
     font-weight: 700;
-    transition: background-color 120ms ease, box-shadow 120ms ease;
+    transition:
+      background-color 120ms ease,
+      box-shadow 120ms ease;
   }
   .lamp.unknown {
     border-style: dashed;

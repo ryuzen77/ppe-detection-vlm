@@ -4,7 +4,14 @@
   import type { Tone } from '../../lib/gate'
   import { clampPercent } from '../../lib/reports'
 
-  let { label, value, note = '', hint = '', meter = null, tone = 'neutral' }: {
+  let {
+    label,
+    value,
+    note = '',
+    hint = '',
+    meter = null,
+    tone = 'neutral',
+  }: {
     label: string
     value: string
     /** Keterangan kecil yang tampil di bawah angka */
@@ -21,7 +28,9 @@
   <span class="label">{label}</span>
   <span class="value">{value}</span>
   {#if meter !== null}
-    <span class="meter" aria-hidden="true"><span class="fill tone-{tone}" style:width="{clampPercent(meter)}%"></span></span>
+    <span class="meter" aria-hidden="true"
+      ><span class="fill tone-{tone}" style:width="{clampPercent(meter)}%"></span></span
+    >
   {/if}
   {#if note}<span class="note">{note}</span>{/if}
 </div>

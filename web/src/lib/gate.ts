@@ -39,8 +39,22 @@ function positionText(clip: ClipType, reason: string): { title: string; detail: 
   return POSITION[clip] ?? { title: POSITION_FALLBACK.title, detail: reason || POSITION_FALLBACK.detail }
 }
 
-function view(kind: GateKind, tone: Tone, text: { title: string; detail?: string }, extra: Partial<GateView> = {}): GateView {
-  return { kind, tone, title: text.title, detail: text.detail ?? '', missing: [], progress: null, trackId: null, ...extra }
+function view(
+  kind: GateKind,
+  tone: Tone,
+  text: { title: string; detail?: string },
+  extra: Partial<GateView> = {},
+): GateView {
+  return {
+    kind,
+    tone,
+    title: text.title,
+    detail: text.detail ?? '',
+    missing: [],
+    progress: null,
+    trackId: null,
+    ...extra,
+  }
 }
 
 export function gateView(t: Telemetry | null, connection: ConnectionStatus): GateView {

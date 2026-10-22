@@ -116,7 +116,10 @@
     try {
       await api.resetAccountPassword(resetUser, { new_password: resetPasswordNew })
       resetSuccess = AUTH.resetSuccess.replace('{user}', resetUser)
-      setTimeout(() => { resetUser = null; resetSuccess = '' }, 2000)
+      setTimeout(() => {
+        resetUser = null
+        resetSuccess = ''
+      }, 2000)
     } catch (e) {
       resetError = AUTH.resetFailed.replace('{err}', extractApiError(e))
     } finally {
@@ -149,7 +152,6 @@
       changingPassword = false
     }
   }
-
 </script>
 
 <!-- T78: daftar akun selebar kartu, form berlabel; ganti sandi sendiri di kartu terpisah -->
@@ -182,7 +184,9 @@
               <td>
                 {#if acc.username !== session.user?.username}
                   <button class="btn btn-small" onclick={() => startReset(acc.username)}>{AUTH.resetPassword}</button>
-                  <button class="btn btn-small tone-danger" onclick={() => confirmDelete(acc.username)}>{AUTH.deleteBtn}</button>
+                  <button class="btn btn-small tone-danger" onclick={() => confirmDelete(acc.username)}
+                    >{AUTH.deleteBtn}</button
+                  >
                 {/if}
               </td>
             </tr>
@@ -199,13 +203,29 @@
   <form class="grid-form" onsubmit={handleAddAccount}>
     <div class="field">
       <label for="acc-new-user">{AUTH.username}</label>
-      <input id="acc-new-user" class="input" type="text" autocomplete="off" bind:value={newUsername} disabled={adding} required />
+      <input
+        id="acc-new-user"
+        class="input"
+        type="text"
+        autocomplete="off"
+        bind:value={newUsername}
+        disabled={adding}
+        required
+      />
     </div>
     <div class="field">
       <label for="acc-new-pass">{AUTH.passwordMin}</label>
-      <PasswordInput id="acc-new-pass" autocomplete="new-password" bind:value={newPassword} disabled={adding} required />
+      <PasswordInput
+        id="acc-new-pass"
+        autocomplete="new-password"
+        bind:value={newPassword}
+        disabled={adding}
+        required
+      />
     </div>
-    <button type="submit" class="btn btn-primary" disabled={adding || !newUsername || !newPassword}>{AUTH.addBtn}</button>
+    <button type="submit" class="btn btn-primary" disabled={adding || !newUsername || !newPassword}
+      >{AUTH.addBtn}</button
+    >
   </form>
 </section>
 
@@ -220,53 +240,90 @@
   <form class="grid-form" onsubmit={handleChangePassword}>
     <div class="field">
       <label for="acc-cur-pass">{AUTH.currentPassword}</label>
-      <PasswordInput id="acc-cur-pass" autocomplete="current-password" bind:value={currentPassword} disabled={changingPassword} required />
+      <PasswordInput
+        id="acc-cur-pass"
+        autocomplete="current-password"
+        bind:value={currentPassword}
+        disabled={changingPassword}
+        required
+      />
     </div>
     <div class="field">
       <label for="acc-new-pass2">{AUTH.newPassword}</label>
-      <PasswordInput id="acc-new-pass2" autocomplete="new-password" bind:value={changePasswordNew} disabled={changingPassword} required />
+      <PasswordInput
+        id="acc-new-pass2"
+        autocomplete="new-password"
+        bind:value={changePasswordNew}
+        disabled={changingPassword}
+        required
+      />
     </div>
     <div class="field">
       <label for="acc-rep-pass">{AUTH.repeatNewPassword}</label>
-      <PasswordInput id="acc-rep-pass" autocomplete="new-password" bind:value={changePasswordConfirm} disabled={changingPassword} required />
+      <PasswordInput
+        id="acc-rep-pass"
+        autocomplete="new-password"
+        bind:value={changePasswordConfirm}
+        disabled={changingPassword}
+        required
+      />
     </div>
-    <button type="submit" class="btn btn-primary" disabled={changingPassword || !currentPassword || !changePasswordNew}>{AUTH.saveNewPassword}</button>
+    <button type="submit" class="btn btn-primary" disabled={changingPassword || !currentPassword || !changePasswordNew}
+      >{AUTH.saveNewPassword}</button
+    >
   </form>
 </section>
 
 {#if resetUser}
-<div class="modal-overlay">
-  <div class="modal-card">
-    <h3>{AUTH.resetConfirmTitle} - {resetUser}</h3>
-    {#if resetError}<div class="error-box">{resetError}</div>{/if}
-    {#if resetSuccess}<div class="success-box">{resetSuccess}</div>{/if}
-    {#if !resetSuccess}
-    <form class="vertical-form" onsubmit={executeReset}>
-      <PasswordInput placeholder={AUTH.newPassword} autocomplete="new-password" bind:value={resetPasswordNew} disabled={resetting} required />
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick={() => resetUser = null} disabled={resetting}>{AUTH.cancelBtn}</button>
-        <button type="submit" class="btn btn-primary" disabled={resetting || !resetPasswordNew}>{AUTH.resetPassword}</button>
-      </div>
-    </form>
-    {/if}
+  <div class="modal-overlay">
+    <div class="modal-card">
+      <h3>{AUTH.resetConfirmTitle} - {resetUser}</h3>
+      {#if resetError}<div class="error-box">{resetError}</div>{/if}
+      {#if resetSuccess}<div class="success-box">{resetSuccess}</div>{/if}
+      {#if !resetSuccess}
+        <form class="vertical-form" onsubmit={executeReset}>
+          <PasswordInput
+            placeholder={AUTH.newPassword}
+            autocomplete="new-password"
+            bind:value={resetPasswordNew}
+            disabled={resetting}
+            required
+          />
+          <div class="modal-actions">
+            <button type="button" class="btn" onclick={() => (resetUser = null)} disabled={resetting}
+              >{AUTH.cancelBtn}</button
+            >
+            <button type="submit" class="btn btn-primary" disabled={resetting || !resetPasswordNew}
+              >{AUTH.resetPassword}</button
+            >
+          </div>
+        </form>
+      {/if}
+    </div>
   </div>
-</div>
 {/if}
 
 {#if deleteUser}
-<div class="modal-overlay">
-  <div class="modal-card">
-    <h3>{AUTH.deleteConfirmTitle}</h3>
-    <p>{AUTH.deleteConfirmPrompt.replace('{user}', deleteUser)}</p>
-    {#if deleteError}<div class="error-box">{deleteError}</div>{/if}
-    <form class="vertical-form" onsubmit={executeDelete}>
-      <div class="modal-actions">
-        <button type="button" class="btn" onclick={() => deleteUser = null} disabled={deleting}>{AUTH.cancelBtn}</button>
-        <button type="submit" class="btn tone-danger" style="color: var(--surface); background: var(--danger)" disabled={deleting}>{AUTH.deleteBtn}</button>
-      </div>
-    </form>
+  <div class="modal-overlay">
+    <div class="modal-card">
+      <h3>{AUTH.deleteConfirmTitle}</h3>
+      <p>{AUTH.deleteConfirmPrompt.replace('{user}', deleteUser)}</p>
+      {#if deleteError}<div class="error-box">{deleteError}</div>{/if}
+      <form class="vertical-form" onsubmit={executeDelete}>
+        <div class="modal-actions">
+          <button type="button" class="btn" onclick={() => (deleteUser = null)} disabled={deleting}
+            >{AUTH.cancelBtn}</button
+          >
+          <button
+            type="submit"
+            class="btn tone-danger"
+            style="color: var(--surface); background: var(--danger)"
+            disabled={deleting}>{AUTH.deleteBtn}</button
+          >
+        </div>
+      </form>
+    </div>
   </div>
-</div>
 {/if}
 
 <style>
@@ -277,21 +334,98 @@
     border-radius: var(--radius-lg);
     color: var(--text);
   }
-  h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
-  .sub-title { margin-top: var(--space-6); font-size: var(--text-md); }
-  .table-wrap { overflow-x: auto; }
-  .accounts-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
-  .accounts-table th, .accounts-table td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .accounts-table th { font-weight: 600; color: var(--text-muted); font-size: var(--text-xs); }
-  .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); align-items: end; }
-  .grid-form .btn { justify-self: start; }
-  .vertical-form { display: flex; flex-direction: column; gap: var(--space-3); }
-  .btn-small { padding: 2px 8px; font-size: var(--text-xs); margin-right: 4px; }
-  .tone-danger { color: var(--danger); border-color: var(--danger-line); }
-  .tone-danger:hover { background: var(--danger-line); }
-  .error-box { background: var(--danger-line); color: var(--danger); padding: var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-sm); margin-bottom: var(--space-2); }
-  .success-box { background: var(--ok-line); color: var(--ok); padding: var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-sm); margin-bottom: var(--space-2); }
-  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-  .modal-card { background: var(--surface); padding: var(--space-6); border-radius: var(--radius-lg); width: min(400px, 90%); }
-  .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+  h3 {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-lg);
+  }
+  .sub-title {
+    margin-top: var(--space-6);
+    font-size: var(--text-md);
+  }
+  .table-wrap {
+    overflow-x: auto;
+  }
+  .accounts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .accounts-table th,
+  .accounts-table td {
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .accounts-table th {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+  }
+  .grid-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-3);
+    align-items: end;
+  }
+  .grid-form .btn {
+    justify-self: start;
+  }
+  .vertical-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .btn-small {
+    padding: 2px 8px;
+    font-size: var(--text-xs);
+    margin-right: 4px;
+  }
+  .tone-danger {
+    color: var(--danger);
+    border-color: var(--danger-line);
+  }
+  .tone-danger:hover {
+    background: var(--danger-line);
+  }
+  .error-box {
+    background: var(--danger-line);
+    color: var(--danger);
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-2);
+  }
+  .success-box {
+    background: var(--ok-line);
+    color: var(--ok);
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-2);
+  }
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal-card {
+    background: var(--surface);
+    padding: var(--space-6);
+    border-radius: var(--radius-lg);
+    width: min(400px, 90%);
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+  }
 </style>

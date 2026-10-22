@@ -25,7 +25,9 @@
   onMount(() => {
     router.start()
     session.load()
-    api.onUnauthorized = () => { session.clear() }
+    api.onUnauthorized = () => {
+      session.clear()
+    }
   })
   onDestroy(() => {
     telemetry.stop()
@@ -33,10 +35,10 @@
   })
 
   $effect(() => {
-    const current = { 
-      authenticated: session.authenticated, 
-      setupRequired: session.setupRequired, 
-      loaded: session.loaded 
+    const current = {
+      authenticated: session.authenticated,
+      setupRequired: session.setupRequired,
+      loaded: session.loaded,
     }
     untrack(() => {
       if (shouldLoadData(prevState, current)) {
@@ -57,7 +59,6 @@
     }
   })
 
-  
   // Notifikasi kejadian penting hanya saat operator TIDAK melihat Monitoring;
   // di Monitoring panel keputusan sudah menampilkannya.
   let watch = initialWatch()

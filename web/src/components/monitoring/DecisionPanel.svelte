@@ -47,7 +47,13 @@
       </ul>
     {/if}
     {#if gate.progress !== null}
-      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(gate.progress * 100)}>
+      <div
+        class="progress"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={Math.round(gate.progress * 100)}
+      >
         <span style:width="{gate.progress * 100}%"></span>
       </div>
     {/if}

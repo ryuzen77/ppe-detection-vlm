@@ -55,19 +55,25 @@
     {#each items as item (item.id)}
       <li>
         <span class="when mono">{formatShortDateTime(item.timestamp)}</span>
-        <span class="result" class:fail={!item.is_complete}>{item.is_complete ? TEXT.historyPass : TEXT.historyFail}</span>
+        <span class="result" class:fail={!item.is_complete}
+          >{item.is_complete ? TEXT.historyPass : TEXT.historyFail}</span
+        >
         <span class="detail">
           {item.missing_items.join(', ')}
           {#if item.fr_score != null}<span class="score">{TEXT.historyScore(item.fr_score)}</span>{/if}
         </span>
         {#if item.snapshot_filename}
-          <a class="photo" href={api.snapshotUrl(item.snapshot_filename)} target="_blank" rel="noopener">{TEXT.historyPhoto}</a>
+          <a class="photo" href={api.snapshotUrl(item.snapshot_filename)} target="_blank" rel="noopener"
+            >{TEXT.historyPhoto}</a
+          >
         {/if}
       </li>
     {/each}
   </ul>
   {#if nextBefore !== null}
-    <button type="button" class="btn" onclick={() => load(nextBefore ?? undefined)} disabled={loading}>{TEXT.historyMore}</button>
+    <button type="button" class="btn" onclick={() => load(nextBefore ?? undefined)} disabled={loading}
+      >{TEXT.historyMore}</button
+    >
   {/if}
 {/if}
 

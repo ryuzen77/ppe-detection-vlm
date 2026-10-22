@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { session } from '../lib/stores/session.svelte'
+  import { session } from '../lib/stores/session.svelte'
   import { ApiError } from '../lib/api/client'
   import { tickCountdown } from '../lib/sessionLogic'
   import { LOGIN } from '../lib/messages'
@@ -62,7 +62,7 @@
 <div class="login-container">
   <form class="login-card" onsubmit={handleLogin}>
     <h2>{LOGIN.title}</h2>
-    
+
     {#if errorMsg}
       <div class="error-box" role="alert">
         {#if waitSecs !== null}
@@ -72,7 +72,7 @@
         {/if}
       </div>
     {/if}
-    
+
     <div class="input-group">
       <label for="username">{LOGIN.username}</label>
       <input type="text" id="username" bind:value={username} disabled={loading || waitSecs !== null} use:focus />
@@ -80,9 +80,14 @@
 
     <div class="input-group">
       <label for="password">{LOGIN.password}</label>
-      <PasswordInput id="password" bind:value={password} autocomplete="current-password" disabled={loading || waitSecs !== null} />
+      <PasswordInput
+        id="password"
+        bind:value={password}
+        autocomplete="current-password"
+        disabled={loading || waitSecs !== null}
+      />
     </div>
-    
+
     <button type="submit" class="btn btn-primary" disabled={!username || !password || loading || waitSecs !== null}>
       {LOGIN.loginBtn}
     </button>

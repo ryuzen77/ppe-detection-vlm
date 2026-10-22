@@ -144,8 +144,10 @@
         <span class="name">{dev.name || TEXT.deviceFallback(dev.index)}</span>
         <span class="meta">
           {formatDeviceMeta(dev)}
-          {#if dev.index === activeIndex} · <span class="active">{TEXT.inUse}</span>{/if}
-          {#if catalog?.saved?.name && dev.name === catalog.saved.name && dev.index !== activeIndex} · {TEXT.lastUsed}{/if}
+          {#if dev.index === activeIndex}
+            · <span class="active">{TEXT.inUse}</span>{/if}
+          {#if catalog?.saved?.name && dev.name === catalog.saved.name && dev.index !== activeIndex}
+            · {TEXT.lastUsed}{/if}
         </span>
       </button>
     {/each}

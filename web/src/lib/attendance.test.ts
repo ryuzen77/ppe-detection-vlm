@@ -9,7 +9,13 @@ function report(over: Partial<AttendanceReport['totals']> = {}, notSeen = 1): At
   return {
     date: '2026-10-21',
     seen: [],
-    not_seen: Array.from({ length: notSeen }, (_, i) => ({ worker_id: i, employee_no: `P${i}`, name: 'X', department: null, company: null })),
+    not_seen: Array.from({ length: notSeen }, (_, i) => ({
+      worker_id: i,
+      employee_no: `P${i}`,
+      name: 'X',
+      department: null,
+      company: null,
+    })),
     unknown: { passes: 5, passed: 3, rejected: 2 },
     totals: { passes: 8, recognized: 3, recognition_rate: 0.375, active_workers: 4, seen_workers: 1, ...over },
   }
