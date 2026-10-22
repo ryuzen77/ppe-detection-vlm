@@ -292,6 +292,57 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
 
+### Rancangan T83 — setelan "Wajib terdaftar" (disetujui pengguna 22-10; dibangun nanti — bawaan MATI)
+
+Pertanyaan pengguna 20-10: orang tak terdaftar lolos bila APD lengkap. **Risiko Tinggi** dua arah: setelan mati = orang tak berhak bisa masuk; setelan aktif dengan FR lemah = pekerja patuh tertahan. Data nyata audit: 19-10 3/20 dikenali, 20-10 **12/20 (60%)** — angka "tidak dikenali" mencampur orang tak terdaftar & pekerja terdaftar yang gagal dikenali, jadi **tingkat pengenalan pekerja terdaftar belum terukur**.
+
+Keputusan pengguna 22-10: (1) FR tidak berfungsi saat setelan aktif → **tahan semua + peringatan** (fail-closed); (2) wajah belum dikenali → **FR diulang beberapa detik** sebelum ditahan; (3) yang tertahan lewat dengan **didaftarkan admin lalu lewat ulang** — tanpa tombol "izinkan" (AGENTS §5); (4) menyalakan setelan → **peringatan + angka pengenalan**, admin boleh tetap menyalakan dengan konfirmasi.
+
+#### 1. Alur gerbang (hanya bila setelan aktif; bawaan MATI = perilaku sekarang)
+
+| Hasil APD (VLM) | Wajah | Gerbang |
+| :-- | :-- | :-- |
+| Kurang / larangan dilanggar | apa pun | **Merah** seperti sekarang (FR tidak ikut menentukan) |
+| Lengkap | dikenali | **Hijau** + suara nama (T34d) |
+| Lengkap | belum dikenali | **Ulang FR**: suara "Mohon tatap kamera", FR pada frame baru selama `FACE_RETRY_SECONDS` (usul 5) — **tanpa** memanggil VLM lagi (tanpa kuota); dikenali → hijau |
+| Lengkap | tetap tidak dikenali | **Kuning — ditahan**: suara "Wajah belum terdaftar. Silakan hubungi petugas." |
+| Lengkap | FR tidak berfungsi (tanpa `FACE_DATA_KEY`, galat engine) | **Kuning — ditahan** (alasan `fr_unavailable`) + peringatan operator |
+| VLM utama & cadangan gagal | – | Menunggu seperti sekarang (tidak berubah) |
+
+Keputusan tetap terkunci per sesi sampai jalur kosong (§5). Merah tetap hanya APD/larangan; ditahan = kuning.
+
+#### 2. Kontrak (bentuk JSON; disetujui dulu sebelum dikerjakan)
+
+**`GET /api/config/registration-policy`** (admin):
+```json
+{"require_registered": false, "fr_ready": true,
+ "recognition": {"rate": 0.6, "recognized": 12, "passes": 20, "days": 7, "threshold": 0.95}}
+```
+`recognition` dari audit `fr_status` `FR_RATE_WINDOW_DAYS` hari terakhir (usul 7) — **termasuk orang tak terdaftar, jadi batas bawah**; `rate: null` bila tanpa lintasan. `threshold` = `FR_REQUIRED_RATE` (usul 0,95).
+
+**`POST /api/config/registration-policy`** (admin) `{"require_registered": true, "confirm_low_recognition": false}`:
+- 400 `fr_not_ready` bila menyalakan saat FR tidak siap (fail-closed langsung menahan semua orang);
+- 400 `low_recognition_needs_confirmation` bila `rate` < `threshold` atau `null` dan belum dikonfirmasi;
+- disimpan di `runtime_settings` (bertahan setelah restart), dicatat `security_log` (siapa, kapan).
+
+**Audit** `worker_inspections`: kolom baru `gate_hold TEXT NULL` (`unregistered` | `fr_unavailable`), dengan migrasi. `is_complete` tetap hasil APD (statistik kepatuhan tidak berubah). `GET /api/reports` tambah `held_count`; CSV tambah kolom "Ditahan".
+
+**Telemetri** keputusan gerbang: `decision: "held"`, `hold_reason`; `registration_policy: {"enabled": bool, "fr_ready": bool}` untuk peringatan operator ("Wajib terdaftar aktif — FR tidak berfungsi, semua pekerja ditahan").
+
+#### 3. UI
+- **Pengaturan → Gerbang:** kartu "Wajib terdaftar" (sakelar, angka pengenalan, ambang, peringatan + konfirmasi bila di bawah ambang; nonaktif bila FR tidak siap).
+- **Monitoring:** panel keputusan kuning "Ditahan — wajah belum terdaftar, hubungi petugas"; peringatan bila FR mati saat setelan aktif.
+- **Laporan:** ubin "Ditahan (tidak terdaftar)" & saringan.
+
+#### 4. Syarat sebelum dipakai sungguhan (bukan syarat membangun — bawaan MATI)
+1. **Ukur tingkat pengenalan pekerja terdaftar**: tiap pekerja terdaftar lewat ±10× memakai helm (berdiri wajar, tidak menatap khusus), target ≥ 95%; hasil di laporan kehadiran.
+2. **Persetujuan HR/Legal**: FR berubah dari pencatat menjadi penentu akses → persetujuan pekerja & DPIA diperbarui (bersama T81).
+
+#### 5. Pembagian & tes
+- **T83a — backend** (Codex): `backend/state_manager.py` (ulang FR & tahan), `backend/face_identity.py` (identifikasi ulang tanpa VLM), `backend/report_manager.py` (kolom + migrasi + `held_count`), rute kebijakan, `config.py`/`messages.py`/`.env.example`/suara (tambah), `tests/`.
+- **T83b — UI** (Claude): Pengaturan, Monitoring, Laporan, `web/src/lib/` + vitest.
+- **Tes wajib T83a:** setelan mati = perilaku sekarang (tidak ada tahan); APD kurang tetap merah walau wajah tak dikenali; ulang FR berhasil → hijau tanpa panggilan VLM kedua; gagal → kuning + audit `gate_hold=unregistered`; FR mati + setelan aktif → semua ditahan `fr_unavailable`; POST tolak `fr_not_ready` & `low_recognition_needs_confirmation`; migrasi kolom pada DB lama; `is_complete` & tingkat kepatuhan tidak berubah oleh penahanan.
+
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
 | # | Risiko | Task | Alasan risiko / isi |
@@ -302,7 +353,7 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 | 5 | Sedang | **Validasi Gemini untuk prompt T58** — 10 foto 10/10 benar (pagi + sore 14-10, `data/eval/20261014-070915`, `-171309`); sore Gemini lambat (median 5,5 dtk, 4/5 > batas 4 dtk). Sisa: 84 foto penuh bila kuota mengizinkan | Status Gemini kini `outdated` (terakhir diuji T48) → peringatan di log & Pengaturan; uji 10–20 foto dengan jeda RPM |
 | 6 | Sedang | **T40 — alternatif mesin VLM lokal** (keputusan setelah uji nyata) | Crash `encoding image` berasal dari llama.cpp (llama.cpp#17422, #17881; ollama#14170), jadi mengganti Ollama dengan llama.cpp langsung kemungkinan tidak menghilangkannya. Bila uji nyata menunjukkan cadangan masih sering bermasalah walau ada penjaga T38: uji coba Qwen2.5-VL 4-bit lewat Transformers (PyTorch) di **proses terpisah** berantarmuka OpenAI-compatible (adaptor sudah mendukung, cukup ganti `.env`), diukur dengan `tools/bench_vlm.py` (akurasi, 0 APD kurang lolos, waktu, VRAM bersama YOLO). vLLM ditinjau untuk produksi Linux/GPU besar (T29). Data sejauh ini: ~2–4 crash per 84 foto. Kriteria tambahan (T48, 05-10): `qwen2.5vl:7b` tidak melihat helm di atas rambut lebat (`apd_10`, salah 4/4; Gemini benar) dan sepatu `apd_4` hanya benar 2/4 — model pengganti harus lolos keduanya |
 | 7f | **Tinggi** (rencana) | **T81 — absensi resmi** (arah produk pengguna 19-10: "absensi + pemeriksaan APD") | Hanya bila tingkat pengenalan FR di gerbang terbukti tinggi & HR/Legal setuju (tujuan baru data wajah → persetujuan pekerja & DPIA diperbarui). Butuh jam masuk/pulang, shift, koreksi manual HR; kesalahan berdampak ke gaji/disiplin. Rancangan dimatangkan & risiko dinilai ulang sebelum dikerjakan |
-| 7g | **Tinggi** (rencana) | **T83 — setelan "Wajib terdaftar"** (pertanyaan pengguna 20-10: orang tak terdaftar lolos?) | Kini orang tak terdaftar lolos bila APD lengkap (FR hanya nama di audit, "Tidak dikenali"). Usul: setelan admin bawaan MATI; bila aktif & wajah tidak dikenali → lampu **kuning** + suara "wajah belum terdaftar, hubungi petugas" (merah tetap hanya APD/larangan, AGENTS §5), audit "ditahan: tidak terdaftar". Tinggi: pekerja patuh bisa tertahan bila FR gagal (bayangan helm, menoleh, cahaya) → syarat: tingkat pengenalan terukur dari 50–100 lintasan nyata (T80) & persetujuan HR; ditinjau bersama T81 |
+| 7g | **Tinggi** (rancangan disetujui 22-10, belum dibangun — lihat "Rancangan T83") | **T83 — setelan "Wajib terdaftar"** (pertanyaan pengguna 20-10: orang tak terdaftar lolos?) | Kini orang tak terdaftar lolos bila APD lengkap (FR hanya nama di audit, "Tidak dikenali"). Usul: setelan admin bawaan MATI; bila aktif & wajah tidak dikenali → lampu **kuning** + suara "wajah belum terdaftar, hubungi petugas" (merah tetap hanya APD/larangan, AGENTS §5), audit "ditahan: tidak terdaftar". Tinggi: pekerja patuh bisa tertahan bila FR gagal (bayangan helm, menoleh, cahaya) → syarat: tingkat pengenalan terukur dari 50–100 lintasan nyata (T80) & persetujuan HR; ditinjau bersama T81 |
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a/b) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
