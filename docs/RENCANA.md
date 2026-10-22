@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T44 — formatter & linter (ruff format massal; Prettier + ESLint untuk `web/`) | Claude (ditugaskan pengguna 22-10) | `claude/t44-format-lint` (dari `master` terbaru) | dikerjakan | **Seluruh repo (format saja)**: `backend/`, `tests/`, `scripts/`, `tools/`, `web/src/`; **dependensi** `web/package.json` + `package-lock.json` (giliran dependensi T44); `scripts/check.py`, `.github/workflows/ci.yml`, `AGENTS.md` §4.1, `.git-blame-ignore-revs` (baru), konfigurasi Prettier/ESLint (baru) | Risiko Rendah (tanpa perubahan perilaku). **Selama T44 dikerjakan, agen lain tidak menyunting kode** (semua berkas beririsan); setelah digabung cukup rebase sekali. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
@@ -357,7 +358,7 @@ Keputusan tetap terkunci per sesi sampai jalur kosong (§5). Merah tetap hanya A
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a/b) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
-| 11 | Rendah | T44 — formatter & linter web (audit 28-09) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
+| 11 | Rendah | T44 — formatter & linter web (audit 28-09; dikerjakan Claude 22-10, lihat papan) | `ruff format` massal (62 berkas) sebagai commit sendiri; eslint + prettier untuk `web/` (mengubah `web/package*.json`, perlu giliran dependensi) |
 | 12 | **Tinggi** (rencana) | **T34 — identitas wajah (FR) untuk audit per pekerja** (rancangan 18-10, lihat "Rancangan T34") | Mulai dari T34a (uji ukuran wajah di gerbang, perlu pengguna di depan kamera); T34b–e menyusul. Persetujuan & DPIA dari HR/Legal sebelum dipakai sungguhan |
 
 
