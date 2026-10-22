@@ -193,8 +193,8 @@ def server_config():
         log_level=cfg.LOG_LEVEL.lower(),
         log_config=None,
         # anotasi uvicorn int, tetapi nilainya dipakai asyncio.wait_for (float boleh)
-        timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS,
-    )  # pyright: ignore[reportArgumentType]
+        timeout_graceful_shutdown=cfg.SHUTDOWN_TIMEOUT_SECONDS,  # pyright: ignore[reportArgumentType]
+    )
     logging.getLogger(ACCESS_LOGGER).setLevel(cfg.LOG_ACCESS_LEVEL)
     return config
 

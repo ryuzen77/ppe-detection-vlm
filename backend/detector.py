@@ -98,11 +98,11 @@ class PersonDetector:
         # Stub ultralytics menyebut Tensor | ndarray; saat inferensi selalu Tensor (punya .cpu()).
         keypoints_data = r.keypoints.data.cpu().numpy() if has_pose else None  # pyright: ignore
         return (
-            r.boxes.xyxy.cpu().numpy(),
+            r.boxes.xyxy.cpu().numpy(),  # pyright: ignore
             r.boxes.id.int().cpu().numpy(),  # pyright: ignore
-            r.boxes.conf.cpu().numpy(),
+            r.boxes.conf.cpu().numpy(),  # pyright: ignore
             keypoints_data,
-        )  # pyright: ignore
+        )
 
     def detect_and_track(self, frame: np.ndarray) -> list[DetectionResult]:
         """Runs YOLO tracking and height-adaptive full-body filter on the current frame."""

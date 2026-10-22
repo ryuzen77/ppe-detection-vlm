@@ -82,7 +82,7 @@ class GeminiProvider(VLMProvider):
             options["temperature"] = self.temperature
         if self.thinking_level:
             # SDK menerima nama level berupa str (pydantic mengubahnya ke enum ThinkingLevel)
-            options["thinking_config"] = self._types.ThinkingConfig(  # pyright: ignore[reportArgumentType]
-                thinking_level=self.thinking_level
-            )  # pyright: ignore[reportArgumentType]
+            options["thinking_config"] = self._types.ThinkingConfig(
+                thinking_level=self.thinking_level  # pyright: ignore[reportArgumentType]
+            )
         return options
