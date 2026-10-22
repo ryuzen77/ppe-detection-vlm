@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import IO, Any, cast
 
+import httpx
 import pytest
 
 from backend.config import cfg
@@ -56,6 +57,9 @@ def _api_key_vars() -> set[str]:
     return {p.key_env for p in vlm_profiles.PROFILES.values() if p.key_env} | {"VLM_API_KEY", "VLM_BACKUP_API_KEY"}
 
 
+_PROXY_VARS = {"http_proxy", "https_proxy", "all_proxy"}
+
+
 def _server_env(tmp_path, port: int, **extra: str) -> dict[str, str]:
     """Lingkungan server uji yang tidak menyentuh dunia luar (T91).
 
@@ -64,7 +68,10 @@ def _server_env(tmp_path, port: int, **extra: str) -> dict[str, str]:
     panggilan VLM cloud (kuota gerbang), relay, kamera, atau kartu suara sungguhan. Ollama tidak
     bisa dialihkan lewat lingkungan (pemeriksaan model sisa memakai alamat profil) → `_ISOLATION`.
     """
-    return {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
+    # Proxy warisan dibuang & NO_PROXY=* (tinjauan Codex T91 v2): httpx mengikuti HTTP(S)_PROXY/ALL_PROXY,
+    # sehingga sambungan menuju port proxy — bukan port Ollama — lolos dari pengaman `_ISOLATION`
+    inherited = {k: v for k, v in os.environ.items() if k.lower() not in _PROXY_VARS}
+    return {**inherited, "NO_PROXY": "*", "no_proxy": "*", "PORT": str(port), "HOST": "127.0.0.1",
             "DATA_DIR": str(tmp_path / "data"), "LOG_TO_FILE": "false",
             "PYTHONIOENCODING": "utf-8", "PYGAME_HIDE_SUPPORT_PROMPT": "1", "SDL_AUDIODRIVER": "dummy",
             **dict.fromkeys(_api_key_vars(), ""),
@@ -102,17 +109,37 @@ def test_server_uji_tanpa_api_key_dan_perangkat(tmp_path):
     assert env["VLM_BACKUP_PROVIDER"] == env["VLM_LOCAL_FALLBACK_PROVIDER"] == "none"
     assert env["IOT_ENABLED"] == env["CAMERA_AUTOSTART"] == "false"
     assert env["SDL_AUDIODRIVER"] == "dummy"
+    assert env["NO_PROXY"] == env["no_proxy"] == "*"
 
 
-def test_pengaman_menolak_sambungan_ke_port_ollama():
-    """Pengaman yang sama dengan server uji: port Ollama ditolak sebelum paket keluar."""
+@pytest.fixture
+def isolation_guard():
+    """Pengaman yang sama dengan server uji, dipasang di proses tes lalu dilepas lagi."""
     scope: dict = {}
     exec(_ISOLATION.replace(f'print("{GUARD_READY}", flush=True)', ""), scope)
-    try:
-        with socket.socket() as sock, pytest.raises(ConnectionRefusedError, match="T91"):
-            sock.connect(("127.0.0.1", scope["_ollama_port"]))
-    finally:
-        socket.socket.connect = scope["_connect"]
+    yield scope["_ollama_port"]
+    socket.socket.connect = scope["_connect"]
+
+
+def test_pengaman_menolak_sambungan_ke_port_ollama(isolation_guard):
+    """Port Ollama ditolak sebelum paket keluar."""
+    with socket.socket() as sock, pytest.raises(ConnectionRefusedError, match="T91"):
+        sock.connect(("127.0.0.1", isolation_guard))
+
+
+def test_proxy_warisan_tidak_melewati_pengaman(isolation_guard, monkeypatch, tmp_path):
+    """Proxy di lingkungan pengembang tidak boleh meneruskan /api/ps ke Ollama (tinjauan Codex T91 v2)."""
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:18080")   # proxy palsu, port tertutup
+    env = _server_env(tmp_path, 1234)
+    assert not {k.lower() for k in env} & _PROXY_VARS
+    for name in list(os.environ):
+        monkeypatch.delenv(name)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    # Klien seperti adaptor Ollama (httpx, trust_env bawaan): harus langsung ke port Ollama & ditolak pengaman
+    with httpx.Client() as client, pytest.raises(httpx.ConnectError, match="T91"):
+        client.get(f"http://127.0.0.1:{isolation_guard}/api/ps", timeout=2)
 
 
 def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
