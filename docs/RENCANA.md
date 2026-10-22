@@ -14,7 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T92 — perbarui dependensi `web/` (npm audit dev, antrean #11) | Claude (ditugaskan pengguna 22-10) | `claude/t92-npm-update` (dari `master` terbaru) | tinjau | **Dependensi** `web/package.json` + `package-lock.json` (giliran dependensi T92) | Risiko Sedang (celah hanya di mesin pengembang). Semua paket ke versi terbaru yang kompatibel; TypeScript tetap 6 (peer `svelte-check` & `typescript-eslint` belum mendukung 7), `@types/node` tetap 24 (runtime Node 24). **Tinjau 22-10:** `npm update --save` → vite 8.3.5, vitest 5.0.5, source-map-js 1.2.2 (lewat postcss 8.5.31), svelte 5.57.2, svelte-check 4.7.7, @lucide/svelte 1.61.0, @types/node 24.19.2; batas bawah `package.json` dinaikkan ke versi berpatch. `npm audit` 0 celah (sebelumnya 9). Web: svelte-check 0, vitest 230, Prettier & ESLint bersih, build lolos. Pytest tidak dijalankan (backend tak berubah); check.py penuh saat digabung. Mesin pengembang: Node 24.5.0 → **24.22.1** (nvm, rilis keamanan 20-10), Node MSI 24.19.0 dihapus pengguna; verifikasi web diulang dengan Node baru, lolos. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
@@ -358,7 +357,6 @@ Keputusan tetap terkunci per sesi sampai jalur kosong (§5). Merah tetap hanya A
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a/b) | 24 fungsi > 30 baris (terpanjang `capture._reader_loop` 199, `detector.detect_and_track` 164, `state_manager.update_frame_detections` 101) — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
-| 11 | Sedang | npm audit dev (22-10): `vite` 8.3.1 (6 advisori launch-editor/`server.fs`, mis. GHSA-587h-7wmj-h5pm), `vitest` 5.0.1 (`@vitest/mocker` GHSA-qxg6-89mg-rqv8), `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q) | Hanya mesin pengembang (produksi `--omit=dev` 0 celah); patch dalam rentang `package.json` → `npm update vite vitest source-map-js` (vite 8.3.5, vitest 5.0.5, source-map-js 1.2.2), giliran dependensi. Disetujui pengguna, dikerjakan setelah T44 |
 | 12 | **Tinggi** (rencana) | **T34 — identitas wajah (FR) untuk audit per pekerja** (rancangan 18-10, lihat "Rancangan T34") | Mulai dari T34a (uji ukuran wajah di gerbang, perlu pengguna di depan kamera); T34b–e menyusul. Persetujuan & DPIA dari HR/Legal sebelum dipakai sungguhan |
 
 
