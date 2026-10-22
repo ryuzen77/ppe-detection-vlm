@@ -86,7 +86,8 @@ def test_windows_socket_error_aliases_are_supported():
     code = getattr(errno, "WSAENETUNREACH", errno.ENETUNREACH)
     assert code in net.NO_ROUTE_ERRORS
     error = OSError(0, "tiruan")
-    error.winerror = code
+    # setattr: `winerror` hanya ada di OSError Windows; Pyright di CI Linux menolak penugasan langsung
+    setattr(error, "winerror", code)
     assert net.is_connection_failure(error)
 
 
