@@ -5,9 +5,11 @@ Hanya membaca berkas yang dilacak git; `backend/.env` tidak pernah dibaca
 """
 
 import ast
+import io
 import re
 import shutil
 import subprocess
+import tokenize
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -32,9 +34,7 @@ LONG_FUNCTIONS_DEBT = {
     "backend/video/hud.py::draw_hud",
     "backend/app.py::run",
     "backend/api/routes_cameras.py::list_cameras",
-    "backend/storage.py::migrate_legacy_data",
     "backend/video/capture.py::__init__",
-    "backend/app.py::__call__",
     "backend/report_manager.py::_migrate",
 }
 HEX_COLOR_DEBT = {"web/src/components/monitoring/VideoPanel.svelte"}
@@ -58,12 +58,38 @@ def _text_files(paths: Iterable[str]):
             continue
 
 
-def _body_length(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
-    """Panjang badan fungsi tanpa docstring (docstring panjang bukan kerumitan).
+_SKIP_BETWEEN = {tokenize.NL, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER}
 
-    Baris lanjutan satu pernyataan (argumen/isi kurung yang dipecah formatter) tidak dihitung
-    (T44, keputusan pengguna 22-10): `ruff format` tidak boleh membuat fungsi "bertambah panjang".
-    Komentar & baris kosong tetap dihitung seperti sebelumnya.
+
+def _continuation_lines(text: str) -> set[int]:
+    """Baris lanjutan setiap pernyataan logis (token pertama s.d. NEWLINE) — berbasis token, jadi
+    berlaku untuk kurung, kepala klausa (if/except/with/…), dekorator, string multi-baris, `\\`.
+    Komentar & baris kosong DI ANTARA pernyataan tidak termasuk pernyataan mana pun (T44)."""
+    lines: set[int] = set()
+    start = None
+    for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+        if start is None:
+            if tok.type not in _SKIP_BETWEEN:
+                start = tok.start[0]
+        elif tok.type == tokenize.NEWLINE:
+            lines.update(range(start + 1, tok.end[0] + 1))
+            start = None
+    return lines
+
+
+def _uncounted_lines(text: str) -> set[int]:
+    """Baris yang bukan baris logis: lanjutan pernyataan + baris kosong. Hanya dua hal itu yang
+    diubah `ruff format` (memecah pernyataan, menambah/membuang baris kosong), jadi format saja
+    tidak mengubah panjang fungsi (tinjauan Codex T44: 993 fungsi dibandingkan sebelum/sesudah)."""
+    blank = {number for number, line in enumerate(text.splitlines(), start=1) if not line.strip()}
+    return _continuation_lines(text) | blank
+
+
+def _body_length(node: ast.FunctionDef | ast.AsyncFunctionDef, uncounted: set[int]) -> int:
+    """Panjang badan fungsi tanpa docstring (docstring panjang bukan kerumitan), dalam baris logis.
+
+    `uncounted` (dari `_uncounted_lines` berkas yang sama) tidak dihitung (T44, keputusan pengguna
+    22-10 "hitung baris logis"). Komentar tetap dihitung.
     """
     body = node.body
     if isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
@@ -71,27 +97,18 @@ def _body_length(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     if not body:
         return 0
     start, end = body[0].lineno, body[-1].end_lineno or body[-1].lineno
-    continuation = set()
-    for stmt in (n for top in body for n in ast.walk(top) if isinstance(n, ast.stmt)):
-        continuation.update(range(stmt.lineno + 1, _header_end(stmt) + 1))
-    return end - start + 1 - len(continuation)
-
-
-def _header_end(stmt: ast.stmt) -> int:
-    """Baris terakhir kepala pernyataan: pernyataan biasa = seluruhnya; majemuk (if/for/with/def…)
-    = sebelum baris pertama isinya, supaya isi tidak ikut dianggap lanjutan."""
-    inner = [
-        child.lineno for field in ("body", "orelse", "finalbody", "handlers") for child in getattr(stmt, field, [])
-    ]
-    inner += [case.pattern.lineno for case in getattr(stmt, "cases", [])]
-    return min(inner) - 1 if inner else stmt.end_lineno or stmt.lineno
+    return end - start + 1 - sum(1 for line in uncounted if start <= line <= end)
 
 
 def _long_functions(paths: list[str]) -> set[str]:
     found = set()
     for rel, text in _text_files(p for p in paths if p.endswith(".py") and p.startswith(("backend/", "tools/"))):
+        uncounted = _uncounted_lines(text)
         for node in ast.walk(ast.parse(text)):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _body_length(node) > MAX_FUNCTION_LINES:
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and _body_length(node, uncounted) > MAX_FUNCTION_LINES
+            ):
                 found.add(f"{rel}::{node.name}")
     return found
 
@@ -144,10 +161,37 @@ def test_body_length_ignores_formatter_wrapping():
         "        return x\n"
         "    return a\n"
     )
-    fn = ast.parse(wrapped).body[0]
-    assert isinstance(fn, ast.FunctionDef)
-    # x=, komentar, kosong, if, return x, return a = 6 baris (lanjutan call & kondisi if tidak dihitung)
-    assert _body_length(fn) == 6
+    # x=, komentar, if, return x, return a = 5 baris logis (lanjutan call/kondisi if & baris kosong tidak dihitung)
+    assert _length_of(wrapped) == 5
+
+
+def _length_of(source: str) -> int:
+    fn = ast.parse(source).body[0]
+    assert isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+    return _body_length(fn, _uncounted_lines(source))
+
+
+def test_body_length_except_header_wrapping_not_counted():
+    # Tinjauan Codex T44: kepala except (...) yang dipecah formatter dulu terhitung (29 -> 34)
+    compact = "def f():\n    try:\n        g()\n    except (ValueError, KeyError) as e:\n        h(e)\n"
+    wrapped = (
+        "def f():\n"
+        "    try:\n"
+        "        g()\n"
+        "    except (\n"
+        "        ValueError,\n"
+        "        KeyError,\n"
+        "    ) as e:\n"
+        "        h(e)\n"
+    )
+    assert _length_of(wrapped) == _length_of(compact) == 4
+
+
+def test_body_length_counts_comments_at_block_start():
+    # Tinjauan Codex T44: komentar/baris kosong di awal blok dulu terbuang
+    source = "def f(x):\n    if x:\n        # komentar awal blok\n\n        return 1\n    return 0\n"
+    # if, komentar, return 1, return 0 = 4 (komentar dihitung; baris kosong bukan baris logis)
+    assert _length_of(source) == 4
 
 
 def test_long_functions_do_not_grow():

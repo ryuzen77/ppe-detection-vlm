@@ -191,7 +191,8 @@ risiko (§2.2a), bukan dirombak sekaligus di luar task.
      dicek memakai indeks (`EXPLAIN QUERY PLAN`).
 2. **Clean code**
    - `ruff check` lolos (lewat `scripts/check.py`); fungsi baru ≤ 30 baris
-     badan (baris lanjutan hasil formatter tidak dihitung, T44) — lebih panjang
+     badan dalam **baris logis** (baris lanjutan & baris kosong tidak dihitung,
+     komentar dihitung — kebal terhadap formatter, T44) — lebih panjang
      dipecah atau diberi alasan di laporan.
    - Tidak menyalin blok ≥ 6 baris: angkat ke fungsi/komponen bersama.
    - Nama jelas; fungsi satu tanggung jawab; logika murni terpisah dari I/O & UI.
