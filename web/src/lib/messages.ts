@@ -4,7 +4,7 @@
  * sendiri, supaya istilah seragam dan mudah diganti tanpa menyentuh logika.
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
-import type { CameraState, VlmMode } from './api/types'
+import type { CameraState, ReportStatusFilter, VlmMode } from './api/types'
 import { LOCALE, REPORTS as REPORTS_SETTINGS, MIN_PASSWORD_LENGTH } from './settings'
 
 export const BRAND = {
@@ -370,8 +370,8 @@ export const REPORTS = {
   },
   filters: {
     ariaLabel: 'Saring riwayat',
-    status: { all: 'Semua', complete: 'Lolos', incomplete: 'Ditolak' } as Record<
-      'all' | 'complete' | 'incomplete',
+    status: { all: 'Semua', complete: 'Lolos', incomplete: 'Ditolak', held: 'Ditahan' } as Record<
+      ReportStatusFilter,
       string
     >,
     date: 'Tanggal',
