@@ -14,7 +14,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T93 — `check.py` gagal bila langkah dilewati | Claude (pengguna: "lanjut" 23-10) | `claude/t93-check-skip` (dari `master` terbaru) | tinjau | `scripts/check.py`, `tests/test_check_script.py` (baru), `docs/INSTALASI.md` §4 | Risiko Sedang: 22-10 npm hilang → check.py melewati Pyright & seluruh langkah web tetapi menulis "Semua pemeriksaan lolos" (bisa meloloskan commit yang belum diperiksa). Rencana: langkah yang dilewati = keluar bukan nol + pesan jelas; opsi `--allow-skip` untuk mesin tanpa Node. **Tinjau 23-10:** `build_steps()` (murni) mengembalikan langkah + alasan yang dilewati; `verdict()` → dilewati tanpa `--allow-skip` = "TIDAK LENGKAP" kode 1, dengan flag = lolos tetapi menyebut yang dilewati, gagal tetap menang. Langkah bernama (CI `check.py pyright`) tidak berubah. 7 tes baru; simulasi npm/npx hilang → kode 1. INSTALASI §4 diperbarui. check.py lolos (pytest 989, Pyright 0, vitest 230). |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
