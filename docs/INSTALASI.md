@@ -233,8 +233,10 @@ mengikuti kamera yang dipilih operator di lokasi (cukup sekali; sesudahnya dibuk
 
 ## 4. Pengembangan
 
-- `python scripts/check.py` wajib lolos sebelum commit. Isinya ruff dan pytest;
-  bila Node.js terpasang, juga cek tipe, vitest, dan build UI.
+- `python scripts/check.py` wajib lolos sebelum commit. Isinya ruff, Pyright, pytest,
+  serta format, lint, cek tipe, vitest, dan build UI. Langkah yang butuh Node.js wajib
+  jalan: bila Node/npm atau `web/node_modules` tidak ada, hasilnya **TIDAK LENGKAP**
+  (kode keluar 1). Mesin yang memang tanpa Node memakai `--allow-skip`.
 - `python -m pytest`: tes memakai `DATA_DIR` sementara, tidak memanggil VLM
   cloud, dan tidak membuka port IoT.
 - `python -m backend.generate_audio`: membangkitkan ulang MP3 panduan suara dari
