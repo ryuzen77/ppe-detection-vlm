@@ -7,6 +7,7 @@ sinyal berhenti: CTRL_BREAK_EVENT di Windows (jalur yang sama dengan Ctrl+C),
 SIGTERM di Linux/macOS (yang dikirim systemd dan Docker saat menghentikan layanan).
 """
 
+import io
 import os
 import re
 import signal
@@ -16,7 +17,9 @@ import sys
 import threading
 import time
 import urllib.request
+from http.client import HTTPResponse
 from pathlib import Path
+from types import SimpleNamespace
 from typing import IO, Any, cast
 
 import httpx
@@ -36,6 +39,17 @@ else:
     POPEN_FLAGS = {}
 
 
+def _read_headers(request: str | urllib.request.Request, timeout: float):
+    """T94: habiskan body sebelum menutup koneksi, walau pemanggil hanya membutuhkan header.
+
+    Setup/probe yang membuang body bisa me-reset koneksi server: Proactor Windows lalu gagal
+    di socket.shutdown() (WinError 10054), sebelum sinyal shutdown tes dikirim.
+    """
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        response.read()
+        return response.headers
+
+
 def _setup_cookie(base: str) -> str:
     """T51: semua API wajib login. Server uji punya DATA_DIR kosong, jadi admin pertama
     dibuat lewat setup (diizinkan dari localhost) dan cookie sesinya dipakai klien."""
@@ -45,8 +59,31 @@ def _setup_cookie(base: str) -> str:
     request = urllib.request.Request(
         base + "/api/setup", data=body, method="POST", headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(request, timeout=10) as r:
-        return r.headers["Set-Cookie"].split(";", 1)[0]
+    return _read_headers(request, timeout=10)["Set-Cookie"].split(";", 1)[0]
+
+
+@pytest.mark.parametrize("setup", [False, True], ids=["session-probe", "admin-setup"])
+def test_http_client_consumes_response_before_closing(monkeypatch, setup):
+    """Parser HTTP sungguhan atas soket tiruan: penutupan tidak boleh menyisakan body."""
+    unread_on_close = []
+
+    class ResponseBuffer(io.BytesIO):
+        def close(self):
+            if not self.closed:
+                unread_on_close.append(len(self.getvalue()) - self.tell())
+            super().close()
+
+    wire = ResponseBuffer(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nSet-Cookie: session=uji; HttpOnly\r\n\r\n{}")
+    socket_stub = cast("socket.socket", SimpleNamespace(makefile=lambda *_args: wire))
+    response = HTTPResponse(socket_stub)
+    response.begin()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_args, **_kwargs: response)
+    if setup:
+        assert _setup_cookie("http://server-uji") == "session=uji"
+    else:
+        assert _read_headers("http://server-uji/api/session", timeout=2)["Content-Length"] == "2"
+    assert unread_on_close == [0], "body HTTP tidak boleh dibuang saat koneksi ditutup"
+    assert response.isclosed()
 
 
 def _free_port():
@@ -177,7 +214,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     try:
         for _ in range(240):
             try:
-                urllib.request.urlopen(base + "/api/session", timeout=2)
+                _read_headers(base + "/api/session", timeout=2)
                 break
             except Exception:
                 if proc.poll() is not None:
@@ -243,7 +280,7 @@ def test_server_berhenti_bersih_dengan_klien_aktif(tmp_path):
     assert "Waiting for connections to close" not in log, "stream/WebSocket masih terbuka saat shutdown"
     assert not re.search(r"Cancel [1-9]\d* running task", log), "tugas aplikasi dibatalkan paksa"
     assert elapsed < _stop_limit(log), f"Berhenti terlalu lama: {elapsed:.1f} detik"
-    assert "Traceback" not in log and "CancelledError" not in log
+    assert "Traceback" not in log and "CancelledError" not in log, log
     assert "Shutdown selesai" in log
 
 
@@ -298,7 +335,7 @@ def test_server_tetap_berhenti_walau_koneksi_macet_saat_shutdown(tmp_path):
     try:
         for _ in range(240):
             try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/session", timeout=2)
+                _read_headers(f"http://127.0.0.1:{port}/api/session", timeout=2)
                 break
             except Exception:
                 if proc.poll() is not None:
