@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T94 — `test_shutdown` rapuh (antrean #11) | **Codex** (perbaikan) + Claude (tinjau & gabung) — pengguna: "kerja sama dengan codex" 23-10 | `codex/t94-shutdown-flaky` (dari `master` terbaru) | dikerjakan | `tests/test_shutdown.py`; bila akar masalah di server: `backend/app.py` (`run`/`GracefulServer`), `backend/shutdown.py`, `backend/logging_setup.py` | Risiko Sedang (tes rapuh = sinyal palsu di check.py/CI). Bukti 23-10 (Claude): `…klien_aktif` gagal 3× lalu lolos 17×; log server memuat `Traceback` asyncio `…_call_connection_lost(None)>` → `asyncio/events.py:88 _run` (dugaan `ConnectionResetError` Proactor Windows saat shutdown, cpython#93821); traceback penuh belum tertangkap (pytest memotong). **Urutan kerja:** (1) tangkap log penuh (`-o truncation_limit_lines=0 -o truncation_limit_chars=0`, ulang di bawah beban, mis. bersamaan `npm run build`/stress CPU), (2) tentukan akar masalah, (3) perbaiki di sumbernya — jangan sekadar melonggarkan assert `Traceback`; bila galat memang tak berbahaya & tak bisa dicegah, saring sempit dengan alasan + tes. Selama T94 Claude tidak menjalankan pytest/check.py tanpa koordinasi. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
