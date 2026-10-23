@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T42i — pecah `hud.draw_hud` (cicilan utang kode, antrean #10) | Claude (pengguna: "lanjut T42" 23-10) | `claude/t42i-draw-hud-split` (dari `master` terbaru) | dikerjakan | `backend/video/hud.py`, `tests/test_hud_characterization.py` (baru) + `tests/golden/hud.json`, `tests/test_code_hygiene.py` (daftar utang) | Risiko Rendah (refaktor tanpa ubah perilaku; HUD server bawaan mati `ENABLE_SERVER_HUD=false`). 50 baris logis → dipecah per bagian (lorong, garis batas, kotak orang, header). Dijaga tes karakterisasi piksel (hash frame) dari kode lama; jalur per frame → diukur 1 vs 20 orang. |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
