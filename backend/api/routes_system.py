@@ -12,8 +12,10 @@ from ..disk_guard import disk_guard
 from ..audio_engine import audio_player
 from ..video.capture import video_service
 from .deps import require_admin
+from . import routes_registration
 
 router = APIRouter()
+router.include_router(routes_registration.router)
 
 
 @router.get("/api/health")

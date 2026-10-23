@@ -410,6 +410,7 @@ def test_csv_exports_have_one_utf8_bom_and_preserve_headers(env, catalog_default
             + [messages.CSV_HEADER_WORKER_NAME, messages.CSV_HEADER_DEPARTMENT, messages.CSV_HEADER_COMPANY]
             + [item.label for item in ppe_rules.get_items()]
             + messages.CSV_HEADER_TRAILING
+            + [messages.CSV_HEADER_GATE_HOLD]
         )
     )
     assert rows[header_index] == expected

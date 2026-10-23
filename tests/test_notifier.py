@@ -7,7 +7,7 @@ from backend import messages, notifier as notifier_mod
 from backend.app import app
 from backend.config import cfg
 from backend.notifier import GateLightLink, LightState, NotifierManager, notifier
-from backend.state_manager import state_mgr
+from backend.state_manager import GateSession, state_mgr
 
 
 class Clock:
@@ -268,7 +268,7 @@ def test_uji_lampu_aksi_tidak_dikenal_ditolak(client):
 
 
 def test_uji_lampu_ditolak_saat_ada_pekerja(client, monkeypatch):
-    monkeypatch.setattr(state_mgr, "session", object())
+    monkeypatch.setattr(state_mgr, "session", GateSession(1, 0.0))
     r = client.post("/api/iot/test", json={"action": "green"})
     assert r.status_code == 409 and r.json()["detail"] == messages.API_LIGHT_TEST_BUSY
     assert notifier.current_state == LightState.OFF

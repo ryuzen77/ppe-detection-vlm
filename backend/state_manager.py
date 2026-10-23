@@ -3,13 +3,13 @@ import time
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
-from typing import Optional, List
+from typing import Any, Optional, List
 import numpy as np
 
 from .config import cfg
 from . import messages
 from .detector import DetectionResult
-from . import face_identity, frame_quality, worker_voice
+from . import face_identity, frame_quality, worker_voice, registration_policy
 from .readiness import ReadinessTracker
 from .vlm_analyzer import vlm_analyzer, InspectionResult
 from .audio_engine import audio_player
@@ -97,6 +97,14 @@ class GateSession:
         self.readiness = ReadinessTracker()
         # Siapa pekerjanya (T34c1); None = belum/tidak dicoba
         self.identity: Optional[face_identity.Identity] = None
+        self._init_registration()
+
+    def _init_registration(self):
+        self.face_retry_deadline = 0.0
+        self.hold_reason: Optional[str] = None
+        self.face_retry = False
+        self.face_frames: list[np.ndarray] = []
+        self.face_frame_ready = threading.Event()
 
     def restart_candidates(self, bbox: list):
         """Rangkaian kandidat terputus: frame lama tidak boleh ikut dinilai."""
@@ -160,6 +168,7 @@ class StateManager:
             if not self._enrolling(now):
                 self._announce_camera_fault(fault, previous, now)
             # Hasil VLM yang tiba belakangan untuk sesi ini diabaikan (cek id sesi)
+            self._cancel_face_retry()
             self.session = None
             self._show_resting_light(now)
 
@@ -193,6 +202,7 @@ class StateManager:
             self.enrollment_until = now + cfg.ENROLLMENT_HOLD_SECONDS
             if started:
                 logger.info(messages.LOG_ENROLLMENT_HOLD_START)
+                self._cancel_face_retry()
                 self.session = None  # hasil VLM yang tiba belakangan diabaikan (cek id sesi)
                 self._show_resting_light(now)
             return started
@@ -251,7 +261,7 @@ class StateManager:
 
     def _remember_decision(self, track_id: int, result: InspectionResult, now: float):
         # Hanya lolos: yang ditolak harus bisa diperiksa ulang setelah memperbaiki APD
-        if result.is_complete:
+        if result.is_complete and not registration_policy.policy.enabled:
             self.recent_decisions[track_id] = (now, result)
 
     def _recent_decision(self, track_id: int, now: float) -> Optional[InspectionResult]:
@@ -259,6 +269,8 @@ class StateManager:
         for tid, (at, _) in list(self.recent_decisions.items()):
             if now - at > cfg.DECIDED_TRACK_MEMORY_SECONDS:
                 del self.recent_decisions[tid]
+        if registration_policy.policy.enabled:
+            return None  # APD antisesi tidak membuktikan identitas pekerja pada sesi baru.
         entry = self.recent_decisions.get(track_id)
         return entry[1] if entry else None
 
@@ -290,6 +302,7 @@ class StateManager:
             if self._decided_subject_absent(session, in_lane, now):
                 return
             det = self._follow_subject(session, in_lane, now)
+            self._offer_face_frame(session, det)
             if not self._may_inspect(session, det, now):
                 return
             if not det.is_full_body:
@@ -365,6 +378,7 @@ class StateManager:
         if session.vlm_result is not None:
             # ID terakhir subjek (bisa berbeda dari ID saat dianalisa)
             self._remember_decision(session.track_id, session.vlm_result, now)
+        self._cancel_face_retry()
         self.session = None
         notifier.set_idle()
 
@@ -500,7 +514,8 @@ class StateManager:
         identity = face_identity.identifier.identify(crops, session_id)
         with self.lock:
             if self.session is not None and self.session.session_id == session_id:
-                self.session.identity = identity
+                if self.session.state != TrackState.ANALYZED or not registration_policy.policy.enabled:
+                    self.session.identity = identity
         return identity
 
     @staticmethod
@@ -515,6 +530,11 @@ class StateManager:
                 messages.LOG_FACE_TIMEOUT.format(session=session_id, seconds=cfg.FACE_IDENTIFY_TIMEOUT_SECONDS)
             )
             return face_identity.Identity(face_identity.UNKNOWN)
+        except Exception:
+            if not registration_policy.policy.enabled:
+                raise
+            face_identity.identifier.mark_unavailable()
+            return face_identity.Identity(face_identity.DISABLED)
 
     def _run_vlm_analysis(
         self,
@@ -538,14 +558,83 @@ class StateManager:
             # Pemeriksaan sudah terjadi, jadi selalu tercatat di audit, termasuk
             # bila pekerjanya sudah pergi sebelum hasil tiba.
             identity = self._await_identity(session_id, identity_future)
-            saved_meta = self._save_audit(track_id, result, crop_img, identity)
+            identity, hold_reason = self._resolve_registration(session_id, result, identity)
+            saved_meta = self._save_audit(track_id, result, crop_img, identity, hold_reason)
             with self.lock:
                 self._record_history(track_id, result, saved_meta, identity)
-                self._apply_decision(session_id, track_id, result)
+                self._apply_decision(session_id, track_id, result, hold_reason, identity)
 
         except Exception as e:
             logger.exception(f"Error during VLM analysis for session #{session_id}: {e}")
             self._retry_session(session_id)
+
+    def _cancel_face_retry(self):
+        if self.session is not None:
+            self.session.face_frame_ready.set()
+
+    @staticmethod
+    def _offer_face_frame(session: GateSession, det: DetectionResult):
+        if not session.face_retry or det.crop_img is None:
+            return
+        session.face_frames.append(det.crop_img.copy())
+        session.face_frames = session.face_frames[-cfg.FACE_VOTE_FRAMES :]
+        if len(session.face_frames) >= cfg.FACE_VOTE_FRAMES:
+            session.face_frame_ready.set()
+
+    def _resolve_registration(self, session_id, result, identity):
+        if not registration_policy.policy.enabled or not result.is_complete:
+            return identity, None
+        if not registration_policy.fr_ready() or identity is None or identity.status == face_identity.DISABLED:
+            return identity, registration_policy.FR_UNAVAILABLE
+        if identity.status == face_identity.RECOGNIZED:
+            return identity, None
+        with self.lock:
+            session = self.session
+            if session is None or session.session_id != session_id:
+                return identity, registration_policy.UNREGISTERED
+            session.face_retry = True
+            session.face_retry_deadline = time.monotonic() + cfg.FACE_RETRY_SECONDS
+            notifier.set_waiting(messages.REGISTRATION_LOOK_CAMERA)
+            audio_player.play(messages.REGISTRATION_RETRY_AUDIO)
+        identity = self._retry_identity(session, identity)
+        with self.lock:
+            session.face_retry = False
+            session.face_frames = []
+        if not registration_policy.fr_ready() or identity.status == face_identity.DISABLED:
+            return identity, registration_policy.FR_UNAVAILABLE
+        return identity, None if identity.status == face_identity.RECOGNIZED else registration_policy.UNREGISTERED
+
+    def _retry_identity(self, session: GateSession, identity):
+        deadline = session.face_retry_deadline
+        while (remaining := deadline - time.monotonic()) > 0:
+            if not session.face_frame_ready.wait(remaining):
+                break
+            with self.lock:
+                if self.session is not session or self.camera_fault is not None:
+                    break
+                crops, session.face_frames = session.face_frames, []
+                session.face_frame_ready.clear()
+            future = self.fr_executor.submit(self._identify_session, session.session_id, crops)
+            try:
+                identity = future.result(timeout=max(0, deadline - time.monotonic()))
+            except FutureTimeout:
+                face_identity.identifier.mark_unavailable()
+                return face_identity.Identity(face_identity.DISABLED)
+            except Exception:
+                face_identity.identifier.mark_unavailable()
+                return face_identity.Identity(face_identity.DISABLED)
+            if identity.status != face_identity.UNKNOWN:
+                break
+        return identity
+
+    @staticmethod
+    def _show_hold(reason: str):
+        unavailable = reason == registration_policy.FR_UNAVAILABLE
+        text = messages.REGISTRATION_FR_UNAVAILABLE if unavailable else messages.REGISTRATION_HELD
+        sound = messages.REGISTRATION_UNAVAILABLE_AUDIO if unavailable else messages.REGISTRATION_HELD_AUDIO
+        notifier.set_waiting(text)
+        audio_player.play(sound, urgent=True)
+        logger.warning(text)
 
     @staticmethod
     def _items_payload(result: InspectionResult) -> dict:
@@ -557,8 +646,9 @@ class StateManager:
         result: InspectionResult,
         crop_img: np.ndarray,
         identity: Optional[face_identity.Identity] = None,
+        hold_reason: Optional[str] = None,
     ) -> dict:
-        extra = (
+        extra: dict[str, Any] = (
             {}
             if identity is None
             else {
@@ -582,6 +672,7 @@ class StateManager:
             inference_source=result.inference_source,
             inference_time_ms=result.inference_time_ms,
             crop_img=crop_img,
+            **({"gate_hold": hold_reason} if hold_reason else {}),
             **extra,
         )
 
@@ -610,12 +701,20 @@ class StateManager:
                 "worker_name": identity.name if identity else None,
                 "employee_no": identity.employee_no if identity else None,
                 "fr_status": identity.status if identity else None,
+                "gate_hold": saved_meta.get("gate_hold"),
             },
         )
         if len(self.inspection_history) > cfg.MAX_HISTORY_RECORDS:
             self.inspection_history.pop()
 
-    def _apply_decision(self, session_id: int, track_id: int, result: InspectionResult):
+    def _apply_decision(
+        self,
+        session_id: int,
+        track_id: int,
+        result: InspectionResult,
+        hold_reason: Optional[str] = None,
+        identity: Optional[face_identity.Identity] = None,
+    ):
         """Kunci keputusan ke sesi, lalu lampu & suara. Pemanggil memegang lock."""
         session = self.session
         if session is None or session.session_id != session_id:
@@ -624,11 +723,17 @@ class StateManager:
             logger.info(f"Hasil sesi #{session_id} tiba setelah sesi berakhir; gerbang tidak diubah.")
             return
 
+        session.hold_reason = hold_reason
+        if identity is not None and registration_policy.policy.enabled:
+            session.identity = identity
         session.vlm_result = result
         session.state = TrackState.ANALYZED
         session.analysis_timestamp = time.time()
         self._remember_decision(track_id, result, session.analysis_timestamp)
 
+        if hold_reason is not None:
+            self._show_hold(hold_reason)
+            return
         if result.is_complete:
             logger.info(f"Sesi #{session_id}: APD LENGKAP! Green Light ON.")
         else:
@@ -679,6 +784,7 @@ class StateManager:
 
     def reset_all(self):
         with self.lock:
+            self._cancel_face_retry()
             self.session = None
             # Reset operator = mulai bersih: orang yang sama boleh diperiksa ulang
             self.recent_decisions.clear()
@@ -703,6 +809,7 @@ class StateManager:
                 **self._lane_payload(active_zone),
                 "light": notifier.get_status(),
                 "camera_fault": self.camera_fault,
+                "registration_policy": registration_policy.policy.status(),
                 "enrollment": self._enrollment_payload(time.time()),
                 "history": self.inspection_history[: cfg.TELEMETRY_HISTORY_RECORDS],
                 # Frontend butuh angka ini untuk indikator "stabil x / y";
@@ -748,6 +855,14 @@ class StateManager:
         }
 
     @staticmethod
+    def _gate_decision(session: GateSession):
+        if session.hold_reason:
+            return "held"
+        if session.vlm_result is None:
+            return None
+        return "granted" if session.vlm_result.is_complete else "denied"
+
+    @staticmethod
     def _session_payload(s: Optional[GateSession]) -> Optional[dict]:
         if s is None:
             return None
@@ -763,6 +878,9 @@ class StateManager:
             if s.state == TrackState.WAITING_SYSTEM
             else None,
             "vlm_result": s.vlm_result.model_dump() if s.vlm_result else None,
+            "decision": StateManager._gate_decision(s),
+            "face_retry_s": max(0.0, round(s.face_retry_deadline - time.monotonic(), 1)) if s.face_retry else None,
+            "hold_reason": s.hold_reason,
             "identity": s.identity.payload() if s.identity else None,
         }
 

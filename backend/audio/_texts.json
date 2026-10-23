@@ -22,6 +22,9 @@
   "mundur_kaki": "Mundur satu langkah, kaki belum terlihat.",
   "mundur_kepala": "Mundur sedikit, kepala terpotong.",
   "posisi_pas": "Posisi tepat. Mohon tunggu.",
+  "registration_held": "Wajah belum terdaftar. Silakan hubungi petugas.",
+  "registration_look_camera": "Mohon tatap kamera.",
+  "registration_unavailable": "Wajib terdaftar aktif — FR tidak berfungsi, semua pekerja ditahan.",
   "sedang_analisa": "Mohon tunggu.",
   "sistem_gangguan": "Sistem sedang gangguan. Mohon tunggu, pemeriksaan diulang otomatis.",
   "tidak_lengkap": "APD tidak lengkap. Akses ditolak."

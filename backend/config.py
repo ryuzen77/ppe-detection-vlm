@@ -607,6 +607,11 @@ class Config:
     # FACE_MIN_INTEROCULAR_PX (720p ±17-22 px), jadi pekerja yang didaftarkan tetap tidak akan dikenali
     ENROLLMENT_MIN_FRAME_HEIGHT: int = 1080
 
+    # T83: kebijakan tersimpan di runtime_settings; bawaan tetap tidak menahan.
+    FACE_RETRY_SECONDS: float = float(_env("FACE_RETRY_SECONDS", "5"))
+    FR_RATE_WINDOW_DAYS: int = int(_env("FR_RATE_WINDOW_DAYS", "7"))
+    FR_REQUIRED_RATE: float = float(_env("FR_REQUIRED_RATE", "0.95"))
+
     # Audio Settings. MP3 adalah aset rilis (dilacak git, dibangkitkan dari
     # katalog APD), bukan data lapangan, jadi tetap berada di direktori kode.
     AUDIO_DIR: Path = BASE_DIR / "audio"

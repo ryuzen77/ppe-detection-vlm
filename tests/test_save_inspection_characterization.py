@@ -130,6 +130,13 @@ def run_calls(root, monkeypatch):
 
 def test_penulisan_audit_tidak_berubah(tmp_path, monkeypatch):
     expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    # T83 menambahkan satu kolom nullable; nilai/perilaku lama tetap dibandingkan utuh.
+    for entry in expected:
+        if entry[0] == "panggilan":
+            entry[2]["gate_hold"] = None
+        elif entry[0] == "baris":
+            for row in entry[1]:
+                row.append(None)
     actual = json.loads(json.dumps(run_calls(tmp_path, monkeypatch)))
     changed = [a for a, e in zip(actual, expected) if a != e]
     assert len(actual) == len(expected) and not changed, f"{len(changed)} entri berubah, mis. {changed[:1]}"
