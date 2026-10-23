@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T83a — "Wajib terdaftar" backend (antrean 7g, lihat "Rancangan T83") | **Codex** (pengguna setuju 23-10; tinjau & gabung Claude) | `codex/t83a-registration-policy` (dari `master` terbaru) | dikerjakan | `backend/state_manager.py` (ulang FR & tahan), `backend/face_identity.py` (identifikasi ulang tanpa VLM), `backend/report_manager.py` (kolom `gate_hold` + migrasi + `held_count` + CSV), rute baru `GET/POST /api/config/registration-policy` (berkas rute baru atau `routes_system.py`), telemetri (`decision: "held"`, `hold_reason`, `registration_policy`), `backend/config.py`/`messages.py`/`.env.example` (tambah saja: `FACE_RETRY_SECONDS`, `FR_RATE_WINDOW_DAYS`, `FR_REQUIRED_RATE`, teks & suara), audio baru, `tests/` | Risiko **Tinggi** (menentukan akses; bawaan MATI = perilaku sekarang). Kontrak & tabel alur = "Rancangan T83" §1–2 (disetujui 22-10) — **jangan ubah bentuk JSON tanpa persetujuan** (UI T83b dibangun di atasnya). Merah tetap hanya APD/larangan; ditahan = kuning; tanpa tombol "izinkan". Tes wajib = §5. Jalur per inspeksi → ukur waktu ulang FR (§4.1). |
 
 ### Rancangan T34 — identitas wajah (FR) untuk audit per pekerja (disusun 18-10; sedang dikerjakan: T34m/m2/a selesai, T34b1/b2 tinjau)
 
