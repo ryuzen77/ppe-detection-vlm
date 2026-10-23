@@ -4,6 +4,7 @@
   import Globe from '@lucide/svelte/icons/globe'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
   import Lightbulb from '@lucide/svelte/icons/lightbulb'
+  import ScanFace from '@lucide/svelte/icons/scan-face'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -15,7 +16,15 @@
   import { BRAND, CONNECTION, GATE_CHIP, NAV, SYSTEM_STATUS, AUTH, chipTitle } from '../lib/messages'
   import { href, ROUTES, router } from '../lib/router.svelte'
   import { CLOCK } from '../lib/settings'
-  import { cameraChip, vlmChip, iotChip, internetChip, localStandbyChip, systemSummary } from '../lib/status'
+  import {
+    cameraChip,
+    vlmChip,
+    iotChip,
+    internetChip,
+    localStandbyChip,
+    registrationChip,
+    systemSummary,
+  } from '../lib/status'
   import { connectionView } from '../lib/connection'
   import { session } from '../lib/stores/session.svelte'
   import { LOGIN } from '../lib/messages'
@@ -34,6 +43,7 @@
   const iot = $derived(iotChip(t))
   const internet = $derived(internetChip(t))
   const localStandby = $derived(localStandbyChip(t))
+  const registration = $derived(registrationChip(t))
   const connection = $derived(connectionView(session.authenticated, telemetry.status))
   const localVlm = $derived(localVlmChipView(health.localVlm))
   // T78: satu ringkasan menggantikan chip kamera/VLM/lampu/VLM lokal yang berdampingan
@@ -44,6 +54,7 @@
     ...(localStandby ? [{ icon: HardDrive, ...localStandby }] : []),
     ...(t?.iot ? [{ icon: Lightbulb, ...iot }] : []),
     ...(localVlm ? [{ icon: Cpu, ...localVlm }] : []),
+    ...(registration ? [{ icon: ScanFace, ...registration }] : []),
   ])
   const summary = $derived(systemSummary(items))
   // Chip gerbang "kamera belum siap" sama dengan masalah kamera di ringkasan: tidak ditampilkan dua kali

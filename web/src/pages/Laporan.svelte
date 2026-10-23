@@ -24,12 +24,11 @@
     Worker,
   } from '../lib/api/types'
   import { ATTENDANCE, REPORTS as TEXT, count, percent, withError } from '../lib/messages'
-  import { complianceTone, historyHead, pageInfo } from '../lib/reports'
+  import { complianceTone, historyHead, pageInfo, reportStatuses } from '../lib/reports'
   import { REPORTS } from '../lib/settings'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { telemetry } from '../lib/stores/telemetry.svelte'
 
-  const STATUSES: ReportStatusFilter[] = ['all', 'complete', 'incomplete']
   // T80: tab Kehadiran (informasi lewat gerbang, bukan absensi resmi) di samping laporan APD
   const TABS = ['apd', 'attendance'] as const
   let tab = $state<(typeof TABS)[number]>('apd')
@@ -41,6 +40,7 @@
 
   let summary = $state<ReportSummary | null>(null)
   let page = $state<ReportsPage | null>(null)
+  const statuses = $derived(reportStatuses(page))
 
   let loading = $state(false)
   let error = $state('')
@@ -199,6 +199,9 @@
         {#if page?.local_fallback_count !== undefined}
           <StatTile label={TEXT.stats.localFallback} value={count(page.local_fallback_count)} />
         {/if}
+        {#if page?.held_count !== undefined}
+          <StatTile label={TEXT.stats.held} value={count(page.held_count)} hint={TEXT.stats.heldHint} />
+        {/if}
         <StatTile
           label={TEXT.stats.outages}
           value={count(page?.system_outages)}
@@ -216,7 +219,7 @@
     <section class="card">
       <div class="filters" role="group" aria-label={TEXT.filters.ariaLabel}>
         <div class="segmented">
-          {#each STATUSES as s (s)}
+          {#each statuses as s (s)}
             <button
               class:active={status === s}
               aria-pressed={status === s}

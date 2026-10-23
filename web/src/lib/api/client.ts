@@ -44,6 +44,8 @@ import type {
   AttendanceFilter,
   AttendanceReport,
   WorkerInspectionsPage,
+  RegistrationPolicy,
+  RegistrationPolicyRequest,
 } from './types'
 import { withQuery } from '../url'
 
@@ -163,6 +165,10 @@ export class ApiClient {
   zone = () => this.request<Zone>('GET', '/api/config/zone')
   setZone = (cfg: Partial<Zone>) => this.request<Zone>('POST', '/api/config/zone', cfg)
   calibrateZone = () => this.request<Zone>('POST', '/api/config/zone/calibrate')
+  // T83: setelan Wajib terdaftar (admin)
+  registrationPolicy = () => this.request<RegistrationPolicy>('GET', '/api/config/registration-policy')
+  setRegistrationPolicy = (req: RegistrationPolicyRequest) =>
+    this.request<RegistrationPolicy>('POST', '/api/config/registration-policy', req)
 
   // --- Laporan
   reportsSummary = (params: { period?: ReportPeriod; date?: string } & ReportWhoFilter = {}) =>

@@ -6,10 +6,11 @@
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark'
   import CircleX from '@lucide/svelte/icons/circle-x'
   import ImageOff from '@lucide/svelte/icons/image-off'
+  import UserX from '@lucide/svelte/icons/user-x'
   import X from '@lucide/svelte/icons/x'
   import { api } from '../../lib/api/client'
   import type { PpeItem, ReportRecord } from '../../lib/api/types'
-  import { REPORTS as TEXT, seconds, shortDate } from '../../lib/messages'
+  import { HOLD_REASON, REPORTS as TEXT, seconds, shortDate } from '../../lib/messages'
   import { assessItem } from '../../lib/ppe'
   import { RESULT_TONE, resultKind, sourceText, workerCell, type ResultKind } from '../../lib/reports'
   import { REPORTS } from '../../lib/settings'
@@ -30,6 +31,7 @@
     passed: CircleCheck,
     denied: CircleX,
     unverified: CircleQuestionMark,
+    held: UserX,
   }
 
   const judged = (rec: ReportRecord) => items.filter((i) => rec.items && i.key in rec.items)
@@ -85,6 +87,8 @@
             </span>
             {#if kind === 'denied' && rec.missing_items.length}
               <span class="sub">{TEXT.table.missing(rec.missing_items)}</span>
+            {:else if kind === 'held' && rec.gate_hold}
+              <span class="sub">{HOLD_REASON[rec.gate_hold]}</span>
             {/if}
           </td>
           <td>

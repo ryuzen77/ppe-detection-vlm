@@ -24,6 +24,15 @@ export function extractApiError(e: unknown, fallback: string = 'Terjadi kesalaha
   return fallback
 }
 
+/** Kode galat terstruktur `detail.code` (mis. T83 `fr_not_ready`), atau undefined */
+export function extractApiErrorCode(e: unknown): string | undefined {
+  if (isObject(e) && 'body' in e) {
+    const body = e.body
+    if (isObject(body) && isObject(body.detail) && typeof body.detail.code === 'string') return body.detail.code
+  }
+  return undefined
+}
+
 export function extractRetryAfter(e: unknown): number | null {
   if (isObject(e) && 'body' in e) {
     const body = e.body

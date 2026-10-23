@@ -4,6 +4,7 @@
   import Accounts from '../components/settings/Accounts.svelte'
   import VlmProviders from '../components/settings/VlmProviders.svelte'
   import LocalVlmCard from '../components/settings/LocalVlmCard.svelte'
+  import RegistrationPolicyCard from '../components/settings/RegistrationPolicyCard.svelte'
   import { api } from '../lib/api/client'
   import type { LightTestAction } from '../lib/api/types'
   import { CAMERA_CHIP, SETTINGS_TAB, modeLabel } from '../lib/messages'
@@ -148,6 +149,8 @@
           {/if}
         </div>
       </section>
+
+      <RegistrationPolicyCard />
 
       <section class="card">
         <h3>{SETTINGS_TAB.lightTest}</h3>

@@ -171,6 +171,46 @@ describe('gateView', () => {
     expect(v).toMatchObject({ kind: 'waiting', tone: 'warn' })
     expect(v.detail).toMatch(/13 dtk/)
   })
+
+  // --- T83 Wajib terdaftar ---
+  it('ditahan: kuning (bukan merah) walau APD lengkap, dengan alasan', () => {
+    const held = (hold_reason: 'unregistered' | 'fr_unavailable') =>
+      gateView(
+        tele({ active_track: track({ state: 'ANALYZED', vlm_result: result(), decision: 'held', hold_reason }) }),
+        'connected',
+      )
+    expect(held('unregistered')).toMatchObject({ kind: 'held', tone: 'warn', missing: [] })
+    expect(held('unregistered').detail).toMatch(/belum terdaftar/)
+    expect(held('fr_unavailable').detail).toMatch(/tidak berfungsi/)
+  })
+
+  it('ulang FR: "Mohon tatap kamera" dengan hitung mundur, belum lolos', () => {
+    const v = gateView(
+      tele({ active_track: track({ state: 'ANALYZED', vlm_result: result(), face_retry_s: 3.2 }) }),
+      'connected',
+    )
+    expect(v).toMatchObject({ kind: 'face-retry', tone: 'neutral' })
+    expect(v.detail).toMatch(/4 dtk/)
+  })
+
+  it('APD kurang tetap ditolak walau FR sedang diulang (FR tidak ikut menentukan merah)', () => {
+    const v = gateView(
+      tele({
+        active_track: track({
+          state: 'ANALYZED',
+          vlm_result: result({ is_complete: false, missing_items: ['Helm'] }),
+          face_retry_s: 2,
+        }),
+      }),
+      'connected',
+    )
+    expect(v).toMatchObject({ kind: 'denied', tone: 'danger' })
+  })
+
+  it('server sebelum T83a (tanpa decision/face_retry_s) = perilaku lama', () => {
+    const v = gateView(tele({ active_track: track({ state: 'ANALYZED', vlm_result: result() }) }), 'connected')
+    expect(v.kind).toBe('granted')
+  })
 })
 
 // --- penilaian APD ----------------------------------------------------------------

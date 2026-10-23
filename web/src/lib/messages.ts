@@ -4,7 +4,7 @@
  * sendiri, supaya istilah seragam dan mudah diganti tanpa menyentuh logika.
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
-import type { CameraState, ReportStatusFilter, VlmMode } from './api/types'
+import type { CameraState, GateHold, ReportStatusFilter, VlmMode } from './api/types'
 import { LOCALE, REPORTS as REPORTS_SETTINGS, MIN_PASSWORD_LENGTH } from './settings'
 
 export const BRAND = {
@@ -131,6 +131,30 @@ export const GATE = {
     title: 'Mode pendaftaran wajah',
     detail: 'Pemeriksaan APD dijeda sementara oleh admin; gerbang memeriksa lagi saat foto selesai.',
   },
+  // T83 Wajib terdaftar: APD lengkap tetapi wajah belum dikenali — kuning, bukan merah (AGENTS §5)
+  faceRetry: {
+    title: 'Mohon tatap kamera',
+    detail: (s: number) => `APD lengkap. Mencocokkan wajah… (${Math.ceil(s)} dtk)`,
+  },
+  held: {
+    title: 'Ditahan',
+    detail: {
+      unregistered: 'APD lengkap, tetapi wajah belum terdaftar. Silakan hubungi petugas.',
+      fr_unavailable: 'APD lengkap, tetapi pengenalan wajah tidak berfungsi. Silakan hubungi petugas.',
+    } as Record<GateHold, string>,
+  },
+} as const
+
+/** Alasan ditahan (T83) untuk riwayat & laporan */
+export const HOLD_REASON: Record<GateHold, string> = {
+  unregistered: 'Wajah belum terdaftar',
+  fr_unavailable: 'Pengenalan wajah tidak berfungsi',
+}
+
+/** T83: peringatan operator — setelan aktif tetapi FR mati = semua pekerja ditahan */
+export const REGISTRATION_CHIP = {
+  text: 'Wajib terdaftar: FR mati',
+  hint: 'Setelan Wajib terdaftar aktif tetapi pengenalan wajah tidak berfungsi — semua pekerja ditahan',
 } as const
 
 /** Kalimat panel keputusan saat kamera belum siap, per status kamera */
@@ -192,6 +216,7 @@ export const HISTORY = {
   denied: 'Ditolak',
   complete: 'APD lengkap',
   incomplete: 'APD belum lengkap',
+  held: 'Ditahan',
   backup: 'cadangan',
   local: 'lokal',
 } as const
@@ -367,6 +392,8 @@ export const REPORTS = {
     localFallback: 'Dinilai VLM lokal darurat',
     outages: 'Gangguan sistem',
     outagesHint: 'Pemeriksaan tanpa keputusan karena VLM utama & cadangan tidak menjawab',
+    held: 'Ditahan (tidak terdaftar)',
+    heldHint: 'APD lengkap tetapi ditahan setelan Wajib terdaftar; tetap dihitung patuh APD',
   },
   filters: {
     ariaLabel: 'Saring riwayat',
@@ -399,7 +426,7 @@ export const REPORTS = {
     openPhoto: (id: number) => `Perbesar foto pekerja #${id}`,
     missing: (items: string[]) => (items.length ? `Kurang: ${items.join(', ')}` : ''),
   },
-  result: { passed: 'Lolos', denied: 'Ditolak', unverified: 'Tidak terverifikasi' },
+  result: { passed: 'Lolos', denied: 'Ditolak', unverified: 'Tidak terverifikasi', held: 'Ditahan' },
   source: {
     utama: 'VLM utama',
     cadangan: 'VLM cadangan',
@@ -507,6 +534,35 @@ export const SETTINGS_TAB = {
   },
   cameraNone: 'Belum ada kamera dipilih.',
   lightTestHint: 'Lampu menyala sebentar lalu padam kembali.',
+} as const
+
+// --- Wajib terdaftar (T83, Pengaturan → Gerbang) ------------------------------------------
+
+export const REGISTRATION_POLICY = {
+  title: 'Wajib terdaftar',
+  toggle: 'Hanya pekerja terdaftar yang boleh lewat',
+  explain:
+    'Bila aktif, pekerja dengan APD lengkap tetapi wajahnya tidak dikenali ditahan (lampu kuning) dan diminta menghubungi petugas. ' +
+    'Petugas mendaftarkan wajahnya di halaman Pekerja, lalu pekerja lewat ulang. APD kurang tetap ditolak (merah) seperti biasa.',
+  recognitionLabel: 'Tingkat pengenalan wajah',
+  recognition: (pct: string, recognized: number, passes: number, days: number) =>
+    `${pct} (${recognized} dari ${passes} lintasan, ${days} hari terakhir)`,
+  recognitionNone: (days: number) => `Belum ada lintasan dalam ${days} hari terakhir`,
+  recognitionNote: 'Angka ini batas bawah: orang yang memang belum terdaftar ikut dihitung "tidak dikenali".',
+  thresholdLabel: 'Ambang aman',
+  frNotReady: 'Pengenalan wajah tidak berfungsi, jadi setelan ini tidak bisa diaktifkan.',
+  frDownWhileOn:
+    'Pengenalan wajah tidak berfungsi — semua pekerja sedang ditahan. Matikan setelan ini atau perbaiki FR.',
+  confirmTitle: 'Tingkat pengenalan di bawah ambang',
+  confirmBody: (pct: string, threshold: string) =>
+    `Pengenalan wajah baru ${pct}, di bawah ambang ${threshold}. Pekerja terdaftar yang tidak dikenali kamera akan ikut ditahan.`,
+  confirmBodyNoData: (threshold: string) =>
+    `Belum ada data pengenalan wajah untuk dibandingkan dengan ambang ${threshold}. Pekerja terdaftar yang tidak dikenali kamera akan ikut ditahan.`,
+  confirmYes: 'Tetap aktifkan',
+  confirmNo: 'Batal',
+  saved: (on: boolean) => (on ? 'Wajib terdaftar diaktifkan.' : 'Wajib terdaftar dimatikan.'),
+  saveFailed: 'Gagal mengubah setelan Wajib terdaftar',
+  loadFailed: 'Gagal memuat setelan Wajib terdaftar',
 } as const
 
 // --- Halaman yang belum dipindahkan (T33 langkah 3) ---------------------------------------
