@@ -26,6 +26,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T97a — daftar model VLM dari penyedia (backend; lihat "Rancangan T97") | **Codex** (diminta Codex lewat pengguna 24-10; tinjau Claude) | `codex/t97a-model-list` (dari `master` terbaru) | dikerjakan | `backend/vlm_providers/*` (`list_models` per adapter), `backend/vlm_selection.py`, `backend/api/routes_vlm.py`, `backend/vlm_analyzer.py` (catat uji berhasil per peran, bila perlu), `backend/config.py`/`messages.py`/`.env.example` (tambah saja: `VLM_MODEL_LIST_CACHE_SECONDS`, `VLM_MODEL_LIST_TIMEOUT_SECONDS`, `VLM_TEST_FRESH_SECONDS`), `tests/` | Risiko Sedang. Kontrak §2 disetujui pengguna 24-10 — jangan ubah bentuk JSON tanpa persetujuan (UI T97b dibangun di atasnya). Key per peran dari T98 (`api_key_for(provider, role)`), `redact()` di jalur galat. |
 
 ### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, **disetujui pengguna 24-10**; dikerjakan setelah T98)
 
