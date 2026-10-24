@@ -158,12 +158,9 @@ class ModelListCache:
             error = None
         except Exception as failure:
             names, error = frozenset(), _error_code(failure)
+        ttl = cfg.VLM_MODEL_LIST_ERROR_CACHE_SECONDS if error else cfg.VLM_MODEL_LIST_CACHE_SECONDS
         result = ModelListResult(
-            names,
-            error,
-            datetime.now().isoformat(timespec="seconds"),
-            time.monotonic() + cfg.VLM_MODEL_LIST_CACHE_SECONDS,
-            signature,
+            names, error, datetime.now().isoformat(timespec="seconds"), time.monotonic() + ttl, signature
         )
         with self._lock:
             if self._pending.get(key) is pending:

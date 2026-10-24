@@ -161,6 +161,48 @@ def test_cache_expires_and_changes_account_without_leaking(http, monkeypatch):
     assert PRIMARY_KEY not in json.dumps(response) and BACKUP_KEY not in json.dumps(response)
 
 
+def test_failure_is_cached_briefly_then_retried(http, monkeypatch):
+    """T97c: galat tidak menahan daftar selama umur cache penuh; berhasil sesudahnya disimpan penuh."""
+    now = [100.0]
+    monkeypatch.setattr(model_list, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    replies = iter([httpx.Response(500), httpx.Response(200, json=gemini_page(["model-uji"]))])
+    http.controls["handle"] = lambda request: next(replies)
+    assert get(http)["source"] == "catalog"
+    now[0] += cfg.VLM_MODEL_LIST_ERROR_CACHE_SECONDS - 1
+    assert get(http)["error"] == "unreachable" and len(http.calls) == 1
+    now[0] += 2
+    assert get(http)["source"] == "provider" and len(http.calls) == 2
+    now[0] += cfg.VLM_MODEL_LIST_ERROR_CACHE_SECONDS + 1
+    assert get(http)["source"] == "provider" and len(http.calls) == 2
+    assert cfg.VLM_MODEL_LIST_ERROR_CACHE_SECONDS < cfg.VLM_MODEL_LIST_CACHE_SECONDS
+
+
+def test_slow_answer_after_timeout_is_used_once_error_expires(monkeypatch):
+    """T97c: Gemini lambat (> tenggat) → galat singkat; jawaban yang tiba belakangan dipakai tanpa permintaan ulang."""
+    now, calls, release = [100.0], [], threading.Event()
+    monkeypatch.setattr(model_list, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    monkeypatch.setattr(cfg, "VLM_MODEL_LIST_TIMEOUT_SECONDS", 0.05)
+
+    def slow_fetch(*args):
+        calls.append(args)
+        release.wait(2)
+        return {"model-lambat"}
+
+    monkeypatch.setattr(model_list, "fetch_models", slow_fetch)
+    cache = model_list.ModelListCache()
+    try:
+        assert cache.get("gemini", "primary", "kunci-uji", "").error == model_list.TIMEOUT
+        release.set()
+        now[0] += cfg.VLM_MODEL_LIST_ERROR_CACHE_SECONDS + 1
+        result, deadline = cache.get("gemini", "primary", "kunci-uji", ""), perf_counter() + 2
+        while result.error and perf_counter() < deadline:  # thread jawaban lambat belum selesai
+            now[0] += cfg.VLM_MODEL_LIST_ERROR_CACHE_SECONDS + 1
+            result = cache.get("gemini", "primary", "kunci-uji", "")
+        assert result.error is None and result.names == {"model-lambat"} and len(calls) == 1
+    finally:
+        cache.close()
+
+
 @pytest.mark.parametrize(
     "status,code", [(401, "auth_failed"), (403, "auth_failed"), (404, "unsupported"), (500, "unreachable")]
 )
