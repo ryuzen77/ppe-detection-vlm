@@ -38,6 +38,7 @@
   let editing = $state<Worker | null>(null)
   let photoWorker = $state<Worker | null>(null)
   let deleteFaceWorker = $state<Worker | null>(null)
+  let deactivateWorker = $state<Worker | null>(null)
   let deleteTemplateTarget = $state<{ workerId: number; templateId: number } | null>(null)
 
   const shown = $derived(filterWorkers(workers, { q, status, departmentId, companyId }))
@@ -75,8 +76,13 @@
   }
 
   async function toggleActive(worker: Worker) {
+    // Menonaktifkan menjadwalkan hapus data wajah: dikonfirmasi dulu. Mengaktifkan langsung.
+    if (worker.active) {
+      deactivateWorker = worker
+      return
+    }
     try {
-      await (worker.active ? api.deactivateWorker(worker.id) : api.activateWorker(worker.id))
+      await api.activateWorker(worker.id)
       await loadWorkers()
     } catch (e) {
       errorMsg = extractApiError(e, WORKERS.errStatus)
@@ -195,14 +201,17 @@
 <WorkerDeleteDialog
   {deleteFaceWorker}
   {deleteTemplateTarget}
+  {deactivateWorker}
   onClose={() => {
     deleteFaceWorker = null
     deleteTemplateTarget = null
+    deactivateWorker = null
   }}
   onDeleted={() =>
     afterSave(() => {
       deleteFaceWorker = null
       deleteTemplateTarget = null
+      deactivateWorker = null
     })}
 />
 <OrgManager open={showOrg} lists={orgs} onChanged={loadOrgs} onClose={() => (showOrg = false)} />

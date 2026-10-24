@@ -7,16 +7,38 @@
   interface Props {
     deleteFaceWorker: Worker | null
     deleteTemplateTarget: { workerId: number; templateId: number } | null
+    deactivateWorker: Worker | null
     onClose: () => void
     onDeleted: () => void
   }
 
-  let { deleteFaceWorker, deleteTemplateTarget, onClose, onDeleted }: Props = $props()
+  let { deleteFaceWorker, deleteTemplateTarget, deactivateWorker, onClose, onDeleted }: Props = $props()
 
   let deletingFace = $state(false)
   let deleteFaceError = $state('')
   let deletingTemplate = $state(false)
   let deleteTemplateError = $state('')
+  let deactivating = $state(false)
+  let deactivateError = $state('')
+
+  $effect(() => {
+    if (deactivateWorker) deactivateError = ''
+  })
+
+  async function executeDeactivate(e: Event) {
+    e.preventDefault()
+    if (!deactivateWorker) return
+    deactivating = true
+    deactivateError = ''
+    try {
+      await api.deactivateWorker(deactivateWorker.id)
+      onDeleted()
+    } catch (e) {
+      deactivateError = extractApiError(e, WORKERS.errStatus)
+    } finally {
+      deactivating = false
+    }
+  }
 
   $effect(() => {
     if (deleteFaceWorker) {
@@ -102,6 +124,30 @@
           </button>
           <button type="submit" class="btn btn-danger" disabled={deletingTemplate}>
             {WORKERS.deleteTemplateBtn}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<!-- Modal Konfirmasi Nonaktifkan Pekerja (temuan uji UI #9) -->
+{#if deactivateWorker}
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-deactivate-title">
+    <div class="modal-card">
+      <h3 id="modal-deactivate-title">{WORKERS.confirmDeactivateTitle} - {deactivateWorker.name}</h3>
+      <p class="del-prompt">{WORKERS.confirmDeactivateMsg}</p>
+      {#if deactivateError}
+        <div class="error-box" role="alert">{deactivateError}</div>
+      {/if}
+
+      <form onsubmit={executeDeactivate}>
+        <div class="modal-actions">
+          <button type="button" class="btn" onclick={onClose} disabled={deactivating}>
+            {WORKERS.cancelBtn}
+          </button>
+          <button type="submit" class="btn btn-danger" disabled={deactivating}>
+            {WORKERS.deactivateBtn}
           </button>
         </div>
       </form>

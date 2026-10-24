@@ -777,6 +777,10 @@ export const WORKERS = {
   confirmDeleteFaceMsg:
     'Hapus seluruh templat data wajah pekerja ini? Tindakan ini permanen dan tidak dapat dibatalkan (hak hapus UU PDP). Riwayat nama pada audit lama tetap dipertahankan.',
   confirmDeleteTemplateTitle: 'Hapus Satu Foto',
+  // Temuan uji UI #9: menonaktifkan = menjadwalkan hapus otomatis data wajah (FACE_RETENTION_DAYS)
+  confirmDeactivateTitle: 'Nonaktifkan Pekerja',
+  confirmDeactivateMsg:
+    'Pekerja ini tidak lagi dikenali di gerbang. Data wajahnya dihapus otomatis setelah masa retensi bila tidak diaktifkan kembali sebelum tanggal itu. Riwayat pemeriksaan tetap tersimpan.',
   confirmDeleteTemplateMsg: 'Hapus templat foto wajah ini?',
   statusActive: 'Aktif',
   statusInactive: 'Nonaktif',
