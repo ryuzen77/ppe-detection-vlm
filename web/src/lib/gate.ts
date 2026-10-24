@@ -85,8 +85,9 @@ export function gateView(t: Telemetry | null, connection: ConnectionStatus): Gat
     return view('held', 'warn', { title: GATE.held.title, detail }, { trackId })
   }
 
-  const r = a.vlm_result
-  if (r && r.is_complete && !r.is_system_unavailable && a.face_retry_s != null) {
+  // T83: backend mengulang FR hanya setelah APD dinilai lengkap, SEBELUM hasilnya dipasang ke sesi
+  // (vlm_result masih null selama ulang FR)
+  if (a.face_retry_s != null) {
     return view(
       'face-retry',
       'neutral',
@@ -94,6 +95,8 @@ export function gateView(t: Telemetry | null, connection: ConnectionStatus): Gat
       { trackId },
     )
   }
+
+  const r = a.vlm_result
   if (r && !r.is_system_unavailable) {
     return r.is_complete
       ? view('granted', 'ok', GATE.granted, { trackId })

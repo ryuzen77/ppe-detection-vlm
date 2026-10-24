@@ -184,22 +184,22 @@ describe('gateView', () => {
     expect(held('fr_unavailable').detail).toMatch(/tidak berfungsi/)
   })
 
-  it('ulang FR: "Mohon tatap kamera" dengan hitung mundur, belum lolos', () => {
+  it('ulang FR: "Mohon tatap kamera" dengan hitung mundur, belum lolos (vlm_result belum dipasang)', () => {
     const v = gateView(
-      tele({ active_track: track({ state: 'ANALYZED', vlm_result: result(), face_retry_s: 3.2 }) }),
+      tele({ active_track: track({ state: 'ANALYZING', vlm_result: null, face_retry_s: 3.2 }) }),
       'connected',
     )
     expect(v).toMatchObject({ kind: 'face-retry', tone: 'neutral' })
     expect(v.detail).toMatch(/4 dtk/)
   })
 
-  it('APD kurang tetap ditolak walau FR sedang diulang (FR tidak ikut menentukan merah)', () => {
+  it('APD kurang tetap ditolak walau wajah tidak dikenali (FR tidak ikut menentukan merah)', () => {
     const v = gateView(
       tele({
         active_track: track({
           state: 'ANALYZED',
           vlm_result: result({ is_complete: false, missing_items: ['Helm'] }),
-          face_retry_s: 2,
+          decision: 'denied',
         }),
       }),
       'connected',
