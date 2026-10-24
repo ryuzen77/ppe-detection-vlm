@@ -12,7 +12,7 @@
   import { telemetry } from '../lib/stores/telemetry.svelte'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { formatLostSince } from '../lib/diagnostics'
-  import { iotChip } from '../lib/status'
+  import { iotChip, lightTestDoneText } from '../lib/status'
   import { pingRows, type PingRow } from '../lib/ping'
   import { withError } from '../lib/messages'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
@@ -50,7 +50,7 @@
       setTimeout(async () => {
         try {
           await api.testLight('off')
-          lightStatus = SETTINGS_TAB.success
+          lightStatus = lightTestDoneText(telemetry.data)
         } catch (e) {
           lightStatus = withError(SETTINGS_TAB.lightOffFailed, e)
         }

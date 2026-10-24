@@ -543,6 +543,12 @@ export const SETTINGS_TAB = {
   },
   cameraNone: 'Belum ada kamera dipilih.',
   lightTestHint: 'Lampu menyala sebentar lalu padam kembali.',
+  // Temuan uji UI #14: "Berhasil" hanya bila lampu fisik tersambung
+  lightTestDone: {
+    connected: 'Berhasil: lampu gerbang menyala lalu padam.',
+    disconnected: 'Perintah terkirim, tetapi lampu gerbang tidak tersambung — periksa kabel/relay.',
+    disabled: 'Lampu gerbang nonaktif: tes hanya terlihat di panel lampu layar Monitoring.',
+  },
 } as const
 
 // --- Wajib terdaftar (T83, Pengaturan → Gerbang) ------------------------------------------
