@@ -26,6 +26,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T97b — UI dropdown model VLM dari penyedia | Claude | `claude/t97b-model-dropdown` | dikerjakan | `web/src/components/settings/VlmModelField.svelte`, `VlmProviders.svelte`, `web/src/lib/vlmSelection.ts` (+test), `web/src/lib/api/{client,types}.ts`, `web/src/lib/messages.ts` (tambah) | Kontrak "Rancangan T97" + tambahan 24-10 (`refresh`, `role=local`) |
 
 ### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, **disetujui pengguna 24-10**; dikerjakan setelah T98)
 
