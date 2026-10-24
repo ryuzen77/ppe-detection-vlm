@@ -14,6 +14,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T98 — key VLM per **peran**, bukan per penyedia (temuan Claude 24-10) | **Codex** (usul; tinjau Claude) | `codex/t98-role-api-key` (dari `master` terbaru) | antre | `backend/vlm_selection.py` (`api_key_for`/`base_url_for`), `backend/vlm_analyzer.py` (`_new_engine`, `matches`), `tests/` | **Risiko Tinggi**: utama & cadangan = Gemini dengan `VLM_API_KEY` ≠ `VLM_BACKUP_API_KEY` (akun berbeda, disengaja pengguna), tetapi `api_key_for(provider)` memilih per **penyedia** → **kedua engine memakai key utama** (dicek 24-10 dengan konfigurasi asli, hanya benar/salah tanpa mencetak key). Kuota key utama habis → cadangan ikut gagal → gerbang tidak memutuskan. Perbaikan: key & alamat dipilih per peran (`role` utama → `VLM_API_KEY`/`VLM_BASE_URL`, cadangan → `VLM_BACKUP_*`, lalu key penyedia); pilihan dashboard memakai key peran yang sama; tes: penyedia sama + key beda → engine beda key; key tidak pernah bocor ke penyedia lain (rambu T28). Prasyarat T97. |
 | T95 — perbaikan temuan uji UI 24-10 (UI) | Claude (pengguna 24-10: "setuju semua") | `claude/ui-test-fixes` (dari `master`) | dikerjakan | `web/src/` saja | Risiko Sedang. Sudah: #2 & #10 koneksi MJPEG tidak diputus (kamera putus-sambung / modal pendaftaran → batas 6 koneksi habis, API dashboard macet). Dikerjakan: #1 chip/panel berkedip "siap" saat camera_fault; #5 laporan bisa ke periode masa depan; #7 pesan kosong saringan pekerja; #9 Nonaktifkan pekerja tanpa konfirmasi (menjadwalkan hapus wajah); #12 teks GPU untuk cadangan cloud; #13 ganti penyedia VLM tidak mengganti model + form tak menandai belum diterapkan; #14 tes lampu "Berhasil" saat lampu nonaktif. Keputusan pengguna #11: cadangan Gemini = akun & API key beda (disengaja) → tanpa peringatan. |
 | T96 — perbaikan temuan uji UI 24-10 (backend) | **Codex** (tinjau & gabung Claude) | `codex/t96-report-hold-semantics` (dari `master` terbaru) | dikerjakan | `backend/report_manager.py`, `backend/messages.py`, `backend/logging_setup.py` (bila perlu), `tests/` | Risiko Sedang. **Keputusan pengguna 24-10 (#6): "Lolos" = lolos gerbang** (is_complete=1 DAN gate_hold IS NULL); ditahan bukan lolos & bukan ditolak; tingkat kepatuhan APD tetap dari is_complete (ditahan = patuh). Perubahan: ringkasan `totals.passed`, bucket `passed`, saringan `status=complete`, Kehadiran passed/rejected & `unknown.passed` tidak menghitung ditahan; #4 `backup_count`/`local_fallback_count`/`held_count` mengikuti saringan periode/tanggal & identitas yang sama dengan halaman; #8 CSV "Status Kelulusan" baris ditahan = teks ditahan (bukan "Akses Diizinkan"); #3 log ERROR palsu asyncio `_call_connection_lost` ConnectionResetError WinError 10054 (Proactor) saat browser memutus stream → saring sesempit mungkin + tes. Kontrak JSON tidak berubah bentuk (arti angka berubah — UI menyesuaikan teks). |
 
@@ -294,6 +295,64 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
 
+### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, menunggu persetujuan)
+
+**Masalah** (pertanyaan pengguna 24-10): kolom Model di Pengaturan = teks bebas + saran (`datalist`) yang hanya berisi model
+dengan catatan uji (`VALIDATIONS`; Gemini baru `gemini-3.5-flash-lite`). Admin bisa salah ketik nama model → server hanya
+meminta konfirmasi "belum tervalidasi" → setiap pemeriksaan gagal ke cadangan / pekerja menunggu; baru ketahuan di gerbang.
+Juga: nama model di aplikasi **menentukan model yang dipakai & ditagih penyedia** (API key hanya menentukan akun/akses).
+**Risiko: Sedang** (salah konfigurasi baru terdeteksi saat pemeriksaan).
+
+**Prasyarat: T98** (key per peran) — daftar model & uji harus memakai key milik **peran** itu (utama/cadangan/lokal darurat),
+bukan key per penyedia: utama & cadangan boleh penyedia sama dengan akun/key berbeda (keputusan pengguna 24-10).
+
+#### 1. Tiga lapis
+1. **Daftar dari penyedia**: backend meminta daftar model yang tersedia untuk key peran itu — Gemini `models.list`
+   (hanya yang mendukung `generateContent`), OpenAI-compatible (OpenAI/OpenRouter/Qwen/DeepSeek/Kimi/vLLM/server lain)
+   `GET /v1/models`, Claude `GET /v1/models`, Ollama `GET /api/tags`. Tidak memanggil model → tidak memakai kuota
+   pemeriksaan. Cache per (penyedia, peran) `VLM_MODEL_LIST_CACHE_SECONDS` (usul 300); batas waktu
+   `VLM_MODEL_LIST_TIMEOUT_SECONDS` (usul 5). Key tidak pernah masuk jawaban/log.
+2. **Server menolak model yang tidak ada**: `POST /api/config/vlm/apply` — bila daftar penyedia berhasil diambil dan model
+   tidak ada di daftar → 400 `model_not_found`. Bila daftar gagal diambil → tidak ditolak (lapis 3 tetap berlaku).
+3. **Model belum teruji wajib lolos Uji Penyedia dulu**: untuk status `unvalidated`/`outdated`, Terapkan butuh
+   `confirm_unvalidated` **dan** uji penyedia yang berhasil untuk (peran, penyedia, model) itu dalam
+   `VLM_TEST_FRESH_SECONDS` (usul 600) terakhir → selain itu 400 `test_required`. Model `unsafe` tetap selalu ditolak;
+   model `validated`/`partial` tidak perlu uji.
+
+#### 2. Kontrak (disetujui dulu sebelum dikerjakan)
+**`GET /api/config/vlm/models?role=primary|backup|local&provider=<name>`** (admin):
+```json
+{"provider": "gemini", "role": "backup", "source": "provider", "fetched_at": "2026-10-24T17:20:00",
+ "error": null,
+ "models": [{"model": "gemini-3.5-flash-lite", "validated": "partial", "photos": 10, "missed": 0,
+             "false_rejects": 0, "median_seconds": 2.35, "available": true}]}
+```
+- `source`: `provider` (daftar asli) | `catalog` (gagal → hanya model katalog). `error` saat `catalog`:
+  `no_key` | `unreachable` | `timeout` | `unsupported` | `auth_failed` (401/403 — key salah/dicabut).
+- Item = `VlmModelEntry` yang sudah ada + `available` (`true` ada di penyedia; `false` model katalog yang **tidak** ada
+  di penyedia, mis. sudah dihentikan; `null` saat `source=catalog`). Urutan: teruji dulu, lalu sisanya A–Z.
+**`POST /api/config/vlm/test`**: tidak berubah bentuk; hasil berhasil dicatat untuk lapis 3 (memori proses, bukan disk).
+**`POST /api/config/vlm/apply`**: galat baru `{"detail": {"code": "model_not_found" | "test_required", "message"}}`.
+
+#### 3. UI (Pengaturan → VLM)
+- Kolom Model per peran = **dropdown** dari endpoint di atas: grup "Sudah diuji" (lencana Teruji/Sebagian) lalu
+  "Tersedia, belum diuji"; model katalog `available:false` ditandai "tidak tersedia di akun ini" & nonaktif.
+- Ganti penyedia → daftar dimuat ulang; model = bawaan penyedia bila ada di daftar (lanjutan T95 #13).
+- `source=catalog` → kembali ke teks bebas + peringatan "Daftar model tidak bisa diambil (<alasan>)".
+- Model belum diuji dipilih → petunjuk "Uji Penyedia dulu"; Terapkan menampilkan galat `test_required` dengan tombol uji.
+- Tombol kecil "Muat ulang daftar" (melewati cache).
+
+#### 4. Tes wajib
+Backend (Codex): tiap adapter mengurai daftar (tiruan HTTP, termasuk filter `generateContent` Gemini); cache & batas
+waktu; key peran yang dipakai (utama ≠ cadangan pada penyedia sama); `model_not_found`; `test_required` (uji kedaluwarsa,
+uji peran lain tidak berlaku); daftar gagal → apply tetap jalan dengan lapis 3; key tidak muncul di jawaban/log.
+UI (Claude): pengelompokan & urutan, `available:false`, fallback teks bebas, alur uji-dulu, galat `test_required`.
+
+#### 5. Pembagian
+- **T97a — backend** (Codex): `backend/vlm_providers/*` (fungsi `list_models` per adapter), `backend/vlm_selection.py`,
+  `backend/api/routes_vlm.py`, `config.py`/`messages.py`/`.env.example` (tambah), `tests/`.
+- **T97b — UI** (Claude): `VlmModelField`, `VlmProviders`, `web/src/lib/vlmSelection.ts` + vitest.
+
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
 | # | Risiko | Task | Alasan risiko / isi |
@@ -307,6 +366,7 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 | 7g | **Tinggi** (setelan sudah dibangun 24-10 — T83a/b, bawaan MATI; rancangan di arsip "Rancangan T83") | **T83 — syarat sebelum "Wajib terdaftar" dipakai sungguhan** | (1) ukur tingkat pengenalan pekerja terdaftar: tiap pekerja ±10× lewat memakai helm, target ≥ 95% (laporan kehadiran); (2) persetujuan HR/Legal & DPIA diperbarui (FR jadi penentu akses, bersama T81); (3) uji gerbang: panel kuning ditahan + suara, ulang FR "Mohon tatap kamera", FR mati → semua ditahan + chip, amati kedipan track (VLM ulang/audit ganda saat setelan aktif) |
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
+| 9b | Sedang (rancangan menunggu persetujuan) | **T97 — daftar model VLM dari penyedia & cegah salah nama model** (lihat "Rancangan T97"; setelah T98) | Pertanyaan pengguna 24-10: kolom Model teks bebas → salah ketik baru ketahuan di gerbang; nama model menentukan model yang dipakai & ditagih penyedia |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 12 | **Tinggi** (rencana) | **T34 — identitas wajah (FR) untuk audit per pekerja** (rancangan 18-10, lihat "Rancangan T34") | Mulai dari T34a (uji ukuran wajah di gerbang, perlu pengguna di depan kamera); T34b–e menyusul. Persetujuan & DPIA dari HR/Legal sebelum dipakai sungguhan |
 
