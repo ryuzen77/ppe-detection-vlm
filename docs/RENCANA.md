@@ -295,7 +295,7 @@ kamera kedua setinggi wajah); foto/layar dipakai menyamar (FR hanya untuk audit,
 **Pertanyaan terbuka:** isi formulir persetujuan (HR/Legal); perlu atau tidak tampilan nama di layar Monitoring.
 (Terjawab 18-10: yang mendaftarkan = admin, persetujuan = centang admin, masa simpan = 30 hari setelah nonaktif.)
 
-### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, menunggu persetujuan)
+### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, **disetujui pengguna 24-10**; dikerjakan setelah T98)
 
 **Masalah** (pertanyaan pengguna 24-10): kolom Model di Pengaturan = teks bebas + saran (`datalist`) yang hanya berisi model
 dengan catatan uji (`VALIDATIONS`; Gemini baru `gemini-3.5-flash-lite`). Admin bisa salah ketik nama model → server hanya
@@ -366,7 +366,7 @@ UI (Claude): pengelompokan & urutan, `available:false`, fallback teks bebas, alu
 | 7g | **Tinggi** (setelan sudah dibangun 24-10 — T83a/b, bawaan MATI; rancangan di arsip "Rancangan T83") | **T83 — syarat sebelum "Wajib terdaftar" dipakai sungguhan** | (1) ukur tingkat pengenalan pekerja terdaftar: tiap pekerja ±10× lewat memakai helm, target ≥ 95% (laporan kehadiran); (2) persetujuan HR/Legal & DPIA diperbarui (FR jadi penentu akses, bersama T81); (3) uji gerbang: panel kuning ditahan + suara, ulang FR "Mohon tatap kamera", FR mati → semua ditahan + chip, amati kedipan track (VLM ulang/audit ganda saat setelan aktif) |
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
-| 9b | Sedang (rancangan menunggu persetujuan) | **T97 — daftar model VLM dari penyedia & cegah salah nama model** (lihat "Rancangan T97"; setelah T98) | Pertanyaan pengguna 24-10: kolom Model teks bebas → salah ketik baru ketahuan di gerbang; nama model menentukan model yang dipakai & ditagih penyedia |
+| 9b | Sedang (rancangan & kontrak **disetujui 24-10**; mulai setelah T98 digabung) | **T97 — daftar model VLM dari penyedia & cegah salah nama model** (lihat "Rancangan T97"; setelah T98) | Pertanyaan pengguna 24-10: kolom Model teks bebas → salah ketik baru ketahuan di gerbang; nama model menentukan model yang dipakai & ditagih penyedia |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 12 | **Tinggi** (rencana) | **T34 — identitas wajah (FR) untuk audit per pekerja** (rancangan 18-10, lihat "Rancangan T34") | Mulai dari T34a (uji ukuran wajah di gerbang, perlu pengguna di depan kamera); T34b–e menyusul. Persetujuan & DPIA dari HR/Legal sebelum dipakai sungguhan |
 
