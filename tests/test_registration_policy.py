@@ -229,7 +229,8 @@ def test_csv_adds_hold_without_changing_apd(policy_env):
     response = policy_env.client.get("/api/reports/export")
     rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert rows[0][-1] == messages.CSV_HEADER_GATE_HOLD
-    assert [row[-1] for row in rows[1:]] == [messages.CSV_EMPTY, "unregistered", "fr_unavailable"]
+    assert [row[-1] for row in rows[1:]] == [messages.CSV_EMPTY, *messages.CSV_GATE_HOLD_LABELS.values()]
+    assert "unregistered" not in response.text and "fr_unavailable" not in response.text
     assert all(row[4] == messages.CSV_STATUS_COMPLETE for row in rows[1:])
 
 
@@ -264,9 +265,10 @@ def test_old_green_memory_cannot_bypass_enabled_policy(policy_env, gerbang, vlm)
     assert vlm.calls == 2
 
 
-def test_error_during_retry_holds_without_repeating_vlm(policy_env, gerbang, vlm):
+@pytest.mark.parametrize("error", [RuntimeError("FR tiruan gagal saat ulang"), TimeoutError("engine tiruan timeout")])
+def test_error_during_retry_holds_without_repeating_vlm(policy_env, gerbang, vlm, error):
     policy_env.policy.save(True)
-    policy_env.identifier.replies = [UNKNOWN, RuntimeError("FR tiruan gagal saat ulang")]
+    policy_env.identifier.replies = [UNKNOWN, error]
     start_inspection(gerbang)
     assert _wait_for(lambda: gerbang.session is not None and gerbang.session.face_retry)
     for _ in range(cfg.FACE_VOTE_FRAMES):
@@ -275,7 +277,11 @@ def test_error_during_retry_holds_without_repeating_vlm(policy_env, gerbang, vlm
     assert vlm.calls == 1 and policy_env.manager.get_reports()["total_all"] == 1
 
 
-def test_late_fr_after_timeout_cannot_change_held_identity(policy_env, gerbang, vlm, monkeypatch):
+@pytest.mark.parametrize("engine_timeout", [False, True], ids=["retry_window_exhausted", "engine_timeout"])
+def test_late_fr_after_timeout_cannot_change_held_identity(policy_env, gerbang, vlm, monkeypatch, engine_timeout):
+    if engine_timeout:
+        monkeypatch.setattr(cfg, "FACE_RETRY_SECONDS", 2.0)
+        monkeypatch.setattr(cfg, "FACE_IDENTIFY_TIMEOUT_SECONDS", 0.1)
     policy_env.policy.save(True)
     release, started = threading.Event(), threading.Event()
     original = policy_env.identifier.identify
@@ -293,11 +299,16 @@ def test_late_fr_after_timeout_cannot_change_held_identity(policy_env, gerbang, 
     for _ in range(cfg.FACE_VOTE_FRAMES):
         gerbang.update_frame_detections([_det(True)])
     assert started.wait(1)
-    active = wait_decision(gerbang)
-    release.set()
-    gerbang.fr_executor.submit(lambda: None).result(timeout=2)
+    try:
+        active = wait_decision(gerbang)
+        assert active["hold_reason"] == ("fr_unavailable" if engine_timeout else "unregistered")
+        assert registration_policy.fr_ready() is not engine_timeout
+    finally:
+        release.set()
+        gerbang.fr_executor.submit(lambda: None).result(timeout=2)
     assert gerbang.get_telemetry()["active_track"] == active
     assert active["decision"] == "held" and vlm.calls == 1
+    assert registration_policy.fr_ready() is not engine_timeout
 
 
 def test_camera_fault_during_retry_cannot_grant(policy_env, gerbang, vlm):

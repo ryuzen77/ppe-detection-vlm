@@ -819,7 +819,7 @@ class ReportManager:
                 row["inference_time_ms"],
                 row["notes"],
                 row["snapshot_filename"],
-                row["gate_hold"] or messages.CSV_EMPTY,
+                messages.CSV_GATE_HOLD_LABELS.get(row["gate_hold"], messages.CSV_EMPTY),
             ]
         )
 

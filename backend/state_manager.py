@@ -1,7 +1,7 @@
 import logging
 import time
 import threading
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any, Optional, List
 import numpy as np
@@ -614,18 +614,24 @@ class StateManager:
                     break
                 crops, session.face_frames = session.face_frames, []
                 session.face_frame_ready.clear()
-            future = self.fr_executor.submit(self._identify_session, session.session_id, crops)
-            try:
-                identity = future.result(timeout=max(0, deadline - time.monotonic()))
-            except FutureTimeout:
-                face_identity.identifier.mark_unavailable()
-                return face_identity.Identity(face_identity.DISABLED)
-            except Exception:
-                face_identity.identifier.mark_unavailable()
-                return face_identity.Identity(face_identity.DISABLED)
+            identity = self._await_retry_identity(session.session_id, crops, max(0, deadline - time.monotonic()))
             if identity.status != face_identity.UNKNOWN:
                 break
         return identity
+
+    def _await_retry_identity(self, session_id, crops, remaining):
+        future = self.fr_executor.submit(self._identify_session, session_id, crops)
+        done, _ = wait((future,), timeout=min(remaining, cfg.FACE_IDENTIFY_TIMEOUT_SECONDS))
+        if not done and remaining < cfg.FACE_IDENTIFY_TIMEOUT_SECONDS:
+            # Jendela mencari wajah habis; engine belum melewati batas waktunya sendiri.
+            return face_identity.Identity(face_identity.UNKNOWN)
+        if done:
+            try:
+                return future.result()
+            except Exception:
+                pass  # Galat engine sungguhan, termasuk TimeoutError dari engine itu sendiri.
+        face_identity.identifier.mark_unavailable()
+        return face_identity.Identity(face_identity.DISABLED)
 
     @staticmethod
     def _show_hold(reason: str):

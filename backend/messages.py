@@ -564,6 +564,10 @@ REGISTRATION_RETRY_AUDIO = "registration_look_camera"
 REGISTRATION_HELD_AUDIO = "registration_held"
 REGISTRATION_UNAVAILABLE_AUDIO = "registration_unavailable"
 CSV_HEADER_GATE_HOLD = "Ditahan"
+CSV_GATE_HOLD_LABELS = {
+    "unregistered": "Wajah belum terdaftar",
+    "fr_unavailable": "Pengenalan wajah tidak berfungsi",
+}
 
 VOICE_TEXTS.update(
     {
