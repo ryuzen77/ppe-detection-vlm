@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { api } from '../../lib/api/client'
-  import type { VlmChoice, VlmProvidersResponse, VlmTestResponse } from '../../lib/api/types'
+  import type { VlmChoice, VlmProvidersResponse, VlmRole, VlmTestResponse } from '../../lib/api/types'
   import { SETTINGS_TAB, VLM_SETTINGS } from '../../lib/messages'
   import {
     handleSelectionError,
@@ -13,11 +13,11 @@
     withLocalNote,
     modelForProvider,
     formDirty,
+    rolesNeedingTest,
+    validationOf,
   } from '../../lib/vlmSelection'
   import { extractApiError } from '../../lib/api/error'
   import VlmModelField from './VlmModelField.svelte'
-
-  type TestRole = 'primary' | 'backup' | 'local'
 
   let data = $state<VlmProvidersResponse | null>(null)
   let loading = $state(true)
@@ -34,14 +34,16 @@
   let applying = $state(false)
   let applyStatus = $state('')
 
-  let testing = $state<TestRole | null>(null)
-  let testResult = $state<{ role: TestRole | ''; res: VlmTestResponse | null; err: string }>({
+  let testing = $state<VlmRole | null>(null)
+  let testResult = $state<{ role: VlmRole | ''; res: VlmTestResponse | null; err: string }>({
     role: '',
     res: null,
     err: '',
   })
 
   let confirmation = $state<{ code: string; message: string } | null>(null)
+  // T97: model belum teruji ditolak sampai Uji Penyedia peran itu berhasil
+  let testRequired = $state<{ message: string; roles: VlmRole[] } | null>(null)
   let resetConfirmation = $state(false)
   let disableConfirmation = $state(false)
 
@@ -78,6 +80,15 @@
     no_local_provider: VLM_SETTINGS.noLocalProvider,
   } as const
   const localChosen = $derived(localFallbackChoice(localAvailability, localProvider, localModel) !== null)
+  // Tinjauan Codex T97b: selama daftar model peran yang tampil dimuat, model formulir belum pasti milik
+  // penyedia terpilih → Terapkan dikunci (field tersembunyi tidak dihitung, nilainya bisa tertinggal)
+  let primaryListBusy = $state(false)
+  let backupListBusy = $state(false)
+  let localListBusy = $state(false)
+  const listsBusy = $derived(
+    (!!primaryProvider && primaryListBusy) || (!!backupProvider && backupListBusy) || (localChosen && localListBusy),
+  )
+  const applyLocked = $derived(applying || listsBusy)
   const findProvider = (name: string) => providers.find((p) => p.name === name)
   const dirty = $derived(
     !!data &&
@@ -94,9 +105,11 @@
   }
 
   async function handleApply(confirmUnvalidated = false) {
+    if (listsBusy) return
     applyStatus = change === 'enable_local' ? VLM_SETTINGS.applyingLocalBackup : VLM_SETTINGS.applying
     applying = true
     confirmation = null
+    testRequired = null
     disableConfirmation = false
     errorMsg = ''
     try {
@@ -127,6 +140,8 @@
         const action = handleSelectionError(detail.code, detail.message)
         if (action.type === 'confirm') {
           confirmation = { code: action.code, message: action.message }
+        } else if (action.type === 'test_required') {
+          testRequired = { message: action.message, roles: untestedRoles() }
         } else if (action.type === 'error') {
           errorMsg = action.message
         } else {
@@ -145,18 +160,38 @@
     backup: () => ({ provider: backupProvider, model: backupModel }),
     local: () => ({ provider: localProvider, model: localModel }),
   }
+  const ROLE_TITLE = {
+    primary: VLM_SETTINGS.primaryTitle,
+    backup: VLM_SETTINGS.backupTitle,
+    local: VLM_SETTINGS.localFallbackTitle,
+  }
+
+  function untestedRoles(): VlmRole[] {
+    const roles: VlmRole[] = ['primary']
+    if (backupProvider) roles.push('backup')
+    if (localChosen) roles.push('local')
+    const needing = rolesNeedingTest(
+      roles.map((role) => {
+        const { provider, model } = TEST_CHOICE[role]()
+        return { role, model, status: validationOf(findProvider(provider), model) }
+      }),
+    )
+    // Katalog UI tertinggal dari server (mis. validasi berubah) → tawarkan uji semua peran aktif
+    return needing.length ? needing : roles
+  }
+
   const TEST_TITLE = {
     primary: VLM_SETTINGS.testResultPrimary,
     backup: VLM_SETTINGS.testResultBackup,
     local: VLM_SETTINGS.testResultLocal,
   }
 
-  async function handleTest(role: TestRole) {
+  async function handleTest(role: VlmRole) {
     testing = role
     testResult = { role, res: null, err: '' }
     try {
-      // Kontrak uji (T28) hanya mengenal utama/cadangan; VLM lokal darurat diuji di jalur cadangan
-      const res = await api.testVlmProvider({ role: role === 'primary' ? 'primary' : 'backup', ...TEST_CHOICE[role]() })
+      // T97: uji dicatat per peran di server (lokal darurat terpisah dari cadangan) untuk syarat Terapkan
+      const res = await api.testVlmProvider({ role, ...TEST_CHOICE[role]() })
       testResult = { role, res, err: '' }
     } catch (e) {
       testResult = { role, res: null, err: extractApiError(e, VLM_SETTINGS.errTest) }
@@ -225,9 +260,10 @@
 
         {#if primaryProvider}
           <VlmModelField
-            id="primary"
+            role="primary"
             provider={providers.find((p) => p.name === primaryProvider)}
             bind:model={primaryModel}
+            bind:busy={primaryListBusy}
             disabled={applying}
             showStats
           />
@@ -267,9 +303,10 @@
 
         {#if backupProvider}
           <VlmModelField
-            id="backup"
+            role="backup"
             provider={providers.find((p) => p.name === backupProvider)}
             bind:model={backupModel}
+            bind:busy={backupListBusy}
             disabled={applying}
           />
           <button
@@ -301,9 +338,10 @@
           </label>
           {#if localProvider}
             <VlmModelField
-              id="local"
+              role="local"
               provider={providers.find((p) => p.name === localProvider)}
               bind:model={localModel}
+              bind:busy={localListBusy}
               disabled={applying}
             />
             <p class="hint">{VLM_SETTINGS.localFallbackHint}</p>
@@ -345,8 +383,25 @@
           <button class="btn btn-secondary" onclick={() => (confirmation = null)} disabled={applying}
             >{VLM_SETTINGS.cancelBtn}</button
           >
-          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applying}
+          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applyLocked}
             >{VLM_SETTINGS.confirmBtn}</button
+          >
+        </div>
+      </div>
+    {/if}
+
+    {#if testRequired}
+      <div class="confirmation-box">
+        <p><strong>{VLM_SETTINGS.testRequiredTitle}:</strong> {testRequired.message}</p>
+        <div class="actions">
+          {#each testRequired.roles as role (role)}
+            <button class="btn btn-secondary" onclick={() => handleTest(role)} disabled={testing !== null || applying}
+              >{testing === role ? VLM_SETTINGS.testingBtn : VLM_SETTINGS.testRoleBtn(ROLE_TITLE[role])}</button
+            >
+          {/each}
+          <!-- Admin sudah mengonfirmasi model belum teruji sebelum sampai ke sini -->
+          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={testing !== null || applyLocked}
+            >{VLM_SETTINGS.applyBtn}</button
           >
         </div>
       </div>
@@ -374,7 +429,7 @@
           <button class="btn btn-secondary" onclick={() => (disableConfirmation = false)} disabled={applying}
             >{VLM_SETTINGS.cancelBtn}</button
           >
-          <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}
+          <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applyLocked}
             >{VLM_SETTINGS.confirmBtn}</button
           >
         </div>
@@ -382,7 +437,7 @@
     {/if}
 
     <div class="footer-actions">
-      <button class="btn btn-primary" onclick={requestApply} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
+      <button class="btn btn-primary" onclick={requestApply} disabled={applyLocked}>{VLM_SETTINGS.applyBtn}</button>
       {#if dirty && !applying && !applyStatus}
         <span class="dirty" role="status">{VLM_SETTINGS.unsavedHint}</span>
       {/if}

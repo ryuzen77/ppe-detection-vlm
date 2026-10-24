@@ -21,6 +21,8 @@ import type {
   VlmTestRequest,
   VlmTestResponse,
   VlmSelection,
+  VlmModelsResponse,
+  VlmRole,
   SessionStatus,
   SetupRequest,
   LoginRequest,
@@ -146,6 +148,8 @@ export class ApiClient {
   // --- VLM
   vlmInfo = () => this.request<VlmInfo>('GET', '/api/config/vlm')
   getVlmProviders = () => this.request<VlmProvidersResponse>('GET', '/api/config/vlm/providers')
+  listVlmModels = (provider: string, role: VlmRole, refresh = false) =>
+    this.request<VlmModelsResponse>('GET', withQuery('/api/config/vlm/models', { provider, role, refresh }))
   testVlmProvider = (req: VlmTestRequest) => this.request<VlmTestResponse>('POST', '/api/config/vlm/test', req)
   applyVlmSelection = (req: VlmApplyRequest) => this.request<VlmSelection>('POST', '/api/config/vlm/apply', req)
   resetVlmSelection = () => this.request<VlmSelection>('DELETE', '/api/config/vlm/selection')

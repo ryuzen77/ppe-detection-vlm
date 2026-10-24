@@ -630,8 +630,29 @@ export interface VlmApplyRequest {
   confirm_unvalidated: boolean
 }
 
+// T97: 'local' = VLM lokal darurat (uji dicatat terpisah dari cadangan)
+export type VlmRole = 'primary' | 'backup' | 'local'
+
 export interface VlmTestRequest extends VlmChoice {
-  role: 'primary' | 'backup'
+  role: VlmRole
+}
+
+/** T97: alasan daftar model dari penyedia gagal diambil (`source: 'catalog'`) */
+export type VlmModelListError = 'no_key' | 'unreachable' | 'timeout' | 'unsupported' | 'auth_failed'
+
+export interface VlmModelListEntry extends VlmModelEntry {
+  /** true = ada di penyedia; false = model katalog yang tidak ada di akun ini; null = daftar gagal diambil */
+  available: boolean | null
+}
+
+/** GET /api/config/vlm/models (T97a) */
+export interface VlmModelsResponse {
+  provider: string
+  role: VlmRole
+  source: 'provider' | 'catalog'
+  fetched_at: string
+  error: VlmModelListError | null
+  models: VlmModelListEntry[]
 }
 
 export interface VlmTestResponse {
