@@ -4,7 +4,7 @@
  * sendiri, supaya istilah seragam dan mudah diganti tanpa menyentuh logika.
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
-import type { CameraState, GateHold, ReportStatusFilter, VlmMode } from './api/types'
+import type { CameraFault, CameraState, GateHold, ReportStatusFilter, VlmMode } from './api/types'
 import { LOCALE, REPORTS as REPORTS_SETTINGS, MIN_PASSWORD_LENGTH } from './settings'
 
 export const BRAND = {
@@ -39,6 +39,15 @@ export const CAMERA_CHIP: Record<CameraState | 'UNKNOWN', string> = {
   UNKNOWN: 'Kamera',
 }
 export const cameraChipOk = (fps: number) => `${CAMERA_CHIP.OK} · ${Math.round(fps)} fps`
+
+/** Gangguan kamera dari telemetri `camera_fault` (T45/T77b). Didahulukan dari status kamera: saat
+ *  kamera membeku, status berputar LOST→OPENING→OK tiap ±3 dtk (uji UI 24-10, temuan #1). */
+export const CAMERA_FAULT: Record<CameraFault, { chip: string; detail: string }> = {
+  lost: { chip: 'Kamera terputus', detail: 'Kamera terputus, menyambung ulang…' },
+  blocked: { chip: 'Kamera terhalang / buram', detail: 'Kamera terhalang / buram.' },
+  frozen: { chip: 'Gambar kamera membeku', detail: 'Gambar kamera membeku, menyambung ulang…' },
+  system: { chip: 'Pengolah gambar galat', detail: 'Pengolah gambar galat, memulihkan otomatis…' },
+}
 
 export const VLM_CHIP: Record<VlmMode | 'UNKNOWN', { text: string; hint: string }> = {
   UTAMA: { text: 'VLM utama', hint: 'Penilaian APD oleh VLM utama' },
@@ -534,6 +543,12 @@ export const SETTINGS_TAB = {
   },
   cameraNone: 'Belum ada kamera dipilih.',
   lightTestHint: 'Lampu menyala sebentar lalu padam kembali.',
+  // Temuan uji UI #14: "Berhasil" hanya bila lampu fisik tersambung
+  lightTestDone: {
+    connected: 'Berhasil: lampu gerbang menyala lalu padam.',
+    disconnected: 'Perintah terkirim, tetapi lampu gerbang tidak tersambung — periksa kabel/relay.',
+    disabled: 'Lampu gerbang nonaktif: tes hanya terlihat di panel lampu layar Monitoring.',
+  },
 } as const
 
 // --- Wajib terdaftar (T83, Pengaturan → Gerbang) ------------------------------------------
@@ -646,11 +661,15 @@ export const VLM_SETTINGS = {
   providerLabel: 'Penyedia',
   modelLabel: 'Model',
   noBackup: '(Tanpa cadangan)',
-  // T70: cadangan mati = model keluar dari GPU; aktif lagi = menunggu model siap
+  // T70: cadangan mati = model keluar dari GPU; aktif lagi = menunggu model siap. Kalimat GPU hanya
+  // untuk cadangan LOKAL — cadangan cloud tidak memakai GPU (temuan uji UI #12).
   noBackupHint:
-    'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa). Model cadangan dikeluarkan dari GPU.',
+    'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa).',
+  noBackupLocalNote: 'Model cadangan dikeluarkan dari GPU.',
   disableBackupConfirm:
-    'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
+    'Matikan VLM cadangan? Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih.',
+  disableBackupLocalNote:
+    'Model cadangan dikeluarkan dari GPU; mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
   // T72: VLM lokal siaga dingin — menerapkan tidak memuat model; disiapkan otomatis saat dibutuhkan
   applyingLocalBackup:
     'Menerapkan... VLM lokal tidak dimuat sekarang (siaga dingin); model disiapkan otomatis di GPU saat VLM utama gangguan atau internet bermasalah.',
@@ -684,6 +703,8 @@ export const VLM_SETTINGS = {
   applyBtn: 'Terapkan',
   applying: 'Menyiapkan...',
   applySuccess: 'Berhasil diterapkan',
+  // Temuan uji UI #13: formulir berbeda dari setelan yang berlaku (mis. setelah Batal pada konfirmasi)
+  unsavedHint: 'Perubahan belum diterapkan — tekan Terapkan, atau muat ulang halaman untuk membatalkan.',
 
   warningTitle: 'Peringatan',
   cancelBtn: 'Batal',
@@ -768,6 +789,10 @@ export const WORKERS = {
   confirmDeleteFaceMsg:
     'Hapus seluruh templat data wajah pekerja ini? Tindakan ini permanen dan tidak dapat dibatalkan (hak hapus UU PDP). Riwayat nama pada audit lama tetap dipertahankan.',
   confirmDeleteTemplateTitle: 'Hapus Satu Foto',
+  // Temuan uji UI #9: menonaktifkan = menjadwalkan hapus otomatis data wajah (FACE_RETENTION_DAYS)
+  confirmDeactivateTitle: 'Nonaktifkan Pekerja',
+  confirmDeactivateMsg:
+    'Pekerja ini tidak lagi dikenali di gerbang. Data wajahnya dihapus otomatis setelah masa retensi bila tidak diaktifkan kembali sebelum tanggal itu. Riwayat pemeriksaan tetap tersimpan.',
   confirmDeleteTemplateMsg: 'Hapus templat foto wajah ini?',
   statusActive: 'Aktif',
   statusInactive: 'Nonaktif',

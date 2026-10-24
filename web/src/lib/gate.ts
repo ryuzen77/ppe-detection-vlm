@@ -8,7 +8,7 @@
  */
 import type { ConnectionStatus } from './api/telemetry'
 import type { ClipType, Telemetry } from './api/types'
-import { CAMERA_NOT_READY, GATE, POSITION, POSITION_FALLBACK } from './messages'
+import { CAMERA_FAULT, CAMERA_NOT_READY, GATE, POSITION, POSITION_FALLBACK } from './messages'
 
 export type GateKind =
   | 'offline' // WebSocket ke server terputus
@@ -66,6 +66,9 @@ export function gateView(t: Telemetry | null, connection: ConnectionStatus): Gat
 
   const a = t.active_track
   if (!a) {
+    // Gangguan kamera didahulukan: statusnya bisa sekejap OK saat menyambung ulang
+    if (t.camera_fault)
+      return view('no-camera', 'warn', { title: GATE.noCamera.title, detail: CAMERA_FAULT[t.camera_fault].detail })
     if (t.camera.status !== 'OK') {
       return view('no-camera', 'warn', { title: GATE.noCamera.title, detail: CAMERA_NOT_READY[t.camera.status] })
     }

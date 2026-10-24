@@ -10,7 +10,7 @@ import {
   toggleDisabled,
 } from './registrationPolicy'
 import { reportStatuses, resultKind } from './reports'
-import { registrationChip } from './status'
+import { lightTestDoneText, registrationChip } from './status'
 
 function policy(over: Partial<RegistrationPolicy> = {}, rec: Partial<RegistrationPolicy['recognition']> = {}) {
   return {
@@ -74,5 +74,15 @@ describe('peringatan operator & laporan (T83)', () => {
     expect(reportStatuses({ held_count: 0 })).toContain('held')
     expect(reportStatuses({})).not.toContain('held')
     expect(reportStatuses(null)).not.toContain('held')
+  })
+})
+
+describe('pesan tes lampu (temuan uji UI #14)', () => {
+  const t = (iot: Partial<Telemetry['iot']> | undefined) => ({ iot }) as Telemetry
+  it('"Berhasil" hanya bila lampu fisik tersambung', () => {
+    expect(lightTestDoneText(t({ enabled: true, connected: true }))).toMatch(/^Berhasil/)
+    expect(lightTestDoneText(t({ enabled: true, connected: false }))).toMatch(/tidak tersambung/)
+    expect(lightTestDoneText(t({ enabled: false, connected: false }))).toMatch(/nonaktif/)
+    expect(lightTestDoneText(null)).toMatch(/nonaktif/)
   })
 })

@@ -70,6 +70,37 @@ export function localFallbackChoice(
   return availability === 'available' && provider ? { provider, model } : null
 }
 
+/**
+ * Model setelah admin mengganti penyedia (temuan uji UI #13): model lama dipakai bila termasuk daftar
+ * model penyedia baru; selain itu model bawaan penyedia, supaya tidak terkirim pasangan seperti
+ * ollama/gemini-3.5-flash-lite (model yang tidak ada di penyedia itu).
+ */
+export function modelForProvider(
+  provider: { default_model: string; models: { model: string }[] } | undefined,
+  currentModel: string,
+): string {
+  if (!provider) return ''
+  if (provider.models.some((m) => m.model === currentModel)) return currentModel
+  return provider.default_model || provider.models[0]?.model || ''
+}
+
+type Choice = { provider: string; model: string } | null
+
+const sameChoice = (a: Choice, b: Choice) =>
+  (a?.provider ?? '') === (b?.provider ?? '') && (a?.provider ? a.model === b?.model : true)
+
+/** Formulir berbeda dari setelan yang berlaku di server (perlu Terapkan) */
+export function formDirty(
+  current: { primary: Choice; backup: Choice; local_fallback?: Choice },
+  form: { primary: Choice; backup: Choice; local_fallback: Choice },
+): boolean {
+  return (
+    !sameChoice(current.primary, form.primary) ||
+    !sameChoice(current.backup, form.backup) ||
+    !sameChoice(current.local_fallback ?? null, form.local_fallback)
+  )
+}
+
 export type BackupChange = 'unchanged' | 'disable' | 'enable_local' | 'other'
 
 /**
@@ -77,6 +108,19 @@ export type BackupChange = 'unchanged' | 'disable' | 'enable_local' | 'other'
  * `disable` perlu konfirmasi (model dikeluarkan dari GPU, pekerja menunggu bila VLM utama gangguan);
  * `enable_local` butuh waktu menyiapkan model di GPU, jadi teks menunggunya berbeda.
  */
+/** Cadangan yang SEDANG aktif adalah VLM lokal (memakai GPU) — teks GPU & kartu kesehatan hanya untuknya */
+export function currentBackupIsLocal(
+  current: { provider: string } | null,
+  providers: { name: string; is_local: boolean }[],
+): boolean {
+  return !!current && !!providers.find((p) => p.name === current.provider)?.is_local
+}
+
+/** Kalimat + catatan GPU bila cadangan aktif lokal (temuan uji UI #12) */
+export function withLocalNote(text: string, note: string, isLocal: boolean): string {
+  return isLocal ? `${text} ${note}` : text
+}
+
 export function backupChange(
   current: { provider: string; model: string } | null,
   nextProvider: string,

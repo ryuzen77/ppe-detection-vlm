@@ -65,6 +65,27 @@ export function complianceTone(rate: number | null): Tone {
   return 'danger'
 }
 
+/** Periode berikutnya ada isinya hanya bila periode tampil belum mencapai hari ini (temuan uji UI #5).
+ *  Tanggal ISO (YYYY-MM-DD) dibandingkan sebagai teks. */
+export function hasNextPeriod(rangeTo: string | undefined, today: string): boolean {
+  return !!rangeTo && rangeTo < today
+}
+
+/**
+ * Pesan tabel kosong. Saringan (status/pekerja/divisi/perusahaan) didahulukan: ringkasan periode ikut
+ * tersaring, jadi totalnya 0 walau periodenya berisi (temuan uji UI #7). Tanggal bukan saringan.
+ */
+export function reportEmptyText(o: { loading: boolean; periodTotal: number | undefined; hasFilter: boolean }): string {
+  if (o.loading) return TEXT.loading
+  if (o.hasFilter) return TEXT.emptyFiltered
+  return o.periodTotal === 0 ? TEXT.emptyPeriod : TEXT.empty
+}
+
+/** Tanggal ketikan manual melewati hari ini → hari ini (atribut `max` tidak menahan ketikan; tinjauan Codex T95) */
+export function clampToToday(value: string, today: string): string {
+  return value && value > today ? today : value
+}
+
 export function offsetDate(base: string, days: number): string {
   if (!base) return ''
   const d = new Date(base + 'T00:00:00')

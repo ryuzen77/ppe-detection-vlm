@@ -12,7 +12,7 @@
   import { telemetry } from '../lib/stores/telemetry.svelte'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { formatLostSince } from '../lib/diagnostics'
-  import { iotChip } from '../lib/status'
+  import { iotChip, lightTestDoneText } from '../lib/status'
   import { pingRows, type PingRow } from '../lib/ping'
   import { withError } from '../lib/messages'
   import ShieldCheck from '@lucide/svelte/icons/shield-check'
@@ -29,7 +29,10 @@
   const gateIot = $derived(iotChip(telemetry.data))
   const camera = $derived(telemetry.data?.camera ?? null)
   // T78: kesehatan VLM cadangan hanya berarti bila cadangan memang dipakai
-  const backupActive = $derived(telemetry.data?.api_monitor?.backup?.configured === true)
+  // Kartu kesehatan VLM lokal (porsi GPU, latensi) hanya bermakna untuk cadangan lokal (temuan uji UI #12)
+  const backupActive = $derived(
+    telemetry.data?.api_monitor?.backup?.configured === true && telemetry.data.api_monitor.backup.is_local,
+  )
   const LIGHTS = [
     { color: 'green', label: SETTINGS_TAB.testLightBtn },
     { color: 'red', label: SETTINGS_TAB.testRedBtn },
@@ -47,7 +50,7 @@
       setTimeout(async () => {
         try {
           await api.testLight('off')
-          lightStatus = SETTINGS_TAB.success
+          lightStatus = lightTestDoneText(telemetry.data)
         } catch (e) {
           lightStatus = withError(SETTINGS_TAB.lightOffFailed, e)
         }

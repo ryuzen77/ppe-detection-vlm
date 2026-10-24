@@ -4,6 +4,7 @@
   import type { EnrollmentPlan, EnrollmentPreview, Worker } from '../../lib/api/types'
   import { ENROLLMENT_GUIDE, WORKERS } from '../../lib/messages'
   import { api } from '../../lib/api/client'
+  import { releaseStream } from '../../lib/mjpeg'
   import { extractApiError } from '../../lib/api/error'
   import {
     autoShotCooldown,
@@ -163,7 +164,9 @@
             <span>{WORKERS.cameraPreviewTitle}</span>
           </div>
           <div class="video-container">
+            <!-- releaseStream: koneksi MJPEG diputus saat modal ditutup (lihat lib/mjpeg.ts) -->
             <img
+              use:releaseStream
               src="{api.streamUrl()}?t={streamKey}"
               alt={WORKERS.cameraPreviewTitle}
               class="stream-img"

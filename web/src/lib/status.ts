@@ -3,9 +3,11 @@ import type { InternetState, LocalStandbyState, Telemetry } from './api/types'
 import type { Tone } from './gate'
 import {
   CAMERA_CHIP,
+  CAMERA_FAULT,
   VLM_CHIP,
   VLM_CHIP_NO_BACKUP,
   IOT_CHIP,
+  SETTINGS_TAB,
   INTERNET_CHIP,
   LOCAL_STANDBY_CHIP,
   REGISTRATION_CHIP,
@@ -22,6 +24,7 @@ export interface Chip {
 export function cameraChip(t: Telemetry | null): Chip {
   const c = t?.camera
   if (!c) return { tone: 'neutral', text: CAMERA_CHIP.UNKNOWN, hint: '' }
+  if (t!.camera_fault) return { tone: 'warn', text: CAMERA_FAULT[t!.camera_fault].chip, hint: c.name }
   const tone: Tone = c.status === 'OK' ? 'ok' : 'warn'
   const text = c.status === 'OK' ? cameraChipOk(t!.fps) : CAMERA_CHIP[c.status]
   return { tone, text, hint: c.name }
@@ -86,6 +89,13 @@ export function iotChip(t: Telemetry | null): Chip {
     text: iot.connected ? IOT_CHIP.connected : IOT_CHIP.disconnected,
     hint: iot.error || '',
   }
+}
+
+/** Pesan akhir tes lampu Pengaturan menurut status lampu fisik (temuan uji UI #14) */
+export function lightTestDoneText(t: Telemetry | null): string {
+  const iot = t?.iot
+  if (!iot?.enabled) return SETTINGS_TAB.lightTestDone.disabled
+  return iot.connected ? SETTINGS_TAB.lightTestDone.connected : SETTINGS_TAB.lightTestDone.disconnected
 }
 
 const TONE_RANK: Record<Tone, number> = { neutral: 0, ok: 1, warn: 2, danger: 3 }

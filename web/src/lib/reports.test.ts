@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
 import {
+  clampToToday,
+  hasNextPeriod,
+  reportEmptyText,
   clampPercent,
   complianceTone,
   historyHead,
@@ -170,5 +173,31 @@ describe('workerCell (T79)', () => {
   })
   it('baris lama / FR mati: nomor lintasan seperti sebelumnya', () => {
     expect(workerCell(base)).toEqual({ primary: '#49', secondary: '', known: false })
+  })
+})
+
+describe('hasNextPeriod (temuan uji UI #5)', () => {
+  it('periode yang sudah mencakup hari ini tidak punya periode berikutnya', () => {
+    expect(hasNextPeriod('2026-10-23', '2026-10-24')).toBe(true)
+    expect(hasNextPeriod('2026-10-24', '2026-10-24')).toBe(false)
+    expect(hasNextPeriod('2026-10-31', '2026-10-24')).toBe(false)
+    expect(hasNextPeriod(undefined, '2026-10-24')).toBe(false)
+  })
+})
+
+describe('reportEmptyText (temuan uji UI #7)', () => {
+  it('saringan tanpa hasil = "tidak cocok", walau ringkasan tersaring bernilai 0', () => {
+    expect(reportEmptyText({ loading: false, periodTotal: 0, hasFilter: true })).toBe(TEXT.emptyFiltered)
+    expect(reportEmptyText({ loading: false, periodTotal: 0, hasFilter: false })).toBe(TEXT.emptyPeriod)
+    expect(reportEmptyText({ loading: false, periodTotal: undefined, hasFilter: false })).toBe(TEXT.empty)
+    expect(reportEmptyText({ loading: true, periodTotal: 0, hasFilter: true })).toBe(TEXT.loading)
+  })
+})
+
+describe('clampToToday (tinjauan Codex T95)', () => {
+  it('tanggal ketikan setelah hari ini dijepit ke hari ini; lainnya apa adanya', () => {
+    expect(clampToToday('2026-11-03', '2026-10-24')).toBe('2026-10-24')
+    expect(clampToToday('2026-10-20', '2026-10-24')).toBe('2026-10-20')
+    expect(clampToToday('', '2026-10-24')).toBe('')
   })
 })

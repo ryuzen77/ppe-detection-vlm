@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { validationBadge, handleSelectionError, backupChange } from './vlmSelection'
+import {
+  validationBadge,
+  handleSelectionError,
+  backupChange,
+  currentBackupIsLocal,
+  withLocalNote,
+  modelForProvider,
+  formDirty,
+} from './vlmSelection'
 
 describe('vlmSelection', () => {
   it('validationBadge memetakan status ke tone yang benar (tanpa danger/merah)', () => {
@@ -49,5 +57,41 @@ describe('backupChange (T70)', () => {
     expect(backupChange(local, 'ollama', 'qwen2.5vl:7b', providers)).toBe('unchanged')
     expect(backupChange(null, '', 'apa saja', providers)).toBe('unchanged')
     expect(backupChange(null, 'gemini', 'x', providers)).toBe('other')
+  })
+})
+
+describe('teks GPU hanya untuk cadangan lokal (temuan uji UI #12)', () => {
+  const providers = [
+    { name: 'gemini', is_local: false },
+    { name: 'ollama', is_local: true },
+  ]
+  it('mengenali cadangan aktif lokal vs cloud', () => {
+    expect(currentBackupIsLocal({ provider: 'ollama' }, providers)).toBe(true)
+    expect(currentBackupIsLocal({ provider: 'gemini' }, providers)).toBe(false)
+    expect(currentBackupIsLocal(null, providers)).toBe(false)
+  })
+  it('catatan GPU ditempel hanya bila lokal', () => {
+    expect(withLocalNote('Teks.', 'GPU.', true)).toBe('Teks. GPU.')
+    expect(withLocalNote('Teks.', 'GPU.', false)).toBe('Teks.')
+  })
+})
+
+describe('ganti penyedia & perubahan belum diterapkan (temuan uji UI #13)', () => {
+  const ollama = { default_model: 'qwen2.5vl:7b', models: [{ model: 'qwen2.5vl:7b' }, { model: 'gemma3:12b' }] }
+  it('model lama yang bukan milik penyedia baru diganti model bawaannya', () => {
+    expect(modelForProvider(ollama, 'gemini-3.5-flash-lite')).toBe('qwen2.5vl:7b')
+    expect(modelForProvider(ollama, 'gemma3:12b')).toBe('gemma3:12b')
+    expect(modelForProvider({ default_model: '', models: [{ model: 'x' }] }, 'y')).toBe('x')
+    expect(modelForProvider(undefined, 'y')).toBe('')
+  })
+  it('formulir berbeda dari server = dirty; sama = bersih', () => {
+    const g = { provider: 'gemini', model: 'm' }
+    const current = { primary: g, backup: g, local_fallback: null }
+    expect(formDirty(current, { primary: g, backup: g, local_fallback: null })).toBe(false)
+    expect(formDirty(current, { primary: { provider: 'ollama', model: 'q' }, backup: g, local_fallback: null })).toBe(
+      true,
+    )
+    expect(formDirty(current, { primary: g, backup: null, local_fallback: null })).toBe(true)
+    expect(formDirty({ primary: g, backup: null }, { primary: g, backup: null, local_fallback: null })).toBe(false)
   })
 })
