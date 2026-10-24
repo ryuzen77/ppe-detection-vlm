@@ -39,6 +39,7 @@ describe('attendance (T80)', () => {
     expect(seen).toMatchObject({ value: '1', hint: TEXT.ofActive(1, 4) })
     expect(notSeen).toMatchObject({ value: '1', hint: TEXT.notSeenNotice })
     expect(unknown).toMatchObject({ value: '5', hint: TEXT.unknownHint(3, 2) })
+    expect(rate).toMatchObject({ value: percent(37.5), hint: TEXT.rateHint(3, 8), tone: 'danger' })
   })
 
   it('lintasan tidak dikenali yang ditahan ikut disebut (T96: ditahan bukan lolos/ditolak)', () => {
@@ -46,7 +47,6 @@ describe('attendance (T80)', () => {
     expect(heldPasses({ passes: 5, passed: 3, rejected: 2 })).toBe(0)
     expect(TEXT.unknownHint(2, 0, 4)).toBe('2 lolos · 0 ditolak · 4 ditahan (seluruh gerbang)')
     expect(TEXT.unknownHint(3, 2, 0)).toBe('3 lolos · 2 ditolak (seluruh gerbang)')
-    expect(rate).toMatchObject({ value: percent(37.5), hint: TEXT.rateHint(3, 8), tone: 'danger' })
   })
 
   it('hari tanpa lintasan: tingkat pengenalan kosong, bukan 0%', () => {
