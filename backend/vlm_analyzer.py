@@ -4,10 +4,9 @@ import cv2
 import numpy as np
 import threading
 from dataclasses import asdict
-from typing import Callable, Optional, List
+from typing import Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager, nullcontext
-from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import cfg
 from .local_model_guard import LocalModelGuard, LocalStandby, UNLOADED, LOADING, READY, FAILED
@@ -21,98 +20,22 @@ from .vlm_providers import profiles as vlm_profiles
 from .vlm_providers import create_provider
 from .vlm_selection import Choice, Selection, ROLE_PRIMARY, ROLE_BACKUP
 
+from .vlm_result import (
+    APDInspectionResult as APDInspectionResult,
+    InspectionResult as InspectionResult,
+    ItemResult as ItemResult,
+    _parse_vlm_payload,
+)
+from .vlm_prompt import (
+    USER_PROMPT as USER_PROMPT,
+    build_system_prompt as build_system_prompt,
+    confirmation_prompts as confirmation_prompts,
+    parse_confirmation as parse_confirmation,
+    thinking_option as thinking_option,
+    profile_warnings as profile_warnings,
+)
+
 logger = logging.getLogger(__name__)
-
-
-class ItemResult(BaseModel):
-    """Hasil pemeriksaan satu item APD.
-
-    Bentuknya sengaja longgar: syarat tambahan seperti `is_valid_color` (rompi)
-    atau `is_closed_shoes` (sepatu) masuk sebagai field ekstra sesuai definisi
-    di `ppe_rules`, bukan sebagai kelas khusus per item. Dengan begitu item APD
-    baru tidak memerlukan kelas model baru.
-    """
-
-    model_config = ConfigDict(extra="allow")
-
-    detected: bool = Field(default=False, description="Apakah item terdeteksi dipakai")
-    color: str = Field(default="", description="Warna item bila relevan")
-    description: str = Field(default="", description="Keterangan singkat item")
-
-    @model_validator(mode="before")
-    @classmethod
-    def _null_means_not_given(cls, data):
-        """`null` dari VLM = nilai tidak diisi, jadi nilai bawaan yang berlaku.
-
-        Gemini menjawab `"color": null` untuk orang tanpa rompi (T39a). Tanpa ini
-        seluruh jawaban gagal divalidasi, dianggap kegagalan VLM utama, dilempar ke
-        cadangan, dan dua kali berturut-turut membuat pemutus sirkuit menganggap
-        utama mati. Syarat (qualifier) yang null dianggap tidak terpenuhi.
-        """
-        if isinstance(data, dict):
-            return {k: v for k, v in data.items() if v is not None}
-        return data
-
-
-class InspectionResult(BaseModel):
-    """Hasil inspeksi APD lengkap, dikunci pada katalog `ppe_rules`."""
-
-    items: dict[str, ItemResult] = Field(default_factory=dict, description="Hasil per item APD, dikunci nama item")
-    is_complete: bool = Field(default=False, description="True jika seluruh item wajib terpenuhi")
-    missing_items: List[str] = Field(default_factory=list, description="Nama APD yang belum memenuhi syarat")
-    notes: str = Field(default="", description="Ringkasan hasil inspeksi dalam Bahasa Indonesia")
-    inference_source: str = Field(
-        default="",
-        description="Sumber keputusan: VLM_LIVE:<penyedia>/<model> (utama) atau VLM_CADANGAN:<penyedia>/<model>",
-    )
-    inference_time_ms: float = Field(default=0.0, description="Durasi inspeksi dalam milidetik")
-    decided_by: str = Field(default="", description="VLM yang memutuskan: 'utama' atau 'cadangan'")
-    is_system_unavailable: bool = Field(
-        default=False,
-        description="True jika utama dan cadangan sama-sama gagal: TIDAK ada keputusan, pekerja diminta menunggu",
-    )
-
-    def item(self, key: str) -> ItemResult:
-        """Hasil satu item; item yang tidak dinilai dianggap tidak terdeteksi."""
-        return self.items.get(key) or ItemResult()
-
-
-# Nama lama dipertahankan sebagai alias supaya modul lain yang mengimpornya
-# tidak perlu diubah pada task ini.
-APDInspectionResult = InspectionResult
-
-
-_SPOOF_MARKER = "bukan orang fisik"
-
-
-def _is_spoof_rejection(missing_items) -> bool:
-    """Apakah model menolak subjek sebagai foto/layar, dengan ejaan apa pun."""
-    return any(isinstance(m, str) and _SPOOF_MARKER in m.casefold() for m in (missing_items or []))
-
-
-# Nama lama dipertahankan untuk pemakai (tes, alat evaluasi); isinya di messages.py
-USER_PROMPT = messages.VLM_USER_PROMPT
-
-
-def build_system_prompt(items=None, zoom: bool = False) -> str:
-    """Prompt inspektur K3, dirakit dari item APD yang sedang aktif.
-
-    Sebelumnya prompt ini ditulis tangan sehingga setiap perubahan item APD
-    harus disunting manual di sini, terpisah dari tempat lain yang menyimpan
-    daftar item yang sama. Kini dirakit ulang setiap kali operator menghidupkan
-    atau mematikan item, jadi item mati tidak pernah ditanyakan ke model.
-    """
-    items = items if items is not None else ppe_rules.get_active_items()
-    prompt = messages.VLM_SYSTEM_PROMPT.format(
-        rules=ppe_rules.build_prompt_rules(items),
-        json_shape=ppe_rules.build_json_shape(items),
-    )
-    return prompt + (_zoom_note() if zoom else "")
-
-
-def _zoom_note() -> str:
-    """Penjelas panel perbesaran (T86), hanya untuk gambar berpanel (lihat vlm_selection.uses_zoom)."""
-    return messages.VLM_ZOOM_NOTE if cfg.VLM_ZOOM_HAND_PANELS else messages.VLM_ZOOM_NOTE_HEAD
 
 
 def image_for_vlm(crop_bgr: np.ndarray, keypoints: Optional[list] = None, zoom: bool = False) -> bytes:
@@ -141,55 +64,6 @@ def warmup_image_jpeg(zoom: bool = False) -> bytes:
     h, w = cfg.VLM_WARMUP_IMAGE_HEIGHT, cfg.VLM_WARMUP_IMAGE_WIDTH
     crop = np.tile(np.linspace(40, 200, h).astype(np.uint8)[:, None, None], (1, w, 3))
     return image_for_vlm(crop, zoom=zoom)
-
-
-def confirmation_prompts(item, zoom: bool = False) -> tuple[str, str]:
-    """(prompt sistem, prompt pengguna) konfirmasi kedua satu larangan (T58)."""
-    return messages.VLM_CONFIRM_SYSTEM_PROMPT + (
-        _zoom_note() if zoom else ""
-    ), f"{item.confirm_prompt}\n{messages.VLM_CONFIRM_SHAPE}"
-
-
-def parse_confirmation(data) -> tuple[bool, str]:
-    """(larangan benar terlihat, benda yang disebut model). Selain `true` tegas = tidak terlihat."""
-    if not isinstance(data, dict):
-        return False, ""
-    return data.get("detected") is True, str(data.get("seen") or "")
-
-
-def thinking_option(provider_name: str, level: str) -> Optional[str]:
-    """Nilai mode berpikir untuk adaptor; peringatan bila tidak dikenal/tidak didukung (T39b)."""
-    if level not in vlm_profiles.THINKING_LEVELS:
-        logger.warning(
-            messages.VLM_THINKING_INVALID.format(value=level, choices=", ".join(vlm_profiles.THINKING_LEVELS))
-        )
-        level = "off"
-    value = vlm_profiles.thinking_value(provider_name, level)
-    if value is None and level != "off":
-        logger.warning(messages.VLM_THINKING_UNSUPPORTED.format(value=level, provider=provider_name))
-    return value
-
-
-def profile_warnings(provider_name: str, model: str, who: str) -> list[str]:
-    """Peringatan katalog profil & validasi model. Gerbang tetap menyala (keputusan pengguna)."""
-    warnings = []
-    profile = vlm_profiles.get_profile(provider_name)
-    if profile is not None and profile.support == vlm_profiles.EXPERIMENTAL:
-        warnings.append(messages.VLM_PROVIDER_EXPERIMENTAL.format(who=who))
-    version = vlm_selection.prompt_version_for(provider_name)
-    status = vlm_profiles.validation_status(provider_name, model, version)
-    record = vlm_profiles.find_validation(provider_name, model, version)
-    if status == vlm_profiles.UNVALIDATED:
-        warnings.append(messages.VLM_MODEL_UNVALIDATED.format(who=who))
-        return warnings
-    assert record is not None or status == vlm_profiles.VALIDATED, "status lain berasal dari catatan validasi"
-    if status == vlm_profiles.UNSAFE and record is not None:
-        warnings.append(messages.VLM_MODEL_UNSAFE.format(who=who, missed=record.missed, photos=record.photos))
-    elif status == vlm_profiles.OUTDATED and record is not None:
-        warnings.append(messages.VLM_MODEL_OUTDATED.format(who=who, old=record.prompt_version, current=version))
-    elif status == vlm_profiles.PARTIAL and record is not None:
-        warnings.append(messages.VLM_MODEL_PARTIAL.format(who=who, note=record.note))
-    return warnings
 
 
 class LaneBusy(Exception):
@@ -1172,51 +1046,7 @@ class VLMAnalyzer:
         )
         return self._parse_vlm_payload(data, aktif)
 
-    @staticmethod
-    def _parse_vlm_payload(data: dict, aktif=None) -> InspectionResult:
-        """Mengubah balasan JSON VLM menjadi hasil yang dikunci pada katalog.
-
-        Keputusan kelengkapan dihitung ulang dari `ppe_rules`, bukan diambil
-        mentah dari balasan model: dengan begitu aturan wajib/opsional yang
-        berlaku di sistem selalu yang menentukan, bukan tafsir model.
-
-        Penolakan tingkat sistem dari model — terutama anti-spoofing — tetap
-        dihormati karena tidak berasal dari katalog item.
-        """
-        mentah = data.get("items")
-        if not isinstance(mentah, dict):
-            # Balasan bentuk lama (item di tingkat teratas) tetap diterima
-            mentah = {k: data.get(k) for k in ppe_rules.item_keys() if isinstance(data.get(k), dict)}
-
-        aktif = aktif if aktif is not None else ppe_rules.get_active_items()
-        items = {}
-        for item in aktif:
-            nilai = mentah.get(item.key)
-            items[item.key] = (
-                ItemResult(**nilai) if isinstance(nilai, dict) else ItemResult(description="Tidak dinilai oleh VLM")
-            )
-
-        is_complete, missing = ppe_rules.evaluate({k: v.model_dump() for k, v in items.items()}, aktif)
-
-        # Satu-satunya penolakan dari teks bebas model yang dihormati adalah
-        # anti-spoofing: aturan itu ada di prompt tetapi bukan item katalog, jadi
-        # tidak bisa dihitung ulang dari `items`. Nama item di `missing_items`
-        # sengaja diabaikan — sistem menghitungnya sendiri dari `items` — karena
-        # model menulisnya dengan ejaan yang berubah-ubah ("Helm keselamatan" vs
-        # "Helm Keselamatan") sehingga pencocokan teks menghasilkan duplikat, dan
-        # menyebut item yang sedang dimatikan tidak boleh menolak pekerja.
-        # Bentuk sekarang: `orang_nyata` = false. Penanda lama di `missing_items`
-        # tetap dihormati (balasan penyedia dengan prompt lama / uji lama).
-        if data.get(ppe_rules.REAL_PERSON_KEY) is False or _is_spoof_rejection(data.get("missing_items")):
-            missing = [ppe_rules.SPOOF_MISSING_LABEL] + missing
-            is_complete = False
-
-        return InspectionResult(
-            items=items,
-            is_complete=is_complete,
-            missing_items=missing,
-            notes=str(data.get("notes", "")),
-        )
+    _parse_vlm_payload = staticmethod(_parse_vlm_payload)
 
 
 vlm_analyzer = VLMAnalyzer()
