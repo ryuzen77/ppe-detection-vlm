@@ -344,7 +344,9 @@ export const ATTENDANCE = {
   ofActive: (seen: number, active: number) => `${seen} dari ${active} pekerja aktif`,
   // Wajah tak dikenali tidak punya divisi/perusahaan: angka ini selalu SELURUH gerbang hari itu (tinjauan T80a)
   rateHint: (recognized: number, passes: number) => `${recognized} dari ${passes} lintasan dikenali (seluruh gerbang)`,
-  unknownHint: (passed: number, rejected: number) => `${passed} lolos · ${rejected} ditolak (seluruh gerbang)`,
+  // T96: ditahan (Wajib terdaftar) bukan lolos & bukan ditolak — disebut hanya bila ada
+  unknownHint: (passed: number, rejected: number, held = 0) =>
+    `${passed} lolos · ${rejected} ditolak${held ? ` · ${held} ditahan` : ''} (seluruh gerbang)`,
   noPasses: 'Belum ada lintasan',
   sections: { seen: 'Terlihat lewat gerbang', notSeen: 'Belum terlihat' },
   cols: {

@@ -39,7 +39,7 @@ export function attendanceTiles(r: AttendanceReport): AttendanceTile[] {
     {
       label: TEXT.tiles.unknown,
       value: String(r.unknown.passes),
-      hint: TEXT.unknownHint(r.unknown.passed, r.unknown.rejected),
+      hint: TEXT.unknownHint(r.unknown.passed, r.unknown.rejected, heldPasses(r.unknown)),
       tone: 'neutral',
     },
     {
@@ -57,6 +57,11 @@ export function orgText(department: string | null, company: string | null): stri
 }
 
 /** 403 = bukan admin, 404 = server belum punya T80a; selain itu pesan galat biasa. */
+/** Lintasan ditahan = sisa setelah lolos & ditolak (T96: kontrak Kehadiran tidak punya kolom ditahan) */
+export function heldPasses(u: { passes: number; passed: number; rejected: number }): number {
+  return Math.max(0, u.passes - u.passed - u.rejected)
+}
+
 export function attendanceError(e: unknown): string {
   if (e instanceof ApiError && e.status === 403) return TEXT.adminOnly
   if (e instanceof ApiError && e.status === 404) return TEXT.unavailable

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attendanceError, attendanceTiles, localDateIso, orgText, rateTone } from './attendance'
+import { attendanceError, attendanceTiles, heldPasses, localDateIso, orgText, rateTone } from './attendance'
 import { ApiError } from './api/client'
 import type { AttendanceReport } from './api/types'
 import { ATTENDANCE as TEXT, percent } from './messages'
@@ -40,6 +40,13 @@ describe('attendance (T80)', () => {
     expect(notSeen).toMatchObject({ value: '1', hint: TEXT.notSeenNotice })
     expect(unknown).toMatchObject({ value: '5', hint: TEXT.unknownHint(3, 2) })
     expect(rate).toMatchObject({ value: percent(37.5), hint: TEXT.rateHint(3, 8), tone: 'danger' })
+  })
+
+  it('lintasan tidak dikenali yang ditahan ikut disebut (T96: ditahan bukan lolos/ditolak)', () => {
+    expect(heldPasses({ passes: 6, passed: 2, rejected: 0 })).toBe(4)
+    expect(heldPasses({ passes: 5, passed: 3, rejected: 2 })).toBe(0)
+    expect(TEXT.unknownHint(2, 0, 4)).toBe('2 lolos · 0 ditolak · 4 ditahan (seluruh gerbang)')
+    expect(TEXT.unknownHint(3, 2, 0)).toBe('3 lolos · 2 ditolak (seluruh gerbang)')
   })
 
   it('hari tanpa lintasan: tingkat pengenalan kosong, bukan 0%', () => {
