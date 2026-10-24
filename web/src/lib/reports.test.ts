@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
 import {
   hasNextPeriod,
+  reportEmptyText,
   clampPercent,
   complianceTone,
   historyHead,
@@ -180,5 +181,14 @@ describe('hasNextPeriod (temuan uji UI #5)', () => {
     expect(hasNextPeriod('2026-10-24', '2026-10-24')).toBe(false)
     expect(hasNextPeriod('2026-10-31', '2026-10-24')).toBe(false)
     expect(hasNextPeriod(undefined, '2026-10-24')).toBe(false)
+  })
+})
+
+describe('reportEmptyText (temuan uji UI #7)', () => {
+  it('saringan tanpa hasil = "tidak cocok", walau ringkasan tersaring bernilai 0', () => {
+    expect(reportEmptyText({ loading: false, periodTotal: 0, hasFilter: true })).toBe(TEXT.emptyFiltered)
+    expect(reportEmptyText({ loading: false, periodTotal: 0, hasFilter: false })).toBe(TEXT.emptyPeriod)
+    expect(reportEmptyText({ loading: false, periodTotal: undefined, hasFilter: false })).toBe(TEXT.empty)
+    expect(reportEmptyText({ loading: true, periodTotal: 0, hasFilter: true })).toBe(TEXT.loading)
   })
 })

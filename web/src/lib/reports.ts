@@ -71,6 +71,16 @@ export function hasNextPeriod(rangeTo: string | undefined, today: string): boole
   return !!rangeTo && rangeTo < today
 }
 
+/**
+ * Pesan tabel kosong. Saringan (status/pekerja/divisi/perusahaan) didahulukan: ringkasan periode ikut
+ * tersaring, jadi totalnya 0 walau periodenya berisi (temuan uji UI #7). Tanggal bukan saringan.
+ */
+export function reportEmptyText(o: { loading: boolean; periodTotal: number | undefined; hasFilter: boolean }): string {
+  if (o.loading) return TEXT.loading
+  if (o.hasFilter) return TEXT.emptyFiltered
+  return o.periodTotal === 0 ? TEXT.emptyPeriod : TEXT.empty
+}
+
 export function offsetDate(base: string, days: number): string {
   if (!base) return ''
   const d = new Date(base + 'T00:00:00')

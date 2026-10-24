@@ -24,7 +24,7 @@
     Worker,
   } from '../lib/api/types'
   import { ATTENDANCE, REPORTS as TEXT, count, percent, withError } from '../lib/messages'
-  import { complianceTone, historyHead, pageInfo, reportStatuses } from '../lib/reports'
+  import { complianceTone, historyHead, pageInfo, reportEmptyText, reportStatuses } from '../lib/reports'
   import { REPORTS } from '../lib/settings'
   import { catalog } from '../lib/stores/catalog.svelte'
   import { telemetry } from '../lib/stores/telemetry.svelte'
@@ -136,7 +136,8 @@
 
   const records = $derived(page?.page_records ?? [])
   const info = $derived(pageInfo(offset, records.length, page?.filtered_total ?? 0))
-  const filtered = $derived(status !== 'all' || date !== '' || workerId !== null || department !== '' || company !== '')
+  // Saringan selain tanggal (tanggal memilih periode, bukan menyaring isinya)
+  const narrowed = $derived(status !== 'all' || workerId !== null || department !== '' || company !== '')
 </script>
 
 <div class="laporan">
@@ -270,13 +271,7 @@
         <ReportTable {records} items={catalog.items} onOpen={(r) => (photo = r)} />
       {:else if !error}
         <p class="state">
-          {loading
-            ? TEXT.loading
-            : summary?.totals.total === 0
-              ? TEXT.emptyPeriod
-              : filtered
-                ? TEXT.emptyFiltered
-                : TEXT.empty}
+          {reportEmptyText({ loading, periodTotal: summary?.totals.total, hasFilter: narrowed })}
         </p>
       {/if}
 
