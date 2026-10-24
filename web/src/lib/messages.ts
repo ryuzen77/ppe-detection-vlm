@@ -4,7 +4,7 @@
  * sendiri, supaya istilah seragam dan mudah diganti tanpa menyentuh logika.
  * Teks per item APD tetap berasal dari katalog backend (ppe_rules).
  */
-import type { CameraState, GateHold, ReportStatusFilter, VlmMode } from './api/types'
+import type { CameraFault, CameraState, GateHold, ReportStatusFilter, VlmMode } from './api/types'
 import { LOCALE, REPORTS as REPORTS_SETTINGS, MIN_PASSWORD_LENGTH } from './settings'
 
 export const BRAND = {
@@ -39,6 +39,15 @@ export const CAMERA_CHIP: Record<CameraState | 'UNKNOWN', string> = {
   UNKNOWN: 'Kamera',
 }
 export const cameraChipOk = (fps: number) => `${CAMERA_CHIP.OK} · ${Math.round(fps)} fps`
+
+/** Gangguan kamera dari telemetri `camera_fault` (T45/T77b). Didahulukan dari status kamera: saat
+ *  kamera membeku, status berputar LOST→OPENING→OK tiap ±3 dtk (uji UI 24-10, temuan #1). */
+export const CAMERA_FAULT: Record<CameraFault, { chip: string; detail: string }> = {
+  lost: { chip: 'Kamera terputus', detail: 'Kamera terputus, menyambung ulang…' },
+  blocked: { chip: 'Kamera terhalang / buram', detail: 'Kamera terhalang / buram.' },
+  frozen: { chip: 'Gambar kamera membeku', detail: 'Gambar kamera membeku, menyambung ulang…' },
+  system: { chip: 'Pengolah gambar galat', detail: 'Pengolah gambar galat, memulihkan otomatis…' },
+}
 
 export const VLM_CHIP: Record<VlmMode | 'UNKNOWN', { text: string; hint: string }> = {
   UTAMA: { text: 'VLM utama', hint: 'Penilaian APD oleh VLM utama' },

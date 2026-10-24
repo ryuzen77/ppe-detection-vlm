@@ -256,6 +256,9 @@ export interface HistoryRecord {
   gate_hold?: GateHold | null
 }
 
+/** 'system' = pengolah gambar galat (T77b) */
+export type CameraFault = 'lost' | 'blocked' | 'frozen' | 'system'
+
 export type CameraState = 'IDLE' | 'OPENING' | 'OK' | 'OPTIMIZING' | 'LOST' | 'SYNTHETIC' | 'BLOCKED'
 
 export interface CameraMode {
@@ -301,7 +304,7 @@ export interface Telemetry {
     lamps_on?: GateLamp[] | null
     lamps_available?: GateLamp[] | null
   }
-  camera_fault: 'lost' | 'blocked' | 'frozen' | 'system' | null // 'system' = pengolah gambar galat (T77b)
+  camera_fault: CameraFault | null
   /** T83; tidak ada pada server sebelum T83a */
   registration_policy?: RegistrationPolicyStatus
   enrollment?: EnrollmentStatus

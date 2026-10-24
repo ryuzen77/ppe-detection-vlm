@@ -172,6 +172,12 @@ describe('gateView', () => {
     expect(v.detail).toMatch(/13 dtk/)
   })
 
+  it('gangguan kamera didahulukan walau status sekejap OK (tidak berkedip "Menunggu pekerja")', () => {
+    const v = gateView(tele({ camera_fault: 'frozen' }), 'connected')
+    expect(v).toMatchObject({ kind: 'no-camera', tone: 'warn' })
+    expect(v.detail).toMatch(/membeku/)
+  })
+
   // --- T83 Wajib terdaftar ---
   it('ditahan: kuning (bukan merah) walau APD lengkap, dengan alasan', () => {
     const held = (hold_reason: 'unregistered' | 'fr_unavailable') =>
@@ -547,6 +553,9 @@ describe('chip status', () => {
     expect(cameraChip(tele()).tone).toBe('ok')
     expect(cameraChip(tele({ camera: { ...tele().camera, status: 'LOST' } })).tone).toBe('warn')
     expect(cameraChip(null).tone).toBe('neutral')
+    // Temuan uji UI #1: kamera membeku — status sekejap OK saat sambung ulang, gangguan tetap tampil
+    const frozen = cameraChip(tele({ camera_fault: 'frozen' }))
+    expect(frozen).toMatchObject({ tone: 'warn', text: 'Gambar kamera membeku' })
   })
 })
 

@@ -3,6 +3,7 @@ import type { InternetState, LocalStandbyState, Telemetry } from './api/types'
 import type { Tone } from './gate'
 import {
   CAMERA_CHIP,
+  CAMERA_FAULT,
   VLM_CHIP,
   VLM_CHIP_NO_BACKUP,
   IOT_CHIP,
@@ -22,6 +23,7 @@ export interface Chip {
 export function cameraChip(t: Telemetry | null): Chip {
   const c = t?.camera
   if (!c) return { tone: 'neutral', text: CAMERA_CHIP.UNKNOWN, hint: '' }
+  if (t!.camera_fault) return { tone: 'warn', text: CAMERA_FAULT[t!.camera_fault].chip, hint: c.name }
   const tone: Tone = c.status === 'OK' ? 'ok' : 'warn'
   const text = c.status === 'OK' ? cameraChipOk(t!.fps) : CAMERA_CHIP[c.status]
   return { tone, text, hint: c.name }
