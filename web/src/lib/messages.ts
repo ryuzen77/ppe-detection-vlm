@@ -697,6 +697,8 @@ export const VLM_SETTINGS = {
   applyBtn: 'Terapkan',
   applying: 'Menyiapkan...',
   applySuccess: 'Berhasil diterapkan',
+  // Temuan uji UI #13: formulir berbeda dari setelan yang berlaku (mis. setelah Batal pada konfirmasi)
+  unsavedHint: 'Perubahan belum diterapkan — tekan Terapkan, atau muat ulang halaman untuk membatalkan.',
 
   warningTitle: 'Peringatan',
   cancelBtn: 'Batal',

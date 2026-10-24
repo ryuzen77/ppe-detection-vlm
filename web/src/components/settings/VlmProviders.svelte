@@ -11,6 +11,8 @@
     localFallbackChoice,
     currentBackupIsLocal,
     withLocalNote,
+    modelForProvider,
+    formDirty,
   } from '../../lib/vlmSelection'
   import { extractApiError } from '../../lib/api/error'
   import VlmModelField from './VlmModelField.svelte'
@@ -76,6 +78,15 @@
     no_local_provider: VLM_SETTINGS.noLocalProvider,
   } as const
   const localChosen = $derived(localFallbackChoice(localAvailability, localProvider, localModel) !== null)
+  const findProvider = (name: string) => providers.find((p) => p.name === name)
+  const dirty = $derived(
+    !!data &&
+      formDirty(data.current, {
+        primary: primaryProvider ? { provider: primaryProvider, model: primaryModel } : null,
+        backup: backupProvider ? { provider: backupProvider, model: backupModel } : null,
+        local_fallback: localFallbackChoice(localAvailability, localProvider, localModel),
+      }),
+  )
 
   function requestApply() {
     if (change === 'disable') disableConfirmation = true
@@ -201,7 +212,11 @@
         <h3>{VLM_SETTINGS.primaryTitle}</h3>
         <label>
           <span>{VLM_SETTINGS.providerLabel}</span>
-          <select bind:value={primaryProvider} disabled={applying}>
+          <select
+            bind:value={primaryProvider}
+            disabled={applying}
+            onchange={(e) => (primaryModel = modelForProvider(findProvider(e.currentTarget.value), primaryModel))}
+          >
             {#each providers as p (p.name)}
               <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
             {/each}
@@ -231,7 +246,11 @@
         <h3>{VLM_SETTINGS.backupTitle}</h3>
         <label>
           <span>{VLM_SETTINGS.providerLabel}</span>
-          <select bind:value={backupProvider} disabled={applying}>
+          <select
+            bind:value={backupProvider}
+            disabled={applying}
+            onchange={(e) => (backupModel = modelForProvider(findProvider(e.currentTarget.value), backupModel))}
+          >
             <option value="">{VLM_SETTINGS.noBackup}</option>
             {#each providers as p (p.name)}
               <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
@@ -269,7 +288,11 @@
         {#if localAvailability === 'available'}
           <label>
             <span>{VLM_SETTINGS.providerLabel}</span>
-            <select bind:value={localProvider} disabled={applying}>
+            <select
+              bind:value={localProvider}
+              disabled={applying}
+              onchange={(e) => (localModel = modelForProvider(findProvider(e.currentTarget.value), localModel))}
+            >
               <option value="">{VLM_SETTINGS.noLocalFallback}</option>
               {#each localProviders as p (p.name)}
                 <option value={p.name} disabled={p.missing !== null}>{providerOptionLabel(p)}</option>
@@ -360,6 +383,9 @@
 
     <div class="footer-actions">
       <button class="btn btn-primary" onclick={requestApply} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
+      {#if dirty && !applying && !applyStatus}
+        <span class="dirty" role="status">{VLM_SETTINGS.unsavedHint}</span>
+      {/if}
       {#if applyStatus}
         <span class="status-msg">{applyStatus}</span>
       {/if}
@@ -457,6 +483,10 @@
   .ok {
     color: var(--ok);
     font-weight: 500;
+  }
+  .dirty {
+    color: var(--warn);
+    font-size: var(--text-sm);
   }
   .status-msg {
     color: var(--text-muted);

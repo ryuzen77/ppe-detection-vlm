@@ -5,6 +5,8 @@ import {
   backupChange,
   currentBackupIsLocal,
   withLocalNote,
+  modelForProvider,
+  formDirty,
 } from './vlmSelection'
 
 describe('vlmSelection', () => {
@@ -71,5 +73,25 @@ describe('teks GPU hanya untuk cadangan lokal (temuan uji UI #12)', () => {
   it('catatan GPU ditempel hanya bila lokal', () => {
     expect(withLocalNote('Teks.', 'GPU.', true)).toBe('Teks. GPU.')
     expect(withLocalNote('Teks.', 'GPU.', false)).toBe('Teks.')
+  })
+})
+
+describe('ganti penyedia & perubahan belum diterapkan (temuan uji UI #13)', () => {
+  const ollama = { default_model: 'qwen2.5vl:7b', models: [{ model: 'qwen2.5vl:7b' }, { model: 'gemma3:12b' }] }
+  it('model lama yang bukan milik penyedia baru diganti model bawaannya', () => {
+    expect(modelForProvider(ollama, 'gemini-3.5-flash-lite')).toBe('qwen2.5vl:7b')
+    expect(modelForProvider(ollama, 'gemma3:12b')).toBe('gemma3:12b')
+    expect(modelForProvider({ default_model: '', models: [{ model: 'x' }] }, 'y')).toBe('x')
+    expect(modelForProvider(undefined, 'y')).toBe('')
+  })
+  it('formulir berbeda dari server = dirty; sama = bersih', () => {
+    const g = { provider: 'gemini', model: 'm' }
+    const current = { primary: g, backup: g, local_fallback: null }
+    expect(formDirty(current, { primary: g, backup: g, local_fallback: null })).toBe(false)
+    expect(formDirty(current, { primary: { provider: 'ollama', model: 'q' }, backup: g, local_fallback: null })).toBe(
+      true,
+    )
+    expect(formDirty(current, { primary: g, backup: null, local_fallback: null })).toBe(true)
+    expect(formDirty({ primary: g, backup: null }, { primary: g, backup: null, local_fallback: null })).toBe(false)
   })
 })
