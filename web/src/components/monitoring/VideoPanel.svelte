@@ -11,6 +11,7 @@
   import VolumeX from '@lucide/svelte/icons/volume-x'
   import { onDestroy, onMount } from 'svelte'
   import { api } from '../../lib/api/client'
+  import { releaseStream } from '../../lib/mjpeg'
   import { drawHud, readHudPalette, type HudPalette } from '../../lib/hud'
   import { VIDEO, withError } from '../../lib/messages'
   import { STORAGE } from '../../lib/settings'
@@ -19,7 +20,6 @@
 
   let { onPickCamera }: { onPickCamera: () => void } = $props()
 
-  let img: HTMLImageElement | undefined = $state()
   let canvas: HTMLCanvasElement | undefined = $state()
   let frame: HTMLDivElement | undefined = $state()
   let size = $state({ w: 0, h: 0 })
@@ -64,9 +64,6 @@
   })
   onDestroy(() => {
     observer?.disconnect()
-    // Memutus koneksi MJPEG secara eksplisit; menghapus elemen saja tidak
-    // selalu membatalkan unduhan di semua browser.
-    if (img) img.src = ''
   })
 
   function toggleGuides() {
@@ -89,7 +86,8 @@
     {#if cameraOk}
       <!-- Video & overlay hanya saat kamera siap: frame tunggu dari backend
            tidak diunduh dan tidak bertumpuk dengan placeholder di bawah. -->
-      <img bind:this={img} src={`${api.streamUrl()}?t=${streamKey}`} alt={VIDEO.alt} />
+      <!-- releaseStream: koneksi MJPEG diputus tiap kali <img> dilepas (kamera putus, pindah halaman) -->
+      <img use:releaseStream src={`${api.streamUrl()}?t=${streamKey}`} alt={VIDEO.alt} />
       <canvas bind:this={canvas} aria-hidden="true"></canvas>
     {:else}
       <div class="placeholder">
