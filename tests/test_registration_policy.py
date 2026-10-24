@@ -231,7 +231,11 @@ def test_csv_adds_hold_without_changing_apd(policy_env):
     assert rows[0][-1] == messages.CSV_HEADER_GATE_HOLD
     assert [row[-1] for row in rows[1:]] == [messages.CSV_EMPTY, *messages.CSV_GATE_HOLD_LABELS.values()]
     assert "unregistered" not in response.text and "fr_unavailable" not in response.text
-    assert all(row[4] == messages.CSV_STATUS_COMPLETE for row in rows[1:])
+    assert [row[4] for row in rows[1:]] == [
+        messages.CSV_STATUS_COMPLETE,
+        messages.CSV_STATUS_HELD,
+        messages.CSV_STATUS_HELD,
+    ]
 
 
 def test_engine_failure_is_cached_unavailable(monkeypatch):

@@ -25,6 +25,7 @@ class AuditRow:
     time_str: str  # HH:MM:SS
     is_complete: bool
     missing_items: str  # JSON daftar missing_label
+    gate_hold: Optional[str] = None
 
 
 def parse_date(value: Optional[str], today: date) -> date:
@@ -87,20 +88,25 @@ def _missing_ranking(rows: Iterable[AuditRow]) -> list[dict]:
 def summarize(period: str, start: date, end: date, rows: list[AuditRow]) -> dict:
     """Bentuk JSON sesuai kontrak T49 di docs/RENCANA.md."""
     buckets = _empty_buckets(period, start, end)
+    total = 0
     for row in rows:
         bucket = buckets.get(_bucket_key(period, row))
         if bucket is not None:
-            bucket["passed" if row.is_complete else "rejected"] += 1
+            total += 1
+            if not row.is_complete:
+                bucket["rejected"] += 1
+            elif row.gate_hold is None:
+                bucket["passed"] += 1
     passed = sum(b["passed"] for b in buckets.values())
-    total = passed + sum(b["rejected"] for b in buckets.values())
+    rejected = sum(b["rejected"] for b in buckets.values())
     return {
         "period": period,
         "range": {"from": start.isoformat(), "to": end.isoformat()},
         "totals": {
             "total": total,
             "passed": passed,
-            "rejected": total - passed,
-            "compliance_rate": round(passed / total * 100, 1) if total else None,
+            "rejected": rejected,
+            "compliance_rate": round((total - rejected) / total * 100, 1) if total else None,
         },
         "buckets": list(buckets.values()),
         "missing_items": _missing_ranking(r for r in rows if not r.is_complete),
