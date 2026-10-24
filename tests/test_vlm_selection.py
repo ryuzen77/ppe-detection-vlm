@@ -353,6 +353,8 @@ def test_endpoint_apply_kode_galat(client):
     assert r.status_code == 400 and r.json()["detail"]["code"] == "unsafe_model"
     r = post({"primary": {"provider": "openai", "model": "model-baru"}})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "needs_confirmation"
+    tested = client.post("/api/config/vlm/test", json={"provider": "openai", "model": "model-baru", "role": "primary"})
+    assert tested.status_code == 200 and tested.json()["json_ok"]
     r = post({"primary": {"provider": "openai", "model": "model-baru"}, "backup": None, "confirm_unvalidated": True})
     assert r.status_code == 200 and r.json()["primary"]["source"] == "dashboard"
     assert runtime_settings.load()[vlm_selection.SETTINGS_KEY]["primary"]["provider"] == "openai"
@@ -367,6 +369,8 @@ def test_endpoint_apply_409_saat_ada_pekerja(client, monkeypatch):
 
 
 def test_endpoint_kembali_ke_env(client):
+    tested = client.post("/api/config/vlm/test", json={"provider": "openai", "model": "m", "role": "primary"})
+    assert tested.status_code == 200 and tested.json()["json_ok"]
     client.post(
         "/api/config/vlm/apply", json={"primary": {"provider": "openai", "model": "m"}, "confirm_unvalidated": True}
     )

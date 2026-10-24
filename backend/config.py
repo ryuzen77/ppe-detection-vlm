@@ -329,6 +329,10 @@ class Config:
     # Laptop median 7,9 / p95 9,2 dtk bersama YOLO (T26). Batas yang sama
     # dipasang pada klien HTTP, sehingga panggilan yang lewat batas benar-benar
     # dibatalkan dan tidak menyandera thread (Gemini sempat menggantung ~60 dtk).
+    # T97: metadata daftar model dan bukti uji admin, bukan panggilan inspeksi.
+    VLM_MODEL_LIST_CACHE_SECONDS: float = float(_env("VLM_MODEL_LIST_CACHE_SECONDS", "300"))
+    VLM_MODEL_LIST_TIMEOUT_SECONDS: float = float(_env("VLM_MODEL_LIST_TIMEOUT_SECONDS", "5"))
+    VLM_TEST_FRESH_SECONDS: float = float(_env("VLM_TEST_FRESH_SECONDS", "600"))
     VLM_CLOUD_TIMEOUT_SECONDS: float = float(_env("VLM_CLOUD_TIMEOUT_SECONDS", "4.0"))
     VLM_LOCAL_TIMEOUT_SECONDS: float = float(_env("VLM_LOCAL_TIMEOUT_SECONDS", "12.0"))
     # Batas pemanasan saat startup (memuat model lokal bisa ~40 dtk pertama kali)

@@ -160,3 +160,21 @@ def security_events():
 def pytest_configure(config):
     config.addinivalue_line("markers", "real_auth: tes memakai pemeriksaan login sungguhan (tanpa admin tiruan)")
     config.addinivalue_line("markers", "stale_model: tes pembersihan model lokal sisa sesi lalu (T71)")
+
+
+@pytest.fixture(autouse=True)
+def isolated_model_metadata(monkeypatch):
+    """Daftar model tidak boleh memakai jaringan pada tes lama; cache & bukti uji terisolasi."""
+    from backend import vlm_selection
+    from backend.vlm_providers import model_list
+
+    cache = model_list.ModelListCache()
+    monkeypatch.setattr(vlm_selection, "model_lists", cache)
+    monkeypatch.setattr(vlm_selection, "recent_tests", vlm_selection.RecentModelTests())
+
+    def unavailable(*args):
+        raise model_list.ModelListError(model_list.UNSUPPORTED)
+
+    monkeypatch.setattr(model_list, "fetch_models", unavailable)
+    yield cache
+    cache.close()

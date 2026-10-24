@@ -578,3 +578,10 @@ VOICE_TEXTS.update(
 )
 
 CSV_STATUS_HELD = "DITAHAN (Akses Belum Diizinkan)"
+
+VLM_SELECT_MODEL_NOT_FOUND = (
+    "Model '{model}' tidak tersedia pada penyedia {provider} untuk peran {role}. Muat ulang daftar model."
+)
+VLM_SELECT_TEST_REQUIRED = (
+    "Jalankan Uji Penyedia hingga berhasil untuk {role} {provider}/{model}, lalu terapkan dalam {seconds:g} detik."
+)

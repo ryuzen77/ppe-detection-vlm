@@ -17,6 +17,34 @@ from .base import VLMProvider
 PRESETS = {name: p.base_url for name, p in profiles.PROFILES.items() if p.api == profiles.API_OPENAI_COMPATIBLE}
 
 
+def ollama_root(base_url: str) -> str:
+    return base_url[:-3] if base_url.endswith("/v1") else base_url
+
+
+def list_models(client, remaining, provider=None) -> set[str]:
+    from .model_list import get_json, ModelListError, UNSUPPORTED, pages
+
+    if provider != "ollama":
+        return pages(client, "models", remaining, _model_page, "after")
+    root = ollama_root(str(client.base_url).rstrip("/"))
+    rows = get_json(client, root + "/api/tags", remaining).get("models")
+    if not isinstance(rows, list):
+        raise ModelListError(UNSUPPORTED)
+    names = [row.get("name") or row.get("model") for row in rows if isinstance(row, dict)]
+    if len(names) != len(rows) or any(not isinstance(name, str) for name in names):
+        raise ModelListError(UNSUPPORTED)
+    return {name for name in names if isinstance(name, str)}
+
+
+def _model_page(data):
+    from .model_list import data_ids, ModelListError, UNSUPPORTED
+
+    names = data_ids(data)
+    if data.get("has_more") and not names:
+        raise ModelListError(UNSUPPORTED)
+    return names, names[-1] if data.get("has_more") else None
+
+
 class OpenAICompatibleProvider(VLMProvider):
     def __init__(
         self,
@@ -90,7 +118,7 @@ class OpenAICompatibleProvider(VLMProvider):
             raise RuntimeError(f"{self.name} HTTP {response.status_code}: {response.text[:300]}")
 
     def _ollama_root(self) -> str:
-        return self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+        return ollama_root(self.base_url)
 
     def gpu_residency(self):
         """Porsi model di VRAM menurut `/api/ps` Ollama; 0 bila model tidak dimuat."""
