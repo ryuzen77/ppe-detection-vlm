@@ -90,6 +90,42 @@ UI (Claude): pengelompokan & urutan, `available:false`, fallback teks bebas, alu
   `backend/api/routes_vlm.py`, `config.py`/`messages.py`/`.env.example` (tambah), `tests/`.
 - **T97b — UI** (Claude): `VlmModelField`, `VlmProviders`, `web/src/lib/vlmSelection.ts` + vitest.
 
+### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
+
+**Tujuan:** memecah `vlm_analyzer.py` (1.222 baris) & `report_manager.py` (1.079) per tanggung jawab, tetap satu
+aplikasi; **perilaku, kontrak API, skema DB, dan nama publik tetap**. **Risiko: Rendah** (perapian), dikerjakan
+hati-hati karena menyentuh audit (salah pindah = baris/foto audit hilang). Lanjutan T42; berhenti bila uji nyata
+(antrean 3/4/4b) bisa jalan.
+
+**Urutan tahap** (satu tahap = commit pindah-saja + `check.py` lolos + ditinjau Claude):
+- **T99a** — `vlm_analyzer` bagian murni: `vlm_result.py` (ItemResult, InspectionResult, `_parse_vlm_payload`,
+  `_is_spoof_rejection`), `vlm_prompt.py` (prompt, konfirmasi, `thinking_option`, `profile_warnings`),
+  `vlm_engine.py` (VLMEngine, LaneBusy, EngineFailed).
+- **T99b** — `report_manager`: `audit_db.py` (koneksi, indeks, migrasi + cadangan sebelum migrasi, SQL apa adanya),
+  `snapshot_store.py`, `audit_queries.py`, `audit_export.py` (CSV), `attendance.py`, `retention.py`.
+  `ReportManager` tetap fasad dengan metode publik sama.
+- **T99c** — `vlm_analyzer` rute/peralihan: pemutus utama jadi kelas murni `PrimaryBreaker` (+tes); `VLMAnalyzer`
+  tetap fasad pemegang lock & rute `_inspect_route`/`_attempt_*`; siklus mesin (apply/test) boleh dipisah.
+- **T99d** — pengelompokan folder setelah batas modul stabil; commit terpisah yang hanya mengubah path impor.
+
+**Aturan:**
+- Hanya fasad yang memegang koneksi SQLite & lock; modul lain = fungsi atas `conn`/mesin, tanpa koneksi/lock sendiri
+  (`synchronous=FULL` & urutan tulis terjaga).
+- Target monkeypatch tes (`backend.vlm_analyzer.create_provider`, `rm.time`, `rm_module.cv2.*`, `rm.os.replace`,
+  `rm_mod.sqlite3.connect`, `vlm_analyzer.primary_*`) dipindah di commit yang sama; **jangan ekspor ulang nama yang
+  di-patch** (patch "berhasil" di namespace lama = tes lolos palsu).
+- Modul murni baru hanya mengimpor `config`/`messages`/`ppe_rules`; `test_import_side_effects` tetap lolos.
+  `tools/bench_vlm.py`, `tools/eval_vlm.py` tetap jalan. Berkas bersama (`config.py`, `messages.py`) tidak disentuh.
+- Sebelum memindah: tes karakterisasi (`test_save_inspection_characterization`, `test_retention_characterization`,
+  `test_state_characterization`, `test_durability`) lolos & jumlahnya dicatat; jalur tanpa tes (mis. migrasi v0→v3)
+  diberi fixture skema lama di tmp pytest — **tidak pernah `data/`**.
+- Jalur panas (§4.1): ukur `analyze_person` & `save_inspection` sebelum/sesudah (1 vs 20 orang; `get_reports`/
+  `get_summary` 100 vs 100.000 baris) — fasad tidak menambah latensi terukur.
+- Perbaikan logika yang ditemukan di jalan → dicatat di papan, dikerjakan terpisah.
+
+**Pembagian:** Codex (backend/, tests/); Claude peninjau tiap tahap. Selama T99 diklaim, task backend lain yang
+menyentuh `report_manager`, `vlm_analyzer`, `state_manager`, `routes_vlm`/`routes_reports` tidak diklaim bersamaan.
+
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
 | # | Risiko | Task | Alasan risiko / isi |
@@ -105,6 +141,7 @@ UI (Claude): pengelompokan & urutan, `available:false`, fallback teks bebas, alu
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 9b | Sedang (rancangan & kontrak **disetujui 24-10**; T98 sudah digabung → **T97a Codex boleh mulai**) | **T97 — daftar model VLM dari penyedia & cegah salah nama model** (lihat "Rancangan T97"; setelah T98) | Pertanyaan pengguna 24-10: kolom Model teks bebas → salah ketik baru ketahuan di gerbang; nama model menentukan model yang dipakai & ditagih penyedia |
 | 9c | Rendah | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
+| 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. Setelah T97b digabung |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
 
