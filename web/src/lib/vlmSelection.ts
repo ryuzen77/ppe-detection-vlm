@@ -179,6 +179,18 @@ export function reconcileModel(models: VlmModelListEntry[], current: string, def
   return pick(current) ?? pick(defaultModel) ?? tested[0]?.model ?? untested[0]?.model ?? current
 }
 
+/**
+ * Daftar milik pilihan sekarang? Selama daftar penyedia baru dimuat, daftar penyedia lama tidak boleh
+ * tampil/dipilih — pasangan penyedia baru + model penyedia lama bisa terkirim (tinjauan Codex T97b).
+ */
+export function listMatches(
+  list: { provider: string; role: VlmRole } | null,
+  provider: string | undefined,
+  role: VlmRole,
+): boolean {
+  return !!list && !!provider && list.provider === provider && list.role === role
+}
+
 /** Alasan daftar gagal (`source: 'catalog'`); `request` = permintaan ke server sendiri yang gagal. */
 export function modelListReason(
   error: VlmModelListError | 'request' | null,

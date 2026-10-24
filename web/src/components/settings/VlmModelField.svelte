@@ -10,6 +10,7 @@
   import { VLM_SETTINGS } from '../../lib/messages'
   import {
     groupModels,
+    listMatches,
     modelListReason,
     modelOptionLabel,
     modelSelectable,
@@ -24,17 +25,20 @@
     model = $bindable(),
     disabled,
     showStats = false,
+    busy = $bindable(false),
   }: {
     role: VlmRole
     provider: VlmProviderEntry | undefined
     model: string
     disabled: boolean
     showStats?: boolean
+    /** Daftar sedang dimuat — induk mengunci Terapkan (pilihan model belum pasti milik penyedia ini) */
+    busy?: boolean
   } = $props()
 
   let list = $state<VlmModelsResponse | null>(null)
-  let requestFailed = $state(false)
-  let loading = $state(false)
+  // Penyedia yang permintaan daftarnya gagal (bukan boolean: galat penyedia lama tidak berlaku untuk yang baru)
+  let failedFor = $state<string | null>(null)
   // Penyedia pertama = setelan tersimpan: modelnya dipertahankan walau tidak ada lagi di akun (admin
   // melihatnya ditandai). Hanya ganti penyedia oleh admin yang memilih ulang model.
   let loadedProvider: string | null = null
@@ -45,21 +49,21 @@
     if (!name) return
     const seq = ++requestSeq
     const providerChanged = loadedProvider !== null && loadedProvider !== name
-    loading = true
+    busy = true
     try {
       const res = await api.listVlmModels(name, role, refresh)
       if (seq !== requestSeq) return // jawaban penyedia lama datang terlambat
       list = res
-      requestFailed = false
+      failedFor = null
       if (res.source === 'provider' && (providerChanged || !model))
         model = reconcileModel(res.models, model, provider?.default_model ?? '')
     } catch {
       if (seq !== requestSeq) return
       list = null
-      requestFailed = true
+      failedFor = name
     } finally {
       if (seq === requestSeq) {
-        loading = false
+        busy = false
         loadedProvider = name
       }
     }
@@ -69,31 +73,35 @@
     if (provider?.name) untrack(() => load(false))
   })
 
-  const fromProvider = $derived(list?.source === 'provider' ? list : null)
+  const shown = $derived(listMatches(list, provider?.name, role) ? list : null)
+  const requestFailed = $derived(!shown && !!provider && failedFor === provider.name)
+  const fromProvider = $derived(shown?.source === 'provider' ? shown : null)
   const groups = $derived(groupModels(fromProvider?.models ?? []))
   const modelGroups = $derived([
     { label: VLM_SETTINGS.modelGroupTested, items: groups.tested },
     { label: VLM_SETTINGS.modelGroupUntested, items: groups.untested },
   ])
   const listWarning = $derived(
-    requestFailed || list?.source === 'catalog'
-      ? VLM_SETTINGS.modelListFailed(modelListReason(list?.error ?? null, VLM_SETTINGS.modelListReasons))
+    requestFailed || shown?.source === 'catalog'
+      ? VLM_SETTINGS.modelListFailed(modelListReason(shown?.error ?? null, VLM_SETTINGS.modelListReasons))
       : '',
   )
-  const entry = $derived(list?.models.find((m) => m.model === model) ?? provider?.models.find((m) => m.model === model))
-  const catalogModels = $derived(list?.models ?? provider?.models ?? [])
+  const entry = $derived(
+    shown?.models.find((m) => m.model === model) ?? provider?.models.find((m) => m.model === model),
+  )
+  const catalogModels = $derived(shown?.models ?? provider?.models ?? [])
 </script>
 
 <label>
   <span class="label-row">
     {VLM_SETTINGS.modelLabel}
-    <button type="button" class="reload" onclick={() => load(true)} disabled={disabled || loading}>
+    <button type="button" class="reload" onclick={() => load(true)} disabled={disabled || busy}>
       <RefreshCw size={12} />
       {VLM_SETTINGS.reloadModelsBtn}
     </button>
   </span>
   {#if fromProvider}
-    <select bind:value={model} {disabled}>
+    <select bind:value={model} disabled={disabled || busy}>
       {#each modelGroups as group (group.label)}
         {#if group.items.length}
           <optgroup label={group.label}>
@@ -108,7 +116,7 @@
       {/each}
     </select>
   {:else}
-    <input type="text" bind:value={model} list="models-{role}" disabled={disabled || (loading && !list)} />
+    <input type="text" bind:value={model} list="models-{role}" disabled={disabled || busy} />
     <datalist id="models-{role}">
       {#each catalogModels as m (m.model)}
         <option value={m.model}></option>
@@ -117,7 +125,7 @@
   {/if}
 </label>
 
-{#if loading && !list && !requestFailed}
+{#if busy && !shown}
   <p class="hint">{VLM_SETTINGS.modelListLoading}</p>
 {:else if listWarning}
   <p class="hint warn">{listWarning}</p>

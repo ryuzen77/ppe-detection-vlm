@@ -15,6 +15,7 @@ import {
   validationOf,
   rolesNeedingTest,
   needsTest,
+  listMatches,
 } from './vlmSelection'
 import type { VlmModelListEntry, VlmValidationStatus } from './api/types'
 
@@ -154,6 +155,15 @@ describe('daftar model dari penyedia (T97)', () => {
     expect(reconcileModel(models, 'old-model', 'bad')).toBe('alpha')
     expect(reconcileModel([entry('u', 'unvalidated')], '', '')).toBe('u')
     expect(reconcileModel([], 'ketikan', 'x')).toBe('ketikan')
+  })
+
+  it('daftar penyedia/peran lain tidak dipakai selama daftar baru dimuat (tinjauan Codex)', () => {
+    const list = { provider: 'gemini', role: 'backup' as const }
+    expect(listMatches(list, 'gemini', 'backup')).toBe(true)
+    expect(listMatches(list, 'ollama', 'backup')).toBe(false)
+    expect(listMatches(list, 'gemini', 'primary')).toBe(false)
+    expect(listMatches(null, 'gemini', 'backup')).toBe(false)
+    expect(listMatches(list, undefined, 'backup')).toBe(false)
   })
 
   it('alasan daftar gagal → teks; tanpa kode = permintaan ke server gagal', () => {

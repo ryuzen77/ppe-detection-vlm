@@ -80,6 +80,15 @@
     no_local_provider: VLM_SETTINGS.noLocalProvider,
   } as const
   const localChosen = $derived(localFallbackChoice(localAvailability, localProvider, localModel) !== null)
+  // Tinjauan Codex T97b: selama daftar model peran yang tampil dimuat, model formulir belum pasti milik
+  // penyedia terpilih → Terapkan dikunci (field tersembunyi tidak dihitung, nilainya bisa tertinggal)
+  let primaryListBusy = $state(false)
+  let backupListBusy = $state(false)
+  let localListBusy = $state(false)
+  const listsBusy = $derived(
+    (!!primaryProvider && primaryListBusy) || (!!backupProvider && backupListBusy) || (localChosen && localListBusy),
+  )
+  const applyLocked = $derived(applying || listsBusy)
   const findProvider = (name: string) => providers.find((p) => p.name === name)
   const dirty = $derived(
     !!data &&
@@ -96,6 +105,7 @@
   }
 
   async function handleApply(confirmUnvalidated = false) {
+    if (listsBusy) return
     applyStatus = change === 'enable_local' ? VLM_SETTINGS.applyingLocalBackup : VLM_SETTINGS.applying
     applying = true
     confirmation = null
@@ -253,6 +263,7 @@
             role="primary"
             provider={providers.find((p) => p.name === primaryProvider)}
             bind:model={primaryModel}
+            bind:busy={primaryListBusy}
             disabled={applying}
             showStats
           />
@@ -295,6 +306,7 @@
             role="backup"
             provider={providers.find((p) => p.name === backupProvider)}
             bind:model={backupModel}
+            bind:busy={backupListBusy}
             disabled={applying}
           />
           <button
@@ -329,6 +341,7 @@
               role="local"
               provider={providers.find((p) => p.name === localProvider)}
               bind:model={localModel}
+              bind:busy={localListBusy}
               disabled={applying}
             />
             <p class="hint">{VLM_SETTINGS.localFallbackHint}</p>
@@ -370,7 +383,7 @@
           <button class="btn btn-secondary" onclick={() => (confirmation = null)} disabled={applying}
             >{VLM_SETTINGS.cancelBtn}</button
           >
-          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applying}
+          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={applyLocked}
             >{VLM_SETTINGS.confirmBtn}</button
           >
         </div>
@@ -387,7 +400,7 @@
             >
           {/each}
           <!-- Admin sudah mengonfirmasi model belum teruji sebelum sampai ke sini -->
-          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={testing !== null || applying}
+          <button class="btn btn-primary" onclick={() => handleApply(true)} disabled={testing !== null || applyLocked}
             >{VLM_SETTINGS.applyBtn}</button
           >
         </div>
@@ -416,7 +429,7 @@
           <button class="btn btn-secondary" onclick={() => (disableConfirmation = false)} disabled={applying}
             >{VLM_SETTINGS.cancelBtn}</button
           >
-          <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applying}
+          <button class="btn btn-primary" onclick={() => handleApply(false)} disabled={applyLocked}
             >{VLM_SETTINGS.confirmBtn}</button
           >
         </div>
@@ -424,7 +437,7 @@
     {/if}
 
     <div class="footer-actions">
-      <button class="btn btn-primary" onclick={requestApply} disabled={applying}>{VLM_SETTINGS.applyBtn}</button>
+      <button class="btn btn-primary" onclick={requestApply} disabled={applyLocked}>{VLM_SETTINGS.applyBtn}</button>
       {#if dirty && !applying && !applyStatus}
         <span class="dirty" role="status">{VLM_SETTINGS.unsavedHint}</span>
       {/if}
