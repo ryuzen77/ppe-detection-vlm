@@ -9,13 +9,11 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **Berikutnya**: **T97b** (Claude, UI) — dropdown model dari `GET /api/config/vlm/models`, galat `model_not_found`/`test_required`,
-  uji `role=local`, tombol "Muat ulang daftar" (kontrak "Rancangan T97" + tambahan 24-10). **T97a sudah digabung**: sampai T97b
-  selesai, UI lama menampilkan galat `test_required` sebagai teks biasa (model belum teruji harus diuji dulu). Sesudahnya: antrean
-  9c (grafik Ditahan), T42 (6 fungsi panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
+- **T97 tuntas 24-10** (T97a backend + T97b UI digabung, belum di-push). **Sedang berjalan:** T99a (Codex). Sesudahnya: T97c
+  (galat daftar model di-cache), antrean 9c (grafik Ditahan), T99b–d, uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
-  berbeda = disengaja; kolom Model VLM akan jadi dropdown dari penyedia (T97).
+  berbeda = disengaja; kolom Model VLM kini dropdown dari penyedia (T97, selesai 24-10).
 - Kebiasaan hemat token: sesi baru per task, laporan Codex cukup commit + status + angka `check.py`.
 
 ## Papan tugas
@@ -26,70 +24,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T97b — UI dropdown model VLM dari penyedia | Claude | `claude/t97b-model-dropdown` | tinjau | `web/src/components/settings/VlmModelField.svelte`, `VlmProviders.svelte`, `web/src/lib/vlmSelection.ts` (+test), `web/src/lib/api/{client,types}.ts`, `web/src/lib/messages.ts` (tambah) | Dropdown per peran (grup "Sudah diuji" / "Tersedia, belum diuji"; `available:false` ditandai & nonaktif), "Muat ulang daftar" (`refresh=true`), `source=catalog`/galat → teks bebas + alasan, uji lokal darurat kirim `role=local`, `test_required` → kotak tombol uji per peran + Terapkan. `check.py` lolos (pytest 1.132, vitest 257). Diuji di app (server + Vite): daftar Gemini 46 model & Ollama, ganti penyedia, alur konfirmasi → `test_required`, simulasi `auth_failed`/500/`available:false`. Belum: Uji Penyedia sungguhan → Terapkan (kuota). Label peran Indonesia: diperbaiki Codex (`a4954b0`, digabung). **Tinjauan Codex (Sedang) ditutup:** daftar hanya tampil bila `provider`+`role` cocok (`listMatches`), Terapkan & konfirmasi dikunci selama daftar peran yang tampil dimuat; diuji di app dengan jawaban Ollama ditunda 4 dtk (isian & Terapkan terkunci, klik Terapkan tidak mengirim apply, terbuka lagi setelah daftar tiba). **Tinjauan Codex ke-2 (Sedang) ditutup:** permintaan instans yang dilepas dibatalkan (`onDestroy` → `requestSeq++`); diuji di app: cadangan A dimuat ulang → "tanpa cadangan" → cadangan B, jawaban A tiba duluan (5,5 dtk) → Terapkan tetap terkunci sampai B (12,2 dtk). **Temuan untuk Codex (backend):** `ModelListCache` menyimpan galat (`timeout`) selama `VLM_MODEL_LIST_CACHE_SECONDS` (300 dtk) → satu jawaban Gemini lambat (refresh Gemini > 5 dtk saat uji 24-10) membuat dropdown jadi teks bebas 5 menit; usul TTL galat pendek / galat tidak di-cache. Tes komponen belum: repo tanpa testing-library/jsdom (dependensi baru = task sendiri) — logika di vitest. `check.py` lolos (pytest 1.138, vitest 258) |
 | T99a — pisahkan hasil & prompt VLM murni dari `vlm_analyzer` | Codex | `codex/t99a-vlm-pure` | dikerjakan | `backend/vlm_analyzer.py`, `backend/vlm_result.py` (baru), `backend/vlm_prompt.py` (baru), `tests/` (target patch & impor), `tests/test_code_hygiene.py` bila perlu | Pindah-saja; rute, lock, mesin, DB, folder = tahap berikutnya. Klaim dicatat Claude 24-10 atas persetujuan pengguna |
-
-### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, **disetujui pengguna 24-10**; dikerjakan setelah T98)
-
-**Masalah** (pertanyaan pengguna 24-10): kolom Model di Pengaturan = teks bebas + saran (`datalist`) yang hanya berisi model
-dengan catatan uji (`VALIDATIONS`; Gemini baru `gemini-3.5-flash-lite`). Admin bisa salah ketik nama model → server hanya
-meminta konfirmasi "belum tervalidasi" → setiap pemeriksaan gagal ke cadangan / pekerja menunggu; baru ketahuan di gerbang.
-Juga: nama model di aplikasi **menentukan model yang dipakai & ditagih penyedia** (API key hanya menentukan akun/akses).
-**Risiko: Sedang** (salah konfigurasi baru terdeteksi saat pemeriksaan).
-
-**Prasyarat: T98** (key per peran) — daftar model & uji harus memakai key milik **peran** itu (utama/cadangan/lokal darurat),
-bukan key per penyedia: utama & cadangan boleh penyedia sama dengan akun/key berbeda (keputusan pengguna 24-10).
-
-#### 1. Tiga lapis
-1. **Daftar dari penyedia**: backend meminta daftar model yang tersedia untuk key peran itu — Gemini `models.list`
-   (hanya yang mendukung `generateContent`), OpenAI-compatible (OpenAI/OpenRouter/Qwen/DeepSeek/Kimi/vLLM/server lain)
-   `GET /v1/models`, Claude `GET /v1/models`, Ollama `GET /api/tags`. Tidak memanggil model → tidak memakai kuota
-   pemeriksaan. Cache per (penyedia, peran) `VLM_MODEL_LIST_CACHE_SECONDS` (usul 300); batas waktu
-   `VLM_MODEL_LIST_TIMEOUT_SECONDS` (usul 5). Key tidak pernah masuk jawaban/log.
-2. **Server menolak model yang tidak ada**: `POST /api/config/vlm/apply` — bila daftar penyedia berhasil diambil dan model
-   tidak ada di daftar → 400 `model_not_found`. Bila daftar gagal diambil → tidak ditolak (lapis 3 tetap berlaku).
-3. **Model belum teruji wajib lolos Uji Penyedia dulu**: untuk status `unvalidated`/`outdated`, Terapkan butuh
-   `confirm_unvalidated` **dan** uji penyedia yang berhasil untuk (peran, penyedia, model) itu dalam
-   `VLM_TEST_FRESH_SECONDS` (usul 600) terakhir → selain itu 400 `test_required`. Model `unsafe` tetap selalu ditolak;
-   model `validated`/`partial` tidak perlu uji.
-
-#### 2. Kontrak (disetujui dulu sebelum dikerjakan)
-**`GET /api/config/vlm/models?role=primary|backup|local&provider=<name>`** (admin):
-```json
-{"provider": "gemini", "role": "backup", "source": "provider", "fetched_at": "2026-10-24T17:20:00",
- "error": null,
- "models": [{"model": "gemini-3.5-flash-lite", "validated": "partial", "photos": 10, "missed": 0,
-             "false_rejects": 0, "median_seconds": 2.35, "available": true}]}
-```
-- `source`: `provider` (daftar asli) | `catalog` (gagal → hanya model katalog). `error` saat `catalog`:
-  `no_key` | `unreachable` | `timeout` | `unsupported` | `auth_failed` (401/403 — key salah/dicabut).
-- Item = `VlmModelEntry` yang sudah ada + `available` (`true` ada di penyedia; `false` model katalog yang **tidak** ada
-  di penyedia, mis. sudah dihentikan; `null` saat `source=catalog`). Urutan: teruji dulu, lalu sisanya A–Z.
-**`POST /api/config/vlm/test`**: tidak berubah bentuk; hasil berhasil dicatat untuk lapis 3 (memori proses, bukan disk).
-**`POST /api/config/vlm/apply`**: galat baru `{"detail": {"code": "model_not_found" | "test_required", "message"}}`.
-**Tambahan disetujui 24-10 (usul Codex, disetujui Claude; additive, bentuk jawaban tetap):**
-- `GET /api/config/vlm/models?...&refresh=true` → lewati cache (tombol "Muat ulang daftar").
-- `POST /api/config/vlm/test` menerima `role: "local"` (VLM lokal darurat) → uji dicatat untuk peran darurat, terpisah dari
-  `backup`; UI T97b mengirim `local` (sebelumnya uji lokal darurat terkirim sebagai `backup`).
-
-#### 3. UI (Pengaturan → VLM)
-- Kolom Model per peran = **dropdown** dari endpoint di atas: grup "Sudah diuji" (lencana Teruji/Sebagian) lalu
-  "Tersedia, belum diuji"; model katalog `available:false` ditandai "tidak tersedia di akun ini" & nonaktif.
-- Ganti penyedia → daftar dimuat ulang; model = bawaan penyedia bila ada di daftar (lanjutan T95 #13).
-- `source=catalog` → kembali ke teks bebas + peringatan "Daftar model tidak bisa diambil (<alasan>)".
-- Model belum diuji dipilih → petunjuk "Uji Penyedia dulu"; Terapkan menampilkan galat `test_required` dengan tombol uji.
-- Tombol kecil "Muat ulang daftar" (melewati cache).
-
-#### 4. Tes wajib
-Backend (Codex): tiap adapter mengurai daftar (tiruan HTTP, termasuk filter `generateContent` Gemini); cache & batas
-waktu; key peran yang dipakai (utama ≠ cadangan pada penyedia sama); `model_not_found`; `test_required` (uji kedaluwarsa,
-uji peran lain tidak berlaku); daftar gagal → apply tetap jalan dengan lapis 3; key tidak muncul di jawaban/log.
-UI (Claude): pengelompokan & urutan, `available:false`, fallback teks bebas, alur uji-dulu, galat `test_required`.
-
-#### 5. Pembagian
-- **T97a — backend** (Codex): `backend/vlm_providers/*` (fungsi `list_models` per adapter), `backend/vlm_selection.py`,
-  `backend/api/routes_vlm.py`, `config.py`/`messages.py`/`.env.example` (tambah), `tests/`.
-- **T97b — UI** (Claude): `VlmModelField`, `VlmProviders`, `web/src/lib/vlmSelection.ts` + vitest.
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
@@ -142,7 +77,7 @@ menyentuh `report_manager`, `vlm_analyzer`, `state_manager`, `routes_vlm`/`route
 | 7g | **Tinggi** (setelan sudah dibangun 24-10 — T83a/b, bawaan MATI; rancangan di arsip "Rancangan T83") | **T83 — syarat sebelum "Wajib terdaftar" dipakai sungguhan** | (1) ukur tingkat pengenalan pekerja terdaftar: tiap pekerja ±10× lewat memakai helm, target ≥ 95% (laporan kehadiran); (2) persetujuan HR/Legal & DPIA diperbarui (FR jadi penentu akses, bersama T81); (3) uji gerbang: panel kuning ditahan + suara, ulang FR "Mohon tatap kamera", FR mati → semua ditahan + chip, amati kedipan track (VLM ulang/audit ganda saat setelan aktif) |
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
-| 9b | Sedang (rancangan & kontrak **disetujui 24-10**; T98 sudah digabung → **T97a Codex boleh mulai**) | **T97 — daftar model VLM dari penyedia & cegah salah nama model** (lihat "Rancangan T97"; setelah T98) | Pertanyaan pengguna 24-10: kolom Model teks bebas → salah ketik baru ketahuan di gerbang; nama model menentukan model yang dipakai & ditagih penyedia |
+| 9b | Rendah | **T97c — galat daftar model VLM jangan di-cache lama** (temuan uji T97b 24-10, Codex) | `ModelListCache` menyimpan galat (`timeout`) selama `VLM_MODEL_LIST_CACHE_SECONDS` (300 dtk): satu jawaban Gemini lambat (refresh > 5 dtk) → dropdown jadi teks bebas 5 menit. Aman (Terapkan tetap wajib uji), tapi mengganggu admin. Usul: TTL galat pendek (config) atau galat tidak di-cache; tes cache |
 | 9c | Rendah | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
 | 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. **T99a diklaim Codex 24-10** (tidak beririsan dengan T97b/UI); tahap berikut setelah tinjauan Claude |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
