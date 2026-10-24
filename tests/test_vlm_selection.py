@@ -132,10 +132,10 @@ def test_key_env_tercatat_untuk_semua_penyedia_cloud_bernama():
 
 
 def test_key_satu_penyedia_tidak_dipakai_penyedia_lain(env):
-    assert vlm_selection.api_key_for("gemini") == "kunci-gemini"
-    assert vlm_selection.api_key_for("openai") == "kunci-openai"
-    assert vlm_selection.api_key_for("deepseek") == "", "VLM_API_KEY milik gemini tidak boleh bocor"
-    assert vlm_selection.api_key_for("ollama") == ""
+    assert vlm_selection.api_key_for("gemini", ROLE_PRIMARY) == "kunci-gemini"
+    assert vlm_selection.api_key_for("openai", ROLE_PRIMARY) == "kunci-openai"
+    assert vlm_selection.api_key_for("deepseek", ROLE_PRIMARY) == "", "VLM_API_KEY milik gemini tidak boleh bocor"
+    assert vlm_selection.api_key_for("ollama", ROLE_PRIMARY) == ""
 
 
 def test_katalog_tanpa_key_dan_menandai_penyedia_siap(env):

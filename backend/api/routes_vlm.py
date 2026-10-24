@@ -79,7 +79,7 @@ def test_vlm_provider(body: TestBody):
     if choice is None:  # penyedia kosong / "none": tidak ada yang bisa diuji (dulu HTTP 500, T65)
         raise _error(400, "unknown_provider", messages.VLM_SELECT_UNKNOWN_PROVIDER.format(provider=body.provider))
     try:
-        vlm_selection.check_choice(choice, confirm_unvalidated=True)
+        vlm_selection.check_choice(choice, confirm_unvalidated=True, role=ROLES[body.role])
     except SelectionError as e:
         raise _error(400, e.code, e.message)
     return vlm_analyzer.test_choice(ROLES[body.role], choice)

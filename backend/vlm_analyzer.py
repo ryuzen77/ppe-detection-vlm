@@ -19,12 +19,9 @@ from . import vlm_selection
 from . import vlm_image
 from .vlm_providers import profiles as vlm_profiles
 from .vlm_providers import create_provider
-from .vlm_selection import Choice, Selection
+from .vlm_selection import Choice, Selection, ROLE_PRIMARY, ROLE_BACKUP
 
 logger = logging.getLogger(__name__)
-
-ROLE_PRIMARY = "utama"
-ROLE_BACKUP = "cadangan"
 
 
 class ItemResult(BaseModel):
@@ -258,7 +255,7 @@ class VLMEngine:
                 )
                 self.error = ""
             except Exception as e:
-                self.error = str(e)
+                self.error = vlm_selection.redact(str(e), self.api_key)
         if self.provider is None:
             logger.warning(f"VLM {self.role} ({self.provider_name}) nonaktif: {self.error}")
         else:
@@ -290,8 +287,8 @@ class VLMEngine:
         return (
             self.provider is not None
             and (self.provider_name, self.model_name) == (choice.provider, choice.model)
-            and self.api_key == vlm_selection.api_key_for(choice.provider)
-            and self.base_url == vlm_selection.base_url_for(choice.provider)
+            and self.api_key == vlm_selection.api_key_for(choice.provider, self.role)
+            and self.base_url == vlm_selection.base_url_for(choice.provider, self.role)
         )
 
     def choice(self) -> Choice:
@@ -334,7 +331,7 @@ class VLMEngine:
             # Tidak fatal: server tetap menyala; VLM ini dicoba lagi pada pekerja
             # pertama dan, bila gagal, inspeksi dialihkan ke VLM lain (T27).
             logger.warning(
-                f"Pemanasan VLM {self.role} {self.provider_name} gagal ({str(e)[:160]}). "
+                f"Pemanasan VLM {self.role} {self.provider_name} gagal ({self.warm_error}). "
                 f"Server tetap berjalan; VLM ini dicoba lagi saat inspeksi."
             )
             return None
@@ -494,8 +491,8 @@ class VLMAnalyzer:
             role,
             choice.provider,
             choice.model,
-            vlm_selection.api_key_for(choice.provider),
-            vlm_selection.base_url_for(choice.provider),
+            vlm_selection.api_key_for(choice.provider, role),
+            vlm_selection.base_url_for(choice.provider, role),
         )
         engine.build()
         return engine
@@ -925,7 +922,7 @@ class VLMAnalyzer:
             raise
         except Exception as e:
             engine.last_call_ok = False
-            api_monitor.record_failure(engine.role, str(e))
+            api_monitor.record_failure(engine.role, vlm_selection.redact(str(e), engine.api_key))
             raise
         engine.last_call_ok = True
         api_monitor.record_success(engine.role, round((time.time() - call_start) * 1000, 1))
@@ -980,7 +977,10 @@ class VLMAnalyzer:
         except Exception as e:
             logger.warning(
                 messages.LOG_VLM_CONFIRM_FAILED.format(
-                    item=item.key, who=engine.who, error=str(e)[:80] or type(e).__name__
+                    item=item.key,
+                    who=engine.who,
+                    error=vlm_selection.redact(str(e), engine.api_key)[: cfg.ERROR_MESSAGE_MAX_CHARS]
+                    or type(e).__name__,
                 )
             )
             raise
@@ -1003,7 +1003,7 @@ class VLMAnalyzer:
     def _describe(e: Exception, engine: VLMEngine) -> str:
         if isinstance(e, TimeoutError):
             return f"timeout > {engine.timeout:g} dtk"
-        return f"galat: {str(e)[:80]}"
+        return f"galat: {vlm_selection.redact(str(e), engine.api_key)[: cfg.ERROR_MESSAGE_MAX_CHARS]}"
 
     def analyze_person(self, person_crop_bgr: np.ndarray, keypoints: Optional[list] = None) -> InspectionResult:
         """Keputusan APD untuk satu crop pekerja (lihat docstring kelas)."""

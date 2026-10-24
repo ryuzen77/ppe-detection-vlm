@@ -21,6 +21,7 @@ from . import messages, runtime_settings, security_log
 from .config import cfg, provider_api_key
 from .vlm_providers import profiles
 from .internet_monitor import DISCONNECTED, SLOW
+from .api_monitor import ROLE_EMERGENCY
 
 logger = logging.getLogger(__name__)
 LOCAL_FALLBACK_SOURCE_PREFIX = "VLM_DARURAT:"
@@ -29,6 +30,8 @@ SETTINGS_KEY = "vlm_selection"
 SOURCE_ENV = "env"
 SOURCE_DASHBOARD = "dashboard"
 NO_BACKUP = "none"
+ROLE_PRIMARY = "utama"
+ROLE_BACKUP = "cadangan"
 
 # Status validasi yang boleh dipakai hanya dengan konfirmasi admin
 NEEDS_CONFIRMATION = (profiles.UNVALIDATED, profiles.OUTDATED)
@@ -80,43 +83,49 @@ class SelectionError(Exception):
 # --- Key & alamat: hanya dari .env ---
 
 
-def api_key_for(provider: str) -> str:
-    """Key untuk penyedia ini. VLM_API_KEY / VLM_BACKUP_API_KEY hanya berlaku untuk
-    penyedia yang dipilih `.env` pada peran itu, supaya tidak bocor ke penyedia lain."""
-    if provider == cfg.VLM_PROVIDER and cfg.VLM_API_KEY:
-        return cfg.VLM_API_KEY
-    if provider == cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_API_KEY:
-        return cfg.VLM_BACKUP_API_KEY
-    return provider_api_key(provider)
-
-
-def base_url_for(provider: str) -> str:
-    """Alamat dari .env bila penyedia itu dipilih .env; kosong = alamat bawaan profil."""
-    if provider == cfg.VLM_PROVIDER and cfg.VLM_BASE_URL:
-        return cfg.VLM_BASE_URL
-    if provider == cfg.VLM_BACKUP_PROVIDER and cfg.VLM_BACKUP_BASE_URL:
-        return cfg.VLM_BACKUP_BASE_URL
+def _role_value(provider: str, role: str, primary_value: str, backup_value: str) -> str:
+    # Rambu T28: override peran hanya milik penyedia yang ditetapkan .env untuk peran itu.
+    if role == ROLE_PRIMARY and provider == cfg.VLM_PROVIDER:
+        return primary_value
+    if role == ROLE_BACKUP and provider == cfg.VLM_BACKUP_PROVIDER:
+        return backup_value
     return ""
+
+
+def api_key_for(provider: str, role: str) -> str:
+    """Override peran dahulu, lalu key milik penyedia; darurat lokal selalu tanpa key."""
+    if role == ROLE_EMERGENCY:
+        return ""
+    return _role_value(provider, role, cfg.VLM_API_KEY, cfg.VLM_BACKUP_API_KEY) or provider_api_key(provider)
+
+
+def base_url_for(provider: str, role: str) -> str:
+    """Override alamat peran; kosong berarti memakai alamat bawaan profil penyedia."""
+    return _role_value(provider, role, cfg.VLM_BASE_URL, cfg.VLM_BACKUP_BASE_URL)
 
 
 MISSING_KEY = "key"
 MISSING_BASE_URL = "base_url"
 
 
-def missing_setting(profile: profiles.ProviderProfile) -> Optional[str]:
+def missing_setting(profile: profiles.ProviderProfile, role: Optional[str] = None) -> Optional[str]:
     """Isian .env yang masih kurang (key lebih dulu), None bila siap. UI perlu
-    membedakannya: vLLM lokal tidak butuh key, hanya alamat."""
-    if not profile.is_local and not api_key_for(profile.name):
+    membedakannya: vLLM lokal tidak butuh key, hanya alamat. Tanpa role = katalog bersama:
+    siap jika salah satu peran dapat dipakai; validasi pilihan selalu mengirim role."""
+    if role is None:
+        missing = [missing_setting(profile, candidate) for candidate in (ROLE_PRIMARY, ROLE_BACKUP)]
+        return None if None in missing else missing[0]
+    if not profile.is_local and not api_key_for(profile.name, role):
         return MISSING_KEY
-    if profile.api != profiles.API_GEMINI and not (profile.base_url or base_url_for(profile.name)):
+    if profile.api != profiles.API_GEMINI and not (profile.base_url or base_url_for(profile.name, role)):
         return MISSING_BASE_URL
     return None
 
 
-def is_ready(provider: str) -> bool:
+def is_ready(provider: str, role: Optional[str] = None) -> bool:
     """Penyedia bisa dipakai tanpa menyentuh .env: key ada (atau lokal) & alamat diketahui."""
     profile = profiles.get_profile(provider)
-    return profile is not None and missing_setting(profile) is None
+    return profile is not None and missing_setting(profile, role) is None
 
 
 REDACTED = "***"
@@ -178,14 +187,14 @@ def validation_of(choice: Choice) -> tuple[str, Optional[profiles.ModelValidatio
     return status, profiles.find_validation(choice.provider, choice.model)
 
 
-def check_choice(choice: Choice, confirm_unvalidated: bool):
+def check_choice(choice: Choice, confirm_unvalidated: bool, role: str = ROLE_PRIMARY):
     """Melempar SelectionError bila pilihan tidak boleh dipakai di gerbang."""
     profile = profiles.get_profile(choice.provider)
     if profile is None:
         raise SelectionError("unknown_provider", messages.VLM_SELECT_UNKNOWN_PROVIDER.format(provider=choice.provider))
     if not choice.model:
         raise SelectionError("missing_model", messages.VLM_SELECT_MISSING_MODEL.format(provider=choice.provider))
-    missing = missing_setting(profile)
+    missing = missing_setting(profile, role)
     if missing == MISSING_KEY:
         raise SelectionError(
             "missing_key",
@@ -248,8 +257,13 @@ def check_local_fallback(backup: Optional[Choice], fallback: Optional[Choice]):
 
 def check_selection(selection: Selection, confirm_unvalidated: bool):
     check_local_fallback(selection.backup, selection.local_fallback)
-    for choice in filter(None, (selection.primary, selection.backup, selection.local_fallback)):
-        check_choice(choice, confirm_unvalidated)
+    for role, choice in (
+        (ROLE_PRIMARY, selection.primary),
+        (ROLE_BACKUP, selection.backup),
+        (ROLE_EMERGENCY, selection.local_fallback),
+    ):
+        if choice is not None:
+            check_choice(choice, confirm_unvalidated, role)
 
 
 def stored_selection() -> Optional[Selection]:
