@@ -8,7 +8,7 @@ import time
 import numpy as np
 import pytest
 
-from backend import report_manager as rm_module
+from backend import snapshot_store
 from backend import uptime
 from backend.report_manager import SNAPSHOT_TMP_SUFFIX, ReportManager
 
@@ -57,8 +57,8 @@ def test_foto_bukti_tertulis_utuh_tanpa_berkas_sementara(mgr):
 
 def test_foto_gagal_ditulis_audit_tidak_merujuk_foto(mgr, monkeypatch):
     # Dulu hasil cv2.imwrite tidak diperiksa: audit menyimpan nama foto yang tak ada
-    monkeypatch.setattr(rm_module.cv2, "imencode", lambda *a, **k: (False, None))
-    monkeypatch.setattr(rm_module.cv2, "imwrite", lambda *a, **k: False)  # cara lama
+    monkeypatch.setattr(snapshot_store.cv2, "imencode", lambda *a, **k: (False, None))
+    monkeypatch.setattr(snapshot_store.cv2, "imwrite", lambda *a, **k: False)  # cara lama
     meta = _save(mgr, np.full((64, 32, 3), 128, np.uint8))
     assert meta["snapshot_filename"] == ""
     assert not list(mgr.snapshots_dir.iterdir())

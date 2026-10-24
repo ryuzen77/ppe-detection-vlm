@@ -33,12 +33,13 @@ KB_AS_GB = 1 / (1024 * 1024)
 
 def _scenario(seed, root, monkeypatch, logs):
     import backend.report_manager as rm
+    from backend import retention
     from backend.config import cfg
 
     rng = np.random.default_rng(seed)
     clock = types.SimpleNamespace(**{k: getattr(time, k) for k in dir(time) if not k.startswith("_")})
     clock.time = lambda: NOW
-    monkeypatch.setattr(rm, "time", clock)
+    monkeypatch.setattr(retention, "time", clock)
     monkeypatch.setattr(cfg, "RETENTION_PHOTO_DAYS", int(rng.choice([0, 1, 3])))
     monkeypatch.setattr(cfg, "RETENTION_AUDIT_DAYS", int(rng.choice([0, 2, 5, 7])))
     monkeypatch.setattr(cfg, "RETENTION_MAX_PHOTO_GB", float(rng.choice([0, 150, 400, 1000])) * KB_AS_GB)

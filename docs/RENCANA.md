@@ -24,7 +24,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99b — pecah `report_manager` per tanggung jawab (fasad tetap) | Codex | `codex/t99b-report-split` | dikerjakan | `backend/report_manager.py`, `backend/audit_db.py`, `backend/snapshot_store.py`, `backend/audit_queries.py`, `backend/audit_export.py`, `backend/attendance.py`, `backend/retention.py` (baru), `tests/` (target patch & impor, fixture skema lama di tmp) | Pindah-saja sesuai "Rancangan T99": `ReportManager` pegang buka/tutup koneksi, transaksi & lock; modul lain menerima `conn`. Awali: ukur ulang baseline `save_inspection` (T99a: 6,9 → 8,2 ms, 1 orang) + catat jumlah tes karakterisasi. Target patch `rm.time`, `rm_module.cv2.*`, `rm.os.replace`, `rm_mod.sqlite3.connect` dipindah di commit yang sama. Tidak pernah memakai `data/`. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T99b — pecah `report_manager` per tanggung jawab (fasad tetap) | Codex | `codex/t99b-report-split` | tinjau | `backend/report_manager.py`, `backend/audit_db.py`, `backend/snapshot_store.py`, `backend/audit_queries.py`, `backend/audit_export.py`, `backend/attendance.py`, `backend/retention.py` (baru), `tests/` (target patch & impor, fixture skema lama di tmp) | Enam modul, fasad tetap memegang transaksi, koneksi & lock; patch tes pindah ke namespace pemiliknya. Acuan 135 + 6 fixture migrasi lolos sebelum/sesudah; 10 kasus baru lain menjaga koneksi pinjaman dan urutan commit/foto. `check.py` lolos 1.161 pytest + 258 vitest, tanpa tambahan utang hygiene. Bukti: 43 literal SQL, 27 badan fungsi ternormalisasi, 73 perintah SQLite aktual & 13 hasil publik identik. Baseline tiga putaran dan uji simpan berselang-seling dicatat di bawah. Cara uji: `python -m pytest -q tests/test_audit_schema_characterization.py tests/test_audit_split.py tests/test_save_inspection_characterization.py tests/test_retention_characterization.py tests/test_report_manager.py tests/test_attendance.py tests/test_durability.py`; lalu `python scripts/check.py`. Pola penutupan koneksi lama dicatat untuk task terpisah, tidak diubah di sini. Tidak memakai `data/` |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
@@ -82,6 +82,41 @@ Pengukuran `perf_counter`, median sebelum → sesudah, VLM tiruan tanpa jaringan
 
 Inspeksi tidak menunjukkan tambahan latensi pada pengukuran ini; simpan audit berfluktuasi pada I/O disk
 (kode audit tidak disentuh pada T99a). Angka tiruan ini tidak mengukur latensi penyedia VLM/perangkat nyata.
+
+**Catatan T99b (25-10):** pemisahan ke `audit_db`, `snapshot_store`, `audit_queries`, `audit_export`, `attendance`,
+dan `retention`. Pabrik koneksi SQLite ada di `audit_db`; hanya fasad yang memanggilnya serta memegang umur
+koneksi, lock, BEGIN/COMMIT/ROLLBACK, commit sebelum penghapusan foto, dan penutupan koneksi ekspor dibatalkan.
+Metode publik dan konstanta publik lama tetap; delegasi privat yang tidak dipakai tidak dipertahankan.
+Target patch dipindahkan: jam simpan → `audit_db.time`; jam retensi → `retention.time`; OpenCV/replace/logger
+foto → `snapshot_store`; pabrik SQLite → `audit_db.sqlite3`; SQL kehadiran → `attendance`.
+
+Acuan sebelum pemindahan: 135 tes audit/karakterisasi lolos, ditambah 6 tes fixture v1/v2/v3 dan rollback yang
+juga lolos pada kode lama (fixture v0 sudah tersedia). Sesudah pemindahan: 141 tes acuan lolos; 78 tes batas,
+identitas, migrasi, impor, dan code hygiene lolos. Sepuluh kasus baru lain menjaga koneksi pinjaman, commit
+sebelum menghapus foto (audit/foto/kuota), dan absennya namespace patch lama dari fasad. Nilai 43 literal SQL
+identik; 27 badan fungsi cocok secara AST setelah normalisasi mekanis `self`/koneksi pinjaman. Uji diferensial
+kode `c5b52e8` versus hasil pemindahan: 73 perintah SQLite aktual dan 13 hasil publik identik, termasuk CSV
+dan retensi. Tidak ada perubahan skema, pragma synchronous=FULL, SQL, konfigurasi bersama, atau data produksi.
+
+Pengukuran `perf_counter` di DB sementara tanpa foto: tiga putaran, pemanasan 10 simpan, median 15 sampel
+untuk simpan (1/20 orang berurutan) dan 9 sampel untuk kueri (seluruh baris pada satu hari). Angka berikut
+adalah median dari tiga putaran, sebelum → sesudah:
+
+| Jalur | Beban | Sebelum (ms) | Sesudah (ms) |
+| :-- | :-- | --: | --: |
+| `save_inspection` | 1 / 20 orang | 7,427 / 165,796 | 8,478 / 167,348 |
+| `get_reports` | 100 / 100.000 baris | 1,132 / 63,455 | 1,109 / 61,141 |
+| `get_summary` | 100 / 100.000 baris | 0,841 / 602,986 | 0,837 / 593,052 |
+
+Simpan satu orang masih berfluktuasi: sebelum 6,803/7,427/8,182 ms, sesudah 9,811/8,478/7,747 ms. Karena itu
+ditambah pengukuran lama/baru berselang-seling di proses yang sama (3 putaran × 15 sampel, 15 simpan pemanasan).
+Median pasangan sebelum → sesudah: 1 orang 7,293 → 7,249 ms; 20 orang 149,591 → 148,952 ms. Tidak terlihat
+perlambatan konsisten akibat fasad pada uji ini; angka disk sesaat bukan batas latensi produksi.
+
+Catatan untuk task terpisah: pola lama `with self._get_connection() as conn` pada beberapa metode hanya
+mengakhiri transaksi, bukan menutup koneksi secara eksplisit; pola tersebut dipertahankan pada T99b agar
+pemindahan tidak merangkap perubahan siklus koneksi. Ekspor dan kehadiran tetap memiliki penutupan eksplisit
+seperti sebelumnya. Penyeragaman penutupan koneksi perlu dinilai dan diuji tersendiri.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 

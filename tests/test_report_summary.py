@@ -222,18 +222,18 @@ def test_ekspor_tetap_utuh_walau_tiap_potongan_dari_thread_berbeda(mgr, monkeypa
 
 def test_unduhan_dibatalkan_koneksi_ekspor_ditutup(mgr, monkeypatch):
     from backend.config import cfg
-    from backend import report_manager as rm_mod
+    from backend import audit_db
 
     monkeypatch.setattr(cfg, "CSV_EXPORT_BATCH_ROWS", 1)
     opened = []
-    real_connect = rm_mod.sqlite3.connect
+    real_connect = audit_db.sqlite3.connect
 
     def spy(*args, **kwargs):
         conn = real_connect(*args, **kwargs)
         opened.append(conn)
         return conn
 
-    monkeypatch.setattr(rm_mod.sqlite3, "connect", spy)
+    monkeypatch.setattr(audit_db.sqlite3, "connect", spy)
     gen = mgr.iter_csv_chunks()
     next(gen)  # header
     next(gen)  # potongan pertama, lalu klien memutus

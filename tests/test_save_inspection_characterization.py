@@ -64,19 +64,23 @@ class _Logs(logging.Handler):
 
 def run_calls(root, monkeypatch):
     import backend.report_manager as rm
+    from backend import audit_db, snapshot_store
 
     logs = []
-    handler, level = _Logs(logs), rm.logger.level
-    rm.logger.addHandler(handler)
-    rm.logger.setLevel(logging.INFO)  # setLevel, bukan atribut: cache isEnabledFor ikut dibersihkan
+    handler = _Logs(logs)
+    loggers = (rm.logger, snapshot_store.logger)
+    levels = [logger.level for logger in loggers]
+    for logger in loggers:
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)  # setLevel, bukan atribut: cache isEnabledFor ikut dibersihkan
 
     clock_now = [START]
     clock = types.SimpleNamespace(**{k: getattr(time, k) for k in dir(time) if not k.startswith("_")})
     # gmtime: acuan sama di zona waktu mana pun
     clock.localtime = lambda t=None: time.gmtime(clock_now[0] if t is None else t)
     clock.time = lambda: clock_now[0]
-    monkeypatch.setattr(rm, "time", clock)
-    real_replace = rm.os.replace
+    monkeypatch.setattr(audit_db, "time", clock)
+    real_replace = snapshot_store.os.replace
     fail = [False]
 
     def replace(src, dst):
@@ -84,7 +88,7 @@ def run_calls(root, monkeypatch):
             raise OSError("disk penuh tiruan")
         real_replace(src, dst)
 
-    monkeypatch.setattr(rm.os, "replace", replace)
+    monkeypatch.setattr(snapshot_store.os, "replace", replace)
     snapshots = root / "snapshots"
     mgr = rm.ReportManager(root / "audit.db", snapshots)
     mgr.open()
@@ -120,8 +124,9 @@ def run_calls(root, monkeypatch):
         conn.close()
     finally:
         mgr._opened = False
-        rm.logger.removeHandler(handler)
-        rm.logger.setLevel(level)
+        for logger, level in zip(loggers, levels):
+            logger.removeHandler(handler)
+            logger.setLevel(level)
     files = sorted(p.name for p in snapshots.iterdir())
     out.append(["baris", rows])
     out.append(["berkas", files])
