@@ -6,7 +6,7 @@
 import pytest
 
 from backend import ppe_rules
-from backend.vlm_analyzer import VLMAnalyzer
+from backend.vlm_result import _parse_vlm_payload
 
 
 def missing_label(key):
@@ -63,14 +63,14 @@ def test_kelengkapan_dihitung_sistem_bukan_diambil_dari_model(catalog_defaults):
     data = _balasan_lengkap()
     data["items"]["rompi"]["is_valid_color"] = False
     data["is_complete"] = True  # Klaim model diabaikan
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [missing_label("rompi")]
 
 
 def test_penolakan_anti_spoofing_dari_model_dipertahankan(catalog_defaults):
     data = _balasan_lengkap(missing_items=[ppe_rules.SPOOF_MISSING_LABEL])
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert ppe_rules.SPOOF_MISSING_LABEL in result.missing_items
 
@@ -78,14 +78,14 @@ def test_penolakan_anti_spoofing_dari_model_dipertahankan(catalog_defaults):
 def test_model_menyebut_item_yang_dimatikan_tidak_menolak_pekerja(catalog_defaults):
     # Kacamata mati secara bawaan; model yang tetap menyebutnya tidak berpengaruh
     data = _balasan_lengkap(missing_items=[missing_label("kacamata")])
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert result.is_complete
 
 
 def test_item_aktif_yang_tidak_dinilai_model_dianggap_tidak_ada(catalog_defaults):
     data = _balasan_lengkap()
     del data["items"]["helm"]
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert missing_label("helm") in result.missing_items
 
@@ -111,7 +111,7 @@ def test_ejaan_nama_item_dari_model_tidak_menggandakan_daftar_kurang(catalog_def
     data = _balasan_tanpa_apd(
         ["Helm keselamatan", "Rompi keselamatan", "Celana panjang", "Sepatu tertutup", "Helm Keselamatan"]
     )
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [missing_label(k) for k in ("helm", "rompi", "celana", "sepatu")]
 
@@ -126,7 +126,7 @@ def test_ejaan_nama_item_dari_model_tidak_menggandakan_daftar_kurang(catalog_def
 )
 def test_penolakan_anti_spoofing_dikenali_dengan_ejaan_apa_pun(catalog_defaults, teks):
     data = _balasan_lengkap(missing_items=[teks])
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [ppe_rules.SPOOF_MISSING_LABEL]
 
@@ -146,14 +146,14 @@ def _balasan_ringkas(orang_nyata=True):
 
 
 def test_jawaban_ringkas_lengkap_lolos(catalog_defaults):
-    result = VLMAnalyzer._parse_vlm_payload(_balasan_ringkas())
+    result = _parse_vlm_payload(_balasan_ringkas())
     assert result.is_complete
     assert result.missing_items == []
     assert result.items["rompi"].color == "oranye"
 
 
 def test_orang_nyata_false_ditolak_sebagai_spoof(catalog_defaults):
-    result = VLMAnalyzer._parse_vlm_payload(_balasan_ringkas(orang_nyata=False))
+    result = _parse_vlm_payload(_balasan_ringkas(orang_nyata=False))
     assert not result.is_complete
     assert result.missing_items == [ppe_rules.SPOOF_MISSING_LABEL]
 
@@ -163,14 +163,14 @@ def test_orang_nyata_tidak_dijawab_tidak_dianggap_spoof(catalog_defaults):
     # tetap dinilai dari item-itemnya.
     data = _balasan_ringkas()
     del data[ppe_rules.REAL_PERSON_KEY]
-    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+    assert _parse_vlm_payload(data).is_complete
 
 
 def test_kunci_tambahan_dari_model_diabaikan(catalog_defaults):
     data = _balasan_ringkas()
     data["items"]["helm"]["alasan"] = "helm putih"
     data["notes"] = "teks bebas"
-    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+    assert _parse_vlm_payload(data).is_complete
 
 
 # --- Nilai null dari VLM (T39a, jawaban nyata Gemini) ----------------------------------
@@ -180,7 +180,7 @@ def test_warna_null_untuk_orang_tanpa_rompi_tidak_menggagalkan_jawaban(catalog_d
     # Jawaban nyata gemini-3.5-flash-lite untuk baju kuning tanpa rompi (no_19)
     data = _balasan_ringkas()
     data["items"]["rompi"] = {"detected": False, "color": None, "is_valid_color": False}
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [missing_label("rompi")]
     assert result.items["rompi"].color == ""
@@ -189,7 +189,7 @@ def test_warna_null_untuk_orang_tanpa_rompi_tidak_menggagalkan_jawaban(catalog_d
 def test_syarat_null_dianggap_tidak_terpenuhi(catalog_defaults):
     data = _balasan_ringkas()
     data["items"]["sepatu"] = {"detected": True, "is_closed_shoes": None}
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert missing_label("sepatu") in result.missing_items
 
@@ -197,7 +197,7 @@ def test_syarat_null_dianggap_tidak_terpenuhi(catalog_defaults):
 def test_detected_null_dianggap_tidak_terdeteksi(catalog_defaults):
     data = _balasan_ringkas()
     data["items"]["helm"] = {"detected": None}
-    assert missing_label("helm") in VLMAnalyzer._parse_vlm_payload(data).missing_items
+    assert missing_label("helm") in _parse_vlm_payload(data).missing_items
 
 
 # --- Larangan rokok (T58) ---------------------------------------------------------------
@@ -206,7 +206,7 @@ def test_detected_null_dianggap_tidak_terdeteksi(catalog_defaults):
 def test_rokok_terlihat_menolak_walau_apd_lengkap(catalog_defaults):
     data = _balasan_lengkap()
     data["items"]["rokok"] = {"detected": True}
-    result = VLMAnalyzer._parse_vlm_payload(data)
+    result = _parse_vlm_payload(data)
     assert not result.is_complete
     assert result.missing_items == [missing_label("rokok")]
 
@@ -217,7 +217,7 @@ def test_rokok_tidak_terlihat_atau_ragu_tidak_menolak(catalog_defaults, jawaban)
     data = _balasan_lengkap()
     if jawaban is not None:
         data["items"]["rokok"] = jawaban
-    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+    assert _parse_vlm_payload(data).is_complete
 
 
 def test_larangan_rokok_aktif_secara_bawaan_dan_bisa_dimatikan(catalog_defaults):
@@ -225,7 +225,7 @@ def test_larangan_rokok_aktif_secara_bawaan_dan_bisa_dimatikan(catalog_defaults)
     catalog_defaults.set_active({"rokok": False})
     data = _balasan_lengkap()
     data["items"]["rokok"] = {"detected": True}
-    assert VLMAnalyzer._parse_vlm_payload(data).is_complete
+    assert _parse_vlm_payload(data).is_complete
 
 
 def test_hanya_larangan_yang_aktif_ditolak(catalog_defaults):

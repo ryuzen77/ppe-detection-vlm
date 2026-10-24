@@ -24,7 +24,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99a — pisahkan hasil & prompt VLM murni dari `vlm_analyzer` | Codex | `codex/t99a-vlm-pure` | dikerjakan | `backend/vlm_analyzer.py`, `backend/vlm_result.py` (baru), `backend/vlm_prompt.py` (baru), `tests/` (target patch & impor), `tests/test_code_hygiene.py` bila perlu | Pindah-saja; rute, lock, mesin, DB, folder = tahap berikutnya. Klaim dicatat Claude 24-10 atas persetujuan pengguna |
+| T99a — pisahkan hasil & prompt VLM murni dari `vlm_analyzer` | Codex | `codex/t99a-vlm-pure` | tinjau | `backend/vlm_analyzer.py`, `backend/vlm_result.py` (baru), `backend/vlm_prompt.py` (baru), `tests/` (target patch & impor), `tests/test_code_hygiene.py` bila perlu | Sepuluh definisi dipindah tanpa perubahan AST logika; fasad publik tetap, parser tanpa wrapper. Acuan 68 tes → 73 tes terarah (5 baru); `check.py` lolos 1.143 pytest + 258 vitest; code hygiene lolos tanpa tambahan utang; impor tools/bench_vlm & eval_vlm lolos. Angka perf & pengecualian impor metadata yang disetujui pengguna tercatat di bawah. Cara uji: `python -m pytest -q tests/test_vlm_pure.py tests/test_vlm_prompt.py tests/test_vlm_profiles.py tests/test_ppe_payload.py tests/test_import_side_effects.py`, lalu `python scripts/check.py`. Rute, lock, mesin, DB, folder tetap tahap berikutnya |
 | T97c — galat daftar model VLM di-cache singkat | Claude (backend kecil, Codex sibuk T99a; diminta pengguna 25-10) | `claude/t97c-model-list-error-ttl` | dikerjakan | `backend/vlm_providers/model_list.py`, `backend/config.py` & `backend/.env.example` (tambah 1 kunci), `tests/test_vlm_model_list.py` | Tidak beririsan dengan T99a. Bentuk JSON `GET /api/config/vlm/models` tetap |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
@@ -64,6 +64,25 @@ hati-hati karena menyentuh audit (salah pindah = baris/foto audit hilang). Lanju
 
 **Pembagian:** Codex (backend/, tests/); Claude peninjau tiap tahap. Selama T99 diklaim, task backend lain yang
 menyentuh `report_manager`, `vlm_analyzer`, `state_manager`, `routes_vlm`/`routes_reports` tidak diklaim bersamaan.
+
+**Catatan T99a (25-10):** pengecualian impor disetujui pengguna: `vlm_prompt` mempertahankan dependensi metadata
+`vlm_providers.profiles` dan `vlm_selection.prompt_version_for`, supaya tidak menduplikasi logika atau mengubah
+perilaku. Sepuluh definisi cocok secara AST sebelum/sesudah (indentasi docstring dinormalkan; dekorator static
+parser dipertahankan lewat binding fasad, diuji identitas objeknya). Tes acuan 68 lolos; setelah pemindahan
+73 lolos termasuk lima tes baru untuk kompatibilitas fasad, logger, dan impor tanpa engine/thread/storage.
+
+Pengukuran `perf_counter`, median sebelum → sesudah, VLM tiruan tanpa jaringan, crop sintetis 640×320;
+31 pengulangan inspeksi, 9 pengulangan simpan tanpa foto, 7 pengulangan kueri. Semua DB di folder sementara:
+
+| Jalur | Beban | Sebelum (ms) | Sesudah (ms) |
+| :-- | :-- | --: | --: |
+| `analyze_person` | 1 / 20 orang berurutan | 2,511 / 49,388 | 2,471 / 49,082 |
+| `save_inspection` | 1 / 20 orang berurutan | 6,880 / 134,189 | 8,181 / 138,432 |
+| `get_reports` | 100 / 100.000 baris | 0,964 / 32,048 | 0,991 / 31,737 |
+| `get_summary` | 100 / 100.000 baris | 0,747 / 298,563 | 0,730 / 297,564 |
+
+Inspeksi tidak menunjukkan tambahan latensi pada pengukuran ini; simpan audit berfluktuasi pada I/O disk
+(kode audit tidak disentuh pada T99a). Angka tiruan ini tidak mengukur latensi penyedia VLM/perangkat nyata.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 

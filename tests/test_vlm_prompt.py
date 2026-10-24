@@ -1,7 +1,7 @@
 """Prompt VLM dirakit dari katalog: ringkas, dan aturan rompi menilai bentuk (T36a)."""
 
 from backend import ppe_rules
-from backend.vlm_analyzer import build_system_prompt
+from backend.vlm_prompt import build_system_prompt
 
 
 def test_prompt_tidak_meminta_teks_bebas(catalog_defaults):
