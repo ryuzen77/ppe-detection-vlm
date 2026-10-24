@@ -47,19 +47,20 @@ _ATTENDANCE_SEEN_SQL = """
                is_complete, ROW_NUMBER() OVER worker_day AS latest,
                MIN(time_str) OVER worker_day AS first_seen,
                COUNT(*) OVER worker_day AS passes,
-               SUM(is_complete) OVER worker_day AS passed
+               SUM(is_complete = 1 AND gate_hold IS NULL) OVER worker_day AS passed,
+               SUM(is_complete = 0) OVER worker_day AS rejected
         FROM worker_inspections WHERE date_str = ? AND fr_status = ?
         WINDOW worker_day AS (PARTITION BY worker_id ORDER BY time_str DESC, id DESC
                               ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
     )
     SELECT worker_id, employee_no, name, department, company, first_seen,
-           time_str AS last_seen, passes, passed, passes - passed AS rejected,
+           time_str AS last_seen, passes, passed, rejected,
            is_complete AS last_complete
     FROM daily WHERE latest = 1 ORDER BY first_seen, worker_id
 """
 _ATTENDANCE_UNKNOWN_SQL = """
-    SELECT COUNT(*) AS passes, COALESCE(SUM(is_complete), 0) AS passed,
-           COUNT(*) - COALESCE(SUM(is_complete), 0) AS rejected
+    SELECT COUNT(*) AS passes, COALESCE(SUM(is_complete = 1 AND gate_hold IS NULL), 0) AS passed,
+           COALESCE(SUM(is_complete = 0), 0) AS rejected
     FROM worker_inspections WHERE date_str = ? AND fr_status IS NOT ?
 """
 _ATTENDANCE_COUNT_FIELDS = ("first_seen", "last_seen", "passes", "passed", "rejected")
@@ -210,7 +211,7 @@ def _filter_clause(
     """Syarat SQL gabungan untuk filter audit (T79)."""
     conditions, params = [], []
     if status_filter == "complete":
-        conditions.append("is_complete = 1")
+        conditions.append("is_complete = 1 AND gate_hold IS NULL")
     elif status_filter == "incomplete":
         conditions.append("is_complete = 0")
     elif status_filter == "held":
@@ -631,19 +632,8 @@ class ReportManager:
             violation_count = total_count - complete_count
             compliance_rate = round((complete_count / total_count * 100.0), 1) if total_count > 0 else 100.0
 
-            # Keputusan oleh VLM cadangan (utama gagal/terputus), T27
-            cursor.execute(
-                """SELECT COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS backup_count,
-                           COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS local_fallback_count
-                           FROM worker_inspections""",
-                (BACKUP_SOURCE_PREFIX, LOCAL_FALLBACK_SOURCE_PREFIX),
-            )
-            source_counts = dict(cursor.fetchone())
-            source_counts["held_count"] = conn.execute(HELD_COUNT_SQL).fetchone()[0]
-
             # Filter query (T79)
             conditions, params = _filter_clause(
-                status_filter=status_filter,
                 date_filter=date_filter,
                 date_from=date_from,
                 date_to=date_to,
@@ -651,6 +641,9 @@ class ReportManager:
                 department=department,
                 company=company,
             )
+            source_counts = self._decision_counts(conn, conditions, params)
+            status_conditions, status_params = _filter_clause(status_filter=status_filter)
+            conditions, params = status_conditions + conditions, status_params + params
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
             cursor.execute(
@@ -680,6 +673,21 @@ class ReportManager:
                 "filtered_total": filtered_total,
                 "page_records": records,
             }
+
+    @staticmethod
+    def _decision_counts(conn: sqlite3.Connection, conditions: list[str], params: list) -> dict:
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        held_select = ", COUNT(gate_hold) AS held_count" if conditions else ""
+        row = conn.execute(
+            "SELECT COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS backup_count, "
+            "COALESCE(SUM(instr(inference_source, ?) = 1), 0) AS local_fallback_count "
+            f"{held_select} FROM worker_inspections {where}",
+            [BACKUP_SOURCE_PREFIX, LOCAL_FALLBACK_SOURCE_PREFIX, *params],
+        ).fetchone()
+        counts = dict(row)
+        if not conditions:
+            counts["held_count"] = conn.execute(HELD_COUNT_SQL).fetchone()[0]
+        return counts
 
     @staticmethod
     def _item_csv_text(item: ppe_rules.PPEItem, result: Optional[dict]) -> str:
@@ -721,11 +729,13 @@ class ReportManager:
         where = f"WHERE {' AND '.join(conditions)}"
         with self._get_connection() as conn:
             rows = conn.execute(
-                f"SELECT date_str, time_str, is_complete, missing_items FROM worker_inspections {where}",
+                f"SELECT date_str, time_str, is_complete, missing_items, gate_hold FROM worker_inspections {where}",
                 params,
             ).fetchall()
         audit = [
-            report_summary.AuditRow(r["date_str"], r["time_str"], bool(r["is_complete"]), r["missing_items"])
+            report_summary.AuditRow(
+                r["date_str"], r["time_str"], bool(r["is_complete"]), r["missing_items"], r["gate_hold"]
+            )
             for r in rows
         ]
         return report_summary.summarize(period, start, end, audit)
@@ -801,6 +811,8 @@ class ReportManager:
         missing_list = _parse_json(row["missing_items"], [])
         results = _parse_json(row["items_json"], {})
         status_str = messages.CSV_STATUS_COMPLETE if row["is_complete"] else messages.CSV_STATUS_INCOMPLETE
+        if row["gate_hold"] is not None:
+            status_str = messages.CSV_STATUS_HELD
         return (
             [
                 number,

@@ -32,6 +32,10 @@ from . import messages
 APP_FORMAT = "%(asctime)s %(levelname)-7s [%(name)s] %(message)s"
 SECURITY_LOGGER = "security"
 ACCESS_LOGGER = "uvicorn.access"
+ASYNCIO_LOGGER = "asyncio"
+PROACTOR_MODULE = "asyncio.proactor_events"
+PROACTOR_CLOSE_CALLBACK = "_ProactorBasePipeTransport._call_connection_lost"
+CONNECTION_RESET_WINERROR = 10054
 
 # Pustaka pihak ketiga yang mencatat detail internal di level INFO
 _QUIET_LIBRARIES = ("comtypes",)
@@ -40,6 +44,33 @@ _configured = False
 _listeners: list[QueueListener] = []
 _queue_handlers: list["DroppingQueueHandler"] = []
 _app_file_handlers: list[logging.Handler] = []
+
+
+class ProactorDisconnectFilter(logging.Filter):
+    """Browser menutup MJPEG: shutdown socket Proactor dapat mengulang WinError 10054.
+
+    Hanya reset di callback penutupan bawaan CPython yang disaring, sebelum QueueHandler
+    menghapus exc_info. Galat protokol/aplikasi memiliki frame terakhir lain dan tetap tercatat.
+    Acuan: CPython 3.12 Lib/asyncio/proactor_events.py, _call_connection_lost.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        info = record.exc_info
+        if record.name != ASYNCIO_LOGGER or record.levelno != logging.ERROR or not info:
+            return True
+        error, traceback = info[1], info[2]
+        if not isinstance(error, ConnectionResetError) or getattr(error, "winerror", None) != CONNECTION_RESET_WINERROR:
+            return True
+        if not record.getMessage().startswith("Exception in callback " + PROACTOR_CLOSE_CALLBACK + "("):
+            return True
+        if traceback is None:
+            return True
+        while traceback.tb_next is not None:
+            traceback = traceback.tb_next
+        frame = traceback.tb_frame
+        return not (
+            frame.f_globals.get("__name__") == PROACTOR_MODULE and frame.f_code.co_qualname == PROACTOR_CLOSE_CALLBACK
+        )
 
 
 class DroppingQueueHandler(QueueHandler):
@@ -185,6 +216,7 @@ def setup_logging(cfg):
     if _configured:
         return
     _configured = True
+    logging.getLogger(ASYNCIO_LOGGER).addFilter(ProactorDisconnectFilter())
     _setup_application_log(cfg)
     setup_security_log(cfg)
     for name in _QUIET_LIBRARIES:
@@ -196,6 +228,10 @@ def setup_logging(cfg):
 def stop_logging():
     """Kosongkan antrean ke berkas lalu lepas semua handler (berhenti rapi & tes)."""
     global _configured
+    asyncio_logger = logging.getLogger(ASYNCIO_LOGGER)
+    for log_filter in list(asyncio_logger.filters):
+        if isinstance(log_filter, ProactorDisconnectFilter):
+            asyncio_logger.removeFilter(log_filter)
     for listener in _listeners:
         listener.stop()
     for name in ("", SECURITY_LOGGER):
