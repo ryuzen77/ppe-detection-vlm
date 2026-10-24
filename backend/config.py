@@ -331,6 +331,9 @@ class Config:
     # dibatalkan dan tidak menyandera thread (Gemini sempat menggantung ~60 dtk).
     # T97: metadata daftar model dan bukti uji admin, bukan panggilan inspeksi.
     VLM_MODEL_LIST_CACHE_SECONDS: float = float(_env("VLM_MODEL_LIST_CACHE_SECONDS", "300"))
+    # T97c: galat (timeout/tak terjangkau/key ditolak) disimpan singkat saja — satu jawaban penyedia
+    # yang lambat tidak boleh membuat dropdown jadi teks bebas selama 5 menit (uji 24-10)
+    VLM_MODEL_LIST_ERROR_CACHE_SECONDS: float = float(_env("VLM_MODEL_LIST_ERROR_CACHE_SECONDS", "30"))
     VLM_MODEL_LIST_TIMEOUT_SECONDS: float = float(_env("VLM_MODEL_LIST_TIMEOUT_SECONDS", "5"))
     VLM_TEST_FRESH_SECONDS: float = float(_env("VLM_TEST_FRESH_SECONDS", "600"))
     VLM_CLOUD_TIMEOUT_SECONDS: float = float(_env("VLM_CLOUD_TIMEOUT_SECONDS", "4.0"))
