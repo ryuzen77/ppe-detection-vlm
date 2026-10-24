@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
 import {
+  hasNextPeriod,
   clampPercent,
   complianceTone,
   historyHead,
@@ -170,5 +171,14 @@ describe('workerCell (T79)', () => {
   })
   it('baris lama / FR mati: nomor lintasan seperti sebelumnya', () => {
     expect(workerCell(base)).toEqual({ primary: '#49', secondary: '', known: false })
+  })
+})
+
+describe('hasNextPeriod (temuan uji UI #5)', () => {
+  it('periode yang sudah mencakup hari ini tidak punya periode berikutnya', () => {
+    expect(hasNextPeriod('2026-10-23', '2026-10-24')).toBe(true)
+    expect(hasNextPeriod('2026-10-24', '2026-10-24')).toBe(false)
+    expect(hasNextPeriod('2026-10-31', '2026-10-24')).toBe(false)
+    expect(hasNextPeriod(undefined, '2026-10-24')).toBe(false)
   })
 })

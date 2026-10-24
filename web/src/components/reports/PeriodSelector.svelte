@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { ReportPeriod, ReportRange } from '../../lib/api/types'
   import { REPORTS as TEXT } from '../../lib/messages'
-  import { offsetDate, formatReportRange } from '../../lib/reports'
+  import { localDateIso } from '../../lib/attendance'
+  import { hasNextPeriod, offsetDate, formatReportRange } from '../../lib/reports'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
 
@@ -30,6 +31,8 @@
   }
 
   const periods: ReportPeriod[] = ['day', 'week', 'month']
+  const today = localDateIso()
+  const canNext = $derived(hasNextPeriod(range?.to, today))
 </script>
 
 <div class="selector" role="group" aria-label={TEXT.period.ariaLabel}>
@@ -63,7 +66,7 @@
         {/if}
       </span>
 
-      <button class="btn icon" onclick={goNext} disabled={loading || !range} title={TEXT.period.next}>
+      <button class="btn icon" onclick={goNext} disabled={loading || !canNext} title={TEXT.period.next}>
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </div>
@@ -72,6 +75,7 @@
       <input
         type="date"
         value={date || (range?.from ?? '')}
+        max={today}
         disabled={loading}
         onchange={(e) => {
           date = e.currentTarget.value

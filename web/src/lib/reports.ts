@@ -65,6 +65,12 @@ export function complianceTone(rate: number | null): Tone {
   return 'danger'
 }
 
+/** Periode berikutnya ada isinya hanya bila periode tampil belum mencapai hari ini (temuan uji UI #5).
+ *  Tanggal ISO (YYYY-MM-DD) dibandingkan sebagai teks. */
+export function hasNextPeriod(rangeTo: string | undefined, today: string): boolean {
+  return !!rangeTo && rangeTo < today
+}
+
 export function offsetDate(base: string, days: number): string {
   if (!base) return ''
   const d = new Date(base + 'T00:00:00')
