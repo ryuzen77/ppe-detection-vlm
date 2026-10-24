@@ -66,6 +66,10 @@ bukan key per penyedia: utama & cadangan boleh penyedia sama dengan akun/key ber
   di penyedia, mis. sudah dihentikan; `null` saat `source=catalog`). Urutan: teruji dulu, lalu sisanya A–Z.
 **`POST /api/config/vlm/test`**: tidak berubah bentuk; hasil berhasil dicatat untuk lapis 3 (memori proses, bukan disk).
 **`POST /api/config/vlm/apply`**: galat baru `{"detail": {"code": "model_not_found" | "test_required", "message"}}`.
+**Tambahan disetujui 24-10 (usul Codex, disetujui Claude; additive, bentuk jawaban tetap):**
+- `GET /api/config/vlm/models?...&refresh=true` → lewati cache (tombol "Muat ulang daftar").
+- `POST /api/config/vlm/test` menerima `role: "local"` (VLM lokal darurat) → uji dicatat untuk peran darurat, terpisah dari
+  `backup`; UI T97b mengirim `local` (sebelumnya uji lokal darurat terkirim sebagai `backup`).
 
 #### 3. UI (Pengaturan → VLM)
 - Kolom Model per peran = **dropdown** dari endpoint di atas: grup "Sudah diuji" (lencana Teruji/Sebagian) lalu
