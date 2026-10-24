@@ -12,13 +12,13 @@ from pydantic import BaseModel
 from .. import messages, vlm_selection
 from ..api_monitor import api_monitor
 from ..state_manager import state_mgr
-from ..vlm_analyzer import ROLE_BACKUP, ROLE_PRIMARY, EngineFailed, LaneBusy, vlm_analyzer
+from ..vlm_analyzer import EngineFailed, LaneBusy, vlm_analyzer
 from ..vlm_selection import Choice, Selection, SelectionError
 from .deps import actor, client_address, require_admin
 
 router = APIRouter()
 
-ROLES = {"primary": ROLE_PRIMARY, "backup": ROLE_BACKUP}
+ROLES = vlm_selection.MODEL_LIST_ROLES
 
 
 class ChoiceBody(BaseModel):
@@ -27,7 +27,7 @@ class ChoiceBody(BaseModel):
 
 
 class TestBody(ChoiceBody):
-    role: Literal["primary", "backup"] = "primary"
+    role: Literal["primary", "backup", "local"] = "primary"
 
 
 class ApplyBody(BaseModel):
@@ -82,7 +82,17 @@ def test_vlm_provider(body: TestBody):
         vlm_selection.check_choice(choice, confirm_unvalidated=True, role=ROLES[body.role])
     except SelectionError as e:
         raise _error(400, e.code, e.message)
-    return vlm_analyzer.test_choice(ROLES[body.role], choice)
+    role = ROLES[body.role]
+    signature = vlm_selection._test_signature(choice, role)
+    vlm_selection.recent_tests.record(role, choice, {})
+    result = vlm_analyzer.test_choice(role, choice)
+    vlm_selection.recent_tests.record(role, choice, result, signature)
+    return result
+
+
+@router.get("/api/config/vlm/models", dependencies=[Depends(require_admin)])
+def list_vlm_models(provider: str, role: Literal["primary", "backup", "local"], refresh: bool = False):
+    return vlm_selection.available_models(provider.strip().lower(), role, refresh, vlm_analyzer.active_choices())
 
 
 @router.post("/api/config/vlm/apply", dependencies=[Depends(require_admin)])
@@ -95,6 +105,9 @@ def apply_vlm_selection(body: ApplyBody, request: Request):
     selection = Selection(primary, backup, vlm_selection.SOURCE_DASHBOARD, fallback)
     try:
         vlm_selection.check_selection(selection, body.confirm_unvalidated)
+        if not _lane_empty():
+            raise _error(409, "lane_busy", messages.VLM_SELECT_LANE_BUSY)
+        vlm_selection.check_apply_models(selection)
     except SelectionError as e:
         raise _error(400, e.code, e.message)
     current = _apply(selection, request)

@@ -16,6 +16,22 @@ STOP_REFUSAL = "refusal"
 STOP_MAX_TOKENS = "max_tokens"
 
 
+def _model_page(data):
+    from .model_list import data_ids, ModelListError, UNSUPPORTED
+
+    names = data_ids(data)
+    cursor = data.get("last_id") if data.get("has_more") else None
+    if data.get("has_more") and not cursor:
+        raise ModelListError(UNSUPPORTED)
+    return names, cursor
+
+
+def list_models(client, remaining, provider=None) -> set[str]:
+    from .model_list import pages
+
+    return pages(client, "v1/models", remaining, _model_page, "after_id")
+
+
 class AnthropicProvider(VLMProvider):
     name = "anthropic"
 

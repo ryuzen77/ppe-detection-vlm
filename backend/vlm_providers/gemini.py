@@ -6,6 +6,28 @@ from .. import messages
 from .base import VLMProvider
 
 
+def _model_page(data):
+    from .model_list import ModelListError, UNSUPPORTED
+
+    rows = data.get("models")
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) or not isinstance(row.get("name"), str) for row in rows
+    ):
+        raise ModelListError(UNSUPPORTED)
+    names = [
+        row["name"].removeprefix("models/")
+        for row in rows
+        if "generateContent" in row.get("supportedGenerationMethods", [])
+    ]
+    return names, data.get("nextPageToken")
+
+
+def list_models(client, remaining, provider=None) -> set[str]:
+    from .model_list import pages
+
+    return pages(client, "models", remaining, _model_page, "pageToken")
+
+
 # Tenggat minimum yang diterima API Gemini untuk satu permintaan
 GEMINI_MIN_DEADLINE_SECONDS = 10.0
 

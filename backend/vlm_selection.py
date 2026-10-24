@@ -14,6 +14,8 @@ Rambu (rancangan T28 yang disetujui 06-10):
 
 import logging
 import re
+import threading
+import time
 from dataclasses import asdict, dataclass
 from typing import Optional
 
@@ -22,6 +24,7 @@ from .config import cfg, provider_api_key
 from .vlm_providers import profiles
 from .internet_monitor import DISCONNECTED, SLOW
 from .api_monitor import ROLE_EMERGENCY
+from .vlm_providers.model_list import ModelListCache, credential_signature
 
 logger = logging.getLogger(__name__)
 LOCAL_FALLBACK_SOURCE_PREFIX = "VLM_DARURAT:"
@@ -32,6 +35,39 @@ SOURCE_DASHBOARD = "dashboard"
 NO_BACKUP = "none"
 ROLE_PRIMARY = "utama"
 ROLE_BACKUP = "cadangan"
+MODEL_LIST_ROLES = {"primary": ROLE_PRIMARY, "backup": ROLE_BACKUP, "local": ROLE_EMERGENCY}
+model_lists = ModelListCache()
+
+
+class RecentModelTests:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._passed: dict[tuple, tuple] = {}
+
+    def record(self, role: str, choice: "Choice", result: dict, signature=None):
+        key = (role, choice.provider, choice.model)
+        with self._lock:
+            self._passed.pop(key, None)
+            if result.get("ok") is True and result.get("json_ok") is True and not result.get("error"):
+                self._passed[key] = (
+                    signature or _test_signature(choice, role),
+                    time.monotonic() + cfg.VLM_TEST_FRESH_SECONDS,
+                )
+
+    def fresh(self, role: str, choice: "Choice") -> bool:
+        with self._lock:
+            passed = self._passed.get((role, choice.provider, choice.model))
+        return bool(passed and passed[0] == _test_signature(choice, role) and time.monotonic() < passed[1])
+
+
+recent_tests = RecentModelTests()
+
+
+def _test_signature(choice: "Choice", role: str) -> tuple:
+    return credential_signature(
+        api_key_for(choice.provider, role), base_url_for(choice.provider, role)
+    ), prompt_version_for(choice.provider)
+
 
 # Status validasi yang boleh dipakai hanya dengan konfirmasi admin
 NEEDS_CONFIRMATION = (profiles.UNVALIDATED, profiles.OUTDATED)
@@ -365,3 +401,58 @@ def _model_entry(choice: Choice) -> dict:
         "false_rejects": record.false_rejects if record else None,
         "median_seconds": record.median_seconds if record else None,
     }
+
+
+def available_models(provider: str, role: str, refresh: bool = False, in_use=()) -> dict:
+    internal_role = MODEL_LIST_ROLES[role]
+    api_key = api_key_for(provider, internal_role)
+    result = model_lists.get(provider, internal_role, api_key, base_url_for(provider, internal_role), refresh)
+    known = {entry.model for entry in profiles.VALIDATIONS if entry.provider == provider}
+    known.update(choice.model for choice in in_use if choice.provider == provider)
+    default = profiles.default_model(provider)
+    if default:
+        known.add(default)
+    names = {name for name in known | set(result.names) if redact(name, api_key) == name}
+    models = [
+        {**_model_entry(Choice(provider, name)), "available": None if result.error else name in result.names}
+        for name in names
+    ]
+    models.sort(
+        key=lambda entry: (
+            entry["validated"] not in (profiles.VALIDATED, profiles.PARTIAL),
+            entry["model"].casefold(),
+            entry["model"],
+        )
+    )
+    return {
+        "provider": provider,
+        "role": role,
+        "source": "catalog" if result.error else "provider",
+        "fetched_at": result.fetched_at,
+        "error": result.error,
+        "models": models,
+    }
+
+
+def check_apply_models(selection: Selection):
+    for role, choice in (
+        ("primary", selection.primary),
+        ("backup", selection.backup),
+        ("local", selection.local_fallback),
+    ):
+        if choice is None:
+            continue
+        listing = available_models(choice.provider, role)
+        found = any(entry["model"] == choice.model and entry["available"] is True for entry in listing["models"])
+        if listing["source"] == "provider" and not found:
+            raise SelectionError(
+                "model_not_found",
+                messages.VLM_SELECT_MODEL_NOT_FOUND.format(model=choice.model, provider=choice.provider, role=role),
+            )
+        if validation_of(choice)[0] in NEEDS_CONFIRMATION and not recent_tests.fresh(MODEL_LIST_ROLES[role], choice):
+            raise SelectionError(
+                "test_required",
+                messages.VLM_SELECT_TEST_REQUIRED.format(
+                    model=choice.model, provider=choice.provider, role=role, seconds=cfg.VLM_TEST_FRESH_SECONDS
+                ),
+            )
