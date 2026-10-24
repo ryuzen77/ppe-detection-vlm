@@ -585,3 +585,4 @@ VLM_SELECT_MODEL_NOT_FOUND = (
 VLM_SELECT_TEST_REQUIRED = (
     "Jalankan Uji Penyedia hingga berhasil untuk {role} {provider}/{model}, lalu terapkan dalam {seconds:g} detik."
 )
+VLM_ROLE_LABELS = {"primary": "utama", "backup": "cadangan", "local": "lokal darurat"}

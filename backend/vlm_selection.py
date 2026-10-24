@@ -447,12 +447,17 @@ def check_apply_models(selection: Selection):
         if listing["source"] == "provider" and not found:
             raise SelectionError(
                 "model_not_found",
-                messages.VLM_SELECT_MODEL_NOT_FOUND.format(model=choice.model, provider=choice.provider, role=role),
+                messages.VLM_SELECT_MODEL_NOT_FOUND.format(
+                    model=choice.model, provider=choice.provider, role=messages.VLM_ROLE_LABELS[role]
+                ),
             )
         if validation_of(choice)[0] in NEEDS_CONFIRMATION and not recent_tests.fresh(MODEL_LIST_ROLES[role], choice):
             raise SelectionError(
                 "test_required",
                 messages.VLM_SELECT_TEST_REQUIRED.format(
-                    model=choice.model, provider=choice.provider, role=role, seconds=cfg.VLM_TEST_FRESH_SECONDS
+                    model=choice.model,
+                    provider=choice.provider,
+                    role=messages.VLM_ROLE_LABELS[role],
+                    seconds=cfg.VLM_TEST_FRESH_SECONDS,
                 ),
             )

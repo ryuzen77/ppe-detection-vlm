@@ -156,3 +156,29 @@ def test_restart_does_not_invalidate_stored_selection_without_new_apply(client, 
     stored = selection.stored_selection()
     assert stored is not None and stored.primary.model == MODEL["model"]
     assert apply(client).json()["detail"]["code"] == "test_required"
+
+
+@pytest.mark.parametrize("role,label", [("primary", "utama"), ("backup", "cadangan"), ("local", "lokal darurat")])
+@pytest.mark.parametrize("code", ["model_not_found", "test_required"])
+def test_apply_error_role_labels_are_indonesian(monkeypatch, role, label, code):
+    choice = selection.Choice("ollama", "model-uji")
+    primary = selection.Choice(SAFE.provider, SAFE.model)
+    selected = selection.Selection(
+        choice if role == "primary" else primary,
+        choice if role == "backup" else None,
+        "dashboard",
+        choice if role == "local" else None,
+    )
+    listing = {"source": "provider" if code == "model_not_found" else "catalog", "models": []}
+
+    def available(provider, selected_role):
+        if selected_role == role:
+            return listing
+        return {"source": "provider", "models": [{"model": primary.model, "available": True}]}
+
+    monkeypatch.setattr(selection, "available_models", available)
+    with pytest.raises(selection.SelectionError) as error:
+        selection.check_apply_models(selected)
+    assert error.value.code == code
+    assert label in error.value.message
+    assert f"{role} " not in error.value.message
