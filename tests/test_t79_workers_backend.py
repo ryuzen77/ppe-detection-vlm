@@ -19,7 +19,7 @@ from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
 from backend.config import cfg
-from backend.report_manager import ReportManager
+from backend.report_manager import SCHEMA_VERSION, ReportManager
 
 
 @pytest.fixture
@@ -453,7 +453,7 @@ def test_migrasi_audit_db_dari_skema_v2(tmp_path):
 
     with mgr._get_connection() as c:
         version = c.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 3
+        assert version == SCHEMA_VERSION
         row = c.execute("SELECT worker_name, department, company FROM worker_inspections WHERE id = 1").fetchone()
         assert row["worker_name"] == "Pekerja Lama"
         assert row["department"] is None

@@ -11,7 +11,7 @@ from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
 from backend.config import cfg
-from backend.state_manager import state_mgr
+from backend.state_manager import GateSession, state_mgr
 from backend.video.capture import video_service
 
 MODEL = "intel_0095"
@@ -260,7 +260,7 @@ def test_foto_tidak_layak_tidak_menyimpan_apa_pun(client, store, camera, code, s
 
 def test_kamera_tidak_dipakai_saat_jalur_terisi_atau_kamera_mati(client, store, camera, monkeypatch):
     wid = _create(client).json()["id"]
-    monkeypatch.setattr(state_mgr, "session", object())
+    monkeypatch.setattr(state_mgr, "session", GateSession(1, 0.0))
     r = _photo(client, wid)
     assert r.status_code == 409 and r.json()["detail"]["code"] == "camera_busy"
     monkeypatch.setattr(state_mgr, "session", None)
@@ -307,7 +307,7 @@ def enrollment():
 def test_jeda_pendaftaran_membuat_foto_bisa_diambil(client, store, camera, security_events, enrollment, monkeypatch):
     """Uji nyata 19-10: orang yang difoto memulai sesi sehingga foto selalu camera_busy."""
     wid = _create(client).json()["id"]
-    monkeypatch.setattr(state_mgr, "session", object())
+    monkeypatch.setattr(state_mgr, "session", GateSession(1, 0.0))
     assert _photo(client, wid).status_code == 409
     r = client.post("/api/workers/enrollment")
     assert r.status_code == 200 and r.json() == {"active": True, "hold_s": cfg.ENROLLMENT_HOLD_SECONDS}

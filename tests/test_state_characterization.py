@@ -224,9 +224,21 @@ def run_scenarios(monkeypatch, telemetry=None):
     return out
 
 
+def _without_registration_fields(value):
+    """Acuan T42 tetap menjaga perilaku lama; field tambahan T83 diuji tersendiri."""
+    if isinstance(value, list):
+        return [_without_registration_fields(item) for item in value]
+    if isinstance(value, dict):
+        added = {"registration_policy", "decision", "hold_reason", "face_retry_s", "gate_hold"}
+        for key in ("hold_reason", "face_retry_s", "gate_hold"):
+            assert value.get(key) is None, "kebijakan mati tidak boleh menahan"
+        return {key: _without_registration_fields(item) for key, item in value.items() if key not in added}
+    return value
+
+
 def test_state_machine_tidak_berubah(monkeypatch, catalog_defaults):
     expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
-    actual = json.loads(json.dumps(run_scenarios(monkeypatch)))
+    actual = _without_registration_fields(json.loads(json.dumps(run_scenarios(monkeypatch))))
     diffs = [i for i, (a, e) in enumerate(zip(actual, expected)) if a != e]
     assert len(actual) == len(expected) and not diffs, (
         f"{len(diffs)} frame berubah, mis. {[actual[i] for i in diffs[:2]]}"
@@ -237,7 +249,7 @@ def test_telemetri_tidak_berubah(monkeypatch, catalog_defaults):
     expected = json.loads(TELEMETRY_GOLDEN.read_text(encoding="utf-8"))
     actual = []
     run_scenarios(monkeypatch, actual)
-    actual = json.loads(json.dumps(actual))
+    actual = _without_registration_fields(json.loads(json.dumps(actual)))
     diffs = [i for i, (a, e) in enumerate(zip(actual, expected)) if a != e]
     assert len(actual) == len(expected) and not diffs, (
         f"{len(diffs)} payload berubah, mis. {[actual[i] for i in diffs[:1]]}"

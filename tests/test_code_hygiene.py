@@ -34,7 +34,6 @@ LONG_FUNCTIONS_DEBT = {
     "backend/app.py::run",
     "backend/api/routes_cameras.py::list_cameras",
     "backend/video/capture.py::__init__",
-    "backend/report_manager.py::_migrate",
 }
 HEX_COLOR_DEBT = {"web/src/components/monitoring/VideoPanel.svelte"}
 

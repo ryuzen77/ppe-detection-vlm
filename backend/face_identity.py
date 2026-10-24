@@ -83,6 +83,26 @@ class FaceIdentifier:
         self._lock = threading.Lock()
         self._gallery: Optional[GalleryView] = None
         self._revision = -1
+        self._failed = False
+
+    def ready(self) -> bool:
+        return self.store.face_ready() and not self._failed
+
+    def mark_unavailable(self):
+        self._failed = True
+
+    def check_ready(self) -> bool:
+        """Probe admin boleh memuat engine; telemetri hanya membaca status tersimpan."""
+        if not self.store.face_ready():
+            return False
+        try:
+            self.gallery()
+            self.engine.subject_embeddings([])
+            self._failed = False
+        except Exception as error:
+            self._failed = True
+            logger.warning(messages.LOG_FACE_FAILED.format(error=error))
+        return self.ready()
 
     @property
     def store(self) -> worker_store.SqliteWorkerStore:
@@ -128,7 +148,9 @@ class FaceIdentifier:
                 return Identity(DISABLED)
             gallery = self.gallery()
             vectors = self.engine.subject_embeddings(crops)
+            self._failed = False
         except Exception as e:  # FR tidak boleh menghambat keputusan APD
+            self._failed = True
             logger.error(messages.LOG_FACE_FAILED.format(error=e))
             return Identity(DISABLED)
         matches = [None if v is None else best_match(v, gallery) for v in vectors]

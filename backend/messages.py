@@ -554,3 +554,25 @@ ORG_BUILTIN = "Perusahaan bawaan '{name}' tidak dapat diubah atau dihapus (atur 
 WORKER_INVALID_DEPARTMENT = "Divisi tidak dikenal."
 WORKER_INVALID_COMPANY = "Perusahaan tidak dikenal."
 WORKER_EMPLOYEE_NO_LOCKED = "Nomor pegawai tidak bisa diubah setelah tersimpan."
+REGISTRATION_FR_NOT_READY = "Pengenalan wajah tidak berfungsi. Wajib terdaftar belum dapat diaktifkan."
+REGISTRATION_LOW_RECOGNITION = "Tingkat pengenalan wajah belum memadai; konfirmasi diperlukan."
+REGISTRATION_SAVE_FAILED = "Kebijakan pendaftaran gagal disimpan."
+REGISTRATION_HELD = "Wajah belum terdaftar. Silakan hubungi petugas."
+REGISTRATION_FR_UNAVAILABLE = "Wajib terdaftar aktif — FR tidak berfungsi, semua pekerja ditahan."
+REGISTRATION_LOOK_CAMERA = "Mohon tatap kamera."
+REGISTRATION_RETRY_AUDIO = "registration_look_camera"
+REGISTRATION_HELD_AUDIO = "registration_held"
+REGISTRATION_UNAVAILABLE_AUDIO = "registration_unavailable"
+CSV_HEADER_GATE_HOLD = "Ditahan"
+CSV_GATE_HOLD_LABELS = {
+    "unregistered": "Wajah belum terdaftar",
+    "fr_unavailable": "Pengenalan wajah tidak berfungsi",
+}
+
+VOICE_TEXTS.update(
+    {
+        REGISTRATION_RETRY_AUDIO: REGISTRATION_LOOK_CAMERA,
+        REGISTRATION_HELD_AUDIO: REGISTRATION_HELD,
+        REGISTRATION_UNAVAILABLE_AUDIO: REGISTRATION_FR_UNAVAILABLE,
+    }
+)

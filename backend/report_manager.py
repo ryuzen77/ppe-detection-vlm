@@ -7,7 +7,7 @@ import os
 import csv
 import io
 from contextlib import closing
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict
 import cv2
@@ -34,6 +34,11 @@ BYTES_PER_MB = 1024**2
 # Akhiran foto bukti yang sedang ditulis (lihat _write_snapshot)
 SNAPSHOT_TMP_SUFFIX = ".tmp"
 CSV_BOM = "\ufeff"  # Excel mengenali UTF-8 lewat penanda di awal berkas, termasuk ekspor kosong.
+RECOGNITION_SQL = (
+    "SELECT COUNT(*) AS passes, COALESCE(SUM(fr_status = ?), 0) AS recognized "
+    "FROM worker_inspections WHERE date_str BETWEEN ? AND ?"
+)
+HELD_COUNT_SQL = "SELECT COUNT(*) FROM worker_inspections WHERE gate_hold IS NOT NULL"
 
 # Filter tanggal dikerjakan sebelum window: hanya audit hari terpilih yang diurutkan.
 _ATTENDANCE_SEEN_SQL = """
@@ -97,7 +102,8 @@ SNAPSHOTS_DIR = cfg.SNAPSHOTS_DIR
 #       siapa yang lewat SAAT ITU, dan tetap terbaca setelah data wajah pekerja dihapus retensi.
 #   3 — snapshot divisi (department) & kontraktor (company) (T79); riwayat audit tetap benar
 #       walau pekerja berpindah divisi kelak. Baris audit lama tetap NULL.
-SCHEMA_VERSION = 3
+#   4 — penahanan akses dipisahkan dari kelengkapan APD (T83).
+SCHEMA_VERSION = 4
 
 _V2_COLUMNS = (
     ("worker_id", "INTEGER"),
@@ -144,6 +150,7 @@ _INSPECTION_COLUMNS = (
     "snapshot_filename",
     *(name for name, _ in _V2_COLUMNS),
     *(name for name, _ in _V3_COLUMNS),
+    "gate_hold",
 )
 _INSERT_INSPECTION = (
     f"INSERT INTO worker_inspections ({', '.join(_INSPECTION_COLUMNS)}) "
@@ -175,6 +182,7 @@ _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_worker_id ON worker_inspections(worker_id)",
     # T72: hitungan global cadangan/darurat cukup membaca indeks kecil, bukan seluruh audit.
     "CREATE INDEX IF NOT EXISTS idx_inference_source ON worker_inspections(inference_source)",
+    "CREATE INDEX IF NOT EXISTS idx_gate_hold ON worker_inspections(gate_hold) WHERE gate_hold IS NOT NULL",
 )
 
 
@@ -205,6 +213,8 @@ def _filter_clause(
         conditions.append("is_complete = 1")
     elif status_filter == "incomplete":
         conditions.append("is_complete = 0")
+    elif status_filter == "held":
+        conditions.append("gate_hold IS NOT NULL")
     if date_filter:
         conditions.append("date_str = ?")
         params.append(date_filter)
@@ -387,20 +397,7 @@ class ReportManager:
         conn.isolation_level = None
         conn.execute("BEGIN IMMEDIATE")
         try:
-            if not has_table:
-                conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections"))
-                self._migrate_v1_to_v2(conn, existing=False)
-                self._migrate_v2_to_v3(conn, existing=False)
-            else:
-                if version == 0:
-                    self._migrate_v0_to_v1(conn)
-                    self._migrate_v1_to_v2(conn, existing=True)
-                    self._migrate_v2_to_v3(conn, existing=True)
-                elif version == 1:
-                    self._migrate_v1_to_v2(conn, existing=True)
-                    self._migrate_v2_to_v3(conn, existing=True)
-                elif version == 2:
-                    self._migrate_v2_to_v3(conn, existing=True)
+            self._upgrade_schema(conn, version, has_table)
             for sql in _CREATE_INDEXES:
                 conn.execute(sql)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -408,6 +405,18 @@ class ReportManager:
         except Exception:
             conn.execute("ROLLBACK")
             raise
+
+    def _upgrade_schema(self, conn: sqlite3.Connection, version: int, has_table: bool):
+        if not has_table:
+            conn.execute(_CREATE_TABLE_V1.format(name="worker_inspections"))
+            version = 0
+        elif version == 0:
+            self._migrate_v0_to_v1(conn)
+        if version < 2:
+            self._migrate_v1_to_v2(conn, existing=has_table)
+        if version < 3:
+            self._migrate_v2_to_v3(conn, existing=has_table)
+        conn.execute("ALTER TABLE worker_inspections ADD COLUMN gate_hold TEXT NULL")
 
     def _backup_before_migration(self, version: int):
         """Salinan utuh database sebelum migrasi, di samping berkas aslinya."""
@@ -496,6 +505,7 @@ class ReportManager:
         inference_time_ms: float,
         crop_img: Optional[np.ndarray] = None,
         identity: Optional[dict] = None,
+        gate_hold: Optional[str] = None,
     ) -> dict:
         """Saves inspection snapshot to disk and inserts record into SQLite.
 
@@ -520,10 +530,12 @@ class ReportManager:
                 inference_time_ms,
                 snapshot_filename,
                 *_identity_values(identity),
+                gate_hold,
             )
         )
         return {
             "id": record_id,
+            "gate_hold": gate_hold,
             "track_id": track_id,
             "timestamp": iso_timestamp,
             "time_str": time_str,
@@ -576,6 +588,23 @@ class ReportManager:
         rec["items"] = _parse_json(rec.pop("items_json"), {})
         return rec
 
+    def recognition_rate(self, days: int, today: Optional[date] = None) -> dict:
+        end = today or date.today()
+        start = end - timedelta(days=max(1, days) - 1)
+        with self._get_connection() as conn:
+            row = conn.execute(
+                RECOGNITION_SQL,
+                (RECOGNIZED, start.isoformat(), end.isoformat()),
+            ).fetchone()
+        passes, recognized = row["passes"], row["recognized"]
+        return {
+            "rate": recognized / passes if passes else None,
+            "recognized": recognized,
+            "passes": passes,
+            "days": days,
+            "threshold": cfg.FR_REQUIRED_RATE,
+        }
+
     def get_reports(
         self,
         limit: int = 50,
@@ -610,6 +639,7 @@ class ReportManager:
                 (BACKUP_SOURCE_PREFIX, LOCAL_FALLBACK_SOURCE_PREFIX),
             )
             source_counts = dict(cursor.fetchone())
+            source_counts["held_count"] = conn.execute(HELD_COUNT_SQL).fetchone()[0]
 
             # Filter query (T79)
             conditions, params = _filter_clause(
@@ -789,6 +819,7 @@ class ReportManager:
                 row["inference_time_ms"],
                 row["notes"],
                 row["snapshot_filename"],
+                messages.CSV_GATE_HOLD_LABELS.get(row["gate_hold"], messages.CSV_EMPTY),
             ]
         )
 
@@ -819,7 +850,9 @@ class ReportManager:
             messages.CSV_HEADER_DEPARTMENT,
             messages.CSV_HEADER_COMPANY,
         ]
-        yield CSV_BOM + self._csv_text([header + [item.label for item in items] + messages.CSV_HEADER_TRAILING])
+        yield CSV_BOM + self._csv_text(
+            [header + [item.label for item in items] + (messages.CSV_HEADER_TRAILING + [messages.CSV_HEADER_GATE_HOLD])]
+        )
         conditions, params = _filter_clause(
             date_from=date_from,
             date_to=date_to,
