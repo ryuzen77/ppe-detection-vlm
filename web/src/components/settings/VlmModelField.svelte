@@ -2,7 +2,7 @@
   // Isian model + lencana validasi satu peran VLM (utama / cadangan / lokal darurat T72):
   // dulu disalin per peran di VlmProviders. T97: dropdown dari daftar model penyedia untuk key
   // peran ini; teks bebas hanya bila daftar gagal diambil.
-  import { untrack } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import Server from '@lucide/svelte/icons/server'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
   import { api } from '../../lib/api/client'
@@ -72,6 +72,9 @@
   $effect(() => {
     if (provider?.name) untrack(() => load(false))
   })
+  // Komponen dilepas (mis. "tanpa cadangan" lalu cadangan diaktifkan lagi = instans baru): jawaban
+  // permintaan lama tidak boleh lagi menulis `busy`/`model` milik instans baru (tinjauan Codex T97b)
+  onDestroy(() => requestSeq++)
 
   const shown = $derived(listMatches(list, provider?.name, role) ? list : null)
   const requestFailed = $derived(!shown && !!provider && failedFor === provider.name)
