@@ -81,6 +81,11 @@ export function reportEmptyText(o: { loading: boolean; periodTotal: number | und
   return o.periodTotal === 0 ? TEXT.emptyPeriod : TEXT.empty
 }
 
+/** Tanggal ketikan manual melewati hari ini → hari ini (atribut `max` tidak menahan ketikan; tinjauan Codex T95) */
+export function clampToToday(value: string, today: string): string {
+  return value && value > today ? today : value
+}
+
 export function offsetDate(base: string, days: number): string {
   if (!base) return ''
   const d = new Date(base + 'T00:00:00')

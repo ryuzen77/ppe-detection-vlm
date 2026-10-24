@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { REPORTS as TEXT } from './messages'
 import {
+  clampToToday,
   hasNextPeriod,
   reportEmptyText,
   clampPercent,
@@ -190,5 +191,13 @@ describe('reportEmptyText (temuan uji UI #7)', () => {
     expect(reportEmptyText({ loading: false, periodTotal: 0, hasFilter: false })).toBe(TEXT.emptyPeriod)
     expect(reportEmptyText({ loading: false, periodTotal: undefined, hasFilter: false })).toBe(TEXT.empty)
     expect(reportEmptyText({ loading: true, periodTotal: 0, hasFilter: true })).toBe(TEXT.loading)
+  })
+})
+
+describe('clampToToday (tinjauan Codex T95)', () => {
+  it('tanggal ketikan setelah hari ini dijepit ke hari ini; lainnya apa adanya', () => {
+    expect(clampToToday('2026-11-03', '2026-10-24')).toBe('2026-10-24')
+    expect(clampToToday('2026-10-20', '2026-10-24')).toBe('2026-10-20')
+    expect(clampToToday('', '2026-10-24')).toBe('')
   })
 })

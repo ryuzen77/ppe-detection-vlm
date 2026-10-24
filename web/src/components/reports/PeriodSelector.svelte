@@ -2,9 +2,11 @@
   import type { ReportPeriod, ReportRange } from '../../lib/api/types'
   import { REPORTS as TEXT } from '../../lib/messages'
   import { localDateIso } from '../../lib/attendance'
-  import { hasNextPeriod, offsetDate, formatReportRange } from '../../lib/reports'
+  import { clampToToday, hasNextPeriod, offsetDate, formatReportRange } from '../../lib/reports'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
+  import { onDestroy } from 'svelte'
+  import { CLOCK } from '../../lib/settings'
 
   let {
     period = $bindable(),
@@ -31,7 +33,10 @@
   }
 
   const periods: ReportPeriod[] = ['day', 'week', 'month']
-  const today = localDateIso()
+  // Diperbarui berkala: halaman yang dibiarkan terbuka melewati tengah malam (tinjauan Codex T95)
+  let today = $state(localDateIso())
+  const dayTimer = setInterval(() => (today = localDateIso()), CLOCK.tickMs)
+  onDestroy(() => clearInterval(dayTimer))
   const canNext = $derived(hasNextPeriod(range?.to, today))
 </script>
 
@@ -78,7 +83,7 @@
         max={today}
         disabled={loading}
         onchange={(e) => {
-          date = e.currentTarget.value
+          date = clampToToday(e.currentTarget.value, today)
         }}
         class="date-input"
         title={TEXT.period.jumpToDate}
