@@ -1,4 +1,4 @@
-import type { VlmMissingSetting, VlmValidationStatus } from './api/types'
+import type { VlmMissingSetting, VlmModelListEntry, VlmModelListError, VlmRole, VlmValidationStatus } from './api/types'
 import { VLM_SETTINGS } from './messages'
 
 export type ValidationTone = 'ok' | 'warn' | 'muted'
@@ -23,11 +23,16 @@ export function validationBadge(status: VlmValidationStatus): { text: string; to
 export type ActionRequired =
   | { type: 'none' }
   | { type: 'confirm'; code: string; message: string }
+  | { type: 'test_required'; code: string; message: string }
   | { type: 'error'; code: string; message: string; isWarn: boolean }
 
 export function handleSelectionError(code: string, message: string): ActionRequired {
   if (code === 'needs_confirmation') {
     return { type: 'confirm', code, message }
+  }
+  // T97: model belum teruji wajib lolos Uji Penyedia (peran itu) sebelum Terapkan
+  if (code === 'test_required') {
+    return { type: 'test_required', code, message }
   }
   if (code === 'lane_busy') {
     return { type: 'error', code, message, isWarn: true }
@@ -131,4 +136,66 @@ export function backupChange(
   if (same) return 'unchanged'
   if (!nextProvider) return 'disable'
   return providers.find((p) => p.name === nextProvider)?.is_local ? 'enable_local' : 'other'
+}
+
+// --- T97: daftar model dari penyedia
+
+const TESTED_STATUSES: VlmValidationStatus[] = ['validated', 'partial']
+// Sama dengan NEEDS_CONFIRMATION backend: Terapkan butuh uji penyedia yang masih segar
+const TEST_FIRST_STATUSES: VlmValidationStatus[] = ['unvalidated', 'outdated']
+
+export const isTested = (status: VlmValidationStatus) => TESTED_STATUSES.includes(status)
+export const needsTest = (status: VlmValidationStatus) => TEST_FIRST_STATUSES.includes(status)
+
+/** Model yang boleh dipilih: ada di akun penyedia & tidak pernah meloloskan APD kurang (selalu ditolak server). */
+export const modelSelectable = (m: VlmModelListEntry) => m.available !== false && m.validated !== 'unsafe'
+
+const byName = (a: VlmModelListEntry, b: VlmModelListEntry) =>
+  a.model.localeCompare(b.model, undefined, { sensitivity: 'base' })
+
+/** Grup dropdown: "Sudah diuji" lalu "Tersedia, belum diuji", masing-masing A–Z. */
+export function groupModels(models: VlmModelListEntry[]): {
+  tested: VlmModelListEntry[]
+  untested: VlmModelListEntry[]
+} {
+  const tested = models.filter((m) => isTested(m.validated)).sort(byName)
+  const untested = models.filter((m) => !isTested(m.validated)).sort(byName)
+  return { tested, untested }
+}
+
+/** Teks pilihan dropdown: model katalog yang tidak ada di akun ditandai (dan dinonaktifkan oleh komponen). */
+export function modelOptionLabel(m: VlmModelListEntry, unavailableText: string): string {
+  return m.available === false ? `${m.model} (${unavailableText})` : m.model
+}
+
+/**
+ * Model setelah daftar penyedia dimuat ulang karena admin mengganti penyedia: model sekarang bila bisa
+ * dipilih, lalu model bawaan penyedia, lalu model pertama yang bisa dipilih (teruji lebih dulu).
+ */
+export function reconcileModel(models: VlmModelListEntry[], current: string, defaultModel: string): string {
+  const selectable = models.filter(modelSelectable)
+  const pick = (name: string) => selectable.find((m) => m.model === name)?.model
+  const { tested, untested } = groupModels(selectable)
+  return pick(current) ?? pick(defaultModel) ?? tested[0]?.model ?? untested[0]?.model ?? current
+}
+
+/** Alasan daftar gagal (`source: 'catalog'`); `request` = permintaan ke server sendiri yang gagal. */
+export function modelListReason(
+  error: VlmModelListError | 'request' | null,
+  reasons: Record<VlmModelListError | 'request', string>,
+): string {
+  return reasons[error ?? 'request']
+}
+
+/** Status validasi pilihan menurut katalog penyedia; model di luar katalog = belum teruji (sama dengan backend). */
+export function validationOf(
+  provider: { models: { model: string; validated: VlmValidationStatus }[] } | undefined,
+  model: string,
+): VlmValidationStatus {
+  return provider?.models.find((m) => m.model === model)?.validated ?? 'unvalidated'
+}
+
+/** Peran yang modelnya perlu Uji Penyedia dulu (galat `test_required`), urut utama → cadangan → lokal. */
+export function rolesNeedingTest(choices: { role: VlmRole; model: string; status: VlmValidationStatus }[]): VlmRole[] {
+  return choices.filter((c) => c.model && needsTest(c.status)).map((c) => c.role)
 }

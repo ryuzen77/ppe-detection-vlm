@@ -7,7 +7,16 @@ import {
   withLocalNote,
   modelForProvider,
   formDirty,
+  groupModels,
+  modelSelectable,
+  modelOptionLabel,
+  reconcileModel,
+  modelListReason,
+  validationOf,
+  rolesNeedingTest,
+  needsTest,
 } from './vlmSelection'
+import type { VlmModelListEntry, VlmValidationStatus } from './api/types'
 
 describe('vlmSelection', () => {
   it('validationBadge memetakan status ke tone yang benar (tanpa danger/merah)', () => {
@@ -30,6 +39,12 @@ describe('vlmSelection', () => {
       message: 'msg',
       isWarn: true,
     })
+    expect(handleSelectionError('test_required', 'msg')).toEqual({
+      type: 'test_required',
+      code: 'test_required',
+      message: 'msg',
+    })
+    expect(handleSelectionError('model_not_found', 'msg')).toMatchObject({ type: 'error', isWarn: false })
     expect(handleSelectionError('unsafe_model', 'msg')).toEqual({
       type: 'error',
       code: 'unsafe_model',
@@ -93,5 +108,83 @@ describe('ganti penyedia & perubahan belum diterapkan (temuan uji UI #13)', () =
     )
     expect(formDirty(current, { primary: g, backup: null, local_fallback: null })).toBe(true)
     expect(formDirty({ primary: g, backup: null }, { primary: g, backup: null, local_fallback: null })).toBe(false)
+  })
+})
+
+describe('daftar model dari penyedia (T97)', () => {
+  const entry = (
+    model: string,
+    validated: VlmValidationStatus,
+    available: boolean | null = true,
+  ): VlmModelListEntry => ({
+    model,
+    validated,
+    available,
+    photos: null,
+    missed: null,
+    false_rejects: null,
+    median_seconds: null,
+  })
+  const models = [
+    entry('zeta', 'unvalidated'),
+    entry('Beta', 'partial'),
+    entry('alpha', 'validated'),
+    entry('gamma', 'outdated'),
+    entry('old-model', 'validated', false),
+    entry('bad', 'unsafe'),
+  ]
+
+  it('mengelompokkan teruji/sebagian dulu, lalu sisanya; masing-masing A–Z tanpa peduli huruf besar', () => {
+    const { tested, untested } = groupModels(models)
+    expect(tested.map((m) => m.model)).toEqual(['alpha', 'Beta', 'old-model'])
+    expect(untested.map((m) => m.model)).toEqual(['bad', 'gamma', 'zeta'])
+  })
+
+  it('model katalog yang tidak ada di akun & model tidak aman tidak bisa dipilih', () => {
+    expect(modelSelectable(entry('x', 'validated', false))).toBe(false)
+    expect(modelSelectable(entry('x', 'unsafe'))).toBe(false)
+    expect(modelSelectable(entry('x', 'unvalidated', null))).toBe(true)
+    expect(modelOptionLabel(entry('x', 'validated', false), 'tidak ada')).toBe('x (tidak ada)')
+    expect(modelOptionLabel(entry('x', 'validated'), 'tidak ada')).toBe('x')
+  })
+
+  it('ganti penyedia: model lama bila bisa dipilih, lalu bawaan, lalu model teruji pertama', () => {
+    expect(reconcileModel(models, 'zeta', 'alpha')).toBe('zeta')
+    expect(reconcileModel(models, 'tidak-ada', 'gamma')).toBe('gamma')
+    expect(reconcileModel(models, 'old-model', 'bad')).toBe('alpha')
+    expect(reconcileModel([entry('u', 'unvalidated')], '', '')).toBe('u')
+    expect(reconcileModel([], 'ketikan', 'x')).toBe('ketikan')
+  })
+
+  it('alasan daftar gagal → teks; tanpa kode = permintaan ke server gagal', () => {
+    const reasons = {
+      no_key: 'k',
+      unreachable: 'u',
+      timeout: 't',
+      unsupported: 's',
+      auth_failed: 'a',
+      request: 'r',
+    }
+    expect(modelListReason('auth_failed', reasons)).toBe('a')
+    expect(modelListReason(null, reasons)).toBe('r')
+  })
+
+  it('alur uji-dulu: hanya model belum teruji/kedaluwarsa yang wajib diuji', () => {
+    expect(needsTest('unvalidated')).toBe(true)
+    expect(needsTest('outdated')).toBe(true)
+    expect(needsTest('validated')).toBe(false)
+    expect(needsTest('partial')).toBe(false)
+    expect(needsTest('unsafe')).toBe(false)
+    const gemini = { models: [{ model: 'g', validated: 'partial' as const }] }
+    expect(validationOf(gemini, 'g')).toBe('partial')
+    expect(validationOf(gemini, 'salah-ketik')).toBe('unvalidated')
+    expect(validationOf(undefined, 'g')).toBe('unvalidated')
+    expect(
+      rolesNeedingTest([
+        { role: 'primary', model: 'g', status: 'partial' },
+        { role: 'backup', model: 'baru', status: 'unvalidated' },
+        { role: 'local', model: '', status: 'unvalidated' },
+      ]),
+    ).toEqual(['backup'])
   })
 })

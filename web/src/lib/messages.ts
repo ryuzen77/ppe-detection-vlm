@@ -712,6 +712,26 @@ export const VLM_SETTINGS = {
   cancelBtn: 'Batal',
   confirmBtn: 'Saya Yakin, Lanjutkan',
 
+  // T97: daftar model dari penyedia (dropdown), cadangan teks bebas bila daftar gagal diambil
+  modelGroupTested: 'Sudah diuji',
+  modelGroupUntested: 'Tersedia, belum diuji',
+  modelUnavailable: 'tidak tersedia di akun ini',
+  modelListLoading: 'Memuat daftar model...',
+  reloadModelsBtn: 'Muat ulang daftar',
+  modelListFailed: (reason: string) =>
+    `Daftar model tidak bisa diambil (${reason}). Ketik nama model persis seperti di penyedia.`,
+  modelListReasons: {
+    no_key: 'API key belum diisi',
+    unreachable: 'penyedia tidak bisa dihubungi',
+    timeout: 'penyedia terlalu lama menjawab',
+    unsupported: 'penyedia tidak menyediakan daftar model',
+    auth_failed: 'API key ditolak penyedia — salah atau sudah dicabut',
+    request: 'server tidak menjawab permintaan daftar',
+  },
+  testFirstHint: 'Model belum diuji: jalankan "Uji Penyedia" sampai berhasil, lalu Terapkan.',
+  testRequiredTitle: 'Uji penyedia dulu',
+  testRoleBtn: (roleTitle: string) => `Uji ${roleTitle}`,
+
   errLoad: 'Gagal memuat',
   errApply: 'Gagal menerapkan',
   errTest: 'Gagal uji',
