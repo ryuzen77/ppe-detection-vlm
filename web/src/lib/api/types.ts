@@ -187,7 +187,48 @@ export interface ActiveTrack {
   retry_in_s: number | null
   vlm_result: InspectionResult | null
   identity?: TrackIdentity | null
+  /** T83: keputusan gerbang final (null = belum ada); tidak ada pada server sebelum T83a */
+  decision?: GateDecision | null
+  /** T83: alasan ditahan, hanya bila decision = 'held' */
+  hold_reason?: GateHold | null
+  /** T83: APD lengkap, FR sedang diulang ("Mohon tatap kamera"): detik tersisa; null = tidak mengulang */
+  face_retry_s?: number | null
 }
+
+// --- Wajib terdaftar (kontrak T83, "Rancangan T83" §2) ---------------------------------
+
+export type GateDecision = 'granted' | 'denied' | 'held'
+
+/** unregistered = wajah tetap tidak dikenali setelah FR diulang; fr_unavailable = FR tidak berfungsi */
+export type GateHold = 'unregistered' | 'fr_unavailable'
+
+/** Telemetri `registration_policy`: untuk peringatan operator bila FR mati saat setelan aktif */
+export interface RegistrationPolicyStatus {
+  enabled: boolean
+  fr_ready: boolean
+}
+
+/** GET /api/config/registration-policy (admin) */
+export interface RegistrationPolicy {
+  require_registered: boolean
+  fr_ready: boolean
+  recognition: {
+    /** Batas bawah (termasuk orang tak terdaftar); null = belum ada lintasan */
+    rate: number | null
+    recognized: number
+    passes: number
+    days: number
+    threshold: number
+  }
+}
+
+/** POST /api/config/registration-policy (admin). Galat 400: detail {code, message} */
+export interface RegistrationPolicyRequest {
+  require_registered: boolean
+  confirm_low_recognition: boolean
+}
+
+export type RegistrationPolicyErrorCode = 'fr_not_ready' | 'low_recognition_needs_confirmation'
 
 export type LightState = 'OFF' | 'GREEN' | 'RED' | 'YELLOW'
 
@@ -211,6 +252,8 @@ export interface HistoryRecord {
   inference_time_ms: number
   decided_by: DecidedBy
   snapshot_filename: string
+  /** T83: ditahan walau APD lengkap; null/tidak ada = tidak ditahan */
+  gate_hold?: GateHold | null
 }
 
 export type CameraState = 'IDLE' | 'OPENING' | 'OK' | 'OPTIMIZING' | 'LOST' | 'SYNTHETIC' | 'BLOCKED'
@@ -259,6 +302,8 @@ export interface Telemetry {
     lamps_available?: GateLamp[] | null
   }
   camera_fault: 'lost' | 'blocked' | 'frozen' | 'system' | null // 'system' = pengolah gambar galat (T77b)
+  /** T83; tidak ada pada server sebelum T83a */
+  registration_policy?: RegistrationPolicyStatus
   enrollment?: EnrollmentStatus
   history: HistoryRecord[]
   stable_frames_required: number
@@ -330,6 +375,8 @@ export interface ReportRecord {
   fr_score?: number | null
   department?: string | null
   company?: string | null
+  /** T83: kolom audit `gate_hold`; is_complete tetap hasil APD */
+  gate_hold?: GateHold | null
 }
 
 /** Saringan identitas laporan (T79); kosong = semua */
@@ -387,11 +434,14 @@ export interface ReportsPage {
   /** T72: keputusan VLM lokal darurat; tidak ada pada server sebelum T72a */
   local_fallback_count?: number
   system_outages: number
+  /** T83: pemeriksaan ditahan (gate_hold tidak null); tidak ada pada server sebelum T83a */
+  held_count?: number
   filtered_total: number
   page_records: ReportRecord[]
 }
 
-export type ReportStatusFilter = 'all' | 'complete' | 'incomplete'
+/** held (T83) = gate_hold tidak null (`?status=held`) */
+export type ReportStatusFilter = 'all' | 'complete' | 'incomplete' | 'held'
 
 // --- Kamera (GET /api/cameras) -----------------------------------------------------------
 

@@ -1,21 +1,34 @@
 /** Logika tampilan halaman Laporan (murni, teruji). Teks di messages.ts, angka di settings.ts. */
-import type { HistoryRecord, ReportRecord } from './api/types'
+import type { HistoryRecord, ReportRecord, ReportStatusFilter, ReportsPage } from './api/types'
 import { describeSource, type SourceRole } from './format'
 import type { Tone } from './gate'
 import { REPORTS as TEXT } from './messages'
 import { REPORTS } from './settings'
 
-export type ResultKind = 'passed' | 'denied' | 'unverified'
+export type ResultKind = 'passed' | 'denied' | 'unverified' | 'held'
 
 /** Awalan sumber baris lama (T21–T26) yang ditolak karena VLM tidak menjawab */
 const LEGACY_UNVERIFIED_PREFIX = 'VLM_GAGAL'
 
-export function resultKind(rec: Pick<ReportRecord, 'is_complete' | 'inference_source'>): ResultKind {
+export function resultKind(rec: Pick<ReportRecord, 'is_complete' | 'inference_source' | 'gate_hold'>): ResultKind {
+  // T83: ditahan = APD lengkap (is_complete tetap true) tetapi gerbang tidak mengizinkan
+  if (rec.gate_hold) return 'held'
   if (rec.is_complete) return 'passed'
   return (rec.inference_source ?? '').startsWith(LEGACY_UNVERIFIED_PREFIX) ? 'unverified' : 'denied'
 }
 
-export const RESULT_TONE: Record<ResultKind, Tone> = { passed: 'ok', denied: 'danger', unverified: 'warn' }
+/** Saringan status yang didukung server: "Ditahan" (T83) hanya bila server mengirim held_count */
+export function reportStatuses(page: Pick<ReportsPage, 'held_count'> | null): ReportStatusFilter[] {
+  const base: ReportStatusFilter[] = ['all', 'complete', 'incomplete']
+  return page?.held_count !== undefined ? [...base, 'held'] : base
+}
+
+export const RESULT_TONE: Record<ResultKind, Tone> = {
+  passed: 'ok',
+  denied: 'danger',
+  unverified: 'warn',
+  held: 'warn',
+}
 
 /** Siapa yang menilai, tanpa nama penyedia/model (keputusan pengguna) */
 export function sourceText(source: string): { role: SourceRole; text: string } {

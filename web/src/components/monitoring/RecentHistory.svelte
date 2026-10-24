@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { HistoryRecord } from '../../lib/api/types'
   import { describeSource } from '../../lib/format'
-  import { HISTORY, seconds } from '../../lib/messages'
+  import { HISTORY, HOLD_REASON, seconds } from '../../lib/messages'
+  import { resultKind } from '../../lib/reports'
   import { href } from '../../lib/router.svelte'
 
   let { records }: { records: HistoryRecord[] } = $props()
@@ -18,14 +19,16 @@
     <ul>
       {#each records as r (r.track_id + r.timestamp + r.snapshot_filename)}
         {@const src = describeSource(r.inference_source)}
+        {@const kind = resultKind(r)}
         <li>
           <span class="time mono">{r.timestamp}</span>
           <span class="who mono">#{r.track_id}</span>
-          <span class="result" class:ok={r.is_complete} class:bad={!r.is_complete}>
-            {r.is_complete ? HISTORY.passed : HISTORY.denied}
+          <span class="result" class:ok={kind === 'passed'} class:bad={kind === 'denied'} class:held={kind === 'held'}>
+            {kind === 'held' ? HISTORY.held : r.is_complete ? HISTORY.passed : HISTORY.denied}
           </span>
           <span class="detail">
-            {r.is_complete ? HISTORY.complete : r.missing_items.join(', ') || HISTORY.incomplete}
+            {#if r.gate_hold}{HOLD_REASON[r.gate_hold]}
+            {:else}{r.is_complete ? HISTORY.complete : r.missing_items.join(', ') || HISTORY.incomplete}{/if}
           </span>
           <span class="meta">
             {#if src.role === 'cadangan'}<span class="backup">{HISTORY.backup}</span>
@@ -95,6 +98,9 @@
   }
   .bad {
     color: var(--danger);
+  }
+  .held {
+    color: var(--warn);
   }
   .detail {
     color: var(--text-muted);

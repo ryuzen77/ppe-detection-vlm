@@ -8,6 +8,7 @@ import {
   IOT_CHIP,
   INTERNET_CHIP,
   LOCAL_STANDBY_CHIP,
+  REGISTRATION_CHIP,
   SYSTEM_STATUS,
   cameraChipOk,
 } from './messages'
@@ -64,6 +65,16 @@ export function localStandbyChip(t: Telemetry | null): Chip | null {
   const local = t?.api_monitor?.local
   if (!local?.role) return null
   return { tone: LOCAL_TONE[local.state], ...LOCAL_STANDBY_CHIP[local.state] }
+}
+
+/**
+ * T83: hanya muncul sebagai masalah — setelan Wajib terdaftar aktif tetapi FR tidak berfungsi,
+ * sehingga semua pekerja ditahan. Kuning (bukan merah): merah hanya untuk APD/larangan.
+ */
+export function registrationChip(t: Telemetry | null): Chip | null {
+  const policy = t?.registration_policy
+  if (!policy?.enabled || policy.fr_ready) return null
+  return { tone: 'warn', ...REGISTRATION_CHIP }
 }
 
 export function iotChip(t: Telemetry | null): Chip {

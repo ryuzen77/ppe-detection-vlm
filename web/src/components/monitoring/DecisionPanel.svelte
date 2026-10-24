@@ -7,6 +7,7 @@
   import ScanFace from '@lucide/svelte/icons/scan-face'
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert'
   import UserRound from '@lucide/svelte/icons/user-round'
+  import UserX from '@lucide/svelte/icons/user-x'
   import VideoOff from '@lucide/svelte/icons/video-off'
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import type { GateView } from '../../lib/gate'
@@ -28,7 +29,8 @@
     {:else if gate.kind === 'analyzing'}<span class="spin"><LoaderCircle size={36} strokeWidth={1.75} /></span>
     {:else if gate.kind === 'no-camera'}<VideoOff size={36} strokeWidth={1.75} />
     {:else if gate.kind === 'offline'}<WifiOff size={36} strokeWidth={1.75} />
-    {:else if gate.kind === 'enrollment'}<ScanFace size={36} strokeWidth={1.75} />
+    {:else if gate.kind === 'enrollment' || gate.kind === 'face-retry'}<ScanFace size={36} strokeWidth={1.75} />
+    {:else if gate.kind === 'held'}<UserX size={40} strokeWidth={1.75} />
     {:else}<UserRound size={36} strokeWidth={1.75} />{/if}
   </div>
 
@@ -39,7 +41,7 @@
         <span class="recognized-badge">{recognizedText}</span>
       {/if}
     </div>
-    <h2 class:big={gate.kind === 'granted' || gate.kind === 'denied'}>{gate.title}</h2>
+    <h2 class:big={gate.kind === 'granted' || gate.kind === 'denied' || gate.kind === 'held'}>{gate.title}</h2>
     <p>{gate.detail}</p>
     {#if gate.missing.length}
       <ul class="missing">

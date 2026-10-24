@@ -20,6 +20,8 @@ export type GateKind =
   | 'denied' // APD kurang
   | 'waiting' // utama & cadangan VLM gagal: mohon tunggu
   | 'enrollment' // admin memotret wajah pendaftaran: pemeriksaan dijeda (T75)
+  | 'face-retry' // T83: APD lengkap, FR diulang sebelum diputuskan ("Mohon tatap kamera")
+  | 'held' // T83: APD lengkap tetapi ditahan (wajah belum terdaftar / FR mati) — kuning
 
 export type Tone = 'neutral' | 'ok' | 'danger' | 'warn'
 
@@ -75,6 +77,23 @@ export function gateView(t: Telemetry | null, connection: ConnectionStatus): Gat
   if (a.state === 'WAITING_SYSTEM') {
     const retry = a.retry_in_s != null ? GATE.waiting.retry(a.retry_in_s) : ''
     return view('waiting', 'warn', { title: GATE.waiting.title, detail: GATE.waiting.detail + retry }, { trackId })
+  }
+
+  // T83: ditahan lebih dulu — APD lengkap (is_complete) tetapi gerbang TIDAK mengizinkan
+  if (a.decision === 'held') {
+    const detail = GATE.held.detail[a.hold_reason ?? 'unregistered']
+    return view('held', 'warn', { title: GATE.held.title, detail }, { trackId })
+  }
+
+  // T83: backend mengulang FR hanya setelah APD dinilai lengkap, SEBELUM hasilnya dipasang ke sesi
+  // (vlm_result masih null selama ulang FR)
+  if (a.face_retry_s != null) {
+    return view(
+      'face-retry',
+      'neutral',
+      { title: GATE.faceRetry.title, detail: GATE.faceRetry.detail(a.face_retry_s) },
+      { trackId },
+    )
   }
 
   const r = a.vlm_result
