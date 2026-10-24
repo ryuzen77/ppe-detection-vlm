@@ -77,6 +77,19 @@ export type BackupChange = 'unchanged' | 'disable' | 'enable_local' | 'other'
  * `disable` perlu konfirmasi (model dikeluarkan dari GPU, pekerja menunggu bila VLM utama gangguan);
  * `enable_local` butuh waktu menyiapkan model di GPU, jadi teks menunggunya berbeda.
  */
+/** Cadangan yang SEDANG aktif adalah VLM lokal (memakai GPU) — teks GPU & kartu kesehatan hanya untuknya */
+export function currentBackupIsLocal(
+  current: { provider: string } | null,
+  providers: { name: string; is_local: boolean }[],
+): boolean {
+  return !!current && !!providers.find((p) => p.name === current.provider)?.is_local
+}
+
+/** Kalimat + catatan GPU bila cadangan aktif lokal (temuan uji UI #12) */
+export function withLocalNote(text: string, note: string, isLocal: boolean): string {
+  return isLocal ? `${text} ${note}` : text
+}
+
 export function backupChange(
   current: { provider: string; model: string } | null,
   nextProvider: string,

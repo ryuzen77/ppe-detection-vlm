@@ -655,11 +655,15 @@ export const VLM_SETTINGS = {
   providerLabel: 'Penyedia',
   modelLabel: 'Model',
   noBackup: '(Tanpa cadangan)',
-  // T70: cadangan mati = model keluar dari GPU; aktif lagi = menunggu model siap
+  // T70: cadangan mati = model keluar dari GPU; aktif lagi = menunggu model siap. Kalimat GPU hanya
+  // untuk cadangan LOKAL — cadangan cloud tidak memakai GPU (temuan uji UI #12).
   noBackupHint:
-    'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa). Model cadangan dikeluarkan dari GPU.',
+    'Cadangan mati: bila VLM utama gangguan, pekerja diminta menunggu (tidak pernah lolos tanpa diperiksa).',
+  noBackupLocalNote: 'Model cadangan dikeluarkan dari GPU.',
   disableBackupConfirm:
-    'Matikan VLM cadangan? Model cadangan dikeluarkan dari GPU. Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih. Mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
+    'Matikan VLM cadangan? Bila VLM utama gangguan, pekerja diminta menunggu sampai VLM utama pulih.',
+  disableBackupLocalNote:
+    'Model cadangan dikeluarkan dari GPU; mengaktifkan lagi nanti perlu menunggu model disiapkan di GPU.',
   // T72: VLM lokal siaga dingin — menerapkan tidak memuat model; disiapkan otomatis saat dibutuhkan
   applyingLocalBackup:
     'Menerapkan... VLM lokal tidak dimuat sekarang (siaga dingin); model disiapkan otomatis di GPU saat VLM utama gangguan atau internet bermasalah.',

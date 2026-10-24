@@ -29,7 +29,10 @@
   const gateIot = $derived(iotChip(telemetry.data))
   const camera = $derived(telemetry.data?.camera ?? null)
   // T78: kesehatan VLM cadangan hanya berarti bila cadangan memang dipakai
-  const backupActive = $derived(telemetry.data?.api_monitor?.backup?.configured === true)
+  // Kartu kesehatan VLM lokal (porsi GPU, latensi) hanya bermakna untuk cadangan lokal (temuan uji UI #12)
+  const backupActive = $derived(
+    telemetry.data?.api_monitor?.backup?.configured === true && telemetry.data.api_monitor.backup.is_local,
+  )
   const LIGHTS = [
     { color: 'green', label: SETTINGS_TAB.testLightBtn },
     { color: 'red', label: SETTINGS_TAB.testRedBtn },

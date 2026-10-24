@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { validationBadge, handleSelectionError, backupChange } from './vlmSelection'
+import {
+  validationBadge,
+  handleSelectionError,
+  backupChange,
+  currentBackupIsLocal,
+  withLocalNote,
+} from './vlmSelection'
 
 describe('vlmSelection', () => {
   it('validationBadge memetakan status ke tone yang benar (tanpa danger/merah)', () => {
@@ -49,5 +55,21 @@ describe('backupChange (T70)', () => {
     expect(backupChange(local, 'ollama', 'qwen2.5vl:7b', providers)).toBe('unchanged')
     expect(backupChange(null, '', 'apa saja', providers)).toBe('unchanged')
     expect(backupChange(null, 'gemini', 'x', providers)).toBe('other')
+  })
+})
+
+describe('teks GPU hanya untuk cadangan lokal (temuan uji UI #12)', () => {
+  const providers = [
+    { name: 'gemini', is_local: false },
+    { name: 'ollama', is_local: true },
+  ]
+  it('mengenali cadangan aktif lokal vs cloud', () => {
+    expect(currentBackupIsLocal({ provider: 'ollama' }, providers)).toBe(true)
+    expect(currentBackupIsLocal({ provider: 'gemini' }, providers)).toBe(false)
+    expect(currentBackupIsLocal(null, providers)).toBe(false)
+  })
+  it('catatan GPU ditempel hanya bila lokal', () => {
+    expect(withLocalNote('Teks.', 'GPU.', true)).toBe('Teks. GPU.')
+    expect(withLocalNote('Teks.', 'GPU.', false)).toBe('Teks.')
   })
 })

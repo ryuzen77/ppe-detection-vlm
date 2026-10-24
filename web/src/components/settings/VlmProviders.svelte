@@ -9,6 +9,8 @@
     providerOptionLabel,
     localFallbackAvailability,
     localFallbackChoice,
+    currentBackupIsLocal,
+    withLocalNote,
   } from '../../lib/vlmSelection'
   import { extractApiError } from '../../lib/api/error'
   import VlmModelField from './VlmModelField.svelte'
@@ -67,6 +69,7 @@
   const localProviders = $derived(providers.filter((p) => p.is_local))
   // T70: mematikan cadangan perlu konfirmasi; mengaktifkan cadangan lokal = menunggu model siap
   const change = $derived(backupChange(data?.current.backup ?? null, backupProvider, backupModel, providers))
+  const backupLocal = $derived(currentBackupIsLocal(data?.current.backup ?? null, providers))
   const localAvailability = $derived(localFallbackAvailability(backupProvider, providers))
   const LOCAL_UNAVAILABLE_HINT = {
     backup_is_local: VLM_SETTINGS.localFallbackBackupIsLocal,
@@ -236,7 +239,11 @@
           </select>
         </label>
         {#if !backupProvider}
-          <p class="hint">{localChosen ? VLM_SETTINGS.noBackupWithLocalHint : VLM_SETTINGS.noBackupHint}</p>
+          <p class="hint">
+            {localChosen
+              ? VLM_SETTINGS.noBackupWithLocalHint
+              : withLocalNote(VLM_SETTINGS.noBackupHint, VLM_SETTINGS.noBackupLocalNote, backupLocal)}
+          </p>
         {/if}
 
         {#if backupProvider}
@@ -336,7 +343,10 @@
 
     {#if disableConfirmation}
       <div class="confirmation-box">
-        <p><strong>{VLM_SETTINGS.warningTitle}:</strong> {VLM_SETTINGS.disableBackupConfirm}</p>
+        <p>
+          <strong>{VLM_SETTINGS.warningTitle}:</strong>
+          {withLocalNote(VLM_SETTINGS.disableBackupConfirm, VLM_SETTINGS.disableBackupLocalNote, backupLocal)}
+        </p>
         <div class="actions">
           <button class="btn btn-secondary" onclick={() => (disableConfirmation = false)} disabled={applying}
             >{VLM_SETTINGS.cancelBtn}</button
