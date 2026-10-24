@@ -8,11 +8,11 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
-- **`master` belum di-push**: ±35 commit (T95, T96, T98, lanjutan Kehadiran, papan) — semuanya lolos `check.py`
-  (pytest 1.084, vitest 252). Push hanya atas permintaan pengguna.
-- **Berikutnya**: **T97a** (Codex, backend daftar model VLM) — pesan tugas sudah dikirim pengguna; **T97b** (Claude, UI)
-  boleh paralel di atas kontrak "Rancangan T97" (disetujui 24-10). Sesudahnya: antrean 9c (grafik Ditahan), T42 (6 fungsi
-  panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
+- **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
+- **Berikutnya**: **T97b** (Claude, UI) — dropdown model dari `GET /api/config/vlm/models`, galat `model_not_found`/`test_required`,
+  uji `role=local`, tombol "Muat ulang daftar" (kontrak "Rancangan T97" + tambahan 24-10). **T97a sudah digabung**: sampai T97b
+  selesai, UI lama menampilkan galat `test_required` sebagai teks biasa (model belum teruji harus diuji dulu). Sesudahnya: antrean
+  9c (grafik Ditahan), T42 (6 fungsi panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
   berbeda = disengaja; kolom Model VLM akan jadi dropdown dari penyedia (T97).
@@ -26,7 +26,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T97a — daftar model VLM dari penyedia (backend; lihat "Rancangan T97") | **Codex** (diminta Codex lewat pengguna 24-10; tinjau Claude) | `codex/t97a-model-list` (dari `master` terbaru) | tinjau | `backend/vlm_providers/*` (`list_models` per adapter), `backend/vlm_selection.py`, `backend/api/routes_vlm.py`, `backend/vlm_analyzer.py` (catat uji berhasil per peran, bila perlu), `backend/config.py`/`messages.py`/`.env.example` (tambah saja: `VLM_MODEL_LIST_CACHE_SECONDS`, `VLM_MODEL_LIST_TIMEOUT_SECONDS`, `VLM_TEST_FRESH_SECONDS`), `tests/` | Risiko Sedang. Kontrak §2 disetujui pengguna 24-10 — jangan ubah bentuk JSON tanpa persetujuan (UI T97b dibangun di atasnya). Key per peran dari T98 (`api_key_for(provider, role)`), `redact()` di jalur galat. Implementasi: HTTP metadata per adapter (Gemini generateContent + pagination, kompatibel OpenAI, Claude + pagination, Ollama tags), cache & tenggat total per penyedia/peran, refresh=true dan role=local sesuai tambahan kontrak 427ff39. Model katalog yang hilang available=false; gagal → catalog/available=null. Terapkan memeriksa ketersediaan & bukti uji berhasil per peran/penyedia/model (kedaluwarsa, key/alamat/prompt berubah → tidak berlaku). Pilihan tersimpan tetap bisa start tanpa uji ulang; guard needs_confirmation T28 tetap dipertahankan. 47 kasus baru HTTP/penyedia tiruan; `python scripts/check.py` lolos: 1132 pytest + 252 vitest (1 deprecation TestClient), tanpa cloud/key asli. Cara uji: `python -m pytest -q tests/test_vlm_model_list.py tests/test_vlm_model_apply.py`. |
 
 ### Rancangan T97 — daftar model VLM dari penyedia & cegah salah nama model (disusun 24-10, **disetujui pengguna 24-10**; dikerjakan setelah T98)
 
