@@ -9,7 +9,7 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **25-10:** T97 tuntas (T97a/b/c), T99a & T99b selesai — semua digabung, belum di-push. Berikutnya: **T99c** (Codex), T100 (koneksi SQLite), antrean 9c
+- **25-10:** T97 tuntas (T97a/b/c), T99a–c selesai — digabung; push terakhir `ef544fe` (T99c belum di-push). Berikutnya: T99d (opsional), T100 (koneksi SQLite), antrean 9c
   (grafik Ditahan), T99c–d, uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
@@ -24,7 +24,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99c — mesin VLM & pemutus utama dipisah dari `vlm_analyzer` (fasad tetap) | Codex | `codex/t99c-vlm-engine` | tinjau | `backend/vlm_analyzer.py`, `backend/vlm_engine.py` (baru), `backend/vlm_breaker.py` (baru, `PrimaryBreaker`), `tests/` (target patch & impor, karakterisasi rute) | Mesin/exception/gambar pindah tanpa perubahan AST; pemutus murni menjadi `analyzer.breaker`; lock/rute/primary/backup tetap dimiliki fasad. Patch factory di `vlm_engine`, patch state di `breaker`, tanpa ekspor ulang nama patch lama. 227 tes acuan termasuk 15 karakterisasi baru lolos pada kode lama; sesudahnya 298 tes terarah lolos, termasuk 17 kasus pemutus baru. Bukti: 5 definisi identik, 57 metode fasad sama setelah normalisasi state, 10.000 kejadian pemutus sama. `check.py` lolos 1.193 pytest + 258 vitest, hygiene tanpa tambahan utang. Performa dan detail kepemilikan di bawah. Cara uji: `python -m pytest -q tests/test_vlm_route_characterization.py tests/test_vlm_breaker.py tests/test_local_standby.py tests/test_vlm_providers.py tests/test_vlm_selection.py`; lalu `python scripts/check.py`. Tanpa cloud/perangkat nyata |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
@@ -165,7 +164,7 @@ urutan peralihan, jumlah panggilan VLM, dan bentuk telemetri tidak diubah. Berka
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 9c | Rendah | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
-| 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. **T99a selesai 25-10**; **T99a & T99b selesai 25-10**; **T99c diklaim Codex 25-10** (mesin VLM & rute peralihan — paling kritis, uji karakterisasi rute dulu) |
+| 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. **T99a selesai 25-10**; **T99a & T99b selesai 25-10**; **T99a–c selesai 25-10**; sisa **T99d** (pengelompokan folder, hanya path impor — boleh ditunda) |
 | 10b | Rendah | **T100 — penutupan koneksi SQLite audit diseragamkan** (temuan Codex di T99b) | Pola `with self._get_connection() as conn` hanya mengakhiri transaksi, tidak menutup koneksi (di CPython tertutup saat objek dibuang, jadi kecil risikonya). Seragamkan ke penutupan eksplisit (`closing`) tanpa mengubah transaksi/urutan tulis; tes: jumlah koneksi terbuka tidak bertambah setelah N panggilan |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
