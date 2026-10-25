@@ -253,3 +253,134 @@ Untuk Codex:
 ## Tanggapan
 
 <!-- Format: **Nama (tanggal), bagian N:** isi. Jangan menyunting usulan di atas. -->
+
+**Codex (25-10-2026), bagian 2 dan 10.1:** Arah paket per fitur saya dukung, dengan pemetaan lengkap
+41 berkas Python datar berikut (termasuk empat berkas pintu masuk/perakitan). Ini usulan batas, bukan izin memindahkan:
+
+| Tujuan | Berkas sekarang | Jumlah |
+| :-- | :-- | --: |
+| Tetap akar `backend/` | `__init__.py`, `__main__.py`, `app.py`, `runtime.py` | 4 |
+| `core/` | `config.py`, `messages.py`, `logging_setup.py`, `security_log.py`, `storage.py`, `disk_guard.py`, `runtime_settings.py`, `uptime.py`, `shutdown.py`, `supervisor.py`, `startup_checks.py`, `gpu_processes.py`, `internet_monitor.py`, `ppe_rules.py` | 14 |
+| `gate/` | `state_manager.py` (awal: `orchestrator.py`), `zone.py`, `registration_policy.py`, `readiness.py` | 4 |
+| `vision/` | `detector.py`, `camera_manager.py`, `camera_health.py`, `frame_quality.py`, `pose_keypoints.py` | 5 |
+| `vlm/` | `api_monitor.py`, `local_model_guard.py` | 2 |
+| `identity/` | `face_engine.py`, `face_align.py`, `face_identity.py`, `face_crypto.py`, `worker_store.py`, `worker_voice.py` | 6 |
+| `signals/` | `notifier.py`, `audio_engine.py`, `usb_relay.py`, `generate_audio.py` | 4 |
+| `accounts/` | `accounts.py` (mis. `store.py`), `auth.py` | 2 |
+
+Paket yang sudah ada tidak masuk hitungan 41: `audit/`, `vlm/`, `api/` tetap; `video/` dapat menjadi
+`vision/video/`, `vlm_providers/` menjadi `vlm/providers/`. Catatan atas perbedaan dari usulan:
+
+- `readiness` adalah syarat pekerja siap diperiksa, bukan kesiapan server. Tempatnya `gate`.
+- `frame_quality` dan `pose_keypoints` dipakai detektor/pengolahan gambar maupun gerbang; taruh di `vision`.
+  `frame_quality` memakai OpenCV untuk operasi gambar, sehingga bukan modul mesin keadaan murni.
+- `ppe_rules` belum tercantum pada pohon usulan. Usul `core/ppe_rules.py` sebagai katalog lintas fitur;
+  ia mempunyai setelan/lock dan tidak diklaim murni. `core` tidak boleh bergantung pada fitur.
+- `internet_monitor` lebih cocok sebagai layanan jaringan bersama di `core`; keputusan peralihan tetap di `vlm`.
+  `api_monitor` saat ini khusus kesehatan/keputusan VLM, sehingga boleh tetap menjadi bagian `vlm`.
+- `worker_voice` tetap di `identity` karena siklus hidup berkas suara mengikuti pekerja dan persetujuannya;
+  pemutaran suara tetap tanggung jawab `signals`. `generate_audio` dipindah apa adanya dulu, bukan langsung diubah menjadi alat CLI.
+- Masih ada ketergantungan `detector` pada `zone` dan `vlm.image.crop_window`. Pemindahan folder tidak otomatis
+  menghapusnya: tandai sebagai pengecualian sementara yang spesifik, lalu pisahkan geometri/kontraknya lewat task lain.
+  Jangan menduplikasi rumus crop agar tes impor langsung hijau.
+
+Untuk `messages`, pindahkan modul utuh dahulu; pemecahan menjadi paket per fitur adalah commit/task berikutnya.
+Saya belum menyarankan perubahan massal `cfg.X` menjadi `cfg.vlm.X`: manfaatnya belum sebanding dengan luas perubahan
+dan risiko patch tes. **[Keputusan]** pertahankan nama atribut dan kunci lingkungan dahulu.
+Tes arsitektur perlu memahami impor relatif, `from package import module`, serta siklus antarmodul;
+larangan teks seperti `cv2.VideoCapture` saja tidak menangkap alias/pemanggilan tidak langsung.
+Tetapkan daftar modul murni secara eksplisit, bukan melarang semua penggunaan `threading` pada satu paket fitur.
+
+**Codex (25-10-2026), bagian 2.1, 4 dan 10.2:** Pemisahan `state_manager` perlu dua jenis pekerjaan berbeda:
+ekstraksi pindah-saja lebih dahulu, kemudian perubahan menjadi mesin keadaan murni. `GateSession` sekarang memuat
+objek kesiapan, kandidat gambar dan event ulang FR; memindahkan kelasnya saja belum menjadikannya murni.
+
+1. Rekam jejak kejadian kode lama: masuk/keluar jalur, pergantian ID, gangguan kamera, jeda pendaftaran,
+   kesiapan, mulai VLM/FR, tenggat FR, audit, riwayat, perubahan lampu/suara. Karakterisasi juga hasil terlambat,
+   kegagalan simpan, VLM gagal semua, dan callback future yang langsung selesai.
+2. Pada ekstraksi pertama, orkestrator tetap memiliki `self.lock`, executor, event dan semua efek samping;
+   `VLMAnalyzer` tetap memiliki `api_lock`/`apply_lock`. Jangan menambah lock sesi atau memindahkan cakupan lock.
+   Tidak boleh menunggu future sambil memegang lock yang diperlukan thread penyelesainya.
+   `_identify_session` sudah menjelaskan bahaya callback langsung yang mengambil ulang lock yang sama.
+3. Setelah jejak tersebut terkunci tes, usulkan reducer `state + event + waktu eksplisit -> state + aksi berurutan`.
+   Masukan berupa ringkasan deteksi/hasil, bukan salinan seluruh frame. Waktu kalender dan monotonic diberikan
+   terpisah mengikuti pemakaian lama; clock, notifier, DB dan konfigurasi global tidak dibaca dari reducer.
+4. Orkestrator menjalankan reducer dan menerapkan transisi pada cakupan lock lama; pekerjaan VLM/FR/DB tetap di
+   posisi lama. Hasil asinkron membawa ID sesi/percobaan dan diperiksa kembali sebelum mengubah sesi aktif.
+   Audit hasil pekerja yang sudah pergi tetap disimpan seperti sekarang, tetapi tidak mengubah lampu pekerja berikutnya.
+5. Jejak urutan sekarang wajib sama: VLM gagal semua -> menunggu tanpa audit keputusan; hasil valid -> tunggu FR/
+   kebijakan pendaftaran -> simpan audit di luar `self.lock` -> ambil lock -> riwayat -> keputusan sesi -> lampu/suara.
+   APD kurang tetap merah; pengulangan FR tidak memanggil VLM kedua; hasil keputusan tetap terkunci sampai reset sesi.
+   Bandingkan jejak lama/baru dengan jam dan executor tiruan, termasuk interleaving yang dikendalikan event.
+
+Saya belum menyetujui mengganti rangkaian kritis itu dengan pelanggan event asinkron. Urutan subscriber,
+galat audit, dan pengiriman ganda dapat mengubah kapan hijau menyala. Peristiwa domain boleh dipakai sebagai
+data aksi berurutan, atau pemberitahuan tambahan setelah rangkaian lama selesai; perubahan urutan adalah task logika tersendiri.
+Ukur ulang 1/20 orang dan pastikan tidak ada salinan gambar tambahan per frame. Memindahkan fungsi murni = Rendah;
+**[Keputusan]** perubahan sinkronisasi/urutan keputusan dinilai Tinggi sesuai dampaknya, meskipun berlabel refaktor.
+
+**Codex (25-10-2026), bagian 6 dan 10.3:** Untuk tiga SQLite sekarang saya memilih tetap SQL mentah dengan
+migrasi bernomor per DB, merapikan disiplin pengujiannya dahulu. Jangan mengubah migrasi lama yang sudah berjalan
+atau membuat satu transaksi seolah mencakup tiga berkas DB. Tiap DB perlu versi sendiri, backup yang dapat dipulihkan,
+tes upgrade dari setiap skema lama, tes kegagalan di tengah migrasi, dan penolakan versi yang lebih baru dari aplikasi.
+Semua fixture memakai direktori sementara, mempertahankan synchronous=FULL, indeks, dan kepemilikan koneksi T100.
+
+Alembic layak saat skema PostgreSQL pusat benar-benar dibangun; SQLAlchemy Core tidak mewajibkan ORM atau penulisan
+ulang layanan gerbang. Namun alat migrasi tidak otomatis menyamakan SQL/semantik SQLite dengan PostgreSQL.
+Autogenerate menghasilkan kandidat yang tetap harus ditinjau, dan perubahan tertentu di SQLite memakai salin-buat
+ulang tabel ([autogenerate Alembic](https://alembic.sqlalchemy.org/en/latest/autogenerate.html),
+[batch SQLite](https://alembic.sqlalchemy.org/en/latest/batch.html)). Itu menambah kebutuhan ruang disk dan verifikasi
+data, bukan alasan mengganti migrasi audit sekarang. Saat pusat ada, migrasinya boleh memakai Alembic sementara
+gerbang tetap bernomor; kontrak sinkron yang kompatibel lebih penting daripada memaksakan alat yang sama.
+**[Keputusan]** tunda dependensi Alembic/SQLAlchemy sampai ada lingkup PG, atau buktikan manfaatnya dahulu pada satu DB tiruan.
+
+**Codex (25-10-2026), bagian 5 dan 10.4:** `contextvars` layak untuk korelasi, dengan ID tetap menjadi argumen
+eksplisit pada audit/pekerjaan asinkron; konteks log tidak boleh menjadi sumber keputusan akses.
+Menurut [dokumentasi Python 3.12](https://docs.python.org/3.12/library/contextvars.html), konteks bersifat per thread
+dan `copy_context()` O(1). Untuk executor gunakan salinan baru per pengiriman, misalnya
+`executor.submit(copy_context().run, task, ...)`, sebagaimana [PEP 567](https://peps.python.org/pep-0567/#offloading-execution-to-other-threads).
+Jangan memakai satu objek `Context` bersamaan di dua thread. Pasang token pada batas tugas dan reset dalam `finally`
+agar thread yang digunakan ulang tidak mewarisi sesi sebelumnya.
+
+Pengukuran mikro lokal CPython 3.12.15/Windows, tiga variabel sudah berisi ID, `timeit.repeat`,
+5 pengulangan x 200.000 operasi (median): tiga `get` **47,8 ns**; tiga pasangan `set/reset` **525,0 ns**;
+`copy_context` **31,5 ns**; salin + `run` fungsi kosong **80,4 ns**.
+Loop pembacaan tiga ID untuk 1/20 subjek (termasuk alokasi list/tuple) **0,161/1,242 mikrodetik**.
+Ini bukan pengukuran logging/server end-to-end atau jaminan latensi produksi; tidak mengukur antrean, formatter,
+I/O atau penjadwalan executor. Saat implementasi, ukur jalur kamera/inspeksi sebelum-sesudah dengan beban nyata.
+
+Yang perlu dijaga: ID disalin ke `LogRecord` di thread penghasil **sebelum** `QueueHandler`, bukan dibaca oleh
+formatter di thread `QueueListener`. Uji dua inspeksi bersamaan, task gagal, thread dipakai ulang, log tanpa sesi,
+dan antrean terlambat. `track_id`/nomor sesi lokal dapat berulang setelah restart; korelasi lintas restart perlu
+ID inspeksi yang unik, dengan migrasi audit terpisah. `worker_id` juga pengenal yang dapat dikaitkan ke orang;
+batasi akses/retensi log dan jangan jadikan ID pekerja/sesi label metrics berkarakteristik tak terbatas.
+
+**Codex (25-10-2026), bagian 8 dan 10.5:** Pembatas panggilan saya tempatkan di `vlm/`, sebagai layanan bersama
+untuk semua engine, bukan satu pembatas terpisah per peran. Identitas bucket adalah cakupan kuota yang sebenarnya:
+penyedia + endpoint/akun/project + model/kelompok kuota bila relevan. Peran utama/cadangan hanya pemakai bucket.
+Key sama pada dua peran harus berbagi anggaran; key berbeda dapat tetap berbagi kuota project. Gunakan ID kredensial
+buram di memori, jangan key mentah pada label metrics, log, cache publik atau jawaban API.
+
+Catat setiap usaha panggilan, termasuk konfirmasi larangan, retry, ping dan uji admin, bukan hanya inspeksi berhasil.
+Angka kuota dapat menjadi perkiraan jika penyedia tidak memberikan saldo yang pasti; jangan menampilkan "sisa"
+sebagai fakta. Kebijakan reservasi anggaran inspeksi vs diagnostik perlu disepakati. Kehabisan jatah harus cepat
+mengalihkan ke engine yang masih layak atau meminta menunggu; jangan tidur lama sambil memegang lock inspeksi.
+Pemutus sirkuit API dan status internet tetap berbeda dari pembatas kuota.
+
+Pemicu skalabilitas perlu memakai latensi end-to-end p50/p95, laju datang, waktu jalur kosong dan jumlah panggilan
+aktual. Contoh 200 orang/15 menit berarti 13,3 inspeksi/menit: bila sering dua panggilan, bebannya 26,7 panggilan/menit,
+bukan 13,3. Menambah jalur tidak menyelesaikan kuota project bersama atau VRAM PC yang sama. Usul satu proses per
+kamera juga perlu menjelaskan satu pemilik perangkat lampu/relay, data dan GPU, bukan sekadar port HTTP berbeda.
+Ambang N orang/1 detik/1 juta baris dalam draf sebaiknya tetap pemicu usulan, belum angka konfigurasi yang disetujui.
+Outbox audit harus atomik dengan insert audit dalam DB yang sama; outbox pekerja dalam transaksi DB pekerja,
+karena tiga SQLite terpisah tidak memiliki satu transaksi aplikasi bersama. Pengiriman foto harus mempertimbangkan
+retensi lokal; pusat mati berkepanjangan tidak boleh menyebabkan foto tersimpan tanpa batas atau unggahan yang tidak disetujui.
+
+**Codex (25-10-2026), bagian 7 dan 9:** Dahulukan bukti yang murah: kontrak impor + pemindahan kecil,
+karakterisasi sesi, lalu korelasi dan catatan evaluasi. Memindahkan folder, merakit singleton menjadi dependency injection,
+dan mengubah state machine jangan digabung satu commit. Uji nyata Tinggi tetap memotong antrean saat perangkat tersedia.
+Registri validasi sebaiknya mengikat penyedia/model + versi prompt + versi dataset + konfigurasi evaluasi, bukan model
+saja; hash bobot berlaku untuk artefak lokal, sedangkan model cloud memerlukan identitas/versi yang tersedia dari penyedia.
+"0 APD kurang lolos" adalah hasil pada sampel evaluasi tertentu, bukan jaminan semua keadaan produksi.
+Rasio penolakan produksi tanpa label pembanding hanya sinyal investigasi, bukan ukuran akurasi/drift yang sudah terbukti.
+Manifest hash/foto tetap perlu kebijakan akses; sumber dan bukti persetujuan tidak otomatis layak masuk Git publik.
