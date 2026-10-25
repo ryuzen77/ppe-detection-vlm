@@ -131,10 +131,15 @@ def _legacy_row_to_items(row: sqlite3.Row) -> dict:
 
 def connect(db_path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), timeout=cfg.DB_TIMEOUT_SECONDS, check_same_thread=check_same_thread)
-    conn.row_factory = sqlite3.Row
-    # Per koneksi: dulu hanya disetel (NORMAL) di koneksi inisialisasi yang
-    # langsung ditutup, jadi tidak pernah berlaku untuk penulisan audit (T37)
-    conn.execute(f"PRAGMA synchronous = {cfg.AUDIT_DB_SYNCHRONOUS};")
+    try:
+        conn.row_factory = sqlite3.Row
+        # Per koneksi: dulu hanya disetel (NORMAL) di koneksi inisialisasi yang
+        # langsung ditutup, jadi tidak pernah berlaku untuk penulisan audit (T37)
+        conn.execute(f"PRAGMA synchronous = {cfg.AUDIT_DB_SYNCHRONOUS};")
+    except BaseException:
+        # Kepemilikan belum diserahkan ke fasad bila inisialisasi gagal.
+        conn.close()
+        raise
     return conn
 
 

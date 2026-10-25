@@ -24,8 +24,34 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T100 — penutupan koneksi SQLite audit diseragamkan | Codex | `codex/t100-sqlite-close` | dikerjakan | `backend/audit/report_manager.py` (+ modul `backend/audit/*` bila perlu), `tests/` | Antrean 10b. Ganti pola `with self._get_connection() as conn` (hanya akhiri transaksi) ke penutupan eksplisit (`closing`) **tanpa** mengubah transaksi, `synchronous=FULL`, urutan tulis, atau commit-sebelum-hapus-foto. Tes: jumlah koneksi terbuka tidak bertambah setelah N panggilan tiap metode publik; tes karakterisasi audit tetap lolos. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T100 — penutupan koneksi SQLite audit diseragamkan | Codex | `codex/t100-sqlite-close` | tinjau | `backend/audit/report_manager.py` (+ modul `backend/audit/*` bila perlu), `tests/` | Tujuh context ditutup eksplisit setelah transaksi keluar; sumber backup dan koneksi setengah terinisialisasi juga ditutup pada galat. SQL, synchronous=FULL, dan commit-sebelum-hapus-foto tetap. +30 kasus: 14 metode publik × 20 panggilan, rollback/galat, migrasi/backup, CSV dibatalkan; 18 gagal pada kode lama lalu seluruhnya lolos. Tes terarah 172 lolos; `check.py` lolos 1.223 pytest + 258 vitest, hygiene tanpa tambahan utang. Biaya simpan 1 audit 7,478 → 11,936 ms dicatat beserta pengukuran lain di bawah. Cara uji: `python -m pytest -q tests/test_audit_connections.py tests/test_audit_split.py tests/test_audit_schema_characterization.py tests/test_save_inspection_characterization.py tests/test_retention_characterization.py`; lalu `python scripts/check.py`. Data hanya di tmp pytest |
 | T42k — modal `div` bersama (Pekerja & Akun) | Claude | `claude/t42k-modal-overlay` | dikerjakan | `web/src/components/ModalOverlay.svelte` (baru), `web/src/components/workers/{WorkerAddModal,WorkerEditModal,WorkerDeleteDialog,WorkerPhotoModal,OrgManager}.svelte`, `web/src/components/settings/Accounts.svelte`, `web/src/app.css`, `web/src/styles/tokens.css` (tambah `--z-modal`) | Lanjutan T42: 7 modal berpola `modal-overlay`/`modal-card` → satu komponen; ukuran tetap (400/520/540/760), Esc khusus Foto/Organisasi tetap di komponennya. Tidak menyentuh `backend/`/`tests/` |
+
+### Catatan implementasi T100 (25-10)
+
+- Tujuh context audit kini `with closing(self._get_connection()) as conn, conn`: context transaksi tetap
+  keluar lebih dahulu (commit/rollback), lalu koneksi ditutup. Kehadiran dan ekspor yang sudah menutup
+  koneksi tetap memakai pola sebelumnya. Cadangan menutup sumber walau pembukaan tujuan gagal;
+  pabrik koneksi menutup koneksi baru bila inisialisasi PRAGMA gagal sebelum diserahkan ke fasad.
+- SQL, PRAGMA synchronous=FULL, skema, dan urutan commit-sebelum-hapus-foto tetap. Setelah normalisasi
+  pembungkus closing, 33 metode fasad identik secara AST; perubahan lain hanya kepemilikan sumber/tujuan
+  cadangan. Nilai seluruh literal SQL/PRAGMA/pesan pada dua berkas produksi tetap sama.
+- 30 kasus regresi baru: kode lama menghasilkan 18 gagal yang membuktikan koneksi tertinggal dan 12 lolos;
+  sesudah perbaikan, 172 tes terarah/karakterisasi lolos. Tracker memegang referensi kuat ke semua koneksi,
+  sehingga GC tidak menutupi kebocoran. Semua 14 metode publik dicakup, masing-masing diulang 20 kali;
+  termasuk galat query, INSERT/commit, retensi, PRAGMA, migrasi/backup, dan pembatalan streaming CSV.
+- Pengukuran perf_counter di DB sementara, lama/baru berselang-seling, tiga putaran. Median 9 sampel
+  untuk simpan 1/20 orang tanpa foto, 7 sampel untuk kueri 100/100.000 baris pada satu hari:
+
+| Jalur | Beban | Sebelum (ms) | Sesudah (ms) |
+| :-- | :-- | --: | --: |
+| Simpan audit | 1 / 20 orang | 7,478 / 153,450 | 11,936 / 239,702 |
+| Laporan | 100 / 100.000 baris | 0,992 / 34,809 | 1,772 / 35,537 |
+| Ringkasan | 100 / 100.000 baris | 0,838 / 316,111 | 1,502 / 317,381 |
+
+Penutupan deterministik menambah sekitar 4,46 ms per simpan pada mesin uji ini. Ini sejalan dengan
+[checkpoint otomatis ketika koneksi WAL terakhir ditutup](https://www.sqlite.org/wal.html), tanpa perubahan
+PRAGMA atau batas transaksi. Biaya tersebut dicatat, bukan disamarkan sebagai fluktuasi pengukuran.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 

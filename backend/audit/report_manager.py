@@ -153,13 +153,8 @@ class ReportManager:
         backup_path = self.db_path.with_name(f"{self.db_path.stem}.v{version}.bak")
         if backup_path.exists():
             return
-        src = self._connect()
-        dst = audit_db.backup_connection(backup_path)
-        try:
+        with closing(self._connect()) as src, closing(audit_db.backup_connection(backup_path)) as dst:
             src.backup(dst)
-        finally:
-            dst.close()
-            src.close()
         logger.info(f"Cadangan sebelum migrasi skema: {backup_path.name}")
 
     def save_inspection(
@@ -236,7 +231,7 @@ class ReportManager:
 
     def _insert_inspection(self, values: tuple) -> int:
         """Satu baris audit (urutan nilai = `_INSPECTION_COLUMNS`); mengembalikan id-nya."""
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn, conn:
             record_id = audit_db.insert_inspection(conn, values)
             conn.commit()
         assert record_id is not None, "INSERT selalu mengisi lastrowid"
@@ -245,7 +240,7 @@ class ReportManager:
     def recognition_rate(self, days: int, today: Optional[date] = None) -> dict:
         end = today or date.today()
         start = end - timedelta(days=max(1, days) - 1)
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn, conn:
             row = audit_queries.recognition_counts(conn, start, end)
         passes, recognized = row["passes"], row["recognized"]
         return {
@@ -269,7 +264,7 @@ class ReportManager:
         company: Optional[str] = None,
     ) -> dict:
         """Retrieves paginated inspection records with summary statistics."""
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn, conn:
             return audit_queries.get_reports(
                 conn, limit, offset, status_filter, date_filter, date_from, date_to, worker_id, department, company
             )
@@ -291,7 +286,7 @@ class ReportManager:
         ValueError untuk periode/tanggal tidak sah (API membalas 400).
         """
         start, end, where, params = audit_queries.summary_query(period, anchor, worker_id, department, company)
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn, conn:
             rows = audit_queries.summary_rows(conn, where, params)
         return audit_queries.summarize_rows(period, start, end, rows)
 
@@ -361,7 +356,7 @@ class ReportManager:
         """Pemeriksaan terakhir per worker_id (T79). Mengembalikan {worker_id: {"at": timestamp, "is_complete": bool}}."""
         if not worker_ids:
             return {}
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn, conn:
             return audit_queries.get_last_seen_batch(conn, worker_ids)
 
     def get_last_seen(self, worker_id: int) -> Optional[dict]:
@@ -370,7 +365,7 @@ class ReportManager:
 
     def get_worker_inspections(self, worker_id: int, limit: int = 50, before: Optional[int] = None) -> dict:
         """Riwayat inspeksi pekerja berhalaman urut terbaru (T79). Memakai idx_worker_id."""
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn, conn:
             return audit_queries.get_worker_inspections(conn, worker_id, limit, before)
 
     def get_snapshot_path(self, filename: str) -> Optional[Path]:
@@ -389,7 +384,7 @@ class ReportManager:
         """
         now = retention.time.time()
         try:
-            with self._get_connection() as conn:
+            with closing(self._get_connection()) as conn, conn:
                 steps = (
                     self._expire_audits(conn, now),
                     self._expire_photos(conn, now),
