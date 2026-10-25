@@ -49,14 +49,14 @@ def period_range(period: str, anchor: date) -> tuple[date, date]:
 def _empty_buckets(period: str, start: date, end: date) -> dict[str, dict]:
     if period == PERIOD_DAY:
         return {
-            f"{h:02d}": {"start": f"{h:02d}:00", "label": f"{h:02d}", "passed": 0, "rejected": 0}
+            f"{h:02d}": {"start": f"{h:02d}:00", "label": f"{h:02d}", "passed": 0, "rejected": 0, "held": 0}
             for h in range(HOURS_PER_DAY)
         }
     buckets = {}
     day = start
     while day <= end:
         label = messages.WEEKDAY_SHORT[day.weekday()] if period == PERIOD_WEEK else str(day.day)
-        buckets[day.isoformat()] = {"start": day.isoformat(), "label": label, "passed": 0, "rejected": 0}
+        buckets[day.isoformat()] = {"start": day.isoformat(), "label": label, "passed": 0, "rejected": 0, "held": 0}
         day += timedelta(days=1)
     return buckets
 
@@ -97,8 +97,11 @@ def summarize(period: str, start: date, end: date, rows: list[AuditRow]) -> dict
                 bucket["rejected"] += 1
             elif row.gate_hold is None:
                 bucket["passed"] += 1
+            else:
+                bucket["held"] += 1
     passed = sum(b["passed"] for b in buckets.values())
     rejected = sum(b["rejected"] for b in buckets.values())
+    held = sum(b["held"] for b in buckets.values())
     return {
         "period": period,
         "range": {"from": start.isoformat(), "to": end.isoformat()},
@@ -106,6 +109,7 @@ def summarize(period: str, start: date, end: date, rows: list[AuditRow]) -> dict
             "total": total,
             "passed": passed,
             "rejected": rejected,
+            "held": held,
             "compliance_rate": round((total - rejected) / total * 100, 1) if total else None,
         },
         "buckets": list(buckets.values()),

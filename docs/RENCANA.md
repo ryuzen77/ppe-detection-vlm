@@ -24,7 +24,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T101a — ringkasan Laporan + `held` (backend) | Codex | `codex/t101a-summary-held` | dikerjakan | `backend/audit/summary.py`, `tests/test_report_summary.py` (+ tes karakterisasi bila perlu) | Kontrak "T101" di bawah (disetujui pengguna 25-10). Tambah `held` ke `totals` & tiap bucket; `compliance_rate` tetap. Klaim dicatat Claude atas aba-aba pengguna |
+| T101a — ringkasan Laporan + `held` (backend) | Codex | `codex/t101a-summary-held` | tinjau | `backend/audit/summary.py`, `tests/test_report_summary.py`, `tests/test_report_hold_semantics.py` | Kontrak "T101" di bawah (disetujui pengguna 25-10). `held` ditambahkan ke totals & bucket jam/hari; invarian total = passed + rejected + held, kepatuhan APD tetap. Tambahan 19 kasus uji (campuran keputusan, kedua alasan ditahan, kosong, rentang, filter identitas); tes terarah 96/96; `check.py` lolos (pytest 1.242, vitest 258). Pengukuran dan cara uji di bawah |
 | T101b — grafik volume seri "Ditahan" (UI) | Claude | `claude/t101b-chart-held` | dikerjakan | `web/src/components/reports/ReportChart.svelte`, `web/src/lib/api/types.ts`, `web/src/lib/messages.ts` (tambah), logika murni di `web/src/lib/` + vitest | Kontrak "T101". Seri ketiga kuning (`--warn`), legenda & tooltip |
 
 ### Kontrak T101 — seri "Ditahan" di ringkasan Laporan (antrean 9c; **disetujui pengguna 25-10**)
@@ -40,6 +40,17 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - UI: grafik volume seri ketiga kuning (`--warn`) ditumpuk di antara merah & hijau, legenda + tooltip "Ditahan";
   tinggi batang = `passed + rejected + held`. Kartu statistik "Ditahan" yang ada tidak diubah.
 - Pembagian: T101a backend (Codex), T101b UI (Claude); area tidak beririsan.
+
+Catatan pelaksanaan T101a (25-10): risiko Rendah, tambahan ringkasan tanpa mengubah keputusan gerbang atau SQL.
+Cara uji: `python -m pytest -q tests/test_report_summary.py tests/test_report_hold_semantics.py tests/test_audit_connections.py tests/test_audit_split.py`.
+`get_summary` pada DB sementara (semua baris pada satu hari; lolos/ditolak/dua alasan ditahan sama banyak):
+median 14 sampel per versi, berselang-seling setelah 2 pemanasan, baseline `bcb4f6d` → T101a:
+100 baris **1,537 → 1,523 ms** (rentang 1,339–1,978 → 1,347–2,044 ms);
+100.000 baris **289,603 → 295,381 ms** (283,771–303,490 → 287,785–303,738 ms).
+Kenaikan median beban besar 2,0%, dengan rentang bertumpang tindih; kompleksitas tetap O(n).
+`EXPLAIN QUERY PLAN` pada kedua ukuran: `SEARCH worker_inspections USING INDEX idx_date_str (date_str>? AND date_str<?)`.
+Tinjauan hanya-baca T101b `2ff65f4`: aman digabung bersama T101a; tipe JSON, seri ketiga,
+tooltip, tinggi batang dan kompatibilitas server lama sesuai kontrak. Tidak menjalankan UI terpisah.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
