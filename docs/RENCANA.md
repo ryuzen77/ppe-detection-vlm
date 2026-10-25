@@ -24,6 +24,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T100 — penutupan koneksi SQLite audit diseragamkan | Codex | `codex/t100-sqlite-close` | dikerjakan | `backend/audit/report_manager.py` (+ modul `backend/audit/*` bila perlu), `tests/` | Antrean 10b. Ganti pola `with self._get_connection() as conn` (hanya akhiri transaksi) ke penutupan eksplisit (`closing`) **tanpa** mengubah transaksi, `synchronous=FULL`, urutan tulis, atau commit-sebelum-hapus-foto. Tes: jumlah koneksi terbuka tidak bertambah setelah N panggilan tiap metode publik; tes karakterisasi audit tetap lolos. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T42k — modal `div` bersama (Pekerja & Akun) | Claude | `claude/t42k-modal-overlay` | dikerjakan | `web/src/components/ModalOverlay.svelte` (baru), `web/src/components/workers/{WorkerAddModal,WorkerEditModal,WorkerDeleteDialog,WorkerPhotoModal,OrgManager}.svelte`, `web/src/components/settings/Accounts.svelte`, `web/src/app.css`, `web/src/styles/tokens.css` (tambah `--z-modal`) | Lanjutan T42: 7 modal berpola `modal-overlay`/`modal-card` → satu komponen; ukuran tetap (400/520/540/760), Esc khusus Foto/Organisasi tetap di komponennya. Tidak menyentuh `backend/`/`tests/` |
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
