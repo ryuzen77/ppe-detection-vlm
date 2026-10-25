@@ -9,7 +9,7 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **25-10:** T97 tuntas (T97a/b/c), T99a selesai — semua digabung, belum di-push. Berikutnya: **T99b** (Codex), antrean 9c
+- **25-10:** T97 tuntas (T97a/b/c), T99a & T99b selesai — semua digabung, belum di-push. Berikutnya: **T99c** (Codex), T100 (koneksi SQLite), antrean 9c
   (grafik Ditahan), T99c–d, uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
@@ -24,7 +24,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99b — pecah `report_manager` per tanggung jawab (fasad tetap) | Codex | `codex/t99b-report-split` | tinjau | `backend/report_manager.py`, `backend/audit_db.py`, `backend/snapshot_store.py`, `backend/audit_queries.py`, `backend/audit_export.py`, `backend/attendance.py`, `backend/retention.py` (baru), `tests/` (target patch & impor, fixture skema lama di tmp) | Enam modul, fasad tetap memegang transaksi, koneksi & lock; patch tes pindah ke namespace pemiliknya. Acuan 135 + 6 fixture migrasi lolos sebelum/sesudah; 10 kasus baru lain menjaga koneksi pinjaman dan urutan commit/foto. `check.py` lolos 1.161 pytest + 258 vitest, tanpa tambahan utang hygiene. Bukti: 43 literal SQL, 27 badan fungsi ternormalisasi, 73 perintah SQLite aktual & 13 hasil publik identik. Baseline tiga putaran dan uji simpan berselang-seling dicatat di bawah. Cara uji: `python -m pytest -q tests/test_audit_schema_characterization.py tests/test_audit_split.py tests/test_save_inspection_characterization.py tests/test_retention_characterization.py tests/test_report_manager.py tests/test_attendance.py tests/test_durability.py`; lalu `python scripts/check.py`. Pola penutupan koneksi lama dicatat untuk task terpisah, tidak diubah di sini. Tidak memakai `data/` |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
@@ -132,7 +131,8 @@ seperti sebelumnya. Penyeragaman penutupan koneksi perlu dinilai dan diuji terse
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 9c | Rendah | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
-| 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. **T99a selesai 25-10**; **T99b diklaim Codex 25-10** (`report_manager`, awali dengan ukur ulang baseline `save_inspection`) |
+| 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. **T99a selesai 25-10**; **T99a & T99b selesai 25-10**; berikutnya **T99c** (mesin VLM & rute peralihan — paling kritis, uji karakterisasi rute dulu) |
+| 10b | Rendah | **T100 — penutupan koneksi SQLite audit diseragamkan** (temuan Codex di T99b) | Pola `with self._get_connection() as conn` hanya mengakhiri transaksi, tidak menutup koneksi (di CPython tertutup saat objek dibuang, jadi kecil risikonya). Seragamkan ke penutupan eksplisit (`closing`) tanpa mengubah transaksi/urutan tulis; tes: jumlah koneksi terbuka tidak bertambah setelah N panggilan |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
 
