@@ -326,7 +326,7 @@ def summarize(rows):
     return out
 
 
-def main():
+def _bench_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("data")
     ap.add_argument("--prompts", default="P0,P1,P2")
@@ -337,10 +337,10 @@ def main():
     ap.add_argument("--files", default="", help="hanya foto dengan nama ini, dipisah koma (mis. no_47,no_14)")
     ap.add_argument("--dump", action="store_true", help="cetak jawaban mentah model")
     args = ap.parse_args()
+    return args
 
-    prompts = args.prompts.split(",")
-    sizes = args.sizes.split(",")
-    variants = [(p, s) for p in prompts for s in sizes]
+
+def _bench_files(args):
     data = Path(args.data).resolve()
     files = []
     for sub, label in CLASSES.items():
@@ -349,14 +349,18 @@ def main():
             wanted = set(args.files.split(","))
             fs = [f for f in fs if f.stem in wanted]
         files += [(f, label) for f in (fs[: args.limit] if args.limit else fs)]
+    return files
 
+
+def _bench_items(args):
     ppe_rules.load_settings()
     items = ppe_rules.get_active_items()
     if args.vest_strict:
         items = with_strict_vest(items)
-    detector.load()
-    print(f"model {args.model} | {len(files)} foto | varian {variants} | item {[i.key for i in items]}", flush=True)
+    return items
 
+
+def _bench_prepare(files):
     # Potongan YOLO dihitung sekali, sebelum beban & pengukuran
     prepared = []
     for f, label in files:
@@ -365,7 +369,10 @@ def main():
         prepared.append(
             (f, label, frame, det.crop_img if det is not None else None, det.is_full_body if det is not None else None)
         )
+    return prepared
 
+
+def _bench_start(args, items, prompts, prepared):
     sampler = GpuSampler()
     sampler.start()
     client = httpx.Client()
@@ -377,7 +384,79 @@ def main():
     time.sleep(2)
     residency = ollama_residency(args.model)
     print(f"porsi GPU Ollama saat beban YOLO: {residency}", flush=True)
+    return sampler, client, load, residency
 
+
+def _bench_predict(args, prompt, items, client, img, system, user, row):
+    resp = {}
+    try:
+        resp = call(client, args.model, system, user, img, output_format(prompt, items))
+        raw = resp.get("message", {}).get("content", "")
+        if args.dump:
+            print(f"--- {row['variant']} {row['file']}", raw, sep="\n", flush=True)
+        parsed = json.loads(raw)
+        row["rokok_awal"] = smoking_flag(parsed)
+        if prompt == "P0" and row["rokok_awal"] is True:
+            confirm_production_smoking(client, args.model, img, parsed, row)
+        res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt, items), items)
+        row.update(
+            status="ok",
+            pred_complete=res.is_complete,
+            missing="; ".join(res.missing_items),
+            rokok=smoking_flag(parsed),
+            output_chars=len(raw),
+        )
+    except Exception as e:
+        row.update(status="galat", error=str(e)[:160])
+    return resp
+
+
+def _bench_timings(row, args, start, dims, resp):
+    row.update(
+        latency_s=round(time.time() - start, 2),
+        image_size=dims,
+        # Model bisa dimuat ulang sebagian ke CPU bila aplikasi lain merebut
+        # VRAM; latensi baris seperti itu tidak sebanding dengan yang lain.
+        gpu=ollama_residency(args.model),
+        prompt_tokens=resp.get("prompt_eval_count"),
+        prompt_ms=round(resp["prompt_eval_duration"] / NS_PER_MS) if resp.get("prompt_eval_duration") else None,
+        output_tokens=resp.get("eval_count"),
+        output_ms=round(resp["eval_duration"] / NS_PER_MS) if resp.get("eval_duration") else None,
+        load_ms=round(resp["load_duration"] / NS_PER_MS) if resp.get("load_duration") else None,
+    )
+
+
+def _bench_row(args, prompt, size, prepared, items, client):
+    f, label, frame, crop, full_body = prepared
+    suffix = "+rompi_ketat" if args.vest_strict else ""
+    row = {
+        "variant": f"{prompt}@{size}{suffix}",
+        "file": f"{f.parent.name}/{f.name}",
+        "label_complete": label,
+        "full_body": full_body,
+    }
+    src = frame if size == FULL else crop
+    if src is None:
+        row["status"] = "tanpa_orang"
+        return row
+    img, dims = encode(src, cfg.VLM_IMAGE_MAX_SIZE if size == FULL else int(size))
+    system, user = build_prompts(prompt, items)
+    start = time.time()
+    resp = _bench_predict(args, prompt, items, client, img, system, user, row)
+    _bench_timings(row, args, start, dims, resp)
+    return row
+
+
+def _bench_progress(row, label, n, total):
+    verdict = ("BENAR" if row.get("pred_complete") == label else "SALAH") if row["status"] == "ok" else "GALAT"
+    print(
+        f"[{n}/{total}] {row['variant']:9} {row['file']}: {verdict} {row['latency_s']} dtk "
+        f"(in {row['prompt_tokens']} tok/{row['prompt_ms']} ms, out {row['output_tokens']} tok/{row['output_ms']} ms)",
+        flush=True,
+    )
+
+
+def _bench_rows(args, variants, prepared, items, client):
     rows = []
     total = len(prepared) * len(variants)
     n = 0
@@ -385,69 +464,17 @@ def main():
     # dikirim berturut-turut sehingga cache prompt Ollama terpakai. Diselang-seling
     # per foto, cache itu terbuang dan waktu baca input tampak lebih lambat.
     for prompt, size in variants:
-        for f, label, frame, crop, full_body in prepared:
+        for prepared_row in prepared:
             n += 1
-            suffix = "+rompi_ketat" if args.vest_strict else ""
-            row = {
-                "variant": f"{prompt}@{size}{suffix}",
-                "file": f"{f.parent.name}/{f.name}",
-                "label_complete": label,
-                "full_body": full_body,
-            }
-            src = frame if size == FULL else crop
-            if src is None:
-                row["status"] = "tanpa_orang"
-                rows.append(row)
-                continue
-            img, dims = encode(src, cfg.VLM_IMAGE_MAX_SIZE if size == FULL else int(size))
-            system, user = build_prompts(prompt, items)
-            start = time.time()
-            resp = {}
-            try:
-                resp = call(client, args.model, system, user, img, output_format(prompt, items))
-                raw = resp.get("message", {}).get("content", "")
-                if args.dump:
-                    print(f"--- {row['variant']} {row['file']}", raw, sep="\n", flush=True)
-                parsed = json.loads(raw)
-                row["rokok_awal"] = smoking_flag(parsed)
-                if prompt == "P0" and row["rokok_awal"] is True:
-                    confirm_production_smoking(client, args.model, img, parsed, row)
-                res = VLMAnalyzer._parse_vlm_payload(to_production_payload(parsed, prompt, items), items)
-                row.update(
-                    status="ok",
-                    pred_complete=res.is_complete,
-                    missing="; ".join(res.missing_items),
-                    rokok=smoking_flag(parsed),
-                    output_chars=len(raw),
-                )
-            except Exception as e:
-                row.update(status="galat", error=str(e)[:160])
-            row.update(
-                latency_s=round(time.time() - start, 2),
-                image_size=dims,
-                # Model bisa dimuat ulang sebagian ke CPU bila aplikasi lain merebut
-                # VRAM; latensi baris seperti itu tidak sebanding dengan yang lain.
-                gpu=ollama_residency(args.model),
-                prompt_tokens=resp.get("prompt_eval_count"),
-                prompt_ms=round(resp["prompt_eval_duration"] / NS_PER_MS) if resp.get("prompt_eval_duration") else None,
-                output_tokens=resp.get("eval_count"),
-                output_ms=round(resp["eval_duration"] / NS_PER_MS) if resp.get("eval_duration") else None,
-                load_ms=round(resp["load_duration"] / NS_PER_MS) if resp.get("load_duration") else None,
-            )
+            row = _bench_row(args, prompt, size, prepared_row, items, client)
             rows.append(row)
-            verdict = ("BENAR" if row.get("pred_complete") == label else "SALAH") if row["status"] == "ok" else "GALAT"
-            print(
-                f"[{n}/{total}] {row['variant']:9} {row['file']}: {verdict} {row['latency_s']} dtk "
-                f"(in {row['prompt_tokens']} tok/{row['prompt_ms']} ms, out {row['output_tokens']} tok/{row['output_ms']} ms)",
-                flush=True,
-            )
+            if row["status"] == "tanpa_orang":
+                continue
+            _bench_progress(row, prepared_row[1], n, total)
+    return rows
 
-    load.stop_flag.set()
-    sampler.stop_flag.set()
-    load.join(5)
-    client.close()
-    unload_ollama(args.model)
 
+def _bench_summary(args, residency, sampler, items, rows):
     summary = {
         "model": args.model,
         "porsi_gpu_ollama": residency,
@@ -455,6 +482,10 @@ def main():
         "item_aktif": [i.key for i in items],
         "varian": summarize(rows),
     }
+    return summary
+
+
+def _bench_write(args, summary, rows):
     out_dir = cfg.DATA_DIR / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{time.strftime('%Y%m%d-%H%M%S')}_bench_{args.model.replace(':', '-')}"
@@ -465,6 +496,27 @@ def main():
     (out_dir / f"{stem}.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     print("\nRINGKASAN " + json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
     print(f"hasil: {out_dir / stem}.csv/.json", flush=True)
+
+
+def main():
+    args = _bench_args()
+    prompts = args.prompts.split(",")
+    sizes = args.sizes.split(",")
+    variants = [(p, s) for p in prompts for s in sizes]
+    files = _bench_files(args)
+    items = _bench_items(args)
+    detector.load()
+    print(f"model {args.model} | {len(files)} foto | varian {variants} | item {[i.key for i in items]}", flush=True)
+    prepared = _bench_prepare(files)
+    sampler, client, load, residency = _bench_start(args, items, prompts, prepared)
+    rows = _bench_rows(args, variants, prepared, items, client)
+    load.stop_flag.set()
+    sampler.stop_flag.set()
+    load.join(5)
+    client.close()
+    unload_ollama(args.model)
+    summary = _bench_summary(args, residency, sampler, items, rows)
+    _bench_write(args, summary, rows)
 
 
 if __name__ == "__main__":

@@ -26,42 +26,14 @@ async def list_cameras():
     catalog = camera_mgr.get_catalog()
     active = video_service.get_camera_status()
 
-    # Kalau belum pernah dipindai, daftar tetap dibentuk dari nama perangkat.
-    # Perangkat yang belum diukur ditandai `scanned: False`, bukan "tidak tersedia":
-    # kamera USB yang baru dicolok belum tentu bermasalah, hanya belum diperiksa.
     if not catalog["devices"]:
-        catalog["devices"] = [
-            {
-                "index": i,
-                "name": name,
-                "available": True,
-                "scanned": False,
-                "in_use": False,
-                "modes": [],
-                "selected_mode": None,
-            }
-            for i, name in enumerate(camera_manager.list_device_names())
-        ]
+        catalog["devices"] = _unscanned_devices()
 
     # Perangkat yang sedang dipakai tidak bisa di-probe karena terkunci oleh
     # aliran video, jadi datanya diisi dari service yang berjalan. Dijalankan
     # setelah daftar terbentuk agar berlaku untuk kedua sumber daftar di atas.
     for dev in catalog["devices"]:
-        if dev["index"] != active["index"]:
-            continue
-        dev["in_use"] = True
-        dev["available"] = not active["is_synthetic"]
-        dev["scanned"] = True
-        if active["mode"] and not dev.get("selected_mode"):
-            dev["selected_mode"] = active["mode"]
-        # Kamera yang dibuka dengan permintaan bawaan belum punya angka hasil
-        # pengukuran, jadi laju yang sedang berjalan dipakai supaya daftar
-        # tidak menampilkan "@0 FPS".
-        sel = dev.get("selected_mode")
-        if sel and not sel.get("fps"):
-            sel = dict(sel)
-            sel["fps"] = active["fps"]
-            dev["selected_mode"] = sel
+        _mark_active_device(dev, active)
 
     # Pilihan terakhir dipakai untuk menyorot bawaan di dialog pemilihan,
     # bukan untuk menyambung otomatis.
@@ -69,6 +41,39 @@ async def list_cameras():
     catalog["active"] = active
     catalog["quality_warning"] = active["height"] > 0 and active["height"] < cfg.CAMERA_QUALITY_WARN_HEIGHT
     return catalog
+
+
+def _unscanned_devices():
+    # Kalau belum pernah dipindai, daftar tetap dibentuk dari nama perangkat.
+    # Kamera baru belum diukur, bukan berarti tidak tersedia.
+    return [
+        {
+            "index": i,
+            "name": name,
+            "available": True,
+            "scanned": False,
+            "in_use": False,
+            "modes": [],
+            "selected_mode": None,
+        }
+        for i, name in enumerate(camera_manager.list_device_names())
+    ]
+
+
+def _mark_active_device(dev, active):
+    if dev["index"] != active["index"]:
+        return
+    dev["in_use"] = True
+    dev["available"] = not active["is_synthetic"]
+    dev["scanned"] = True
+    if active["mode"] and not dev.get("selected_mode"):
+        dev["selected_mode"] = active["mode"]
+    # Mode bawaan belum punya angka pengukuran: pakai laju yang sedang berjalan.
+    sel = dev.get("selected_mode")
+    if sel and not sel.get("fps"):
+        sel = dict(sel)
+        sel["fps"] = active["fps"]
+        dev["selected_mode"] = sel
 
 
 @router.post("/api/cameras/scan", dependencies=[Depends(require_admin)])

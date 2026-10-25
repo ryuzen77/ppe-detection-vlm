@@ -28,13 +28,7 @@ COLOR_SOURCE = "web/src/styles/tokens.css"
 
 # Utang lama (audit 28-09-2026). Daftar ini hanya boleh MENYUSUT: fungsi baru yang
 # panjang ditolak, dan entri yang sudah dipendekkan wajib dihapus dari sini.
-LONG_FUNCTIONS_DEBT = {
-    "tools/bench_vlm.py::main",
-    "tools/eval_vlm.py::main",
-    "backend/app.py::run",
-    "backend/api/routes_cameras.py::list_cameras",
-    "backend/video/capture.py::__init__",
-}
+LONG_FUNCTIONS_DEBT: set[str] = set()
 HEX_COLOR_DEBT: set[str] = set()  # T42j: VideoPanel kini memakai token --video-bg
 
 
