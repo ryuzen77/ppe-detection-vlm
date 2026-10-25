@@ -199,14 +199,7 @@ def server_config():
     return config
 
 
-def run():
-    """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
-    # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
-    # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
-    # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.
-    setup_logging(cfg)
-    install_shutdown_hook()
-
+def _graceful_server():
     import contextlib
     import signal
     import uvicorn
@@ -217,21 +210,42 @@ def run():
 
         @contextlib.contextmanager
         def capture_signals(self):
-            original_handlers = {}
-            for sig in HANDLED_SIGNALS:
-                try:
-                    original_handlers[sig] = signal.signal(sig, self.handle_exit)
-                except (ValueError, OSError):
-                    pass
+            original_handlers = _install_server_signals(signal, HANDLED_SIGNALS, self.handle_exit)
             try:
                 yield
             finally:
-                for sig, handler in original_handlers.items():
-                    try:
-                        signal.signal(sig, handler)
-                    except (ValueError, OSError):
-                        pass
+                _restore_server_signals(signal, original_handlers)
                 # Intentionally avoid re-raising SIGINT on Windows so event loop exits with zero error trace
+
+    return GracefulServer
+
+
+def _install_server_signals(signal, handled_signals, handle_exit):
+    original_handlers = {}
+    for sig in handled_signals:
+        try:
+            original_handlers[sig] = signal.signal(sig, handle_exit)
+        except (ValueError, OSError):
+            pass
+    return original_handlers
+
+
+def _restore_server_signals(signal, original_handlers):
+    for sig, handler in original_handlers.items():
+        try:
+            signal.signal(sig, handler)
+        except (ValueError, OSError):
+            pass
+
+
+def run():
+    """Menjalankan server. Dipanggil dari `python -m backend` (lihat `__main__.py`)."""
+    # Logging disiapkan sebelum uvicorn supaya baris startup-nya ikut tercatat.
+    # Hook berhenti dipasang sebelum server dibuat: uvicorn mengikat penangan
+    # sinyalnya saat mulai, jadi pemasangan sesudahnya tidak berpengaruh.
+    setup_logging(cfg)
+    install_shutdown_hook()
+    GracefulServer = _graceful_server()
 
     # Objek app dioper langsung, bukan lewat string "backend.app:app". Bentuk
     # string membuat uvicorn mengimpor modul ini lewat jalur impornya sendiri;

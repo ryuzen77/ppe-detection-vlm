@@ -68,7 +68,11 @@ class VideoCaptureService:
         self.fps = 0.0
         self.camera_index = None
         self.use_synthetic = False
+        self._init_camera_status()
+        self._init_camera_requests()
+        self._init_frame_state()
 
+    def _init_camera_status(self):
         # Status kamera untuk ribbon dashboard:
         # IDLE (belum dipilih) / OPENING / OK / LOST (terputus, dicoba ulang) / SYNTHETIC
         self.camera_status = "IDLE"
@@ -78,6 +82,8 @@ class VideoCaptureService:
         self.camera_name_verified = False
         self.camera_error = ""
         self.active_mode = None
+
+    def _init_camera_requests(self):
         # Permintaan pindah kamera; hanya diset dari luar, dieksekusi thread pembaca
         # supaya tidak ada dua thread yang menyentuh perangkat yang sama.
         self._pending_index = None
@@ -92,6 +98,8 @@ class VideoCaptureService:
         self._health = CameraHealth()
         # Gangguan yang dibawa melewati pembukaan ulang kamera (T45b)
         self._carry_fault = None
+
+    def _init_frame_state(self):
         # Menunggu kamera dicolok ulang (T45b): kapan mulai & kapan terakhir dicatat
         self._waiting_since = None
         self._waiting_logged_at = 0.0

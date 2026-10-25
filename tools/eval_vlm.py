@@ -144,7 +144,7 @@ def unload_ollama(model: str):
         print(f"gagal membongkar {model}: {e}", flush=True)
 
 
-def main():
+def _eval_files():
     data = Path(sys.argv[1]).resolve()
     # --files a,b,c : hanya foto dengan nama (tanpa ekstensi) ini — menghemat kuota
     # VLM cloud saat cukup menguji sebagian foto (mis. T39a, 10 gambar)
@@ -157,7 +157,10 @@ def main():
     ]
     if not files:
         sys.exit(f"Tidak ada foto di {data}/ppe_complete atau ppe_incomplete")
+    return files
 
+
+def _eval_analyzer(files):
     ppe_rules.load_settings()
     detector.load()
     analyzer = VLMAnalyzer()
@@ -168,13 +171,19 @@ def main():
     provider, model = analyzer.provider.name, analyzer.provider.model
     active = [i.key for i in ppe_rules.get_active_items()]
     print(f"penyedia {provider} | model {model} | {len(files)} foto | item aktif {active}", flush=True)
+    return analyzer, provider, model, active
 
+
+def _eval_prepare(files):
     # 1. Potongan YOLO dihitung sekali, sebelum beban & pengukuran dimulai
     crops = []
     for f, label in files:
         frame = cv2.imdecode(np.fromfile(str(f), np.uint8), cv2.IMREAD_COLOR)
         crops.append((f, label, frame, person_crop(frame)))
+    return crops
 
+
+def _eval_start(analyzer, crops, model):
     sampler = GpuSampler()
     sampler.start()
     time.sleep(1.5)
@@ -188,7 +197,40 @@ def main():
     load_start = time.time()
     load.start()
     residency = ollama_residency(model) if cfg.VLM_IS_LOCAL else "-"
+    return sampler, vram_before, load, load_start, residency
 
+
+def _eval_measure(analyzer, pool, det, row, last_call):
+    wait = cfg.VLM_MIN_INTERVAL_SECONDS - (time.time() - last_call)
+    if wait > 0:
+        time.sleep(wait)  # jeda kuota free tier; di luar pengukuran latensi
+    start = time.time()
+    try:
+        # T86: titik pose ikut, supaya gambar yang dinilai sama dengan di gerbang (panel kepala & tangan)
+        res = pool.submit(analyzer._call_vlm_internal, det.crop_img, getattr(det, "crop_keypoints", None)).result(
+            timeout=EVAL_TIMEOUT_SECONDS
+        )
+        row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items))
+    except Exception as e:
+        kind = "timeout" if e.__class__.__name__ == "TimeoutError" else "galat"
+        row.update(status=kind, error=str(e)[:200])
+    row["latency_s"] = round(time.time() - start, 2)
+    last_call = time.time()
+    return last_call
+
+
+def _eval_progress(n, crops, row, label):
+    verdict = (
+        ("BENAR" if row["pred_complete"] == label else "SALAH") if row["status"] == "ok" else row["status"].upper()
+    )
+    print(
+        f"[{n}/{len(crops)}] {row['file']}: {verdict} {row['latency_s']} dtk "
+        f"(pred {'lengkap' if row.get('pred_complete') else 'tidak'}; kurang: {row.get('missing', '-')})",
+        flush=True,
+    )
+
+
+def _eval_rows(analyzer, crops):
     rows = []
     pool = ThreadPoolExecutor(max_workers=1)
     last_call = 0.0
@@ -201,39 +243,13 @@ def main():
             continue
         row.update(full_body=det.is_full_body, in_corridor=det.is_inside_corridor, body_reason=det.reason)
 
-        wait = cfg.VLM_MIN_INTERVAL_SECONDS - (time.time() - last_call)
-        if wait > 0:
-            time.sleep(wait)  # jeda kuota free tier; di luar pengukuran latensi
-        start = time.time()
-        try:
-            # T86: titik pose ikut, supaya gambar yang dinilai sama dengan di gerbang (panel kepala & tangan)
-            res = pool.submit(analyzer._call_vlm_internal, det.crop_img, getattr(det, "crop_keypoints", None)).result(
-                timeout=EVAL_TIMEOUT_SECONDS
-            )
-            row.update(status="ok", pred_complete=res.is_complete, missing="; ".join(res.missing_items))
-        except Exception as e:
-            kind = "timeout" if e.__class__.__name__ == "TimeoutError" else "galat"
-            row.update(status=kind, error=str(e)[:200])
-        row["latency_s"] = round(time.time() - start, 2)
-        last_call = time.time()
+        last_call = _eval_measure(analyzer, pool, det, row, last_call)
         rows.append(row)
-        verdict = (
-            ("BENAR" if row["pred_complete"] == label else "SALAH") if row["status"] == "ok" else row["status"].upper()
-        )
-        print(
-            f"[{n}/{len(crops)}] {row['file']}: {verdict} {row['latency_s']} dtk "
-            f"(pred {'lengkap' if row.get('pred_complete') else 'tidak'}; kurang: {row.get('missing', '-')})",
-            flush=True,
-        )
+        _eval_progress(n, crops, row, label)
+    return rows, pool
 
-    load.stop_flag.set()
-    sampler.stop_flag.set()
-    load.join(5)
-    pool.shutdown(wait=False)
-    if cfg.VLM_IS_LOCAL:
-        unload_ollama(model)
-    elapsed = time.time() - load_start
 
+def _eval_summary(analyzer, provider, model, active, rows, sampler, vram_before, residency, load, elapsed):
     # 2. Ringkasan
     ok = [r for r in rows if r["status"] == "ok"]
     sent = [r for r in rows if r["status"] != "tanpa_orang"]
@@ -267,6 +283,10 @@ def main():
         "tanpa_orang": sum(r["status"] == "tanpa_orang" for r in rows),
         "item_aktif": active,
     }
+    return summary
+
+
+def _eval_write(provider, model, rows, summary):
     out_dir = cfg.DATA_DIR / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{time.strftime('%Y%m%d-%H%M%S')}_{provider}_{model.replace(':', '-').replace('/', '-')}"
@@ -278,6 +298,23 @@ def main():
     (out_dir / f"{stem}.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     print("\nRINGKASAN " + json.dumps(summary, ensure_ascii=False), flush=True)
     print(f"hasil: {out_dir / stem}.csv/.json", flush=True)
+
+
+def main():
+    files = _eval_files()
+    analyzer, provider, model, active = _eval_analyzer(files)
+    crops = _eval_prepare(files)
+    sampler, vram_before, load, load_start, residency = _eval_start(analyzer, crops, model)
+    rows, pool = _eval_rows(analyzer, crops)
+    load.stop_flag.set()
+    sampler.stop_flag.set()
+    load.join(5)
+    pool.shutdown(wait=False)
+    if cfg.VLM_IS_LOCAL:
+        unload_ollama(model)
+    elapsed = time.time() - load_start
+    summary = _eval_summary(analyzer, provider, model, active, rows, sampler, vram_before, residency, load, elapsed)
+    _eval_write(provider, model, rows, summary)
 
 
 if __name__ == "__main__":

@@ -27,8 +27,20 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T42l — pendekkan 5 fungsi panjang (sisa T42) | Codex | `codex/t42l-long-functions` | dikerjakan | `tools/bench_vlm.py`, `tools/eval_vlm.py`, `backend/app.py`, `backend/video/capture.py`, `backend/api/routes_cameras.py`, `tests/test_code_hygiene.py` (hapus dari `LONG_FUNCTIONS_DEBT`) + tes terkait | Fungsi ≤ 30 baris logis (§4.1) lewat ekstraksi fungsi kecil; perilaku, argumen CLI, dan kontrak API tetap. `capture.__init__` & `app.run` = jalur nyala server/kamera → uji `python -m backend` sampai siap. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T42l — pendekkan 5 fungsi panjang (sisa T42) | Codex | `codex/t42l-long-functions` | tinjau | `tools/bench_vlm.py`, `tools/eval_vlm.py`, `backend/app.py`, `backend/video/capture.py`, `backend/api/routes_cameras.py`, `tests/test_code_hygiene.py`, `tests/test_long_function_characterization.py` | Risiko Rendah: ekstraksi helper tanpa mengubah perilaku/CLI/API. Lima pengecualian dihapus, `LONG_FUNCTIONS_DEBT` kosong; seluruh fungsi backend/tools ≤ 30 baris logis. Tambahan 22 tes karakterisasi lolos pada fungsi asli `6990f39` dan hasil refaktor. `check.py` lolos: pytest 1.264, vitest 262. Startup `python -m backend` :8001 sampai siap, shutdown exit 0 tanpa traceback; `bench_vlm.py --help` berjalan. Rincian uji/pengukuran di bawah |
 | T102 — Monitoring di layar sempit: tombol panel video terpotong | Claude | `claude/t102-monitoring-narrow` | dikerjakan | `web/src/components/monitoring/*`, `web/src/pages/Monitoring.svelte`, `web/src/styles/tokens.css` (tambah bila perlu) | Catatan terbuka: di lebar ~360 px satu tombol panel video melewati tepi kanan tanpa gulir. Tampilan layar lebar tidak berubah |
+
+Catatan T42l (25-10): `tests/test_long_function_characterization.py` mengunci urutan varian, hasil CSV/JSON,
+konfirmasi larangan, jeda kuota dan penutupan sumber daya CLI; urutan bootstrap, pemulihan sinyal saat galat,
+12 kombinasi katalog kamera dan keadaan/lock awal kamera. Semua memakai tiruan dan direktori sementara.
+Cara uji: `python -m pytest -q tests/test_long_function_characterization.py tests/test_capture_characterization.py tests/test_scan_without_camera.py tests/test_import_side_effects.py tests/test_shutdown.py tests/test_camera_manager.py tests/test_camera_health.py tests/test_code_hygiene.py`.
+Uji server memakai DATA_DIR sementara, API key kosong, Ollama diblokir, kamera/IoT mati dan CPU;
+`GET /api/session` = 200, tanpa memanggil VLM cloud/perangkat.
+AST konstruktor kamera setelah helper di-inline identik dengan baseline; 76 definisi lama di luar lima target
+juga identik secara AST. Fungsi tes baru maksimum 24 baris logis. Pengukuran `perf_counter`,
+median 14 sampel berselang-seling setelah 2 pemanasan, 1.000 batch/sampel, baseline `6990f39` → refaktor:
+1 instans **2,508 → 2,670 µs**, 20 instans **49,203 → 51,581 µs**.
+Tambahan hanya pada inisialisasi, bukan per frame; loop frame, keputusan gerbang dan audit tidak diubah.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
