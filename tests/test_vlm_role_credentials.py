@@ -196,7 +196,7 @@ def test_primary_failure_reaches_other_account_without_secret_in_logs_or_telemet
 
 
 def test_http_adapter_receives_url_and_key_for_its_role(role_env, fakes, monkeypatch):
-    from backend import vlm_analyzer as module
+    from backend import vlm_engine as module
 
     monkeypatch.setattr(cfg, "VLM_PROVIDER", "openai")
     monkeypatch.setattr(cfg, "VLM_BACKUP_PROVIDER", "openai")
@@ -241,7 +241,7 @@ def test_provider_errors_never_export_key_in_log_or_engine_info(role_env, fakes,
 
     try:
         if operation == "build":
-            monkeypatch.setattr("backend.vlm_analyzer.create_provider", fail)
+            monkeypatch.setattr("backend.vlm_engine.create_provider", fail)
             assert engine.build() is False
         elif operation == "warm_up":
             monkeypatch.setattr(engine.provider, "warm_up", fail)

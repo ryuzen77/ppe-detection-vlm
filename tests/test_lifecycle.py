@@ -85,8 +85,8 @@ def vlm(monkeypatch):
     engine.provider, engine.min_interval = tiruan, 0.0
     monkeypatch.setattr(vlm_analyzer, "primary", engine)
     monkeypatch.setattr(vlm_analyzer, "backup", None)
-    monkeypatch.setattr(vlm_analyzer, "primary_failures", 0)
-    monkeypatch.setattr(vlm_analyzer, "primary_down_since", None)
+    monkeypatch.setattr(vlm_analyzer.breaker, "failures", 0)
+    monkeypatch.setattr(vlm_analyzer.breaker, "down_since", None)
     yield tiruan
     engine.executor.shutdown(wait=False)
 
