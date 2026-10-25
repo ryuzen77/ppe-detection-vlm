@@ -24,7 +24,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99c — mesin VLM & pemutus utama dipisah dari `vlm_analyzer` (fasad tetap) | Codex | `codex/t99c-vlm-engine` | dikerjakan | `backend/vlm_analyzer.py`, `backend/vlm_engine.py` (baru), `backend/vlm_breaker.py` (baru, `PrimaryBreaker`), `tests/` (target patch & impor, karakterisasi rute) | Sesuai "Rancangan T99" tahap c. **Paling kritis** (rute utama → cadangan → lokal darurat → tunggu): tes karakterisasi rute dulu (2 gagal → utama dilewati, coba lagi setelah 60 dtk; keduanya gagal → menunggu, tanpa keputusan; larangan dikonfirmasi; jalur busy), lolos sebelum & sesudah. `VLMAnalyzer` tetap pemegang lock (`api_lock`, `apply_lock`) & rute `_inspect_route`/`_attempt_*`; pindah-saja, tanpa ubah batas waktu/urutan. Target patch `vlm_analyzer.primary_failures/primary_down_since/primary/backup`, `backend.vlm_analyzer.create_provider` dipindah di commit yang sama. Ukur `analyze_person` 1 vs 20 orang. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T99c — mesin VLM & pemutus utama dipisah dari `vlm_analyzer` (fasad tetap) | Codex | `codex/t99c-vlm-engine` | tinjau | `backend/vlm_analyzer.py`, `backend/vlm_engine.py` (baru), `backend/vlm_breaker.py` (baru, `PrimaryBreaker`), `tests/` (target patch & impor, karakterisasi rute) | Mesin/exception/gambar pindah tanpa perubahan AST; pemutus murni menjadi `analyzer.breaker`; lock/rute/primary/backup tetap dimiliki fasad. Patch factory di `vlm_engine`, patch state di `breaker`, tanpa ekspor ulang nama patch lama. 227 tes acuan termasuk 15 karakterisasi baru lolos pada kode lama; sesudahnya 298 tes terarah lolos, termasuk 17 kasus pemutus baru. Bukti: 5 definisi identik, 57 metode fasad sama setelah normalisasi state, 10.000 kejadian pemutus sama. `check.py` lolos 1.193 pytest + 258 vitest, hygiene tanpa tambahan utang. Performa dan detail kepemilikan di bawah. Cara uji: `python -m pytest -q tests/test_vlm_route_characterization.py tests/test_vlm_breaker.py tests/test_local_standby.py tests/test_vlm_providers.py tests/test_vlm_selection.py`; lalu `python scripts/check.py`. Tanpa cloud/perangkat nyata |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
@@ -117,6 +117,39 @@ Catatan untuk task terpisah: pola lama `with self._get_connection() as conn` pad
 mengakhiri transaksi, bukan menutup koneksi secara eksplisit; pola tersebut dipertahankan pada T99b agar
 pemindahan tidak merangkap perubahan siklus koneksi. Ekspor dan kehadiran tetap memiliki penutupan eksplisit
 seperti sebelumnya. Penyeragaman penutupan koneksi perlu dinilai dan diuji tersendiri.
+
+**Catatan T99c (25-10):** `VLMEngine`, `LaneBusy`, dan `EngineFailed` pindah ke `vlm_engine`; pembantu
+`image_for_vlm`/`warmup_image_jpeg` ikut dipindah agar pemanasan mesin tidak mengimpor balik fasad. Lima
+definisi tersebut identik secara AST. Nama publik lama tetap merujuk objek yang sama; `create_provider`
+tidak diekspor ulang. Target patch factory kini `backend.vlm_engine.create_provider`.
+
+State pemutus kini `analyzer.breaker` (`PrimaryBreaker.failures`, `down_since`, `last_attempt`), tanpa alias
+atribut lama. Pemutus menerima waktu eksplisit, membaca ambang dari config saat dipakai, dan tidak memiliki
+lock, mesin, probe, log, atau I/O. Log dan pemberitahuan standby tetap di fasad dalam urutan semula.
+`primary`/`backup` tetap atribut fasad (pemilik rute dan lock); patch engine di tes tetap mengenai objek yang
+dipakai, bukan ekspor ulang modul. `api_lock`/`apply_lock` dan semua metode rute tetap di `VLMAnalyzer`.
+
+Sebelum pemindahan, 227 tes terarah lolos termasuk 15 kasus karakterisasi baru: tepat dua gagal, lewatkan
+utama hingga batas 60 detik dari percobaan terakhir, coba lagi hanya saat pekerja diperiksa (tanpa probe),
+semua mesin gagal → menunggu, lokal darurat saat lambat/putus/loading, konfirmasi larangan/ragu/timeout,
+serta `LaneBusy` tanpa menukar engine dan dengan pelepasan lock. Sesudah pemindahan 298 tes terarah lolos,
+termasuk 17 kasus unit/penjaga kepemilikan baru untuk pemutus. Lima definisi mesin/gambar/exception identik
+secara AST; 57 metode fasad identik setelah normalisasi lokasi state. Perbandingan kode `ef544fe` versus
+kode baru pada 10.000 kejadian berbenih menghasilkan izin mencoba dan state pemutus yang identik.
+
+Pengukuran `perf_counter` memakai crop sintetis 640×320 dan panggilan VLM tiruan (JPEG/prompt/parser/rute/lock
+tetap berjalan), tanpa jaringan atau perangkat. Acuan awal 3 putaran × 21 sampel, pemanasan 20 inspeksi:
+1 orang 2,534/2,567/2,587 ms; 20 orang 53,191/53,019/97,480 ms. Karena variasi beban, pengukuran utama memakai
+kode lama/baru berselang-seling di proses sama, 3 putaran × 21 sampel dan pemanasan 20 inspeksi per versi:
+
+| Beban `analyze_person` | Median sebelum (ms) | Median sesudah (ms) | Rentang median putaran sebelum / sesudah (ms) |
+| :-- | --: | --: | :-- |
+| 1 orang | 2,486 | 2,469 | 2,461–2,498 / 2,468–2,485 |
+| 20 orang berurutan | 49,426 | 49,969 | 49,220–50,511 / 49,900–50,359 |
+
+Selisih median batch 20 orang +0,542 ms (1,1%), dengan rentang sampel yang bertumpang tindih; angka ini tidak
+menunjukkan perlambatan konsisten pada ketiga putaran dan bukan batas latensi VLM produksi. Batas waktu,
+urutan peralihan, jumlah panggilan VLM, dan bentuk telemetri tidak diubah. Berkas bersama tidak disentuh.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 

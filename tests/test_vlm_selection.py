@@ -108,7 +108,7 @@ def fakes(monkeypatch):
         made.append(provider)
         return provider
 
-    monkeypatch.setattr("backend.vlm_analyzer.create_provider", create)
+    monkeypatch.setattr("backend.vlm_engine.create_provider", create)
     return made, options
 
 

@@ -197,15 +197,15 @@ def test_slow_route_keeps_primary_circuit_breaker_and_retries_after_interval(mak
     for _ in range(cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN):
         assert analyzer.analyze_person(person_crop()).decided_by == analyzer.standby.engine.role
     assert len(analyzer.primary.provider.calls) == 2
-    assert analyzer.primary_down_since is not None
+    assert analyzer.breaker.down_since is not None
     assert analyzer.analyze_person(person_crop()).decided_by == analyzer.standby.engine.role
     assert len(analyzer.primary.provider.calls) == 2
     if layout == "A":
         assert analyzer.backup.provider.calls == []
     analyzer.primary.provider.error = None
-    analyzer.primary_last_attempt -= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
+    analyzer.breaker.last_attempt -= cfg.VLM_PRIMARY_RETRY_AFTER_SECONDS
     assert analyzer.analyze_person(person_crop()).decided_by == "utama"
-    assert len(analyzer.primary.provider.calls) == 3 and analyzer.primary_down_since is None
+    assert len(analyzer.primary.provider.calls) == 3 and analyzer.breaker.down_since is None
 
 
 @pytest.mark.parametrize("layout", ["A", "B"])
@@ -396,7 +396,7 @@ def test_recovered_internet_returns_to_primary_before_breaker_retry(make_analyze
     analyzer.primary.provider.error = RuntimeError("429 tiruan")
     for _ in range(cfg.VLM_PRIMARY_FAILURES_BEFORE_DOWN):
         analyzer.analyze_person(person_crop())
-    assert analyzer.primary_down_since is not None
+    assert analyzer.breaker.down_since is not None
     _internet(analyzer, DISCONNECTED)
     assert analyzer.analyze_person(person_crop()).decided_by == ROLE_EMERGENCY
     analyzer.primary.provider.error = None

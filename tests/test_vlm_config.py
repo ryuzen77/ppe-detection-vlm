@@ -156,8 +156,10 @@ def klien(monkeypatch):
     from backend.config import cfg
     from backend.vlm_analyzer import vlm_analyzer
 
-    for attr in ("primary", "backup", "primary_failures", "primary_down_since"):
+    for attr in ("primary", "backup"):
         monkeypatch.setattr(vlm_analyzer, attr, getattr(vlm_analyzer, attr))
+    for attr in ("failures", "down_since", "last_attempt"):
+        monkeypatch.setattr(vlm_analyzer.breaker, attr, getattr(vlm_analyzer.breaker, attr))
     monkeypatch.setattr(cfg, "VLM_API_KEY", cfg.VLM_API_KEY)
     return TestClient(app), vlm_analyzer
 
