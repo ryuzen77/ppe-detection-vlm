@@ -9,8 +9,8 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **25-10:** T97 tuntas (T97a/b/c), T99a–c selesai — digabung; push terakhir `ef544fe` (T99c belum di-push). Berikutnya: T99d (opsional), T100 (koneksi SQLite), antrean 9c
-  (grafik Ditahan), T99c–d, uji nyata (antrean 3/4/4b, diblokir perangkat demo).
+- **25-10:** T97 (a/b/c), T99 (a–d: `backend/vlm/`, `backend/audit/`), T42j selesai — digabung & di-push. Berikutnya:
+  T100 (koneksi SQLite), 9c (grafik Ditahan), T42 sisa, uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
   berbeda = disengaja; kolom Model VLM kini dropdown dari penyedia (T97, selesai 24-10).
@@ -24,169 +24,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99d — kelompokkan modul VLM & audit ke `backend/vlm/` dan `backend/audit/` | Codex | `codex/t99d-folders` | tinjau | `backend/` (rename + impor), `tests/`, `tools/`, `scripts/` (impor), `docs/ARSITEKTUR.md` | 15 `git mv` sesuai tabel, kemiripan rename 96–99%, tanpa shim dan dengan dua initializer kosong. AST 23 modul produksi yang berubah identik setelah impor diabaikan; path patch/probe/alat diperbarui. 67 tes terarah lolos; `check.py` lolos 1.193 pytest + 258 vitest. `python -m backend` sampai siap di :8001 (CPU, DATA_DIR sementara, key kosong, kamera/IoT mati, Ollama diblokir), HTTP 200 dan shutdown exit 0 tanpa traceback. `tools/bench_vlm.py --help` lolos. `docs/ARSITEKTUR.md` diperbarui; arsip dan `vlm_providers` tidak disentuh. Cara uji: `git diff -M d13febe..codex/t99d-folders --stat`, lalu `python scripts/check.py`. Selama tinjau tidak ada task backend/tests lain yang beririsan |
-| T42j — utang kode UI (web saja) | Claude | `claude/t42j-web-debt` | tinjau | `web/src/components/monitoring/CameraPicker.svelte`, `VideoPanel.svelte`, `web/src/components/reports/SnapshotDialog.svelte`, `web/src/components/settings/ZoneSettings.svelte`, `web/src/pages/Pengaturan.svelte`, komponen bersama baru di `web/src/components/`, `web/src/styles/tokens.css` (tambah) | Lanjutan T42 (antrean #10): blok kembar dialog & Zona/Pengaturan, `#000` VideoPanel → token. **Tidak menyentuh `backend/`/`tests/`** (dikunci T99d); entri `HEX_COLOR_DEBT` dihapus setelah T99d digabung. Tampilan tidak berubah Hasil: komponen bersama `ModalDialog.svelte` (buka/tutup `<dialog>` native, `onopen`/`onclose`, ukuran md/lg, klik latar opsional) dipakai `CameraPicker` & `SnapshotDialog`; `#000` VideoPanel → token `--video-bg`; latar dialog kamera kini token `--backdrop` (0,6 → 0,7, sama dengan dialog foto). `ZoneSettings`/`Pengaturan`: tidak ada lagi blok kembar ≥ 6 baris (sudah lunas). Diuji di app: dialog kamera (buka otomatis, Esc, Tutup, buka ulang memuat daftar; 520 px/24 px), dialog foto (X, klik latar, klik foto tetap terbuka, Esc lalu buka ulang; 720 px/20 px), bingkai video tetap hitam. `check.py` lolos (pytest 1.193, vitest 258). **Temuan di luar lingkup:** 7 modal div (`modal-overlay`/`modal-card` di Pekerja & Akun) berpola mirip — kandidat T42 berikutnya. Setelah T99d: hapus entri `HEX_COLOR_DEBT` VideoPanel |
-
-### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
-
-**Tujuan:** memecah `vlm_analyzer.py` (1.222 baris) & `report_manager.py` (1.079) per tanggung jawab, tetap satu
-aplikasi; **perilaku, kontrak API, skema DB, dan nama publik tetap**. **Risiko: Rendah** (perapian), dikerjakan
-hati-hati karena menyentuh audit (salah pindah = baris/foto audit hilang). Lanjutan T42; berhenti bila uji nyata
-(antrean 3/4/4b) bisa jalan.
-
-**Urutan tahap** (satu tahap = commit pindah-saja + `check.py` lolos + ditinjau Claude):
-- **T99a** — `vlm_analyzer` bagian murni saja: `vlm_result.py` (ItemResult, InspectionResult, `_parse_vlm_payload`,
-  `_is_spoof_rejection`), `vlm_prompt.py` (prompt, konfirmasi, `thinking_option`, `profile_warnings`).
-- **T99b** — `report_manager`: `audit_db.py` (koneksi, indeks, migrasi + cadangan sebelum migrasi, SQL apa adanya),
-  `snapshot_store.py`, `audit_queries.py`, `audit_export.py` (CSV), `attendance.py`, `retention.py`.
-  `ReportManager` tetap fasad dengan metode publik sama.
-- **T99c** — `vlm_analyzer` mesin & rute/peralihan: `vlm_engine.py` (VLMEngine, LaneBusy, EngineFailed); pemutus utama
-  jadi kelas murni `PrimaryBreaker` (+tes); `VLMAnalyzer` tetap fasad pemegang lock & rute `_inspect_route`/`_attempt_*`;
-  siklus mesin (apply/test) boleh dipisah.
-- **T99d** — pengelompokan folder setelah batas modul stabil; commit terpisah yang hanya mengubah path impor.
-  **Pemetaan (disusun Claude 25-10, atas aba-aba pengguna; Codex boleh mengusulkan perubahan sebelum mulai):**
-
-  | Lama | Baru |
-  | :-- | :-- |
-  | `vlm_analyzer.py`, `vlm_engine.py`, `vlm_breaker.py`, `vlm_prompt.py`, `vlm_result.py`, `vlm_image.py`, `vlm_selection.py` | `backend/vlm/` → `analyzer.py`, `engine.py`, `breaker.py`, `prompt.py`, `result.py`, `image.py`, `selection.py` |
-  | `report_manager.py`, `audit_db.py`, `snapshot_store.py`, `audit_queries.py`, `audit_export.py`, `attendance.py`, `retention.py`, `report_summary.py` | `backend/audit/` → `report_manager.py` (nama fasad tetap), `db.py`, `snapshots.py`, `queries.py`, `export.py`, `attendance.py`, `retention.py`, `summary.py` |
-
-  - **Di luar lingkup** (tetap di tempat): `vlm_providers/` (banyak target patch string per adaptor), `local_model_guard`,
-    `api_monitor`, `internet_monitor`, dan modul lain — dipindah hanya lewat task sendiri bila perlu.
-  - **Tanpa modul pengganti di path lama** (shim ekspor ulang = target patch lama "berhasil" diam-diam). Semua impor di
-    `backend/`, `tests/`, `tools/`, `scripts/` diganti dalam satu commit; `__init__.py` folder baru kosong (tanpa ekspor
-    ulang, `test_import_side_effects` tetap lolos).
-  - Gunakan `git mv` supaya riwayat berkas tetap terlacak; isi berkas hanya berubah pada baris impor.
-  - Nama logger ikut berubah (`backend.vlm.analyzer` dst.): `logging_setup` tidak merutekan menurut nama modul (aman);
-    tes `caplog` yang memakai nama logger lama diperbarui. Target patch string (`backend.vlm_engine.create_provider`,
-    `backend.state_manager.report_mgr`, `backend.api.routes_*.report_mgr`, `"backend.vlm_analyzer"`) diperbarui.
-  - Dokumen yang menyebut path diperbarui (`docs/ARSITEKTUR.md`, rancangan T99); arsip tidak disentuh.
-  - Bukti: daftar berkas = rename murni (`git diff -M --stat` 100%/hampir 100% kemiripan), `check.py` lolos, server menyala
-    (`python -m backend` sampai siap, tanpa kamera/VLM cloud bila memungkinkan), `tools/bench_vlm.py --help` jalan.
-
-**Aturan:**
-- Hanya fasad yang memegang koneksi SQLite & lock; modul lain = fungsi atas `conn`/mesin, tanpa koneksi/lock sendiri
-  (`synchronous=FULL` & urutan tulis terjaga). Diperjelas 24-10 (Codex): `audit_db.py` boleh berisi fungsi pembuat
-  koneksi & migrasi, tetapi **`ReportManager` tetap mengendalikan buka/tutup koneksi, transaksi, dan lock**; modul
-  kueri, CSV, dan retensi menerima koneksi dari fasad.
-- Target monkeypatch tes (`backend.vlm_analyzer.create_provider`, `rm.time`, `rm_module.cv2.*`, `rm.os.replace`,
-  `rm_mod.sqlite3.connect`, `vlm_analyzer.primary_*`) dipindah di commit yang sama; **jangan ekspor ulang nama yang
-  di-patch** (patch "berhasil" di namespace lama = tes lolos palsu).
-- Modul murni baru hanya mengimpor `config`/`messages`/`ppe_rules`; `test_import_side_effects` tetap lolos.
-  `tools/bench_vlm.py`, `tools/eval_vlm.py` tetap jalan. Berkas bersama (`config.py`, `messages.py`) tidak disentuh.
-- Sebelum memindah: tes karakterisasi (`test_save_inspection_characterization`, `test_retention_characterization`,
-  `test_state_characterization`, `test_durability`) lolos & jumlahnya dicatat; jalur tanpa tes (mis. migrasi v0→v3)
-  diberi fixture skema lama di tmp pytest — **tidak pernah `data/`**.
-- Jalur panas (§4.1): ukur `analyze_person` & `save_inspection` sebelum/sesudah (1 vs 20 orang; `get_reports`/
-  `get_summary` 100 vs 100.000 baris) — fasad tidak menambah latensi terukur.
-- Perbaikan logika yang ditemukan di jalan → dicatat di papan, dikerjakan terpisah.
-
-**Pembagian:** Codex (backend/, tests/); Claude peninjau tiap tahap. Selama T99 diklaim, task backend lain yang
-menyentuh `report_manager`, `vlm_analyzer`, `state_manager`, `routes_vlm`/`routes_reports` tidak diklaim bersamaan.
-
-**Catatan T99a (25-10):** pengecualian impor disetujui pengguna: `vlm_prompt` mempertahankan dependensi metadata
-`vlm_providers.profiles` dan `vlm_selection.prompt_version_for`, supaya tidak menduplikasi logika atau mengubah
-perilaku. Sepuluh definisi cocok secara AST sebelum/sesudah (indentasi docstring dinormalkan; dekorator static
-parser dipertahankan lewat binding fasad, diuji identitas objeknya). Tes acuan 68 lolos; setelah pemindahan
-73 lolos termasuk lima tes baru untuk kompatibilitas fasad, logger, dan impor tanpa engine/thread/storage.
-
-Pengukuran `perf_counter`, median sebelum → sesudah, VLM tiruan tanpa jaringan, crop sintetis 640×320;
-31 pengulangan inspeksi, 9 pengulangan simpan tanpa foto, 7 pengulangan kueri. Semua DB di folder sementara:
-
-| Jalur | Beban | Sebelum (ms) | Sesudah (ms) |
-| :-- | :-- | --: | --: |
-| `analyze_person` | 1 / 20 orang berurutan | 2,511 / 49,388 | 2,471 / 49,082 |
-| `save_inspection` | 1 / 20 orang berurutan | 6,880 / 134,189 | 8,181 / 138,432 |
-| `get_reports` | 100 / 100.000 baris | 0,964 / 32,048 | 0,991 / 31,737 |
-| `get_summary` | 100 / 100.000 baris | 0,747 / 298,563 | 0,730 / 297,564 |
-
-Inspeksi tidak menunjukkan tambahan latensi pada pengukuran ini; simpan audit berfluktuasi pada I/O disk
-(kode audit tidak disentuh pada T99a). Angka tiruan ini tidak mengukur latensi penyedia VLM/perangkat nyata.
-
-**Catatan T99b (25-10):** pemisahan ke `audit_db`, `snapshot_store`, `audit_queries`, `audit_export`, `attendance`,
-dan `retention`. Pabrik koneksi SQLite ada di `audit_db`; hanya fasad yang memanggilnya serta memegang umur
-koneksi, lock, BEGIN/COMMIT/ROLLBACK, commit sebelum penghapusan foto, dan penutupan koneksi ekspor dibatalkan.
-Metode publik dan konstanta publik lama tetap; delegasi privat yang tidak dipakai tidak dipertahankan.
-Target patch dipindahkan: jam simpan → `audit_db.time`; jam retensi → `retention.time`; OpenCV/replace/logger
-foto → `snapshot_store`; pabrik SQLite → `audit_db.sqlite3`; SQL kehadiran → `attendance`.
-
-Acuan sebelum pemindahan: 135 tes audit/karakterisasi lolos, ditambah 6 tes fixture v1/v2/v3 dan rollback yang
-juga lolos pada kode lama (fixture v0 sudah tersedia). Sesudah pemindahan: 141 tes acuan lolos; 78 tes batas,
-identitas, migrasi, impor, dan code hygiene lolos. Sepuluh kasus baru lain menjaga koneksi pinjaman, commit
-sebelum menghapus foto (audit/foto/kuota), dan absennya namespace patch lama dari fasad. Nilai 43 literal SQL
-identik; 27 badan fungsi cocok secara AST setelah normalisasi mekanis `self`/koneksi pinjaman. Uji diferensial
-kode `c5b52e8` versus hasil pemindahan: 73 perintah SQLite aktual dan 13 hasil publik identik, termasuk CSV
-dan retensi. Tidak ada perubahan skema, pragma synchronous=FULL, SQL, konfigurasi bersama, atau data produksi.
-
-Pengukuran `perf_counter` di DB sementara tanpa foto: tiga putaran, pemanasan 10 simpan, median 15 sampel
-untuk simpan (1/20 orang berurutan) dan 9 sampel untuk kueri (seluruh baris pada satu hari). Angka berikut
-adalah median dari tiga putaran, sebelum → sesudah:
-
-| Jalur | Beban | Sebelum (ms) | Sesudah (ms) |
-| :-- | :-- | --: | --: |
-| `save_inspection` | 1 / 20 orang | 7,427 / 165,796 | 8,478 / 167,348 |
-| `get_reports` | 100 / 100.000 baris | 1,132 / 63,455 | 1,109 / 61,141 |
-| `get_summary` | 100 / 100.000 baris | 0,841 / 602,986 | 0,837 / 593,052 |
-
-Simpan satu orang masih berfluktuasi: sebelum 6,803/7,427/8,182 ms, sesudah 9,811/8,478/7,747 ms. Karena itu
-ditambah pengukuran lama/baru berselang-seling di proses yang sama (3 putaran × 15 sampel, 15 simpan pemanasan).
-Median pasangan sebelum → sesudah: 1 orang 7,293 → 7,249 ms; 20 orang 149,591 → 148,952 ms. Tidak terlihat
-perlambatan konsisten akibat fasad pada uji ini; angka disk sesaat bukan batas latensi produksi.
-
-Catatan untuk task terpisah: pola lama `with self._get_connection() as conn` pada beberapa metode hanya
-mengakhiri transaksi, bukan menutup koneksi secara eksplisit; pola tersebut dipertahankan pada T99b agar
-pemindahan tidak merangkap perubahan siklus koneksi. Ekspor dan kehadiran tetap memiliki penutupan eksplisit
-seperti sebelumnya. Penyeragaman penutupan koneksi perlu dinilai dan diuji tersendiri.
-
-**Catatan T99c (25-10):** `VLMEngine`, `LaneBusy`, dan `EngineFailed` pindah ke `vlm_engine`; pembantu
-`image_for_vlm`/`warmup_image_jpeg` ikut dipindah agar pemanasan mesin tidak mengimpor balik fasad. Lima
-definisi tersebut identik secara AST. Nama publik lama tetap merujuk objek yang sama; `create_provider`
-tidak diekspor ulang. Target patch factory kini `backend.vlm_engine.create_provider`.
-
-State pemutus kini `analyzer.breaker` (`PrimaryBreaker.failures`, `down_since`, `last_attempt`), tanpa alias
-atribut lama. Pemutus menerima waktu eksplisit, membaca ambang dari config saat dipakai, dan tidak memiliki
-lock, mesin, probe, log, atau I/O. Log dan pemberitahuan standby tetap di fasad dalam urutan semula.
-`primary`/`backup` tetap atribut fasad (pemilik rute dan lock); patch engine di tes tetap mengenai objek yang
-dipakai, bukan ekspor ulang modul. `api_lock`/`apply_lock` dan semua metode rute tetap di `VLMAnalyzer`.
-
-Sebelum pemindahan, 227 tes terarah lolos termasuk 15 kasus karakterisasi baru: tepat dua gagal, lewatkan
-utama hingga batas 60 detik dari percobaan terakhir, coba lagi hanya saat pekerja diperiksa (tanpa probe),
-semua mesin gagal → menunggu, lokal darurat saat lambat/putus/loading, konfirmasi larangan/ragu/timeout,
-serta `LaneBusy` tanpa menukar engine dan dengan pelepasan lock. Sesudah pemindahan 298 tes terarah lolos,
-termasuk 17 kasus unit/penjaga kepemilikan baru untuk pemutus. Lima definisi mesin/gambar/exception identik
-secara AST; 57 metode fasad identik setelah normalisasi lokasi state. Perbandingan kode `ef544fe` versus
-kode baru pada 10.000 kejadian berbenih menghasilkan izin mencoba dan state pemutus yang identik.
-
-Pengukuran `perf_counter` memakai crop sintetis 640×320 dan panggilan VLM tiruan (JPEG/prompt/parser/rute/lock
-tetap berjalan), tanpa jaringan atau perangkat. Acuan awal 3 putaran × 21 sampel, pemanasan 20 inspeksi:
-1 orang 2,534/2,567/2,587 ms; 20 orang 53,191/53,019/97,480 ms. Karena variasi beban, pengukuran utama memakai
-kode lama/baru berselang-seling di proses sama, 3 putaran × 21 sampel dan pemanasan 20 inspeksi per versi:
-
-| Beban `analyze_person` | Median sebelum (ms) | Median sesudah (ms) | Rentang median putaran sebelum / sesudah (ms) |
-| :-- | --: | --: | :-- |
-| 1 orang | 2,486 | 2,469 | 2,461–2,498 / 2,468–2,485 |
-| 20 orang berurutan | 49,426 | 49,969 | 49,220–50,511 / 49,900–50,359 |
-
-Selisih median batch 20 orang +0,542 ms (1,1%), dengan rentang sampel yang bertumpang tindih; angka ini tidak
-menunjukkan perlambatan konsisten pada ketiga putaran dan bukan batas latensi VLM produksi. Batas waktu,
-urutan peralihan, jumlah panggilan VLM, dan bentuk telemetri tidak diubah. Berkas bersama tidak disentuh.
-
-**Catatan T99d (25-10):** tabel pemetaan tahap d sudah diterapkan. Paket `backend.vlm` dan `backend.audit`
-tidak mengekspor apa pun dari `__init__.py`; tidak ada shim atau modul tersisa pada 15 path lama. Semua
-nama variabel lokal dipertahankan dengan alias impor. Tidak ada perubahan fungsi, SQL, kontrak, konfigurasi,
-skema, maupun data; 23 modul produksi yang berubah identik secara AST setelah simpul impor diabaikan.
-Target patch string yang modulnya pindah kini memakai nama paket baru; patch pada pemakai yang tetap di
-tempat (`backend.state_manager.report_mgr`, `backend.api.routes_*.report_mgr`) tetap mengenai pemiliknya.
-Pencarian path modul lama di `backend/`, `tests/`, `tools/`, `scripts/` tidak menyisakan referensi aktif.
-
-Bukti rename (`git diff -M ... --summary`): VLM analyzer 98%, engine 96%, breaker 97%, prompt 96%, result 99%,
-image 98%, selection 98%; audit report_manager 97%, db 99%, snapshots 98%, queries 98%, export 98%,
-attendance 97%, retention 98%, summary 99%. `vlm_providers`, berkas bersama, dan arsip tidak berubah.
-Startup diuji dengan perintah anak literal `python -m backend`, port 8001, bobot YOLO lokal pada CPU,
-data sementara, kamera/IoT mati, seluruh key VLM kosong, audio dummy, serta pengaman soket Ollama T91.
-Harness awal perlu koreksi sys.path (karena berada di direktori sementara) dan CUDA_VISIBLE_DEVICES=-1;
-setelah koreksi, layanan siap, GET /api/session membalas 200, lalu shutdown exit 0 tanpa traceback.
-Server uji sudah dihentikan. Alat benchmark hanya dijalankan dengan `--help`, tanpa inferensi.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
@@ -202,9 +39,8 @@ Server uji sudah dihentikan. Alat benchmark hanya dijalankan dengan `--help`, ta
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 9c | Rendah | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
-| 10a | Rendah (eksekusi hati-hati: audit) | **T99 — perapian backend per fitur** (lihat "Rancangan T99"; tahap a→d, Codex) | Usul Codex 24-10: `vlm_analyzer` 1.222 & `report_manager` 1.079 baris; perilaku & kontrak tetap, tiap tahap tes regresi. **T99a selesai 25-10**; **T99a & T99b selesai 25-10**; **T99a–c selesai 25-10**; **T99d diklaim Codex 25-10** (pengelompokan folder, hanya path impor) |
 | 10b | Rendah | **T100 — penutupan koneksi SQLite audit diseragamkan** (temuan Codex di T99b) | Pola `with self._get_connection() as conn` hanya mengakhiri transaksi, tidak menutup koneksi (di CPython tertutup saat objek dibuang, jadi kecil risikonya). Seragamkan ke penutupan eksplisit (`closing`) tanpa mengubah transaksi/urutan tulis; tes: jumlah koneksi terbuka tidak bertambah setelah N panggilan |
-| 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh |
+| 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh — **25-10 T42j selesai** (dialog `CameraPicker`/`SnapshotDialog` → `ModalDialog`, `#000` VideoPanel → token; Zona/Pengaturan sudah tanpa blok kembar). Kandidat berikut: 7 modal `div` (`modal-overlay`/`modal-card`) di Pekerja & Akun berpola mirip |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
 
 
