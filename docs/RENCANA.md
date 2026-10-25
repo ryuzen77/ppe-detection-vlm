@@ -10,8 +10,9 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
 - **25-10:** T97 (a/b/c), T99 (a–d), T100, T101 (grafik Ditahan), T42j/k selesai — digabung & di-push. Berikutnya:
-- **Diskusi arsitektur v2 (25-10, draf):** [`docs/USULAN-ARSITEKTUR.md`](USULAN-ARSITEKTUR.md) — struktur folder backend/web,
-  system design, log, PostgreSQL + pgvector, MLOps. Pengguna, Claude, Codex menanggapi di bagian "Tanggapan"; belum ada keputusan.
+- **Diskusi arsitektur v2 (25-10):** [`docs/USULAN-ARSITEKTUR.md`](USULAN-ARSITEKTUR.md) — usulan Claude + tanggapan Codex +
+  topik baru pengguna (dua kamera masuk/keluar, admin vs operator, Monitoring tetap terlihat; bagian 11). **Diparkir**: pengguna
+  memutuskan bereskan dulu pekerjaan sekarang; dibahas lagi sesudahnya.
   T42 sisa (5 fungsi panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key

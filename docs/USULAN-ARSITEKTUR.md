@@ -287,6 +287,32 @@ Untuk Codex:
 
 ---
 
+## 11. Topik baru dari pengguna (25-10) — **diparkir**, dibahas setelah pekerjaan sekarang beres
+
+Pengguna memutuskan (25-10): perubahan arsitektur besar ditunda; bereskan dulu yang sekarang. Topik berikut
+dicatat supaya tidak hilang; rinciannya ada di percakapan 25-10 (ringkasan di bawah).
+
+1. **Dua kamera: masuk (APD + FR) & keluar (FR saja) untuk absensi masuk/pulang.** Rancangan dasar: satu server,
+   peran kamera lewat konfigurasi (`entry`/`exit`), kamera keluar tanpa VLM (tanpa biaya API), tabel baru
+   `attendance_events`. Kendala lapangan yang harus dijawab: wajah saat pulang (helm/masker/kotor/bergerombol →
+   FR ≥ 95% diukur khusus kamera keluar), cahaya sore/malam & backlight, arah gerak bila satu pintu, kejadian
+   hilang (pintu lain, FR gagal → koreksi HR), kejadian ganda (jeda per pekerja), shift melewati tengah malam &
+   sinkron jam (NTP), dua kamera USB (bandwidth, kabel > 5 m → kamera IP/PoE, urutan tertukar), tamu/kontraktor,
+   persetujuan biometrik & papan pemberitahuan, debu/lensa kotor (T57 untuk kamera keluar). Terikat T81 (absensi resmi).
+   **[Keputusan]** jalur fisik masuk/keluar terpisah atau satu pintu?
+2. **Hak akses admin vs operator.** Kondisi: backend hanya mengenal peran `admin` (41 endpoint `require_admin`,
+   2 `require_session`) — semua akun admin. Usul matriks peran operator / admin / (HR nanti, bersama T81); server
+   penentu, frontend menyembunyikan menu/tombol. **[Keputusan]** operator boleh melihat foto bukti (wajah)? HR sekarang
+   atau nanti?
+3. **Monitoring tetap terlihat saat membuka Laporan/Pengaturan.** Mengubah keputusan UI T33 ("video diputus saat
+   meninggalkan Monitoring"). Usul: panel Monitoring mini yang bisa diciutkan (A) + jendela/layar kedua untuk meja
+   operator (C). **[Keputusan]** setuju A + C?
+4. **Dependensi besar** (SQLAlchemy/Alembic, klien Prometheus): usul Claude **tidak sekarang** — satu gerbang cukup
+   SQLite + SQL langsung; `/api/metrics` berformat Prometheus tanpa dependensi. Menunggu konfirmasi pengguna.
+5. **Foto untuk dataset MLOps:** pengguna **siap mengurus persetujuan pekerja** (25-10). Syarat: persetujuan tujuan
+   "evaluasi & perbaikan model" terpisah, DPIA diperbarui, foto dataset disalin terpisah dari foto bukti (retensi
+   sendiri, bisa ditarik), tetap di luar git, admin memilih lewat UI hanya untuk pekerja yang setuju.
+
 ## Tanggapan
 
 <!-- Format: **Nama (tanggal), bagian N:** isi. Jangan menyunting usulan di atas. -->
