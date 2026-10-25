@@ -12,7 +12,7 @@ from backend import audio_engine, face_crypto, face_identity, security_log, work
 from backend.app import app
 from backend.config import cfg
 from backend.state_manager import GateSession, StateManager
-from backend.vlm_analyzer import InspectionResult
+from backend.vlm.analyzer import InspectionResult
 
 
 @pytest.fixture

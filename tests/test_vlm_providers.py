@@ -10,7 +10,7 @@ import pytest
 
 from backend import messages, ppe_rules
 from backend.config import cfg
-from backend.vlm_analyzer import (
+from backend.vlm.analyzer import (
     USER_PROMPT,
     VLMAnalyzer,
     VLMEngine,
@@ -386,7 +386,7 @@ def test_ping_menguji_utama_dan_cadangan(analyzer):
 
 def test_ping_memakai_gambar_contoh_seukuran_pemeriksaan(analyzer):
     """T86: dulu ping teks (±0,5 dtk) sementara pemeriksaan foto > 5 dtk -> "latensi aman" menyesatkan."""
-    from backend.vlm_analyzer import warmup_image_jpeg
+    from backend.vlm.analyzer import warmup_image_jpeg
 
     utama = FakeProvider(reply=_lengkap())
     analyzer.pasang(utama=utama)

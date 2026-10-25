@@ -4,9 +4,9 @@ import json
 import sqlite3
 from datetime import date
 from typing import Optional
-from . import report_summary
-from .face_identity import RECOGNIZED
-from .vlm_selection import LOCAL_FALLBACK_SOURCE_PREFIX
+from . import summary as report_summary
+from ..face_identity import RECOGNIZED
+from ..vlm.selection import LOCAL_FALLBACK_SOURCE_PREFIX
 
 
 BACKUP_SOURCE_PREFIX = "VLM_CADANGAN:"

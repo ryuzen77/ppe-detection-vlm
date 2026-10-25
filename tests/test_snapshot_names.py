@@ -14,8 +14,8 @@ import cv2
 import numpy as np
 import pytest
 
-import backend.report_manager as rm
-from backend import audit_db
+import backend.audit.report_manager as rm
+from backend.audit import db as audit_db
 
 FROZEN = 1_790_000_000.0
 

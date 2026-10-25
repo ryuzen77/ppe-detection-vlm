@@ -114,7 +114,7 @@ def terkirim(monkeypatch, catalog_defaults):
     """Mencatat panggilan VLM; jendela tahan dipendekkan supaya tes cepat."""
     from backend.audio_engine import audio_player
     from backend.notifier import notifier
-    from backend.vlm_analyzer import vlm_analyzer
+    from backend.vlm.analyzer import vlm_analyzer
 
     asli = vlm_analyzer.analyze_person
     dikirim = []

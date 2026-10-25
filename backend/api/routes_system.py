@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ..config import cfg
 from .. import messages
 from ..state_manager import state_mgr
-from ..vlm_analyzer import vlm_analyzer
+from ..vlm.analyzer import vlm_analyzer
 from ..notifier import notifier
 from .. import startup_checks
 from ..disk_guard import disk_guard

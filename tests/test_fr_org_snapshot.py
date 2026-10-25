@@ -14,8 +14,8 @@ import pytest
 import backend.state_manager as sm
 from backend import face_crypto, face_identity, worker_store
 from backend.config import cfg
-from backend.report_manager import ReportManager
-from backend.vlm_analyzer import InspectionResult
+from backend.audit.report_manager import ReportManager
+from backend.vlm.analyzer import InspectionResult
 
 CROPS = [np.zeros((10, 10, 3), np.uint8)] * 3
 

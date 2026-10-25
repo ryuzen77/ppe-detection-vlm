@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend import vlm_selection as selection
+from backend.vlm import selection as selection
 from backend.api import routes_vlm
 from backend.config import cfg
 from backend.vlm_providers import model_list, profiles

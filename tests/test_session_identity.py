@@ -14,7 +14,7 @@ import pytest
 
 from backend import face_identity, messages
 from backend.config import cfg
-from backend.report_manager import ReportManager, SCHEMA_VERSION
+from backend.audit.report_manager import ReportManager, SCHEMA_VERSION
 from backend.state_manager import state_mgr
 from test_lifecycle import _analisa_selesai, _wait_for, gerbang, vlm  # noqa: F401 (fixture)
 
@@ -79,7 +79,7 @@ def test_nama_masuk_telemetri_riwayat_dan_audit(gerbang, vlm, identifier):
 
 
 def state_mgr_report_row():
-    from backend.report_manager import report_mgr
+    from backend.audit.report_manager import report_mgr
 
     return report_mgr.get_reports(limit=1)["page_records"][0]
 

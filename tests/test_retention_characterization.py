@@ -32,8 +32,8 @@ KB_AS_GB = 1 / (1024 * 1024)
 
 
 def _scenario(seed, root, monkeypatch, logs):
-    import backend.report_manager as rm
-    from backend import retention
+    import backend.audit.report_manager as rm
+    from backend.audit import retention
     from backend.config import cfg
 
     rng = np.random.default_rng(seed)
@@ -108,7 +108,7 @@ class _Logs(logging.Handler):
 
 
 def run_scenarios(root, monkeypatch):
-    import backend.report_manager as rm
+    import backend.audit.report_manager as rm
 
     logs = []
     handler = _Logs(logs)

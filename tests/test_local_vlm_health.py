@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from backend import config as config_mod, gpu_processes, local_model_guard as guard_mod, messages
 from backend.config import cfg
 from backend.local_model_guard import LocalModelGuard
-from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt
+from backend.vlm.analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine, build_system_prompt
 from backend.vlm_providers import VLMProvider
 
 from helpers import person_crop

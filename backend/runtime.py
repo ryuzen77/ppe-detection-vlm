@@ -17,12 +17,12 @@ from .logging_setup import prune_rotated_logs, setup_logging
 from .disk_guard import disk_guard
 from .storage import prepare_data_dir
 from . import ppe_rules
-from .report_manager import SECONDS_PER_DAY, report_mgr
+from .audit.report_manager import SECONDS_PER_DAY, report_mgr
 from . import worker_store, worker_voice
 from .audio_engine import audio_player
 from .notifier import notifier
 from .detector import detector
-from .vlm_analyzer import vlm_analyzer
+from .vlm.analyzer import vlm_analyzer
 from .video.capture import video_service
 
 logger = logging.getLogger(__name__)

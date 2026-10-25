@@ -40,7 +40,7 @@ class _World:
     """Jam, suara, VLM, dan audit tiruan yang dipasang ke modul state_manager."""
 
     def __init__(self, sm_module, monkeypatch, first_reply: int = 0, delay_frames: int = VLM_DELAY_FRAMES):
-        from backend.vlm_analyzer import InspectionResult
+        from backend.vlm.analyzer import InspectionResult
 
         self.delay = delay_frames / FPS
         self.now, self.sounds, self.pending, self.vlm_calls, self.audits = 1000.0, [], [], 0, []

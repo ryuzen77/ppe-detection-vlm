@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from backend import pose_keypoints as kp
-from backend import vlm_image
+from backend.vlm import image as vlm_image
 from backend.config import cfg
 
 CONF = 0.9

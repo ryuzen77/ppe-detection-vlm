@@ -5,7 +5,7 @@ from pydantic import BaseModel, StrictBool
 
 from .. import face_identity, messages, registration_policy, security_log
 from ..config import cfg
-from ..report_manager import report_mgr
+from ..audit.report_manager import report_mgr
 from .deps import actor, require_admin
 
 router = APIRouter(dependencies=[Depends(require_admin)])

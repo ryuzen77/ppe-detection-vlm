@@ -9,7 +9,7 @@ import pytest
 
 from backend.config import cfg
 
-from backend.vlm_analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
+from backend.vlm.analyzer import USER_PROMPT, VLMAnalyzer, VLMEngine
 from backend.vlm_providers import create_provider
 from backend.vlm_providers.openai_compatible import PRESETS, OpenAICompatibleProvider
 

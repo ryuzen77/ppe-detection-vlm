@@ -129,7 +129,7 @@ def no_ollama_cleanup(request, monkeypatch):
     Tes yang menguji pembersihan itu (dengan penyedia tiruan) memakai penanda `stale_model`."""
     if request.node.get_closest_marker("stale_model"):
         return
-    from backend.vlm_analyzer import VLMAnalyzer
+    from backend.vlm.analyzer import VLMAnalyzer
 
     monkeypatch.setattr(VLMAnalyzer, "_unload_if_loaded", staticmethod(lambda engine: engine.close()))
 
@@ -165,7 +165,7 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def isolated_model_metadata(monkeypatch):
     """Daftar model tidak boleh memakai jaringan pada tes lama; cache & bukti uji terisolasi."""
-    from backend import vlm_selection
+    from backend.vlm import selection as vlm_selection
     from backend.vlm_providers import model_list
 
     cache = model_list.ModelListCache()

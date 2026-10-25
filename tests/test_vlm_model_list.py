@@ -10,7 +10,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import vlm_selection as selection
+from backend.vlm import selection as selection
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser

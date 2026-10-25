@@ -129,7 +129,7 @@ def test_penyedia_cloud_tidak_punya_porsi_gpu():
 
 
 def test_cadangan_lokal_gagal_memicu_pemeriksaan(monkeypatch):
-    from backend.vlm_analyzer import VLMAnalyzer, VLMEngine
+    from backend.vlm.analyzer import VLMAnalyzer, VLMEngine
     from helpers import person_crop
 
     a = VLMAnalyzer()

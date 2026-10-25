@@ -14,7 +14,7 @@ from .config import cfg
 from . import zone
 from . import messages
 from . import pose_keypoints as kp
-from . import vlm_image
+from .vlm import image as vlm_image
 
 logger = logging.getLogger(__name__)
 

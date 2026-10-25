@@ -8,9 +8,9 @@ import time
 import numpy as np
 import pytest
 
-from backend import snapshot_store
+from backend.audit import snapshots as snapshot_store
 from backend import uptime
-from backend.report_manager import SNAPSHOT_TMP_SUFFIX, ReportManager
+from backend.audit.report_manager import SNAPSHOT_TMP_SUFFIX, ReportManager
 
 SYNCHRONOUS_FULL = 2
 

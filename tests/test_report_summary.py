@@ -10,9 +10,10 @@ from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import messages, report_summary as rs
+from backend import messages
+from backend.audit import summary as rs
 from backend.app import app
-from backend.report_manager import CSV_BOM, ReportManager
+from backend.audit.report_manager import CSV_BOM, ReportManager
 
 HELM = "Helm Keselamatan"
 SEPATU = "Sepatu Tertutup"
@@ -222,7 +223,7 @@ def test_ekspor_tetap_utuh_walau_tiap_potongan_dari_thread_berbeda(mgr, monkeypa
 
 def test_unduhan_dibatalkan_koneksi_ekspor_ditutup(mgr, monkeypatch):
     from backend.config import cfg
-    from backend import audit_db
+    from backend.audit import db as audit_db
 
     monkeypatch.setattr(cfg, "CSV_EXPORT_BATCH_ROWS", 1)
     opened = []

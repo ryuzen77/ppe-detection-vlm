@@ -3,7 +3,7 @@
 import sqlite3
 import time
 from pathlib import Path
-from .config import cfg
+from ..config import cfg
 
 
 SECONDS_PER_DAY = 24 * 60 * 60

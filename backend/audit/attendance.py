@@ -2,8 +2,8 @@
 
 import sqlite3
 from typing import Optional
-from . import worker_store
-from .face_identity import RECOGNIZED
+from .. import worker_store
+from ..face_identity import RECOGNIZED
 
 
 _ATTENDANCE_SEEN_SQL = """

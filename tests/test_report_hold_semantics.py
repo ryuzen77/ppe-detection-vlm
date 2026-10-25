@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 from backend import messages, worker_store
 from backend.api import routes_reports
 from backend.app import app
-from backend.report_manager import BACKUP_SOURCE_PREFIX, ReportManager
-from backend.vlm_selection import LOCAL_FALLBACK_SOURCE_PREFIX
+from backend.audit.report_manager import BACKUP_SOURCE_PREFIX, ReportManager
+from backend.vlm.selection import LOCAL_FALLBACK_SOURCE_PREFIX
 
 DAY = "2026-10-24"
 OTHER_DAY = "2026-09-24"

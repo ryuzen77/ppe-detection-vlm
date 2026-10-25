@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from .. import auth, face_engine, face_identity, messages, security_log, worker_store, worker_voice
 from ..audio_engine import audio_player
 from ..config import cfg
-from ..report_manager import report_mgr
+from ..audit.report_manager import report_mgr
 from ..state_manager import state_mgr
 from ..video.capture import video_service
 from .deps import client_address, require_admin

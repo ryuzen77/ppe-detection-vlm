@@ -5,7 +5,7 @@ from contextlib import closing
 
 import pytest
 
-from backend.report_manager import ReportManager, SCHEMA_VERSION
+from backend.audit.report_manager import ReportManager, SCHEMA_VERSION
 
 LEGACY_BASE_COLUMNS = """
     id INTEGER PRIMARY KEY AUTOINCREMENT, track_id INTEGER NOT NULL,

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from .. import messages
-from ..report_manager import report_mgr
+from ..audit.report_manager import report_mgr
 from ..api_monitor import api_monitor
 from .deps import require_admin
 

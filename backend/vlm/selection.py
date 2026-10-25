@@ -19,12 +19,12 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Optional
 
-from . import messages, runtime_settings, security_log
-from .config import cfg, provider_api_key
-from .vlm_providers import profiles
-from .internet_monitor import DISCONNECTED, SLOW
-from .api_monitor import ROLE_EMERGENCY
-from .vlm_providers.model_list import ModelListCache, credential_signature
+from .. import messages, runtime_settings, security_log
+from ..config import cfg, provider_api_key
+from ..vlm_providers import profiles
+from ..internet_monitor import DISCONNECTED, SLOW
+from ..api_monitor import ROLE_EMERGENCY
+from ..vlm_providers.model_list import ModelListCache, credential_signature
 
 logger = logging.getLogger(__name__)
 LOCAL_FALLBACK_SOURCE_PREFIX = "VLM_DARURAT:"

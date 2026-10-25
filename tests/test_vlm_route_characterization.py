@@ -6,13 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend import ppe_rules, vlm_analyzer as analyzer_module
+from backend import ppe_rules
+from backend.vlm import analyzer as analyzer_module
 from backend.config import cfg
 from backend.internet_monitor import NORMAL, SLOW, DISCONNECTED
 from backend.local_model_guard import READY, LOADING
-from backend.vlm_analyzer import VLMAnalyzer, VLMEngine, LaneBusy
+from backend.vlm.analyzer import VLMAnalyzer, VLMEngine, LaneBusy
 from backend.vlm_providers.base import VLMProvider
-from backend.vlm_selection import Choice, Selection
+from backend.vlm.selection import Choice, Selection
 from helpers import person_crop
 
 

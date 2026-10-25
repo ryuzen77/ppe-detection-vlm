@@ -43,12 +43,7 @@ import numpy as np  # noqa: E402
 from backend import messages, ppe_rules  # noqa: E402
 from backend.config import cfg  # noqa: E402
 from backend.detector import detector  # noqa: E402
-from backend.vlm_analyzer import (  # noqa: E402
-    VLMAnalyzer,
-    build_system_prompt,
-    confirmation_prompts,
-    parse_confirmation,
-)
+from backend.vlm.analyzer import VLMAnalyzer, build_system_prompt, confirmation_prompts, parse_confirmation  # noqa: E402
 
 CLASSES = eval_vlm.CLASSES
 TIMEOUT_S = 90.0
