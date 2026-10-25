@@ -407,4 +407,17 @@
       padding: 6px 8px;
     }
   }
+  /* T102: ponsel 320 px — 4 menu tidak muat; navigasi bergulir di dalam barnya sendiri, halaman tidak ikut melebar */
+  @media (max-width: 380px) {
+    nav {
+      flex: 1 1 100%;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    nav a {
+      padding: 6px 6px;
+      white-space: nowrap;
+    }
+  }
 </style>
