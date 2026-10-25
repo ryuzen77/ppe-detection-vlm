@@ -27,6 +27,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
+| T42l — pendekkan 5 fungsi panjang (sisa T42) | Codex | `codex/t42l-long-functions` | dikerjakan | `tools/bench_vlm.py`, `tools/eval_vlm.py`, `backend/app.py`, `backend/video/capture.py`, `backend/api/routes_cameras.py`, `tests/test_code_hygiene.py` (hapus dari `LONG_FUNCTIONS_DEBT`) + tes terkait | Fungsi ≤ 30 baris logis (§4.1) lewat ekstraksi fungsi kecil; perilaku, argumen CLI, dan kontrak API tetap. `capture.__init__` & `app.run` = jalur nyala server/kamera → uji `python -m backend` sampai siap. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T102 — Monitoring di layar sempit: tombol panel video terpotong | Claude | `claude/t102-monitoring-narrow` | dikerjakan | `web/src/components/monitoring/*`, `web/src/pages/Monitoring.svelte`, `web/src/styles/tokens.css` (tambah bila perlu) | Catatan terbuka: di lebar ~360 px satu tombol panel video melewati tepi kanan tanpa gulir. Tampilan layar lebar tidak berubah |
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
@@ -174,4 +176,4 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 - **Uji CPU only 19-10** (`CUDA_VISIBLE_DEVICES=-1`, tanpa cadangan, kamera 864×480, Gemini free tier): bench YOLO26s-pose frame 1080p — GPU RTX 4060 median 11,3 ms (~88 FPS), CPU laptop 16 thread 51,6 ms (~19 FPS); server nyata **15–17 FPS** (kosong maupun ada orang), CPU ~8 dari 16 inti logis, RAM ~958 MB. 13 sesi, 6 inspeksi: keputusan sesuai jawaban VLM, VLM 1,8–2,9 dtk setelah siap, tanpa galat; jalur lolos (hijau) 3×, merah 3×. Batas: perangkat edge 4–8 inti kemungkinan di bawah 15 FPS; 1080p belum diukur di CPU (ikut T74). Catatan Windows: `CUDA_VISIBLE_DEVICES=` (kosong) tidak berefek, pakai `-1`.
 - VRAM puncak 7,6 / 8 GB dengan `qwen2.5vl:7b` + YOLO — risiko OOM bila ada beban GPU lain.
 - Ollama kadang crash pada gambar tertentu (ollama/ollama#14170); inspeksi itu jatuh ke jalur gangguan dan diulang.
-- Monitoring di lebar ~360 px: satu tombol panel video melewati tepi kanan (terpotong, tanpa scroll horizontal) — rapikan di T33 langkah 3.
+- Monitoring di lebar ~360 px: satu tombol panel video melewati tepi kanan (terpotong, tanpa scroll horizontal) — rapikan di T33 langkah 3. **Diklaim T102 (25-10).**
