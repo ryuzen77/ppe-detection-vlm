@@ -9,8 +9,8 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **25-10:** T97 (a/b/c), T99 (a–d), T100, T101 (grafik Ditahan), T42j/k selesai — digabung & di-push. Berikutnya:
-  T42 sisa (5 fungsi panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
+- **26-10:** T97 (a/b/c), T99 (a–d), T100, T101, T42 (j/k/l — utang fungsi panjang & warna hex kosong), T102 selesai —
+  digabung & di-push. Berikutnya: uji nyata (antrean 3/4/4b, diblokir perangkat demo); arsitektur v2 diparkir.
 - **Diskusi arsitektur v2 (25-10):** [`docs/USULAN-ARSITEKTUR.md`](USULAN-ARSITEKTUR.md) — usulan Claude + tanggapan Codex +
   topik baru pengguna (dua kamera masuk/keluar, admin vs operator, Monitoring tetap terlihat; bagian 11). **Diparkir**: pengguna
   memutuskan bereskan dulu pekerjaan sekarang; dibahas lagi sesudahnya.
@@ -27,8 +27,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T42l — pendekkan 5 fungsi panjang (sisa T42) | Codex | `codex/t42l-long-functions` | tinjau | `tools/bench_vlm.py`, `tools/eval_vlm.py`, `backend/app.py`, `backend/video/capture.py`, `backend/api/routes_cameras.py`, `tests/test_code_hygiene.py`, `tests/test_long_function_characterization.py` | Risiko Rendah: ekstraksi helper tanpa mengubah perilaku/CLI/API. Lima pengecualian dihapus, `LONG_FUNCTIONS_DEBT` kosong; seluruh fungsi backend/tools ≤ 30 baris logis. Tambahan 22 tes karakterisasi lolos pada fungsi asli `6990f39` dan hasil refaktor. `check.py` lolos: pytest 1.264, vitest 262. Startup `python -m backend` :8001 sampai siap, shutdown exit 0 tanpa traceback; `bench_vlm.py --help` berjalan. Rincian uji/pengukuran di bawah |
-| T102 — Monitoring di layar sempit: tombol panel video terpotong | Claude | `claude/t102-monitoring-narrow` | tinjau | `web/src/components/monitoring/*`, `web/src/pages/Monitoring.svelte`, `web/src/styles/tokens.css` (tambah bila perlu) | Catatan terbuka: di lebar ~360 px satu tombol panel video melewati tepi kanan tanpa gulir. Tampilan layar lebar tidak berubah Hasil ukur (iframe 320/360/380/400/600/1280 px): tombol panel video **sudah tidak terpotong** (2×2 di dalam panel, aturan `@media 400px` lama) — catatan terbuka usang. Masalah nyata: **navigasi atas di 320 px** (`flex-shrink: 0`) menembus tepi → halaman melebar. Perbaikan `TopBar.svelte` `@media (max-width: 380px)`: nav satu baris penuh, bergulir di dalam barnya sendiri. Sesudah: lebar gulir halaman = lebar layar di semua ukuran; 360/380 px nav muat tanpa gulir; ≥ 400 px tidak berubah. `check.py` lolos (pytest 1.242, vitest 262) |
 
 Catatan T42l (25-10): `tests/test_long_function_characterization.py` mengunci urutan varian, hasil CSV/JSON,
 konfirmasi larangan, jeda kuota dan penutupan sumber daya CLI; urutan bootstrap, pemulihan sinyal saat galat,
@@ -55,7 +53,6 @@ Tambahan hanya pada inisialisasi, bukan per frame; loop frame, keputusan gerbang
 | 7g | **Tinggi** (setelan sudah dibangun 24-10 — T83a/b, bawaan MATI; rancangan di arsip "Rancangan T83") | **T83 — syarat sebelum "Wajib terdaftar" dipakai sungguhan** | (1) ukur tingkat pengenalan pekerja terdaftar: tiap pekerja ±10× lewat memakai helm, target ≥ 95% (laporan kehadiran); (2) persetujuan HR/Legal & DPIA diperbarui (FR jadi penentu akses, bersama T81); (3) uji gerbang: panel kuning ditahan + suara, ulang FR "Mohon tatap kamera", FR mati → semua ditahan + chip, amati kedipan track (VLM ulang/audit ganda saat setelan aktif) |
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
-| 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh — **25-10 T42j selesai** (dialog `CameraPicker`/`SnapshotDialog` → `ModalDialog`, `#000` VideoPanel → token; Zona/Pengaturan sudah tanpa blok kembar). **T42k selesai** (9 modal → `ModalOverlay`). Sisa: 5 fungsi panjang |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
 
 
