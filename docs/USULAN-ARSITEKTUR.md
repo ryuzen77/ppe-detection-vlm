@@ -178,7 +178,44 @@ alat eval/bench, eval FR. Kekurangannya ada di **ketertelusuran** dan **pemantau
   **Konflik yang harus diputuskan [Keputusan]**: foto bukti dihapus 30 hari (T20, data pribadi). Memasukkan foto
   ke dataset = tujuan baru → perlu persetujuan pekerja & DPIA, atau hanya simpan label + hash tanpa foto.
 
-## 8. Urutan yang saya usulkan (dinilai ulang setelah diskusi)
+## 8. Skalabilitas — batas sekarang, pemicu, dan langkahnya
+
+Prinsip: **skala ke luar per gerbang** (tiap gerbang = satu unit mandiri: kamera, GPU, VLM, SQLite), lalu
+**pusat** untuk data bersama. Tidak ada satu server yang memproses video semua gerbang — video tidak pernah
+dikirim ke pusat (bandwidth & data pribadi).
+
+### 8.1 Dimensi & angka terukur
+
+| Dimensi | Sekarang (terukur) | Batas / risiko | Pemicu penskalaan | Langkah |
+| :-- | :-- | :-- | :-- | :-- |
+| **Throughput 1 gerbang** | 1 jalur, keputusan terkunci per sesi; VLM cloud ±2–5 dtk, lokal 3,5–7,9 dtk | Antrean di jam masuk shift (mis. 200 pekerja dalam 15 menit = 1 orang / 4,5 dtk) | Antrean > N orang terukur di gerbang | Tambah **jalur/gerbang** (scale-out), bukan mempercepat satu jalur; tahap 2 IoT (pekerja berikutnya diperiksa lebih awal) |
+| **Kamera & deteksi** | YOLO26s-pose GPU ~88 FPS bench, server 15–17 FPS di CPU-only; 1 kamera per proses | 2+ kamera per PC → GPU/CPU berbagi | Satu PC melayani >1 jalur | 1 proses per kamera (port berbeda) atau proses vision terpisah + antrean frame; ukur dulu |
+| **Kuota VLM cloud** | Free tier ±15 RPM, ±500/hari per project; key per peran (T98) | 1 inspeksi = 1–2 panggilan (+ konfirmasi larangan T58) → ±250–500 pekerja/hari | Pemeriksaan/hari mendekati kuota | Tier berbayar; **pembatas laju + penghitung kuota** di backend (tahu sisa kuota sebelum habis); key per gerbang; cadangan lokal tetap jalan |
+| **GPU lokal** | VRAM puncak 7,6 / 8 GB (`qwen2.5vl:7b` + YOLO) | OOM bila ada beban GPU lain | Model lokal lebih besar / 2 kamera | GPU ≥ 12–16 GB per gerbang atau server inferensi lokal bersama di lokasi (vLLM, ditunda T40) |
+| **Galeri wajah** | Teruji ±300 pekerja/gerbang; 10.000 pekerja < 0,1 ms/pencarian (numpy di memori) | Akurasi 1:N turun saat galeri besar (lebih banyak salah kenal) | > 300 pekerja aktif atau multi-gerbang | Ukur ulang ambang per ukuran galeri; galeri per lokasi; pusat pgvector (6d) untuk cek ganda & lintas lokasi |
+| **Audit** | 100.000 baris: laporan ±32–63 ms, ringkasan ±300–600 ms (indeks `idx_date_str`); simpan ±12 ms (T100) | Ringkasan bulanan tumbuh linear; retensi 1 tahun | Ringkasan > 1 dtk atau > 1 juta baris | Tabel agregat harian (dihitung saat simpan/malam), bukan hitung ulang; di pusat: partisi per bulan di PG |
+| **Foto bukti** | Lokal, 30 hari, maksimal 2 GB (T20) | Disk gerbang sempit | Multi-gerbang butuh foto di pusat | Object storage (S3/MinIO) di pusat via outbox; gerbang tetap simpan lokal dulu |
+| **Jumlah gerbang** | 1 | Konfigurasi, akun, pembaruan per gerbang manual | ≥ 3 gerbang | Pusat: akun terpusat + akun darurat lokal, konfigurasi terpusat (gerbang menarik), **pembaruan armada** (image Docker berversi, rollout bertahap, rollback) |
+| **Pusat** | Belum ada | — | Multi-gerbang | API tanpa state (bisa >1 instance di belakang load balancer), PG + replika baca, antrean sinkron idempoten (outbox) |
+
+### 8.2 Prinsip desain supaya skala tidak perlu rewrite
+
+1. **Tanpa state global tersembunyi** — objek dirakit di composition root (bagian 4) dan diberi `gate_id`; data yang
+   dikirim ke pusat selalu membawa `gate_id` + UUID baris (bukan id autoincrement lokal).
+2. **Idempoten** — unggahan ulang baris yang sama tidak menggandakan (UUID + upsert).
+3. **Batas waktu & tekanan balik** di setiap I/O jaringan (sudah: VLM cloud 4 dtk, daftar model 5 dtk); antrean
+   berbatas, bukan tak terbatas (sudah: antrean log).
+4. **Ukur dulu** — tiap langkah di tabel 8.1 baru dikerjakan bila pemicunya terukur (metrics bagian 5.3), sesuai
+   §4.1 "jalur panas diukur dulu".
+5. **Gerbang tetap jalan saat pusat mati** — semua yang terpusat bersifat sinkron-tunda (outbox), tidak pernah
+   memblokir keputusan.
+
+### 8.3 Yang perlu diukur dulu (masuk uji nyata)
+- Laju datang pekerja di jam masuk shift sungguhan (orang/menit) vs waktu per inspeksi end-to-end.
+- Pemakaian kuota VLM per hari pada pemakaian nyata.
+- Biaya simpan audit di perangkat gerbang (T100) dan ringkasan pada 1 tahun data sintetis.
+
+## 9. Urutan yang saya usulkan (dinilai ulang setelah diskusi)
 
 | # | Tahap | Risiko | Siapa |
 | :-- | :-- | :-- | :-- |
@@ -189,15 +226,17 @@ alat eval/bench, eval FR. Kekurangannya ada di **ketertelusuran** dan **pemantau
 | 5 | Pengenal korelasi log + `/api/metrics` + pemantauan model di Diagnostik | Sedang (mempercepat diagnosis insiden) | Codex backend, Claude UI |
 | 6 | Registri model + manifest dataset + catatan run evaluasi | Sedang (menjaga "APD kurang lolos = 0" tertelusur) | Codex |
 | 7 | Antarmuka repositori + alat migrasi (6a–6b) | Rendah–Sedang | Codex |
-| 8 | Outbox + server pusat PG/pgvector (6c–6d) | **Tinggi** | setelah keputusan pengguna |
+| 8 | Pembatas laju + penghitung kuota VLM, agregat harian audit (8.1) — bila pemicu terukur | Sedang (kuota habis = pekerja menunggu) | Codex |
+| 9 | Outbox + server pusat PG/pgvector (6c–6d), `gate_id` + UUID baris, pembaruan armada | **Tinggi** | setelah keputusan pengguna |
 
 Uji nyata berisiko Tinggi (antrean 3/4/4b) **tetap didahulukan** begitu perangkat demo tersedia; tahap di atas
 mengisi waktu sampai itu.
 
-## 9. Pertanyaan terbuka
+## 10. Pertanyaan terbuka
 
 Untuk pengguna:
 1. Target jumlah gerbang & pekerja dalam 12 bulan? Siapa mengelola server pusat (on-premise / cloud)?
+   Berapa pekerja lewat satu gerbang di jam masuk shift (orang/menit)? (menentukan perlu jalur tambahan atau tidak)
 2. Boleh menambah dependensi besar (SQLAlchemy/Alembic, Prometheus client) atau tetap minimal?
 3. Foto untuk dataset evaluasi: siap mengurus persetujuan pekerja, atau cukup label + hash?
 4. Prioritas: perapian struktur dulu, atau MLOps (registri, pemantauan) dulu?
@@ -207,6 +246,7 @@ Untuk Codex:
 2. Cara memecah `state_manager` tanpa mengubah urutan keputusan & lock?
 3. Alembic vs migrasi bernomor sendiri untuk 3 SQLite + PG kelak?
 4. Biaya korelasi `contextvars` di thread kamera/VLM (jalur panas)?
+5. Pembatas laju & penghitung kuota VLM: di `vlm/` per peran/key, atau lapisan bersama per penyedia?
 
 ---
 
