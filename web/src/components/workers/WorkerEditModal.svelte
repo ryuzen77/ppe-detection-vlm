@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModalOverlay from '../ModalOverlay.svelte'
   import type { OrgEntry, UpdateWorkerRequest, Worker } from '../../lib/api/types'
   import { WORKERS } from '../../lib/messages'
   import { api } from '../../lib/api/client'
@@ -62,85 +63,62 @@
 </script>
 
 {#if worker}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-edit-title">
-    <div class="modal-card">
-      <h3 id="modal-edit-title">{WORKERS.modalEditTitle} — {worker.name}</h3>
-      {#if updateError}
-        <div class="error-box" role="alert">{updateError}</div>
-      {/if}
+  <ModalOverlay labelledby="modal-edit-title" size="md">
+    <h3 id="modal-edit-title">{WORKERS.modalEditTitle} — {worker.name}</h3>
+    {#if updateError}
+      <div class="error-box" role="alert">{updateError}</div>
+    {/if}
 
-      <form class="form-layout" onsubmit={handleUpdateWorker}>
-        <div class="form-group">
-          <label for="edit-emp-no">{WORKERS.fieldEmployeeNo}</label>
-          <input
-            id="edit-emp-no"
-            type="text"
-            class="locked mono"
-            value={worker.employee_no}
-            readonly
-            aria-describedby="edit-emp-no-hint"
-          />
-          <span id="edit-emp-no-hint" class="form-hint">{WORKERS.employeeNoLockedHint}</span>
-        </div>
+    <form class="form-layout" onsubmit={handleUpdateWorker}>
+      <div class="form-group">
+        <label for="edit-emp-no">{WORKERS.fieldEmployeeNo}</label>
+        <input
+          id="edit-emp-no"
+          type="text"
+          class="locked mono"
+          value={worker.employee_no}
+          readonly
+          aria-describedby="edit-emp-no-hint"
+        />
+        <span id="edit-emp-no-hint" class="form-hint">{WORKERS.employeeNoLockedHint}</span>
+      </div>
 
-        <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={updating} idPrefix="edit" />
+      <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={updating} idPrefix="edit" />
 
-        <div class="form-group">
-          <label for="edit-nickname">{WORKERS.fieldNickname}</label>
-          <input
-            id="edit-nickname"
-            type="text"
-            placeholder={WORKERS.fieldNicknamePlaceholder}
-            bind:value={nickname}
-            disabled={updating}
-            required
-          />
-          <span class="form-hint">{WORKERS.fieldNicknameHint}</span>
-        </div>
+      <div class="form-group">
+        <label for="edit-nickname">{WORKERS.fieldNickname}</label>
+        <input
+          id="edit-nickname"
+          type="text"
+          placeholder={WORKERS.fieldNicknamePlaceholder}
+          bind:value={nickname}
+          disabled={updating}
+          required
+        />
+        <span class="form-hint">{WORKERS.fieldNicknameHint}</span>
+      </div>
 
-        <div class="form-group">
-          <label for="edit-gender">{WORKERS.fieldGender}</label>
-          <select id="edit-gender" bind:value={gender} disabled={updating}>
-            <option value="male">{WORKERS.genderMale}</option>
-            <option value="female">{WORKERS.genderFemale}</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label for="edit-gender">{WORKERS.fieldGender}</label>
+        <select id="edit-gender" bind:value={gender} disabled={updating}>
+          <option value="male">{WORKERS.genderMale}</option>
+          <option value="female">{WORKERS.genderFemale}</option>
+        </select>
+      </div>
 
-        <div class="modal-actions">
-          <button type="button" class="btn" onclick={onClose} disabled={updating}>
-            {WORKERS.cancelBtn}
-          </button>
-          <button type="submit" class="btn btn-primary" disabled={updating || !nickname.trim()}>
-            {WORKERS.saveBtn}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick={onClose} disabled={updating}>
+          {WORKERS.cancelBtn}
+        </button>
+        <button type="submit" class="btn btn-primary" disabled={updating || !nickname.trim()}>
+          {WORKERS.saveBtn}
+        </button>
+      </div>
+    </form>
+  </ModalOverlay>
 {/if}
 
 <style>
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--backdrop);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4);
-    z-index: 100;
-  }
-
-  .modal-card {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    width: 100%;
-    max-width: 520px;
-    box-shadow: 0 10px 25px var(--backdrop);
-  }
-
   h3 {
     margin: 0 0 var(--space-3);
     font-size: var(--text-md);
@@ -199,12 +177,5 @@
     border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     margin-bottom: var(--space-3);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
   }
 </style>

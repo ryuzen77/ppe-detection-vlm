@@ -69,4 +69,6 @@
   --backdrop: rgba(0, 0, 0, 0.7);
   /* Latar bingkai video: hitam murni supaya letterbox tidak terlihat sebagai bagian gambar (T42j) */
   --video-bg: #000;
+  /* Lapisan modal: di atas bilah atas (40) & notifikasi (50) — satu angka untuk semua modal (T42k) */
+  --z-modal: 100;
 }

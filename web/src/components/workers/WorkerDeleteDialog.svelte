@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModalOverlay from '../ModalOverlay.svelte'
   import type { Worker } from '../../lib/api/types'
   import { WORKERS } from '../../lib/messages'
   import { api } from '../../lib/api/client'
@@ -85,102 +86,71 @@
 
 <!-- Modal Konfirmasi Hapus Wajah -->
 {#if deleteFaceWorker}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-del-face-title">
-    <div class="modal-card">
-      <h3 id="modal-del-face-title">{WORKERS.confirmDeleteFaceTitle} - {deleteFaceWorker.name}</h3>
-      <p class="del-prompt">{WORKERS.confirmDeleteFaceMsg}</p>
-      {#if deleteFaceError}
-        <div class="error-box" role="alert">{deleteFaceError}</div>
-      {/if}
+  <ModalOverlay labelledby="modal-del-face-title" size="md">
+    <h3 id="modal-del-face-title">{WORKERS.confirmDeleteFaceTitle} - {deleteFaceWorker.name}</h3>
+    <p class="del-prompt">{WORKERS.confirmDeleteFaceMsg}</p>
+    {#if deleteFaceError}
+      <div class="error-box" role="alert">{deleteFaceError}</div>
+    {/if}
 
-      <form onsubmit={executeDeleteFace}>
-        <div class="modal-actions">
-          <button type="button" class="btn" onclick={onClose} disabled={deletingFace}>
-            {WORKERS.cancelBtn}
-          </button>
-          <button type="submit" class="btn btn-danger" disabled={deletingFace}>
-            {WORKERS.deleteFaceBtn}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+    <form onsubmit={executeDeleteFace}>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick={onClose} disabled={deletingFace}>
+          {WORKERS.cancelBtn}
+        </button>
+        <button type="submit" class="btn btn-danger" disabled={deletingFace}>
+          {WORKERS.deleteFaceBtn}
+        </button>
+      </div>
+    </form>
+  </ModalOverlay>
 {/if}
 
 <!-- Modal Konfirmasi Hapus Templat -->
 {#if deleteTemplateTarget}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-del-tpl-title">
-    <div class="modal-card modal-card-sm">
-      <h3 id="modal-del-tpl-title">{WORKERS.confirmDeleteTemplateTitle}</h3>
-      <p class="del-prompt">{WORKERS.confirmDeleteTemplateMsg}</p>
-      {#if deleteTemplateError}
-        <div class="error-box" role="alert">{deleteTemplateError}</div>
-      {/if}
+  <ModalOverlay labelledby="modal-del-tpl-title" size="sm">
+    <h3 id="modal-del-tpl-title">{WORKERS.confirmDeleteTemplateTitle}</h3>
+    <p class="del-prompt">{WORKERS.confirmDeleteTemplateMsg}</p>
+    {#if deleteTemplateError}
+      <div class="error-box" role="alert">{deleteTemplateError}</div>
+    {/if}
 
-      <form onsubmit={executeDeleteTemplate}>
-        <div class="modal-actions">
-          <button type="button" class="btn" onclick={onClose} disabled={deletingTemplate}>
-            {WORKERS.cancelBtn}
-          </button>
-          <button type="submit" class="btn btn-danger" disabled={deletingTemplate}>
-            {WORKERS.deleteTemplateBtn}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+    <form onsubmit={executeDeleteTemplate}>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick={onClose} disabled={deletingTemplate}>
+          {WORKERS.cancelBtn}
+        </button>
+        <button type="submit" class="btn btn-danger" disabled={deletingTemplate}>
+          {WORKERS.deleteTemplateBtn}
+        </button>
+      </div>
+    </form>
+  </ModalOverlay>
 {/if}
 
 <!-- Modal Konfirmasi Nonaktifkan Pekerja (temuan uji UI #9) -->
 {#if deactivateWorker}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-deactivate-title">
-    <div class="modal-card">
-      <h3 id="modal-deactivate-title">{WORKERS.confirmDeactivateTitle} - {deactivateWorker.name}</h3>
-      <p class="del-prompt">{WORKERS.confirmDeactivateMsg}</p>
-      {#if deactivateError}
-        <div class="error-box" role="alert">{deactivateError}</div>
-      {/if}
+  <ModalOverlay labelledby="modal-deactivate-title" size="md">
+    <h3 id="modal-deactivate-title">{WORKERS.confirmDeactivateTitle} - {deactivateWorker.name}</h3>
+    <p class="del-prompt">{WORKERS.confirmDeactivateMsg}</p>
+    {#if deactivateError}
+      <div class="error-box" role="alert">{deactivateError}</div>
+    {/if}
 
-      <form onsubmit={executeDeactivate}>
-        <div class="modal-actions">
-          <button type="button" class="btn" onclick={onClose} disabled={deactivating}>
-            {WORKERS.cancelBtn}
-          </button>
-          <button type="submit" class="btn btn-danger" disabled={deactivating}>
-            {WORKERS.deactivateBtn}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+    <form onsubmit={executeDeactivate}>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick={onClose} disabled={deactivating}>
+          {WORKERS.cancelBtn}
+        </button>
+        <button type="submit" class="btn btn-danger" disabled={deactivating}>
+          {WORKERS.deactivateBtn}
+        </button>
+      </div>
+    </form>
+  </ModalOverlay>
 {/if}
 
 <style>
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--backdrop);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4);
-    z-index: 100;
-  }
-
-  .modal-card {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    width: 100%;
-    max-width: 520px;
-    box-shadow: 0 10px 25px var(--backdrop);
-  }
-
-  .modal-card-sm {
-    max-width: 400px;
-  }
-
   h3 {
     margin: 0 0 var(--space-3);
     font-size: var(--text-md);
@@ -211,12 +181,5 @@
 
   .btn-danger:hover {
     opacity: 0.9;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
   }
 </style>
