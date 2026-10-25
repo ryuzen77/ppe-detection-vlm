@@ -12,7 +12,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, messages, ppe_rules, report_manager, worker_store
+from backend import face_crypto, messages, ppe_rules, attendance, worker_store
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
@@ -443,11 +443,11 @@ def _seed_benchmark(env, size, day):
 def test_attendance_query_plan_and_benchmark(env, size):
     _seed_benchmark(env, size, DAY)
     with sqlite3.connect(env.manager.db_path) as conn:
-        for sql in (report_manager._ATTENDANCE_SEEN_SQL, report_manager._ATTENDANCE_UNKNOWN_SQL):
+        for sql in (attendance._ATTENDANCE_SEEN_SQL, attendance._ATTENDANCE_UNKNOWN_SQL):
             plan = conn.execute("EXPLAIN QUERY PLAN " + sql, (DAY, "recognized")).fetchall()
             details = [row[3] for row in plan]
             assert any("SEARCH worker_inspections USING INDEX idx_date_str" in row for row in details)
-            print(f"EXPLAIN {size} {'seen' if sql == report_manager._ATTENDANCE_SEEN_SQL else 'unknown'}: {details}")
+            print(f"EXPLAIN {size} {'seen' if sql == attendance._ATTENDANCE_SEEN_SQL else 'unknown'}: {details}")
     durations = []
     for _ in range(5):
         start = perf_counter()

@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 import backend.report_manager as rm
+from backend import audit_db
 
 FROZEN = 1_790_000_000.0
 
@@ -24,7 +25,7 @@ def frozen_mgr(tmp_path, monkeypatch):
     clock = types.SimpleNamespace(**{k: getattr(time, k) for k in dir(time) if not k.startswith("_")})
     clock.localtime = lambda t=None: time.gmtime(FROZEN if t is None else t)
     clock.time = lambda: FROZEN
-    monkeypatch.setattr(rm, "time", clock)
+    monkeypatch.setattr(audit_db, "time", clock)
     mgr = rm.ReportManager(tmp_path / "audit.db", tmp_path / "snapshots").open()
     yield mgr
     mgr._opened = False
