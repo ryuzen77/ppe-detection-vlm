@@ -9,7 +9,7 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **25-10:** T97 (a/b/c), T99 (a–d), T100, T42j/k selesai — digabung & di-push. Berikutnya: 9c (grafik Ditahan),
+- **25-10:** T97 (a/b/c), T99 (a–d), T100, T101 (grafik Ditahan), T42j/k selesai — digabung & di-push. Berikutnya:
   T42 sisa (5 fungsi panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
@@ -24,33 +24,6 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T101a — ringkasan Laporan + `held` (backend) | Codex | `codex/t101a-summary-held` | tinjau | `backend/audit/summary.py`, `tests/test_report_summary.py`, `tests/test_report_hold_semantics.py` | Kontrak "T101" di bawah (disetujui pengguna 25-10). `held` ditambahkan ke totals & bucket jam/hari; invarian total = passed + rejected + held, kepatuhan APD tetap. Tambahan 19 kasus uji (campuran keputusan, kedua alasan ditahan, kosong, rentang, filter identitas); tes terarah 96/96; `check.py` lolos (pytest 1.242, vitest 258). Pengukuran dan cara uji di bawah |
-| T101b — grafik volume seri "Ditahan" (UI) | Claude | `claude/t101b-chart-held` | tinjau | `web/src/components/reports/ReportChart.svelte`, `web/src/lib/api/types.ts`, `web/src/lib/messages.ts` (tambah), logika murni di `web/src/lib/` + vitest | Kontrak "T101". Seri ketiga kuning (`--warn`), legenda & tooltip Hasil: logika murni `BUCKET_SERIES`/`bucketTotal`/`bucketSegments`/`bucketTitle` di `lib/reports.ts` (+4 vitest); `ReportChart` merakit ruas merah → kuning → hijau, legenda 3 seri, tooltip hanya seri bernilai; `held` absen (server lama) dianggap 0. Diuji di app: data asli bulan ini (tanpa `held`) utuh; jawaban disisipi `held` → ruas kuning di tengah, bertumpuk tanpa celah. `check.py` lolos (pytest 1.223, vitest 262). Digabung setelah/bersama T101a |
-
-### Kontrak T101 — seri "Ditahan" di ringkasan Laporan (antrean 9c; **disetujui pengguna 25-10**)
-
-`GET /api/reports/summary` — tambahan (additive, bentuk lain tetap):
-```json
-"totals":  {"total": 12, "passed": 8, "rejected": 3, "held": 1, "compliance_rate": 75.0},
-"buckets": [{"start": "08:00", "label": "08", "passed": 2, "rejected": 1, "held": 1}]
-```
-- `held` = APD lengkap tetapi ditahan gerbang (`is_complete` dan `gate_hold` terisi) — sama dengan status "Ditahan"
-  tabel Laporan (T83). Invarian: `total = passed + rejected + held` (totals dan tiap bucket).
-- `compliance_rate` tidak berubah: `(total − rejected) / total` (ditahan bukan lolos, tetapi patuh APD — keputusan 24-10).
-- UI: grafik volume seri ketiga kuning (`--warn`) ditumpuk di antara merah & hijau, legenda + tooltip "Ditahan";
-  tinggi batang = `passed + rejected + held`. Kartu statistik "Ditahan" yang ada tidak diubah.
-- Pembagian: T101a backend (Codex), T101b UI (Claude); area tidak beririsan.
-
-Catatan pelaksanaan T101a (25-10): risiko Rendah, tambahan ringkasan tanpa mengubah keputusan gerbang atau SQL.
-Cara uji: `python -m pytest -q tests/test_report_summary.py tests/test_report_hold_semantics.py tests/test_audit_connections.py tests/test_audit_split.py`.
-`get_summary` pada DB sementara (semua baris pada satu hari; lolos/ditolak/dua alasan ditahan sama banyak):
-median 14 sampel per versi, berselang-seling setelah 2 pemanasan, baseline `bcb4f6d` → T101a:
-100 baris **1,537 → 1,523 ms** (rentang 1,339–1,978 → 1,347–2,044 ms);
-100.000 baris **289,603 → 295,381 ms** (283,771–303,490 → 287,785–303,738 ms).
-Kenaikan median beban besar 2,0%, dengan rentang bertumpang tindih; kompleksitas tetap O(n).
-`EXPLAIN QUERY PLAN` pada kedua ukuran: `SEARCH worker_inspections USING INDEX idx_date_str (date_str>? AND date_str<?)`.
-Tinjauan hanya-baca T101b `2ff65f4`: aman digabung bersama T101a; tipe JSON, seri ketiga,
-tooltip, tinggi batang dan kompatibilitas server lama sesuai kontrak. Tidak menjalankan UI terpisah.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
@@ -65,7 +38,6 @@ tooltip, tinggi batang dan kompatibilitas server lama sesuai kontrak. Tidak menj
 | 7g | **Tinggi** (setelan sudah dibangun 24-10 — T83a/b, bawaan MATI; rancangan di arsip "Rancangan T83") | **T83 — syarat sebelum "Wajib terdaftar" dipakai sungguhan** | (1) ukur tingkat pengenalan pekerja terdaftar: tiap pekerja ±10× lewat memakai helm, target ≥ 95% (laporan kehadiran); (2) persetujuan HR/Legal & DPIA diperbarui (FR jadi penentu akses, bersama T81); (3) uji gerbang: panel kuning ditahan + suara, ulang FR "Mohon tatap kamera", FR mati → semua ditahan + chip, amati kedipan track (VLM ulang/audit ganda saat setelan aktif) |
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
-| 9c | Rendah (**diklaim 25-10: T101a/b**, lihat "Kontrak T101") | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
 | 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh — **25-10 T42j selesai** (dialog `CameraPicker`/`SnapshotDialog` → `ModalDialog`, `#000` VideoPanel → token; Zona/Pengaturan sudah tanpa blok kembar). **T42k selesai** (9 modal → `ModalOverlay`). Sisa: 5 fungsi panjang |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
 
