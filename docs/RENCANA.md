@@ -9,8 +9,8 @@ Terakhir diperbarui: 24-10-2026. Task `selesai`, kontrak/rancangan task selesai,
 ## Lanjut dari sini (24-10-2026, akhir sesi panjang)
 
 - **`master` di-push 24-10** setelah T97a (T95, T96, T98, T97a, lanjutan Kehadiran, papan) — lolos `check.py` (pytest 1.132, vitest 252).
-- **25-10:** T97 (a/b/c), T99 (a–d: `backend/vlm/`, `backend/audit/`), T42j selesai — digabung & di-push. Berikutnya:
-  T100 (koneksi SQLite), 9c (grafik Ditahan), T42 sisa, uji nyata (antrean 3/4/4b, diblokir perangkat demo).
+- **25-10:** T97 (a/b/c), T99 (a–d), T100, T42j/k selesai — digabung & di-push. Berikutnya: 9c (grafik Ditahan),
+  T42 sisa (5 fungsi panjang), uji nyata (antrean 3/4/4b, diblokir perangkat demo).
 - **Server gerbang asli** perlu dinyalakan ulang dengan `master` terbaru agar T98 (cadangan memakai key cadangan) berlaku.
 - Keputusan sesi 24-10: "Lolos" = lolos gerbang (ditahan bukan lolos, tetap patuh APD); cadangan Gemini dengan akun/key
   berbeda = disengaja; kolom Model VLM kini dropdown dari penyedia (T97, selesai 24-10).
@@ -24,40 +24,12 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T100 — penutupan koneksi SQLite audit diseragamkan | Codex | `codex/t100-sqlite-close` | tinjau | `backend/audit/report_manager.py` (+ modul `backend/audit/*` bila perlu), `tests/` | Tujuh context ditutup eksplisit setelah transaksi keluar; sumber backup dan koneksi setengah terinisialisasi juga ditutup pada galat. SQL, synchronous=FULL, dan commit-sebelum-hapus-foto tetap. +30 kasus: 14 metode publik × 20 panggilan, rollback/galat, migrasi/backup, CSV dibatalkan; 18 gagal pada kode lama lalu seluruhnya lolos. Tes terarah 172 lolos; `check.py` lolos 1.223 pytest + 258 vitest, hygiene tanpa tambahan utang. Biaya simpan 1 audit 7,478 → 11,936 ms dicatat beserta pengukuran lain di bawah. Cara uji: `python -m pytest -q tests/test_audit_connections.py tests/test_audit_split.py tests/test_audit_schema_characterization.py tests/test_save_inspection_characterization.py tests/test_retention_characterization.py`; lalu `python scripts/check.py`. Data hanya di tmp pytest |
-| T42k — modal `div` bersama (Pekerja & Akun) | Claude | `claude/t42k-modal-overlay` | tinjau | `web/src/components/ModalOverlay.svelte` (baru), `web/src/components/workers/{WorkerAddModal,WorkerEditModal,WorkerDeleteDialog,WorkerPhotoModal,OrgManager}.svelte`, `web/src/components/settings/Accounts.svelte`, `web/src/app.css`, `web/src/styles/tokens.css` (tambah `--z-modal`) | Lanjutan T42: 7 modal berpola `modal-overlay`/`modal-card` → satu komponen; ukuran tetap (400/520/540/760), Esc khusus Foto/Organisasi tetap di komponennya. Tidak menyentuh `backend/`/`tests/` Hasil: `ModalOverlay.svelte` menggantikan kerangka di **9 modal / 6 berkas**; `.modal-actions` ke `app.css`; token `--z-modal: 100`. Perubahan tampilan kecil yang disengaja (penyeragaman): modal Akun latar 0,5 → 0,7 + border + bayangan, z 1000 → 100; Organisasi z 50 → 100 + bayangan; jarak atas tombol Foto 0 → 8 px, Akun 16 → 8 px. Modal Akun kini `role=dialog` + judul ber-id. Diuji di app: Tambah/Ubah/Nonaktifkan (520), hapus templat (400), Foto wajah (540, gulir, Esc), Organisasi (760, gulir, Esc) — semua z 100, ditutup Batal tanpa menyimpan. **Belum diuji di app:** modal Reset/Hapus akun (hanya ada akun sendiri; membuat akun uji = mengubah `data/`). `check.py` lolos (pytest 1.193, vitest 258) |
-
-### Catatan implementasi T100 (25-10)
-
-- Tujuh context audit kini `with closing(self._get_connection()) as conn, conn`: context transaksi tetap
-  keluar lebih dahulu (commit/rollback), lalu koneksi ditutup. Kehadiran dan ekspor yang sudah menutup
-  koneksi tetap memakai pola sebelumnya. Cadangan menutup sumber walau pembukaan tujuan gagal;
-  pabrik koneksi menutup koneksi baru bila inisialisasi PRAGMA gagal sebelum diserahkan ke fasad.
-- SQL, PRAGMA synchronous=FULL, skema, dan urutan commit-sebelum-hapus-foto tetap. Setelah normalisasi
-  pembungkus closing, 33 metode fasad identik secara AST; perubahan lain hanya kepemilikan sumber/tujuan
-  cadangan. Nilai seluruh literal SQL/PRAGMA/pesan pada dua berkas produksi tetap sama.
-- 30 kasus regresi baru: kode lama menghasilkan 18 gagal yang membuktikan koneksi tertinggal dan 12 lolos;
-  sesudah perbaikan, 172 tes terarah/karakterisasi lolos. Tracker memegang referensi kuat ke semua koneksi,
-  sehingga GC tidak menutupi kebocoran. Semua 14 metode publik dicakup, masing-masing diulang 20 kali;
-  termasuk galat query, INSERT/commit, retensi, PRAGMA, migrasi/backup, dan pembatalan streaming CSV.
-- Pengukuran perf_counter di DB sementara, lama/baru berselang-seling, tiga putaran. Median 9 sampel
-  untuk simpan 1/20 orang tanpa foto, 7 sampel untuk kueri 100/100.000 baris pada satu hari:
-
-| Jalur | Beban | Sebelum (ms) | Sesudah (ms) |
-| :-- | :-- | --: | --: |
-| Simpan audit | 1 / 20 orang | 7,478 / 153,450 | 11,936 / 239,702 |
-| Laporan | 100 / 100.000 baris | 0,992 / 34,809 | 1,772 / 35,537 |
-| Ringkasan | 100 / 100.000 baris | 0,838 / 316,111 | 1,502 / 317,381 |
-
-Penutupan deterministik menambah sekitar 4,46 ms per simpan pada mesin uji ini. Ini sejalan dengan
-[checkpoint otomatis ketika koneksi WAL terakhir ditutup](https://www.sqlite.org/wal.html), tanpa perubahan
-PRAGMA atau batas transaksi. Biaya tersebut dicatat, bukan disamarkan sebagai fluktuasi pengukuran.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 
 | # | Risiko | Task | Alasan risiko / isi |
 | :-- | :-- | :-- | :-- |
-| 3 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Belum diuji di gerbang: T72 jaringan (cabut LAN/Wi-Fi → lokal, hotspot lemah → lambat, colok lagi → utama, bongkar 10 menit), T88 lampu relay, VLM lokal darurat, T83 (panel ditahan + suara, ulang FR, FR mati), T98 (cadangan memakai akun kedua saat kuota utama habis), sisa lama (cabut kamera, setengah badan, berjalan lewat). Uji 2 sebagian 20-10 & penyebab gagalnya (T86, T87) sudah ditutup. **Diblokir:** perangkat dipakai demo. Riwayat rinci: arsip "Riwayat antrean (dipindah 24-10)" |
+| 3 | **Tinggi** | **Uji nyata gabungan (T35 Uji 2 & 3)** | Belum diuji di gerbang: T72 jaringan (cabut LAN/Wi-Fi → lokal, hotspot lemah → lambat, colok lagi → utama, bongkar 10 menit), T88 lampu relay, VLM lokal darurat, T83 (panel ditahan + suara, ulang FR, FR mati), T98 (cadangan memakai akun kedua saat kuota utama habis), sisa lama (cabut kamera, setengah badan, berjalan lewat). Uji 2 sebagian 20-10 & penyebab gagalnya (T86, T87) sudah ditutup. **Diblokir:** perangkat dipakai demo. Riwayat rinci: arsip "Riwayat antrean (dipindah 24-10)" Tambahan 25-10: ukur biaya `save_inspection` di perangkat gerbang (T100: checkpoint WAL per simpan, 7,5 → 11,9 ms di laptop); bila berarti → satu koneksi penjaga terbuka sepanjang server hidup |
 | 4 | **Tinggi** | **Uji fisik T57 & T58** (kamera terhalang; rokok/vape + pengecoh) | Sisa: pengecoh (pulpen, sedotan, ponsel, tangan kotor), vape, bungkus di saku, jalur cadangan lokal, kamera tertutup tangan/kain/plastik sistematis. Uji luring 22-10: 13/14 benar (0 merah palsu; terlewat foto 480p rokok ±4–5 px) — kebijakan "ragu = tidak ada" tetap. Riwayat: arsip "Riwayat antrean (dipindah 24-10)" |
 | 4b | **Tinggi** | **T74 — rokok/benda kecil terlihat VLM** | Akar masalah 19-10: area tangan buram (bukan ukuran gambar/`media_resolution`). 1080p: luring 7/7, kamera langsung 4/5. Lanjutan (diblokir uji fisik): (a) cahaya tambahan → syarat pemasangan; (b) pemilih frame peka tangan; (c) 2–3 frame terbaik per panggilan; (d) eksposur dikunci. Uji ulang: rokok di tangan setinggi pinggang berlatar putih, 1080p. Riwayat: arsip "Riwayat antrean (dipindah 24-10)" |
 | 5 | Sedang | **Validasi Gemini untuk prompt T58** — 10 foto 10/10 benar (pagi + sore 14-10, `data/eval/20261014-070915`, `-171309`); sore Gemini lambat (median 5,5 dtk, 4/5 > batas 4 dtk). Sisa: 84 foto penuh bila kuota mengizinkan | Status Gemini kini `outdated` (terakhir diuji T48) → peringatan di log & Pengaturan; uji 10–20 foto dengan jeda RPM |
@@ -67,8 +39,7 @@ PRAGMA atau batas transaksi. Biaya tersebut dicatat, bukan disamarkan sebagai fl
 | 8 | Sedang | Uji fisik tertunda: lampu ESP32 (T47), restart PC sungguhan (T29) | Rancangan diuji tanpa perangkat/simulasi saja |
 | 9 | Rendah | Dua orang berdampingan di zona (T36d); T25 sisa latensi | Dicegah batas fisik di lokasi; latensi sudah jauh turun |
 | 9c | Rendah | Grafik volume Laporan tanpa seri "Ditahan" (lanjutan T96, 24-10) | Bucket ringkasan hanya `passed`/`rejected` → batang < total bila ada yang ditahan. Usul: kontrak bucket + `held`, grafik seri ketiga kuning (Codex backend + Claude UI) |
-| 10b | Rendah | **T100 — penutupan koneksi SQLite audit diseragamkan** (temuan Codex di T99b) | Pola `with self._get_connection() as conn` hanya mengakhiri transaksi, tidak menutup koneksi (di CPython tertutup saat objek dibuang, jadi kecil risikonya). Seragamkan ke penutupan eksplisit (`closing`) tanpa mengubah transaksi/urutan tulis; tes: jumlah koneksi terbuka tidak bertambah setelah N panggilan |
-| 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh — **25-10 T42j selesai** (dialog `CameraPicker`/`SnapshotDialog` → `ModalDialog`, `#000` VideoPanel → token; Zona/Pengaturan sudah tanpa blok kembar). Kandidat berikut: 7 modal `div` (`modal-overlay`/`modal-card`) di Pekerja & Akun berpola mirip |
+| 10 | Rendah | T42 — cicil utang kode (sisa setelah T42a–i) | 6 fungsi > 30 baris logis (23-10): `tools/bench_vlm.py::main` 97, `tools/eval_vlm.py::main` 88, `capture.__init__` 43, `app.run` 38, `report_manager._migrate` 34, `routes_cameras.list_cameras` 32 — daftar di `tests/test_code_hygiene.py`; 8 blok kembar (web: dialog CameraPicker/SnapshotDialog/AdminToken, ZoneSettings/Pengaturan); pesan log di luar `messages.py` (`camera_manager`, `detector`, `audio_engine`, `capture`); angka HUD/resolusi ke config; warna `#000` VideoPanel ke token; nama Indonesia → Inggris saat disentuh — **25-10 T42j selesai** (dialog `CameraPicker`/`SnapshotDialog` → `ModalDialog`, `#000` VideoPanel → token; Zona/Pengaturan sudah tanpa blok kembar). **T42k selesai** (9 modal → `ModalOverlay`). Sisa: 5 fungsi panjang |
 | 12 | **Tinggi** (syarat pemakaian) | **T34 — identitas wajah (FR)**: dibangun lengkap (T34m–e, T75/T76 selesai; rancangan di arsip "Rancangan T34") | Sisa sebelum dipakai sungguhan: persetujuan pekerja & DPIA HR/Legal (bersama T81/T83), tingkat pengenalan pekerja terdaftar terukur di gerbang (antrean 7g) |
 
 
