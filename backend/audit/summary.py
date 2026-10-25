@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterable, Optional
 
-from . import messages, ppe_rules
+from .. import messages, ppe_rules
 
 PERIOD_DAY, PERIOD_WEEK, PERIOD_MONTH = "day", "week", "month"
 PERIODS = (PERIOD_DAY, PERIOD_WEEK, PERIOD_MONTH)

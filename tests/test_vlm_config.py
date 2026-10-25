@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 _PROBE = r"""
 import json
 from backend.config import cfg
-from backend.vlm_analyzer import VLMAnalyzer
+from backend.vlm.analyzer import VLMAnalyzer
 # Proses terpisah tanpa conftest: jangan menyentuh model Ollama sungguhan saat start (T71)
 VLMAnalyzer._unload_if_loaded = staticmethod(lambda engine: engine.close())
 a = VLMAnalyzer()
@@ -154,7 +154,7 @@ def klien(monkeypatch):
     from fastapi.testclient import TestClient
     from backend.app import app
     from backend.config import cfg
-    from backend.vlm_analyzer import vlm_analyzer
+    from backend.vlm.analyzer import vlm_analyzer
 
     for attr in ("primary", "backup"):
         monkeypatch.setattr(vlm_analyzer, attr, getattr(vlm_analyzer, attr))

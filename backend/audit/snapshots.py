@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 import cv2
 import numpy as np
-from .config import cfg
-from . import messages
+from ..config import cfg
+from .. import messages
 
 logger = logging.getLogger(__name__)
 

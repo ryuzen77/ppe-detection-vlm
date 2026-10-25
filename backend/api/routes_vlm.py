@@ -9,11 +9,12 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from .. import messages, vlm_selection
+from .. import messages
+from ..vlm import selection as vlm_selection
 from ..api_monitor import api_monitor
 from ..state_manager import state_mgr
-from ..vlm_analyzer import EngineFailed, LaneBusy, vlm_analyzer
-from ..vlm_selection import Choice, Selection, SelectionError
+from ..vlm.analyzer import EngineFailed, LaneBusy, vlm_analyzer
+from ..vlm.selection import Choice, Selection, SelectionError
 from .deps import actor, client_address, require_admin
 
 router = APIRouter()

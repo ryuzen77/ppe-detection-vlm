@@ -87,10 +87,25 @@ backend/              Paket Python (jalankan: python -m backend)
   frame_quality.py    Pemilihan frame terbaik untuk VLM
   zone.py             Zona titik berdiri
   state_manager.py    Sesi gerbang, pemanggilan VLM, telemetri
-  vlm_analyzer.py     VLM utama + cadangan, pemutus sirkuit
+  vlm/                Pemeriksaan VLM dan pemilihan penyedia
+    analyzer.py       Fasad, rute utama/cadangan/darurat dan lock inspeksi
+    engine.py         Mesin VLM, batas waktu, pemanasan dan gambar bersama
+    breaker.py        State pemutus utama tanpa I/O
+    prompt.py         Prompt dan metadata validasi
+    result.py         Model hasil dan penguraian jawaban
+    image.py          Crop serta panel perbesaran
+    selection.py      Pilihan penyedia/model, key per peran dan validasi
   vlm_providers/      Adaptor penyedia VLM
   local_model_guard.py  Menjaga model lokal tetap di GPU
-  report_manager.py   Audit SQLite, foto bukti, retensi, CSV
+  audit/              Audit SQLite, foto bukti, retensi dan CSV
+    report_manager.py Fasad pemegang koneksi, transaksi dan lock
+    db.py             Pabrik koneksi dan migrasi skema
+    snapshots.py      Berkas foto bukti
+    queries.py        Kueri laporan dan identitas
+    export.py         Ekspor CSV
+    attendance.py     Informasi lintasan pekerja
+    retention.py      Pemilihan audit/foto kedaluwarsa
+    summary.py        Perhitungan ringkasan laporan
   audio_engine.py     Pemutar suara
   notifier.py         Lampu gerbang (IoT)
   camera_manager.py   Daftar & pengukuran kamera

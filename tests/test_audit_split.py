@@ -6,7 +6,15 @@ from typing import Any
 
 import pytest
 
-from backend import audit_db, audit_queries, audit_export, attendance, report_manager, retention, snapshot_store
+from backend.audit import (
+    db as audit_db,
+    queries as audit_queries,
+    export as audit_export,
+    attendance,
+    report_manager,
+    retention,
+    snapshots as snapshot_store,
+)
 from backend.config import cfg
 from backend.disk_guard import BYTES_PER_GB
 

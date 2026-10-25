@@ -12,11 +12,13 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from backend import face_crypto, messages, ppe_rules, attendance, worker_store
+from backend import face_crypto, messages, ppe_rules
+from backend.audit import attendance
+from backend import worker_store
 from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
-from backend.report_manager import ReportManager
+from backend.audit.report_manager import ReportManager
 
 DAY = "2026-10-21"
 OTHER_DAY = "2026-10-20"

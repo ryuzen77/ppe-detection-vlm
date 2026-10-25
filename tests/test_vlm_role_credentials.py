@@ -7,12 +7,13 @@ from time import perf_counter
 
 import pytest
 
-from backend import ppe_rules, vlm_selection as selection
+from backend import ppe_rules
+from backend.vlm import selection as selection
 from backend.api import routes_vlm
 from backend.api_monitor import ROLE_EMERGENCY, api_monitor
 from backend.config import cfg
-from backend.vlm_analyzer import ROLE_BACKUP, ROLE_PRIMARY, VLMAnalyzer
-from backend.vlm_selection import Choice, Selection, SelectionError
+from backend.vlm.analyzer import ROLE_BACKUP, ROLE_PRIMARY, VLMAnalyzer
+from backend.vlm.selection import Choice, Selection, SelectionError
 from helpers import person_crop
 from test_vlm_selection import FakeProvider, analyzer, client, env, fakes  # noqa: F401 (fixtures)
 
@@ -196,7 +197,7 @@ def test_primary_failure_reaches_other_account_without_secret_in_logs_or_telemet
 
 
 def test_http_adapter_receives_url_and_key_for_its_role(role_env, fakes, monkeypatch):
-    from backend import vlm_engine as module
+    from backend.vlm import engine as module
 
     monkeypatch.setattr(cfg, "VLM_PROVIDER", "openai")
     monkeypatch.setattr(cfg, "VLM_BACKUP_PROVIDER", "openai")
@@ -241,7 +242,7 @@ def test_provider_errors_never_export_key_in_log_or_engine_info(role_env, fakes,
 
     try:
         if operation == "build":
-            monkeypatch.setattr("backend.vlm_engine.create_provider", fail)
+            monkeypatch.setattr("backend.vlm.engine.create_provider", fail)
             assert engine.build() is False
         elif operation == "warm_up":
             monkeypatch.setattr(engine.provider, "warm_up", fail)

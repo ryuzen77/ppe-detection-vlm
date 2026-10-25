@@ -24,7 +24,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| T99d — kelompokkan modul VLM & audit ke `backend/vlm/` dan `backend/audit/` | Codex | `codex/t99d-folders` | dikerjakan | `backend/` (rename + impor), `tests/`, `tools/`, `scripts/` (impor), `docs/ARSITEKTUR.md` | Pemetaan di "Rancangan T99" tahap d. Hanya path impor; menyentuh banyak berkas → **selama T99d tidak ada task lain di `backend/`/`tests/`**. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T99d — kelompokkan modul VLM & audit ke `backend/vlm/` dan `backend/audit/` | Codex | `codex/t99d-folders` | tinjau | `backend/` (rename + impor), `tests/`, `tools/`, `scripts/` (impor), `docs/ARSITEKTUR.md` | 15 `git mv` sesuai tabel, kemiripan rename 96–99%, tanpa shim dan dengan dua initializer kosong. AST 23 modul produksi yang berubah identik setelah impor diabaikan; path patch/probe/alat diperbarui. 67 tes terarah lolos; `check.py` lolos 1.193 pytest + 258 vitest. `python -m backend` sampai siap di :8001 (CPU, DATA_DIR sementara, key kosong, kamera/IoT mati, Ollama diblokir), HTTP 200 dan shutdown exit 0 tanpa traceback. `tools/bench_vlm.py --help` lolos. `docs/ARSITEKTUR.md` diperbarui; arsip dan `vlm_providers` tidak disentuh. Cara uji: `git diff -M d13febe..codex/t99d-folders --stat`, lalu `python scripts/check.py`. Selama tinjau tidak ada task backend/tests lain yang beririsan |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
@@ -169,6 +169,23 @@ kode lama/baru berselang-seling di proses sama, 3 putaran × 21 sampel dan peman
 Selisih median batch 20 orang +0,542 ms (1,1%), dengan rentang sampel yang bertumpang tindih; angka ini tidak
 menunjukkan perlambatan konsisten pada ketiga putaran dan bukan batas latensi VLM produksi. Batas waktu,
 urutan peralihan, jumlah panggilan VLM, dan bentuk telemetri tidak diubah. Berkas bersama tidak disentuh.
+
+**Catatan T99d (25-10):** tabel pemetaan tahap d sudah diterapkan. Paket `backend.vlm` dan `backend.audit`
+tidak mengekspor apa pun dari `__init__.py`; tidak ada shim atau modul tersisa pada 15 path lama. Semua
+nama variabel lokal dipertahankan dengan alias impor. Tidak ada perubahan fungsi, SQL, kontrak, konfigurasi,
+skema, maupun data; 23 modul produksi yang berubah identik secara AST setelah simpul impor diabaikan.
+Target patch string yang modulnya pindah kini memakai nama paket baru; patch pada pemakai yang tetap di
+tempat (`backend.state_manager.report_mgr`, `backend.api.routes_*.report_mgr`) tetap mengenai pemiliknya.
+Pencarian path modul lama di `backend/`, `tests/`, `tools/`, `scripts/` tidak menyisakan referensi aktif.
+
+Bukti rename (`git diff -M ... --summary`): VLM analyzer 98%, engine 96%, breaker 97%, prompt 96%, result 99%,
+image 98%, selection 98%; audit report_manager 97%, db 99%, snapshots 98%, queries 98%, export 98%,
+attendance 97%, retention 98%, summary 99%. `vlm_providers`, berkas bersama, dan arsip tidak berubah.
+Startup diuji dengan perintah anak literal `python -m backend`, port 8001, bobot YOLO lokal pada CPU,
+data sementara, kamera/IoT mati, seluruh key VLM kosong, audio dummy, serta pengaman soket Ollama T91.
+Harness awal perlu koreksi sys.path (karena berada di direktori sementara) dan CUDA_VISIBLE_DEVICES=-1;
+setelah koreksi, layanan siap, GET /api/session membalas 200, lalu shutdown exit 0 tanpa traceback.
+Server uji sudah dihentikan. Alat benchmark hanya dijalankan dengan `--help`, tanpa inferensi.
 
 ## Antrean berikutnya (urut menurut risiko — AGENTS.md §2.2a, disusun 27-09, dirapikan 14-10)
 

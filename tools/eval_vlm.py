@@ -42,7 +42,7 @@ import numpy as np  # noqa: E402
 from backend.config import cfg  # noqa: E402
 from backend import ppe_rules  # noqa: E402
 from backend.detector import detector  # noqa: E402
-from backend.vlm_analyzer import VLMAnalyzer  # noqa: E402
+from backend.vlm.analyzer import VLMAnalyzer  # noqa: E402
 
 CLASSES = {"ppe_complete": True, "ppe_incomplete": False}
 EVAL_TIMEOUT_SECONDS = float(os.getenv("EVAL_TIMEOUT_SECONDS", "90"))

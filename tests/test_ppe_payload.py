@@ -6,7 +6,7 @@
 import pytest
 
 from backend import ppe_rules
-from backend.vlm_result import _parse_vlm_payload
+from backend.vlm.result import _parse_vlm_payload
 
 
 def missing_label(key):

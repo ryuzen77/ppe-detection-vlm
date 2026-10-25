@@ -11,10 +11,10 @@ from . import messages
 from .detector import DetectionResult
 from . import face_identity, frame_quality, worker_voice, registration_policy
 from .readiness import ReadinessTracker
-from .vlm_analyzer import vlm_analyzer, InspectionResult
+from .vlm.analyzer import vlm_analyzer, InspectionResult
 from .audio_engine import audio_player
 from .notifier import notifier
-from .report_manager import report_mgr
+from .audit.report_manager import report_mgr
 from .api_monitor import api_monitor
 from . import zone as zones
 from .zone import zone_store

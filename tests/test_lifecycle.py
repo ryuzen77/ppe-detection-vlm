@@ -78,7 +78,7 @@ def _wait_for(predicate, timeout=5.0):
 @pytest.fixture
 def vlm(monkeypatch):
     """VLM utama tiruan tanpa cadangan, dipasang pada analyzer global gerbang."""
-    from backend.vlm_analyzer import vlm_analyzer, VLMEngine
+    from backend.vlm.analyzer import vlm_analyzer, VLMEngine
 
     tiruan = VLMTiruan()
     engine = VLMEngine("utama", "gemini", "model-tiruan", api_key="kunci-uji")
@@ -304,7 +304,7 @@ def test_orang_lewat_di_luar_jalur_tidak_menahan_reset(gerbang):
 
 
 def test_hasil_yang_tiba_setelah_pekerja_pergi_tidak_menyalakan_lampu(gerbang, monkeypatch):
-    from backend.vlm_analyzer import vlm_analyzer
+    from backend.vlm.analyzer import vlm_analyzer
 
     asli = vlm_analyzer.analyze_person
 

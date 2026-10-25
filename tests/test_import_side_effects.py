@@ -19,8 +19,8 @@ import torch, pygame
 from backend.detector import detector
 from backend.notifier import notifier
 from backend.audio_engine import audio_player
-from backend.vlm_analyzer import vlm_analyzer
-from backend.report_manager import report_mgr
+from backend.vlm.analyzer import vlm_analyzer
+from backend.audit.report_manager import report_mgr
 from backend.video.capture import video_service
 try:
     mixer_on = bool(pygame.mixer.get_init())

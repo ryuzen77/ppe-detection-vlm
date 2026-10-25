@@ -7,14 +7,15 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 import cv2
 import numpy as np
-from .config import cfg
-from . import messages, vlm_selection, vlm_image
-from .api_monitor import ROLE_EMERGENCY
-from .local_model_guard import UNLOADED, LOADING, READY, FAILED
-from .vlm_providers import create_provider
-from .vlm_providers import profiles as vlm_profiles
-from .vlm_selection import Choice, ROLE_PRIMARY
-from .vlm_prompt import USER_PROMPT, build_system_prompt, thinking_option, profile_warnings
+from ..config import cfg
+from .. import messages
+from . import selection as vlm_selection, image as vlm_image
+from ..api_monitor import ROLE_EMERGENCY
+from ..local_model_guard import UNLOADED, LOADING, READY, FAILED
+from ..vlm_providers import create_provider
+from ..vlm_providers import profiles as vlm_profiles
+from .selection import Choice, ROLE_PRIMARY
+from .prompt import USER_PROMPT, build_system_prompt, thinking_option, profile_warnings
 
 logger = logging.getLogger(__name__)
 

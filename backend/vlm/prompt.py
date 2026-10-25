@@ -3,9 +3,10 @@
 import logging
 from typing import Optional
 
-from .config import cfg
-from . import messages, ppe_rules, vlm_selection
-from .vlm_providers import profiles as vlm_profiles
+from ..config import cfg
+from .. import messages, ppe_rules
+from . import selection as vlm_selection
+from ..vlm_providers import profiles as vlm_profiles
 
 logger = logging.getLogger(__name__)
 USER_PROMPT = messages.VLM_USER_PROMPT

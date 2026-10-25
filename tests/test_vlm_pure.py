@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from backend import vlm_analyzer, vlm_prompt, vlm_result
+from backend.vlm import analyzer as vlm_analyzer, prompt as vlm_prompt, result as vlm_result
 
 
 @pytest.mark.parametrize(
@@ -50,9 +50,9 @@ def test_thinking_warning_uses_prompt_module_logger(monkeypatch):
 _PURE_IMPORT_PROBE = """
 import json, sys, threading
 before = {thread.ident for thread in threading.enumerate()}
-from backend import vlm_result, vlm_prompt
+from backend.vlm import result as vlm_result, prompt as vlm_prompt
 print(json.dumps({
-    "analyzer_imported": "backend.vlm_analyzer" in sys.modules,
+    "analyzer_imported": "backend.vlm.analyzer" in sys.modules,
     "new_threads": len({thread.ident for thread in threading.enumerate()} - before),
     "adapters_imported": any(name in sys.modules for name in (
         "backend.vlm_providers.gemini", "backend.vlm_providers.anthropic",

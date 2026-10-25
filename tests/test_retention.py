@@ -3,7 +3,7 @@ import os
 import pytest
 
 from backend.config import cfg
-from backend.report_manager import ReportManager
+from backend.audit.report_manager import ReportManager
 
 
 @pytest.fixture
@@ -217,9 +217,9 @@ def test_retention_thread_stops(monkeypatch):
     def mock_cleanup():
         called.append(1)
 
-    import backend.report_manager
+    import backend.audit.report_manager
 
-    monkeypatch.setattr(backend.report_manager.report_mgr, "cleanup_old_data", mock_cleanup)
+    monkeypatch.setattr(backend.audit.report_manager.report_mgr, "cleanup_old_data", mock_cleanup)
 
     # We must also mock video_service.stop etc if we call rt.stop()
     monkeypatch.setattr(rt.video_service, "stop", lambda: None)
@@ -251,9 +251,9 @@ def test_retention_interval_disabled(monkeypatch):
     def mock_cleanup():
         called.append(1)
 
-    import backend.report_manager
+    import backend.audit.report_manager
 
-    monkeypatch.setattr(backend.report_manager.report_mgr, "cleanup_old_data", mock_cleanup)
+    monkeypatch.setattr(backend.audit.report_manager.report_mgr, "cleanup_old_data", mock_cleanup)
 
     thread = threading.Thread(target=rt._retention_loop, daemon=True)
     thread.start()

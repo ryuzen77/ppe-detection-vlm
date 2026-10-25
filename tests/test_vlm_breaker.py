@@ -2,9 +2,9 @@
 
 import pytest
 
-from backend import vlm_analyzer, vlm_breaker
+from backend.vlm import analyzer as vlm_analyzer, breaker as vlm_breaker
 from backend.config import cfg
-from backend.vlm_breaker import PrimaryBreaker
+from backend.vlm.breaker import PrimaryBreaker
 
 
 @pytest.fixture(autouse=True)

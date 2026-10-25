@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from backend import messages
-from backend.report_manager import CSV_BOM, SCHEMA_VERSION, ReportManager
+from backend.audit.report_manager import CSV_BOM, SCHEMA_VERSION, ReportManager
 
 # Skema versi 0 persis seperti sebelum T4: sebelas kolom tetap per item
 _CREATE_V0 = """
@@ -236,8 +236,8 @@ def test_statistik_menghitung_keputusan_vlm_cadangan(paths):
 
 
 def test_label_vlm_cadangan_cocok_dengan_prefiks_laporan():
-    from backend.report_manager import BACKUP_SOURCE_PREFIX
-    from backend.vlm_analyzer import VLMEngine
+    from backend.audit.report_manager import BACKUP_SOURCE_PREFIX
+    from backend.vlm.analyzer import VLMEngine
 
     engine = VLMEngine("cadangan", "ollama", "qwen2.5vl:7b")
     assert engine.label.startswith(BACKUP_SOURCE_PREFIX)

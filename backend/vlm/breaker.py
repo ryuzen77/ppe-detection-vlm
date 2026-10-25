@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from .config import cfg
+from ..config import cfg
 
 
 @dataclass

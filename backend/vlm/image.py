@@ -12,8 +12,8 @@ from typing import Optional, Sequence
 import cv2
 import numpy as np
 
-from . import pose_keypoints as kp
-from .config import cfg
+from .. import pose_keypoints as kp
+from ..config import cfg
 
 Box = tuple[int, int, int, int]  # x0, y0, x1, y1 (x1/y1 eksklusif)
 _HEAD_POINTS = (kp.NOSE, kp.LEFT_EYE, kp.RIGHT_EYE, kp.LEFT_EAR, kp.RIGHT_EAR)

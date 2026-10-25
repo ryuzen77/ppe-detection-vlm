@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from backend.config import cfg
-from backend.vlm_analyzer import VLMEngine
+from backend.vlm.analyzer import VLMEngine
 from backend.vlm_providers import create_provider
 from backend.vlm_providers.anthropic import API_VERSION, AnthropicProvider
 

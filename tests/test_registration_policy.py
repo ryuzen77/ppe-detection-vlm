@@ -23,8 +23,8 @@ from backend.app import app
 from backend.auth import SessionUser
 from backend.config import cfg
 from backend.notifier import notifier
-from backend.report_manager import ReportManager, SCHEMA_VERSION
-from backend.report_manager import HELD_COUNT_SQL, RECOGNITION_SQL
+from backend.audit.report_manager import ReportManager, SCHEMA_VERSION
+from backend.audit.report_manager import HELD_COUNT_SQL, RECOGNITION_SQL
 from backend.state_manager import TrackState
 from test_lifecycle import _balasan, _det, _wait_for, gerbang, vlm  # noqa: F401
 
@@ -379,7 +379,7 @@ def test_audit_indexes_and_timing(policy_env, size):
 
 @pytest.mark.parametrize("size", [100, 100_000])
 def test_inspection_policy_timing(policy_env, gerbang, size):
-    from backend.vlm_analyzer import InspectionResult
+    from backend.vlm.analyzer import InspectionResult
 
     policy_env.policy.save(True)
     result = InspectionResult(is_complete=True)

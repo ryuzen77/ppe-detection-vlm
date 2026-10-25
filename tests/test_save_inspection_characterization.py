@@ -63,8 +63,8 @@ class _Logs(logging.Handler):
 
 
 def run_calls(root, monkeypatch):
-    import backend.report_manager as rm
-    from backend import audit_db, snapshot_store
+    import backend.audit.report_manager as rm
+    from backend.audit import db as audit_db, snapshots as snapshot_store
 
     logs = []
     handler = _Logs(logs)

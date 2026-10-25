@@ -9,14 +9,15 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import ppe_rules, vlm_selection
+from backend import ppe_rules
+from backend.vlm import selection as vlm_selection
 from backend.api_monitor import APIMonitor, MODE_LOCAL, ROLE_EMERGENCY
 from backend.config import cfg
 from backend.internet_monitor import NORMAL, SLOW, DISCONNECTED, ProbeResult
 from backend.local_model_guard import UNLOADED, LOADING, READY, FAILED
-from backend.vlm_analyzer import VLMAnalyzer, VLMEngine
+from backend.vlm.analyzer import VLMAnalyzer, VLMEngine
 from backend.vlm_providers.base import VLMProvider
-from backend.vlm_selection import Choice, Selection
+from backend.vlm.selection import Choice, Selection
 from helpers import person_crop
 
 
@@ -405,7 +406,7 @@ def test_recovered_internet_returns_to_primary_before_breaker_retry(make_analyze
 
 
 def test_failed_selection_preparation_closes_new_engines_only(make_analyzer, monkeypatch):
-    from backend.vlm_analyzer import EngineFailed
+    from backend.vlm.analyzer import EngineFailed
 
     analyzer = make_analyzer("C")
     fresh = _fake_engine("utama", Choice("gemini", "model-baru-uji"))

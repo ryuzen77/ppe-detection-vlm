@@ -5,9 +5,10 @@ import logging
 
 import pytest
 
-from backend import config, messages, ppe_rules, vlm_selection
-from backend.vlm_analyzer import VLMEngine
-from backend.vlm_prompt import build_system_prompt, confirmation_prompts, profile_warnings, thinking_option
+from backend import config, messages, ppe_rules
+from backend.vlm import selection as vlm_selection
+from backend.vlm.analyzer import VLMEngine
+from backend.vlm.prompt import build_system_prompt, confirmation_prompts, profile_warnings, thinking_option
 from backend.vlm_providers import OPENAI_COMPATIBLE, profiles
 from backend.vlm_providers.openai_compatible import PRESETS
 

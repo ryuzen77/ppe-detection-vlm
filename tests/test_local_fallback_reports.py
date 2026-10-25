@@ -6,8 +6,8 @@ from time import perf_counter
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.report_manager import BACKUP_SOURCE_PREFIX, ReportManager
-from backend.vlm_selection import LOCAL_FALLBACK_SOURCE_PREFIX
+from backend.audit.report_manager import BACKUP_SOURCE_PREFIX, ReportManager
+from backend.vlm.selection import LOCAL_FALLBACK_SOURCE_PREFIX
 
 
 @pytest.fixture

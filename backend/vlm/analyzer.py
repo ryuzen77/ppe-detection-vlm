@@ -8,23 +8,23 @@ from typing import Callable, Optional
 from concurrent.futures import TimeoutError
 from contextlib import contextmanager, nullcontext
 
-from .config import cfg
-from .local_model_guard import LocalModelGuard, LocalStandby, UNLOADED, LOADING, READY
-from .api_monitor import api_monitor, ROLE_EMERGENCY
-from .internet_monitor import InternetMonitor, NORMAL, SLOW, DISCONNECTED, is_connection_failure
-from . import messages
-from . import ppe_rules
-from . import vlm_selection
-from .vlm_providers import profiles as vlm_profiles
-from .vlm_selection import Choice, Selection, ROLE_PRIMARY, ROLE_BACKUP
+from ..config import cfg
+from ..local_model_guard import LocalModelGuard, LocalStandby, UNLOADED, LOADING, READY
+from ..api_monitor import api_monitor, ROLE_EMERGENCY
+from ..internet_monitor import InternetMonitor, NORMAL, SLOW, DISCONNECTED, is_connection_failure
+from .. import messages
+from .. import ppe_rules
+from . import selection as vlm_selection
+from ..vlm_providers import profiles as vlm_profiles
+from .selection import Choice, Selection, ROLE_PRIMARY, ROLE_BACKUP
 
-from .vlm_result import (
+from .result import (
     APDInspectionResult as APDInspectionResult,
     InspectionResult as InspectionResult,
     ItemResult as ItemResult,
     _parse_vlm_payload,
 )
-from .vlm_prompt import (
+from .prompt import (
     USER_PROMPT as USER_PROMPT,
     build_system_prompt as build_system_prompt,
     confirmation_prompts as confirmation_prompts,
@@ -33,14 +33,14 @@ from .vlm_prompt import (
     profile_warnings as profile_warnings,
 )
 
-from .vlm_engine import (
+from .engine import (
     VLMEngine as VLMEngine,
     LaneBusy as LaneBusy,
     EngineFailed as EngineFailed,
     image_for_vlm as image_for_vlm,
     warmup_image_jpeg as warmup_image_jpeg,
 )
-from .vlm_breaker import PrimaryBreaker
+from .breaker import PrimaryBreaker
 
 logger = logging.getLogger(__name__)
 

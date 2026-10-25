@@ -19,7 +19,7 @@ from backend.api.deps import require_session
 from backend.app import app
 from backend.auth import SessionUser
 from backend.config import cfg
-from backend.report_manager import SCHEMA_VERSION, ReportManager
+from backend.audit.report_manager import SCHEMA_VERSION, ReportManager
 
 
 @pytest.fixture

@@ -16,12 +16,13 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import messages, runtime_settings, vlm_selection
+from backend import messages, runtime_settings
+from backend.vlm import selection as vlm_selection
 from backend.config import cfg
-from backend.vlm_analyzer import ROLE_BACKUP, ROLE_PRIMARY, EngineFailed, LaneBusy, VLMAnalyzer
+from backend.vlm.analyzer import ROLE_BACKUP, ROLE_PRIMARY, EngineFailed, LaneBusy, VLMAnalyzer
 from backend.vlm_providers import profiles
 from backend.vlm_providers.base import VLMProvider
-from backend.vlm_selection import Choice, Selection, SelectionError
+from backend.vlm.selection import Choice, Selection, SelectionError
 
 from helpers import PROVIDER_KEY_ENVS, person_crop
 
@@ -108,7 +109,7 @@ def fakes(monkeypatch):
         made.append(provider)
         return provider
 
-    monkeypatch.setattr("backend.vlm_engine.create_provider", create)
+    monkeypatch.setattr("backend.vlm.engine.create_provider", create)
     return made, options
 
 
