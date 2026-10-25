@@ -8,6 +8,14 @@ usulan orang lain. Pertanyaan yang butuh keputusan pengguna diberi tanda **[Kepu
 
 ---
 
+## Keputusan pengguna (25-10)
+
+1. **Produksi: VLM utama & cadangan berbayar.** Free tier hanya untuk pengembangan & demo.
+2. **Fokus sekarang: satu gerbang** — perapian struktur folder (backend & web) dengan best practice (clean code,
+   system design, log) **dan MLOps**. Multi-gerbang, server pusat, dan PostgreSQL/pgvector **ditunda** (rancangannya
+   tetap di bagian 6 & 8 sebagai arah, tidak dikerjakan sekarang).
+3. **GPU vs edge computing di skala besar** didiskusikan nanti (bagian 8.4) — biaya GPU per gerbang dianggap mahal.
+
 ## 0. Prinsip yang tidak berubah
 
 1. Keputusan produk AGENTS.md §5 tetap: semua keputusan APD oleh VLM, merah hanya APD kurang/larangan, gagal VLM →
@@ -190,7 +198,7 @@ dikirim ke pusat (bandwidth & data pribadi).
 | :-- | :-- | :-- | :-- | :-- |
 | **Throughput 1 gerbang** | 1 jalur, keputusan terkunci per sesi; VLM cloud ±2–5 dtk, lokal 3,5–7,9 dtk | Antrean di jam masuk shift (mis. 200 pekerja dalam 15 menit = 1 orang / 4,5 dtk) | Antrean > N orang terukur di gerbang | Tambah **jalur/gerbang** (scale-out), bukan mempercepat satu jalur; tahap 2 IoT (pekerja berikutnya diperiksa lebih awal) |
 | **Kamera & deteksi** | YOLO26s-pose GPU ~88 FPS bench, server 15–17 FPS di CPU-only; 1 kamera per proses | 2+ kamera per PC → GPU/CPU berbagi | Satu PC melayani >1 jalur | 1 proses per kamera (port berbeda) atau proses vision terpisah + antrean frame; ukur dulu |
-| **Kuota VLM cloud** | Free tier ±15 RPM, ±500/hari per project; key per peran (T98) | 1 inspeksi = 1–2 panggilan (+ konfirmasi larangan T58) → ±250–500 pekerja/hari | Pemeriksaan/hari mendekati kuota | Tier berbayar; **pembatas laju + penghitung kuota** di backend (tahu sisa kuota sebelum habis); key per gerbang; cadangan lokal tetap jalan |
+| **Kuota & biaya VLM cloud** | Produksi **berbayar** (utama & cadangan, keputusan 25-10); free tier ±15 RPM / ±500 per hari hanya dev & demo; key per peran (T98) | 1 inspeksi = 1–2 panggilan (+ konfirmasi larangan T58); biaya per pekerja per hari belum diukur | Tagihan/bulan atau batas RPM tier berbayar | **Penghitung panggilan & biaya** per peran (tahu biaya per inspeksi), pembatas laju; cadangan lokal tetap jalan |
 | **GPU lokal** | VRAM puncak 7,6 / 8 GB (`qwen2.5vl:7b` + YOLO) | OOM bila ada beban GPU lain | Model lokal lebih besar / 2 kamera | GPU ≥ 12–16 GB per gerbang atau server inferensi lokal bersama di lokasi (vLLM, ditunda T40) |
 | **Galeri wajah** | Teruji ±300 pekerja/gerbang; 10.000 pekerja < 0,1 ms/pencarian (numpy di memori) | Akurasi 1:N turun saat galeri besar (lebih banyak salah kenal) | > 300 pekerja aktif atau multi-gerbang | Ukur ulang ambang per ukuran galeri; galeri per lokasi; pusat pgvector (6d) untuk cek ganda & lintas lokasi |
 | **Audit** | 100.000 baris: laporan ±32–63 ms, ringkasan ±300–600 ms (indeks `idx_date_str`); simpan ±12 ms (T100) | Ringkasan bulanan tumbuh linear; retensi 1 tahun | Ringkasan > 1 dtk atau > 1 juta baris | Tabel agregat harian (dihitung saat simpan/malam), bukan hitung ulang; di pusat: partisi per bulan di PG |
@@ -214,6 +222,32 @@ dikirim ke pusat (bandwidth & data pribadi).
 - Laju datang pekerja di jam masuk shift sungguhan (orang/menit) vs waktu per inspeksi end-to-end.
 - Pemakaian kuota VLM per hari pada pemakaian nyata.
 - Biaya simpan audit di perangkat gerbang (T100) dan ringkasan pada 1 tahun data sintetis.
+- Biaya VLM berbayar per inspeksi (token gambar + jawaban) → biaya per gerbang per bulan.
+
+### 8.4 GPU vs edge computing — **didiskusikan nanti** (keputusan pengguna 25-10)
+
+Pertanyaan: di skala besar, apakah tiap gerbang harus ber-GPU? Apa yang sebenarnya butuh GPU:
+
+| Beban | Butuh GPU? | Catatan terukur |
+| :-- | :-- | :-- |
+| YOLO26s-pose (deteksi & posisi) | **Tidak wajib** | CPU laptop 16 thread: server 15–17 FPS (uji 19-10). Perangkat 4–8 inti kemungkinan < 15 FPS → perlu NPU/iGPU |
+| FR (YuNet + reid-0095, OpenVINO) | Tidak | Sudah CPU |
+| VLM utama & cadangan | Tidak di gerbang | Cloud berbayar |
+| **VLM lokal darurat** (`qwen2.5vl:7b`) | **Ya** (±6–7 GB VRAM) | Satu-satunya beban yang memaksa GPU besar; hanya dipakai saat internet putus / cloud gagal |
+
+Pilihan yang dibandingkan nanti (biaya perangkat + listrik + perawatan vs risiko saat internet putus):
+- **A. Gerbang tanpa GPU** (PC mini / edge CPU + NPU untuk YOLO), VLM cloud utama & cadangan berbayar, **tanpa VLM
+  lokal** → saat internet putus pekerja *menunggu* (sesuai §5: tidak pernah lolos tanpa diperiksa) + SOP manual.
+- **B. Edge dengan akselerator** (mis. NVIDIA Jetson Orin, Intel Core Ultra NPU/iGPU + OpenVINO, Hailo) untuk YOLO +
+  **VLM lokal kecil** (2–4B, mis. `qwen2.5vl:3b`) — wajib lolos validasi yang sama (`apd_10` helm di rambut lebat,
+  `apd_4` sepatu; "APD kurang lolos = 0") sebelum dipakai.
+- **C. Satu server GPU per lokasi** dipakai bersama banyak gerbang sebagai VLM darurat (LAN lokal tetap jalan saat
+  internet putus); gerbang sendiri tanpa GPU.
+- **D. Seperti sekarang** (GPU per gerbang) untuk lokasi dengan internet tidak andal.
+
+Yang perlu disiapkan dari sekarang **tanpa** memilih: struktur kode tidak mengunci ke GPU — `vision/` & `vlm/` memilih
+perangkat lewat konfigurasi (sudah: `CUDA_VISIBLE_DEVICES`, VLM lokal opsional), dan MLOps (bagian 7) mencatat
+metrik per **perangkat** juga, supaya perbandingan A–D nanti memakai angka, bukan perkiraan.
 
 ## 9. Urutan yang saya usulkan (dinilai ulang setelah diskusi)
 
@@ -229,17 +263,20 @@ dikirim ke pusat (bandwidth & data pribadi).
 | 8 | Pembatas laju + penghitung kuota VLM, agregat harian audit (8.1) — bila pemicu terukur | Sedang (kuota habis = pekerja menunggu) | Codex |
 | 9 | Outbox + server pusat PG/pgvector (6c–6d), `gate_id` + UUID baris, pembaruan armada | **Tinggi** | setelah keputusan pengguna |
 
-Uji nyata berisiko Tinggi (antrean 3/4/4b) **tetap didahulukan** begitu perangkat demo tersedia; tahap di atas
-mengisi waktu sampai itu.
+**Fokus sekarang (keputusan 25-10): tahap 1–7 untuk satu gerbang.** Tahap 8 (penghitung biaya/kuota) boleh
+dikerjakan bila tagihan VLM berbayar perlu dipantau; tahap 9 (multi-gerbang/PG) ditunda. Uji nyata berisiko Tinggi
+(antrean 3/4/4b) **tetap didahulukan** begitu perangkat demo tersedia; tahap di atas mengisi waktu sampai itu.
 
 ## 10. Pertanyaan terbuka
 
 Untuk pengguna:
-1. Target jumlah gerbang & pekerja dalam 12 bulan? Siapa mengelola server pusat (on-premise / cloud)?
+1. ~~Target jumlah gerbang & server pusat~~ → ditunda (fokus satu gerbang, keputusan 25-10).
    Berapa pekerja lewat satu gerbang di jam masuk shift (orang/menit)? (menentukan perlu jalur tambahan atau tidak)
 2. Boleh menambah dependensi besar (SQLAlchemy/Alembic, Prometheus client) atau tetap minimal?
 3. Foto untuk dataset evaluasi: siap mengurus persetujuan pekerja, atau cukup label + hash?
-4. Prioritas: perapian struktur dulu, atau MLOps (registri, pemantauan) dulu?
+4. ~~Prioritas~~ → struktur folder + best practice **dan** MLOps (keputusan 25-10). Sisa: mana duluan di antara
+   keduanya — usul Claude: tes arsitektur + struktur backend dulu (tahap 2–3), MLOps registri/dataset (tahap 6)
+   bisa paralel karena area berkasnya berbeda (`tools/`, `models/`, `datasets/`).
 
 Untuk Codex:
 1. Pemetaan 41 modul ke paket di bagian 2 — ada yang salah tempat?

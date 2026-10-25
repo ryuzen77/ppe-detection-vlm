@@ -103,6 +103,8 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 ## Keputusan pengguna (acuan)
 
 **Gerbang & VLM**
+- **Produksi: VLM utama & cadangan berbayar**; free tier hanya untuk pengembangan & demo (keputusan pengguna 25-10).
+- **Fokus 25-10: satu gerbang** — perapian struktur folder + best practice + MLOps (lihat `docs/USULAN-ARSITEKTUR.md`); multi-gerbang/PostgreSQL ditunda; GPU vs edge computing didiskusikan nanti.
 - Alur: pekerja datang → selama tubuh belum utuh API terkunci (arahan posisi) → satu gambar ke VLM → keputusan terkunci sampai orang keluar dari jalur.
 - Utama = VLM cloud (penyedia bebas, bawaan Gemini 3.5 Flash-Lite); cadangan = VLM lokal (`qwen2.5vl:7b` via Ollama). Batas waktu cloud 4 dtk, lokal 12 dtk; setelah 2 kegagalan utama berturut-turut, utama dilewati dan dicoba lagi pada pekerja nyata setelah 60 dtk (tanpa probe yang memakan kuota).
 - Keduanya gagal → tidak ada keputusan: suara "mohon tunggu", lampu padam, diperiksa ulang otomatis, gangguan cukup dicatat di log.
