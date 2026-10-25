@@ -5,10 +5,11 @@
 
   let { buckets, totals }: { buckets: ReportBucket[]; totals: { total: number } } = $props()
 
-  // Find max total to scale the chart
-  const maxTotal = $derived(Math.max(1, ...buckets.map((b) => b.passed + b.rejected)))
+  import { BUCKET_SERIES, bucketSegments, bucketTitle, bucketTotal, calculateYAxis } from '../../lib/reports'
 
-  import { calculateYAxis } from '../../lib/reports'
+  // Skala grafik dari batang tertinggi (lolos + ditahan + ditolak, T101)
+  const maxTotal = $derived(Math.max(1, ...buckets.map(bucketTotal)))
+  const SERIES_LABEL = { passed: TEXT.charts.passed, held: TEXT.charts.held, rejected: TEXT.charts.rejected }
 
   let scrollWidth = $state(0)
 
@@ -39,14 +40,12 @@
   <div class="header">
     <h3>{TEXT.charts.complianceTitle}</h3>
     <div class="legend">
-      <span class="legend-item passed">
-        <span class="dot"></span>
-        {TEXT.charts.passed}
-      </span>
-      <span class="legend-item rejected">
-        <span class="dot"></span>
-        {TEXT.charts.rejected}
-      </span>
+      {#each [...BUCKET_SERIES].reverse() as s (s.key)}
+        <span class="legend-item">
+          <span class="dot" style:background="var(--{s.tone})"></span>
+          {SERIES_LABEL[s.key]}
+        </span>
+      {/each}
     </div>
   </div>
 
@@ -67,23 +66,15 @@
         {#each buckets as b, i (b.start)}
           {@const slotCenter = axisXStart + gap / 2 + i * slotWidth + slotWidth / 2}
           {@const x = slotCenter - barWidth / 2}
-          {@const passedH = getBarHeight(b.passed)}
-          {@const rejectedH = getBarHeight(b.rejected)}
-          {@const totalH = passedH + rejectedH}
-          {@const y = paddingY + usableHeight - totalH}
+          {@const y = paddingY + usableHeight - getBarHeight(bucketTotal(b))}
 
           <g class="bar-group">
-            <title>{b.label}: {b.passed} {TEXT.charts.passed}, {b.rejected} {TEXT.charts.rejected}</title>
+            <title>{bucketTitle(b, SERIES_LABEL)}</title>
 
-            <!-- Rejected (Top part) -->
-            {#if b.rejected > 0}
-              <rect {x} {y} width={barWidth} height={rejectedH} fill="var(--danger)" class="bar" />
-            {/if}
-
-            <!-- Passed (Bottom part) -->
-            {#if b.passed > 0}
-              <rect {x} y={y + rejectedH} width={barWidth} height={passedH} fill="var(--ok)" class="bar" />
-            {/if}
+            <!-- Ditolak (atas) → Ditahan → Lolos (bawah) -->
+            {#each bucketSegments(b, getBarHeight) as seg (seg.key)}
+              <rect {x} y={y + seg.offset} width={barWidth} height={seg.height} fill="var(--{seg.tone})" class="bar" />
+            {/each}
 
             <!-- X Axis Label -->
             <text x={slotCenter} y={height - 6} class="axis-label" text-anchor="middle">
@@ -133,12 +124,6 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-  }
-  .passed .dot {
-    background: var(--ok);
-  }
-  .rejected .dot {
-    background: var(--danger);
   }
 
   .empty {

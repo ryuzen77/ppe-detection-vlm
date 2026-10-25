@@ -1,5 +1,5 @@
 /** Logika tampilan halaman Laporan (murni, teruji). Teks di messages.ts, angka di settings.ts. */
-import type { HistoryRecord, ReportRecord, ReportStatusFilter, ReportsPage } from './api/types'
+import type { HistoryRecord, ReportBucket, ReportRecord, ReportStatusFilter, ReportsPage } from './api/types'
 import { describeSource, type SourceRole } from './format'
 import type { Tone } from './gate'
 import { REPORTS as TEXT } from './messages'
@@ -177,4 +177,41 @@ export function workerCell(
   const track = TEXT.table.worker_id(rec.track_id)
   if (rec.fr_status === 'unknown') return { primary: TEXT.table.unknownWorker, secondary: track, known: false }
   return { primary: track, secondary: '', known: false }
+}
+
+// --- T101: tumpukan batang grafik volume (merah atas → kuning → hijau bawah)
+
+export type BucketSeries = 'rejected' | 'held' | 'passed'
+
+/** Urutan tumpukan dari atas ke bawah; warna mengikuti aturan tone (merah/kuning/hijau) */
+export const BUCKET_SERIES: { key: BucketSeries; tone: Tone }[] = [
+  { key: 'rejected', tone: 'danger' },
+  { key: 'held', tone: 'warn' },
+  { key: 'passed', tone: 'ok' },
+]
+
+const countOf = (b: ReportBucket, key: BucketSeries) => b[key] ?? 0
+
+export const bucketTotal = (b: ReportBucket) => BUCKET_SERIES.reduce((sum, s) => sum + countOf(b, s.key), 0)
+
+/** Ruas batang yang tampil (nilai 0 dilewati), dengan posisi y relatif terhadap puncak batang */
+export function bucketSegments(
+  b: ReportBucket,
+  heightOf: (value: number) => number,
+): { key: BucketSeries; tone: Tone; offset: number; height: number }[] {
+  let offset = 0
+  return BUCKET_SERIES.filter((s) => countOf(b, s.key) > 0).map((s) => {
+    const height = heightOf(countOf(b, s.key))
+    const segment = { ...s, offset, height }
+    offset += height
+    return segment
+  })
+}
+
+/** Tooltip batang: "08: 2 Lolos, 1 Ditahan, 1 Ditolak" (seri bernilai 0 tidak disebut) */
+export function bucketTitle(b: ReportBucket, labels: Record<BucketSeries, string>): string {
+  const parts = (['passed', 'held', 'rejected'] as const)
+    .filter((key) => countOf(b, key) > 0)
+    .map((key) => `${countOf(b, key)} ${labels[key]}`)
+  return `${b.label}: ${parts.join(', ') || 0}`
 }

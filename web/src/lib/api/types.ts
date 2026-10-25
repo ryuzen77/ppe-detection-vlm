@@ -333,6 +333,8 @@ export interface ReportTotals {
   total: number
   passed: number
   rejected: number
+  /** T101: APD lengkap tetapi ditahan gerbang (T83); total = passed + rejected + held */
+  held: number
   compliance_rate: number | null
 }
 
@@ -341,6 +343,8 @@ export interface ReportBucket {
   label: string
   passed: number
   rejected: number
+  /** T101: lihat ReportTotals.held */
+  held: number
 }
 
 export interface MissingItemStat {
