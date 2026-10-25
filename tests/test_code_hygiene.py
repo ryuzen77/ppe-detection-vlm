@@ -35,7 +35,7 @@ LONG_FUNCTIONS_DEBT = {
     "backend/api/routes_cameras.py::list_cameras",
     "backend/video/capture.py::__init__",
 }
-HEX_COLOR_DEBT = {"web/src/components/monitoring/VideoPanel.svelte"}
+HEX_COLOR_DEBT: set[str] = set()  # T42j: VideoPanel kini memakai token --video-bg
 
 
 def _tracked_files() -> list[str]:

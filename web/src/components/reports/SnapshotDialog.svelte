@@ -6,24 +6,18 @@
   import type { ReportRecord } from '../../lib/api/types'
   import { REPORTS as TEXT, shortDate } from '../../lib/messages'
   import { resultKind } from '../../lib/reports'
+  import ModalDialog from '../ModalDialog.svelte'
 
   let { record = $bindable(null) }: { record?: ReportRecord | null } = $props()
-
-  let dialog: HTMLDialogElement | undefined = $state()
-
-  $effect(() => {
-    if (!dialog) return
-    if (record && !dialog.open) dialog.showModal()
-    else if (!record && dialog.open) dialog.close()
-  })
-
-  // Klik di latar (di luar isi dialog) menutup
-  function onBackdrop(e: MouseEvent) {
-    if (e.target === dialog) record = null
-  }
 </script>
 
-<dialog bind:this={dialog} onclose={() => (record = null)} onclick={onBackdrop} aria-labelledby="snapshot-title">
+<ModalDialog
+  open={record !== null}
+  onclose={() => (record = null)}
+  labelledby="snapshot-title"
+  size="lg"
+  closeOnBackdrop
+>
   {#if record}
     <header>
       <h2 id="snapshot-title">{TEXT.photo.title(record.track_id)}</h2>
@@ -34,20 +28,9 @@
       {TEXT.photo.caption(shortDate(record.date_str), record.time_str, TEXT.result[resultKind(record)])}
     </p>
   {/if}
-</dialog>
+</ModalDialog>
 
 <style>
-  dialog {
-    width: min(720px, calc(100vw - 32px));
-    padding: var(--space-5);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    background: var(--surface);
-    color: var(--text);
-  }
-  dialog::backdrop {
-    background: var(--backdrop);
-  }
   header {
     display: flex;
     align-items: center;

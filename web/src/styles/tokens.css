@@ -67,4 +67,6 @@
 
   /* Latar gelap di belakang dialog modal */
   --backdrop: rgba(0, 0, 0, 0.7);
+  /* Latar bingkai video: hitam murni supaya letterbox tidak terlihat sebagai bagian gambar (T42j) */
+  --video-bg: #000;
 }

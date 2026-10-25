@@ -8,13 +8,13 @@
   import { CAMERA_PICKER as TEXT, withError } from '../../lib/messages'
   import { formatDeviceMeta } from '../../lib/formatters'
   import { CAMERA_POLL } from '../../lib/settings'
+  import ModalDialog from '../ModalDialog.svelte'
 
   let { open = $bindable(false) }: { open?: boolean } = $props()
 
   /** Penanda backend untuk "belum pernah dipindai" */
   const NEVER_SCANNED = '-'
 
-  let dialog: HTMLDialogElement | undefined = $state()
   let catalog = $state<CameraCatalog | null>(null)
   let choice = $state<number | null>(null)
   let status = $state('')
@@ -52,16 +52,10 @@
     }
   }
 
-  $effect(() => {
-    if (!dialog) return
-    if (open && !dialog.open) {
-      choice = null
-      dialog.showModal()
-      refresh()
-    } else if (!open && dialog.open) {
-      dialog.close()
-    }
-  })
+  function onOpen() {
+    choice = null
+    refresh()
+  }
 
   async function connect() {
     if (choice === null) return
@@ -124,7 +118,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} onclose={() => (open = false)} aria-labelledby="camera-picker-title">
+<ModalDialog {open} onclose={() => (open = false)} onopen={onOpen} labelledby="camera-picker-title">
   <h2 id="camera-picker-title">{TEXT.title}</h2>
   <p class="hint">{TEXT.hintBefore} <strong>{TEXT.confirm}</strong>.</p>
 
@@ -169,20 +163,9 @@
       {busy === 'connect' ? TEXT.connecting : TEXT.confirm}
     </button>
   </div>
-</dialog>
+</ModalDialog>
 
 <style>
-  dialog {
-    width: min(520px, calc(100vw - 32px));
-    padding: var(--space-6);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    background: var(--surface);
-    color: var(--text);
-  }
-  dialog::backdrop {
-    background: rgba(0, 0, 0, 0.6);
-  }
   h2 {
     margin: 0 0 var(--space-2);
     font-size: var(--text-lg);

@@ -136,7 +136,7 @@
     position: relative;
     flex: 1;
     min-height: 0;
-    background: #000;
+    background: var(--video-bg);
   }
   img,
   canvas {
