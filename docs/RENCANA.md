@@ -25,6 +25,7 @@ baru mulai. Status: `antre` → `dikerjakan` → `tinjau` → `selesai`.
 | Task | Pemilik | Branch | Status | Area berkas | Catatan |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | T99d — kelompokkan modul VLM & audit ke `backend/vlm/` dan `backend/audit/` | Codex | `codex/t99d-folders` | dikerjakan | `backend/` (rename + impor), `tests/`, `tools/`, `scripts/` (impor), `docs/ARSITEKTUR.md` | Pemetaan di "Rancangan T99" tahap d. Hanya path impor; menyentuh banyak berkas → **selama T99d tidak ada task lain di `backend/`/`tests/`**. Klaim dicatat Claude 25-10 atas aba-aba pengguna |
+| T42j — utang kode UI (web saja) | Claude | `claude/t42j-web-debt` | dikerjakan | `web/src/components/monitoring/CameraPicker.svelte`, `VideoPanel.svelte`, `web/src/components/reports/SnapshotDialog.svelte`, `web/src/components/settings/ZoneSettings.svelte`, `web/src/pages/Pengaturan.svelte`, komponen bersama baru di `web/src/components/`, `web/src/styles/tokens.css` (tambah) | Lanjutan T42 (antrean #10): blok kembar dialog & Zona/Pengaturan, `#000` VideoPanel → token. **Tidak menyentuh `backend/`/`tests/`** (dikunci T99d); entri `HEX_COLOR_DEBT` dihapus setelah T99d digabung. Tampilan tidak berubah |
 
 ### Rancangan T99 — perapian backend per fitur (usul Codex 24-10, ditinjau Claude, **disetujui pengguna 24-10**)
 
