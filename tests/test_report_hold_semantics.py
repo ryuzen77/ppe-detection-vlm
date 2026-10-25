@@ -62,16 +62,17 @@ def seed_outcomes(manager, **identity):
 def test_summary_counts_held_in_total_and_apd_only(manager, period):
     seed_outcomes(manager)
     out = TestClient(app).get("/api/reports/summary", params={"period": period, "date": DAY}).json()
-    assert out["totals"] == {"total": 4, "passed": 1, "rejected": 1, "compliance_rate": 75.0}
+    assert out["totals"] == {"total": 4, "passed": 1, "rejected": 1, "held": 2, "compliance_rate": 75.0}
     assert sum(bucket["passed"] for bucket in out["buckets"]) == 1
     assert sum(bucket["rejected"] for bucket in out["buckets"]) == 1
-    assert set(out["totals"]) == {"total", "passed", "rejected", "compliance_rate"}
+    assert sum(bucket["held"] for bucket in out["buckets"]) == 2
+    assert set(out["totals"]) == {"total", "passed", "rejected", "held", "compliance_rate"}
 
 
 def test_only_held_is_neither_passed_nor_rejected_but_fully_compliant(manager):
     insert(manager, hold="unregistered")
     summary = manager.get_summary("day", DAY)
-    assert summary["totals"] == {"total": 1, "passed": 0, "rejected": 0, "compliance_rate": 100.0}
+    assert summary["totals"] == {"total": 1, "passed": 0, "rejected": 0, "held": 1, "compliance_rate": 100.0}
     assert manager.get_reports()["compliance_rate"] == 100.0
 
 
@@ -179,5 +180,11 @@ def test_filtered_report_performance_and_indexes(manager, size):
     started = perf_counter()
     summary = manager.get_summary("day", DAY)
     elapsed_ms = (perf_counter() - started) * 1000
-    assert summary["totals"] == {"total": size // 2, "passed": 0, "rejected": 0, "compliance_rate": 100.0}
+    assert summary["totals"] == {
+        "total": size // 2,
+        "passed": 0,
+        "rejected": 0,
+        "held": size // 2,
+        "compliance_rate": 100.0,
+    }
     print(f"T96 summary {size}: elapsed={elapsed_ms:.3f} ms")

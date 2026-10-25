@@ -6,6 +6,7 @@ import json
 import sqlite3
 import threading
 from datetime import date
+from contextlib import closing
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,8 +20,8 @@ HELM = "Helm Keselamatan"
 SEPATU = "Sepatu Tertutup"
 
 
-def row(day, time="07:15:00", complete=True, missing=()):
-    return rs.AuditRow(day, time, complete, json.dumps(list(missing)))
+def row(day, time="07:15:00", complete=True, missing=(), gate_hold=None):
+    return rs.AuditRow(day, time, complete, json.dumps(list(missing)), gate_hold)
 
 
 # --- Rentang periode --------------------------------------------------------------------
@@ -55,9 +56,10 @@ def test_harian_24_jam_termasuk_yang_nol():
         "label": "00",
         "passed": 0,
         "rejected": 0,
+        "held": 0,
     }
-    assert out["buckets"][7] == {"start": "07:00", "label": "07", "passed": 1, "rejected": 1}
-    assert out["totals"] == {"total": 3, "passed": 2, "rejected": 1, "compliance_rate": 66.7}
+    assert out["buckets"][7] == {"start": "07:00", "label": "07", "passed": 1, "rejected": 1, "held": 0}
+    assert out["totals"] == {"total": 3, "passed": 2, "rejected": 1, "held": 0, "compliance_rate": 66.7}
 
 
 def test_mingguan_berlabel_hari_dan_bulanan_semua_tanggal():
@@ -76,6 +78,71 @@ def test_tanpa_data_tingkat_kepatuhan_null():
 def test_baris_di_luar_rentang_diabaikan():
     d = date(2026, 10, 5)
     assert rs.summarize("week", d, date(2026, 10, 11), [row("2026-10-12")])["totals"]["total"] == 0
+
+
+def assert_summary_invariant(summary):
+    totals = summary["totals"]
+    assert totals["total"] == totals["passed"] + totals["rejected"] + totals["held"]
+    for key in ("passed", "rejected", "held"):
+        assert sum(bucket[key] for bucket in summary["buckets"]) == totals[key]
+    assert all(set(bucket) == {"start", "label", "passed", "rejected", "held"} for bucket in summary["buckets"])
+
+
+@pytest.mark.parametrize("period", ["day", "week", "month"])
+def test_held_buckets_partition_every_pass_without_changing_compliance(period):
+    anchor = date(2026, 10, 5)
+    start, end = rs.period_range(period, anchor)
+    rows = [
+        row("2026-10-05", "08:00:00"),
+        row("2026-10-05", "08:01:00", False, [HELM]),
+        row("2026-10-05", "08:02:00", gate_hold="unregistered"),
+        row("2026-10-05", "09:00:00", gate_hold="fr_unavailable"),
+        row("2026-10-05", "09:01:00", False, [SEPATU], gate_hold="unregistered"),
+    ]
+    expected = {"08:00": (1, 1, 1), "09:00": (0, 1, 1)}
+    if period != "day":
+        rows.append(row("2026-10-06", gate_hold="unregistered"))
+        expected = {"2026-10-05": (1, 2, 2), "2026-10-06": (0, 0, 1)}
+    result = rs.summarize(period, start, end, rows)
+    assert_summary_invariant(result)
+    assert result["totals"] == {
+        "total": len(rows),
+        "passed": 1,
+        "rejected": 2,
+        "held": len(rows) - 3,
+        "compliance_rate": round((len(rows) - 2) / len(rows) * 100, 1),
+    }
+    for bucket in result["buckets"]:
+        counts = (bucket["passed"], bucket["rejected"], bucket["held"])
+        assert counts == expected.get(bucket["start"], (0, 0, 0))
+        assert sum(counts) == sum(expected.get(bucket["start"], (0, 0, 0)))
+
+
+@pytest.mark.parametrize("period", ["day", "week", "month"])
+def test_empty_summary_has_zero_held_in_every_bucket(period):
+    start, end = rs.period_range(period, date(2026, 10, 5))
+    result = rs.summarize(period, start, end, [])
+    assert result["totals"] == {"total": 0, "passed": 0, "rejected": 0, "held": 0, "compliance_rate": None}
+    assert_summary_invariant(result)
+    assert all(bucket["held"] == 0 for bucket in result["buckets"])
+
+
+@pytest.mark.parametrize("reason", ["unregistered", "fr_unavailable"])
+def test_held_only_stays_fully_compliant(reason):
+    anchor = date(2026, 10, 5)
+    rows = [row("2026-10-05", "08:00:00", gate_hold=reason), row("2026-10-05", "09:00:00", gate_hold=reason)]
+    result = rs.summarize("day", anchor, anchor, rows)
+    assert result["totals"] == {"total": 2, "passed": 0, "rejected": 0, "held": 2, "compliance_rate": 100.0}
+    assert result["missing_items"] == []
+    assert_summary_invariant(result)
+
+
+@pytest.mark.parametrize("period", ["week", "month"])
+def test_held_outside_period_is_not_counted(period):
+    start, end = rs.period_range(period, date(2026, 10, 5))
+    result = rs.summarize(period, start, end, [row("2026-11-02", gate_hold="unregistered")])
+    assert result["totals"]["total"] == result["totals"]["held"] == 0
+    assert_summary_invariant(result)
 
 
 # --- Item APD paling sering kurang ------------------------------------------------------
@@ -137,6 +204,41 @@ def test_api_ringkasan_mingguan(mgr):
     body = r.json()
     assert r.status_code == 200 and body["range"] == {"from": "2026-10-05", "to": "2026-10-11"}
     assert body["totals"]["total"] == 2 and body["missing_items"][0]["key"] == "helm"
+
+
+def insert_held_records(manager):
+    with closing(sqlite3.connect(manager.db_path)) as conn, conn:
+        for day, clock, reason, worker_id in (
+            ("2026-10-05", "08:05:00", "unregistered", 7),
+            ("2026-10-06", "09:05:00", "fr_unavailable", 8),
+        ):
+            conn.execute(
+                "INSERT INTO worker_inspections(track_id,timestamp,date_str,time_str,is_complete,gate_hold,worker_id,department,company) "
+                "VALUES (1,?,?,?,1,?,?,?,?)",
+                (day + "T" + clock, day, clock, reason, worker_id, "Divisi Uji", "Perusahaan Uji"),
+            )
+
+
+@pytest.mark.parametrize("period", ["day", "week", "month"])
+@pytest.mark.parametrize("filters", [{}, {"worker_id": 7}, {"department": "Divisi Uji", "company": "Perusahaan Uji"}])
+def test_summary_api_exposes_held_and_preserves_identity_filters(mgr, period, filters):
+    insert_held_records(mgr)
+    response = TestClient(app).get("/api/reports/summary", params={"period": period, "date": "2026-10-05", **filters})
+    assert response.status_code == 200
+    result = response.json()
+    assert_summary_invariant(result)
+    if not filters:
+        passed, rejected, held = {"day": (1, 0, 1), "week": (1, 1, 2), "month": (2, 1, 2)}[period]
+        assert result["totals"] == {
+            "total": passed + rejected + held,
+            "passed": passed,
+            "rejected": rejected,
+            "held": held,
+            "compliance_rate": round((passed + held) / (passed + rejected + held) * 100, 1),
+        }
+    else:
+        held = 1 if "worker_id" in filters or period == "day" else 2
+        assert result["totals"] == {"total": held, "passed": 0, "rejected": 0, "held": held, "compliance_rate": 100.0}
 
 
 @pytest.mark.parametrize("params", [{"period": "year"}, {"period": "day", "date": "07-10-2026"}])
