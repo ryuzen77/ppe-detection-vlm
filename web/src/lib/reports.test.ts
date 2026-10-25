@@ -14,6 +14,9 @@ import {
   formatReportRange,
   calculateYAxis,
   workerCell,
+  bucketTotal,
+  bucketSegments,
+  bucketTitle,
 } from './reports'
 import { REPORTS } from './settings'
 
@@ -199,5 +202,43 @@ describe('clampToToday (tinjauan Codex T95)', () => {
     expect(clampToToday('2026-11-03', '2026-10-24')).toBe('2026-10-24')
     expect(clampToToday('2026-10-20', '2026-10-24')).toBe('2026-10-20')
     expect(clampToToday('', '2026-10-24')).toBe('')
+  })
+})
+
+describe('tumpukan batang grafik volume (T101)', () => {
+  const bucket = (passed: number, rejected: number, held: number) => ({
+    start: '08:00',
+    label: '08',
+    passed,
+    rejected,
+    held,
+  })
+  const labels = { passed: 'Lolos', rejected: 'Ditolak', held: 'Ditahan' }
+
+  it('total batang = lolos + ditolak + ditahan', () => {
+    expect(bucketTotal(bucket(2, 1, 1))).toBe(4)
+    expect(bucketTotal(bucket(0, 0, 0))).toBe(0)
+  })
+
+  it('urutan merah → kuning → hijau dari atas, ruas nol dilewati, offset bertumpuk', () => {
+    const segs = bucketSegments(bucket(2, 1, 1), (v) => v * 10)
+    expect(segs.map((s) => [s.key, s.tone, s.offset, s.height])).toEqual([
+      ['rejected', 'danger', 0, 10],
+      ['held', 'warn', 10, 10],
+      ['passed', 'ok', 20, 20],
+    ])
+    expect(bucketSegments(bucket(3, 0, 0), (v) => v).map((s) => s.key)).toEqual(['passed'])
+  })
+
+  it('server lama tanpa held tidak merusak grafik', () => {
+    const old = { start: '08:00', label: '08', passed: 1, rejected: 1 } as unknown as Parameters<typeof bucketTotal>[0]
+    expect(bucketTotal(old)).toBe(2)
+    expect(bucketSegments(old, (v) => v).map((s) => s.key)).toEqual(['rejected', 'passed'])
+  })
+
+  it('tooltip menyebut seri bernilai saja', () => {
+    expect(bucketTitle(bucket(2, 1, 1), labels)).toBe('08: 2 Lolos, 1 Ditahan, 1 Ditolak')
+    expect(bucketTitle(bucket(0, 3, 0), labels)).toBe('08: 3 Ditolak')
+    expect(bucketTitle(bucket(0, 0, 0), labels)).toBe('08: 0')
   })
 })

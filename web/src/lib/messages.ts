@@ -387,6 +387,8 @@ export const REPORTS = {
   charts: {
     passed: 'Lolos',
     rejected: 'Ditolak',
+    // T101: APD lengkap tetapi ditahan gerbang (T83) — kuning, bukan lolos
+    held: 'Ditahan',
     missingItemsTitle: 'Item APD terbanyak yang kurang',
     complianceTitle: 'Kepatuhan & Volume Inspeksi',
     noData: 'Tidak ada data untuk periode ini.',
