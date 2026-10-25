@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModalOverlay from '../ModalOverlay.svelte'
   import { onMount } from 'svelte'
   import { api } from '../../lib/api/client'
   import type { AccountInfo } from '../../lib/api/types'
@@ -275,55 +276,51 @@
 </section>
 
 {#if resetUser}
-  <div class="modal-overlay">
-    <div class="modal-card">
-      <h3>{AUTH.resetConfirmTitle} - {resetUser}</h3>
-      {#if resetError}<div class="error-box">{resetError}</div>{/if}
-      {#if resetSuccess}<div class="success-box">{resetSuccess}</div>{/if}
-      {#if !resetSuccess}
-        <form class="vertical-form" onsubmit={executeReset}>
-          <PasswordInput
-            placeholder={AUTH.newPassword}
-            autocomplete="new-password"
-            bind:value={resetPasswordNew}
-            disabled={resetting}
-            required
-          />
-          <div class="modal-actions">
-            <button type="button" class="btn" onclick={() => (resetUser = null)} disabled={resetting}
-              >{AUTH.cancelBtn}</button
-            >
-            <button type="submit" class="btn btn-primary" disabled={resetting || !resetPasswordNew}
-              >{AUTH.resetPassword}</button
-            >
-          </div>
-        </form>
-      {/if}
-    </div>
-  </div>
-{/if}
-
-{#if deleteUser}
-  <div class="modal-overlay">
-    <div class="modal-card">
-      <h3>{AUTH.deleteConfirmTitle}</h3>
-      <p>{AUTH.deleteConfirmPrompt.replace('{user}', deleteUser)}</p>
-      {#if deleteError}<div class="error-box">{deleteError}</div>{/if}
-      <form class="vertical-form" onsubmit={executeDelete}>
+  <ModalOverlay labelledby="reset-title" size="sm">
+    <h3 id="reset-title">{AUTH.resetConfirmTitle} - {resetUser}</h3>
+    {#if resetError}<div class="error-box">{resetError}</div>{/if}
+    {#if resetSuccess}<div class="success-box">{resetSuccess}</div>{/if}
+    {#if !resetSuccess}
+      <form class="vertical-form" onsubmit={executeReset}>
+        <PasswordInput
+          placeholder={AUTH.newPassword}
+          autocomplete="new-password"
+          bind:value={resetPasswordNew}
+          disabled={resetting}
+          required
+        />
         <div class="modal-actions">
-          <button type="button" class="btn" onclick={() => (deleteUser = null)} disabled={deleting}
+          <button type="button" class="btn" onclick={() => (resetUser = null)} disabled={resetting}
             >{AUTH.cancelBtn}</button
           >
-          <button
-            type="submit"
-            class="btn tone-danger"
-            style="color: var(--surface); background: var(--danger)"
-            disabled={deleting}>{AUTH.deleteBtn}</button
+          <button type="submit" class="btn btn-primary" disabled={resetting || !resetPasswordNew}
+            >{AUTH.resetPassword}</button
           >
         </div>
       </form>
-    </div>
-  </div>
+    {/if}
+  </ModalOverlay>
+{/if}
+
+{#if deleteUser}
+  <ModalOverlay labelledby="delete-title" size="sm">
+    <h3 id="delete-title">{AUTH.deleteConfirmTitle}</h3>
+    <p>{AUTH.deleteConfirmPrompt.replace('{user}', deleteUser)}</p>
+    {#if deleteError}<div class="error-box">{deleteError}</div>{/if}
+    <form class="vertical-form" onsubmit={executeDelete}>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick={() => (deleteUser = null)} disabled={deleting}
+          >{AUTH.cancelBtn}</button
+        >
+        <button
+          type="submit"
+          class="btn tone-danger"
+          style="color: var(--surface); background: var(--danger)"
+          disabled={deleting}>{AUTH.deleteBtn}</button
+        >
+      </div>
+    </form>
+  </ModalOverlay>
 {/if}
 
 <style>
@@ -403,29 +400,5 @@
     border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     margin-bottom: var(--space-2);
-  }
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-  .modal-card {
-    background: var(--surface);
-    padding: var(--space-6);
-    border-radius: var(--radius-lg);
-    width: min(400px, 90%);
-  }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-4);
   }
 </style>

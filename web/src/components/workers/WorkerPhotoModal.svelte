@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModalOverlay from '../ModalOverlay.svelte'
   // Pendaftaran wajah terpandu (T76): pendamping memegang layar, pekerja berdiri di posisi
   // pemeriksaan. Urutan foto, arah kepala, dan kunci suara datang dari rencana backend.
   import type { EnrollmentPlan, EnrollmentPreview, Worker } from '../../lib/api/types'
@@ -147,156 +148,124 @@
 <svelte:window onkeydown={onKeydown} />
 
 {#if worker}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-photo-title">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="modal-photo-title">
-          {WORKERS.modalPhotoTitle} — {worker.name}
-        </h3>
-        <span class="emp-badge">{worker.employee_no}</span>
-      </div>
-      <p class="subtitle">{WORKERS.modalPhotoSubtitle}</p>
-
-      {#if !done}
-        <div class="camera-preview-box">
-          <div class="preview-header">
-            <Camera size={14} />
-            <span>{WORKERS.cameraPreviewTitle}</span>
-          </div>
-          <div class="video-container">
-            <!-- releaseStream: koneksi MJPEG diputus saat modal ditutup (lihat lib/mjpeg.ts) -->
-            <img
-              use:releaseStream
-              src="{api.streamUrl()}?t={streamKey}"
-              alt={WORKERS.cameraPreviewTitle}
-              class="stream-img"
-              class:mirror={mirrorPreview(telemetry.data?.camera)}
-            />
-          </div>
-          {#if mirrorPreview(telemetry.data?.camera)}<span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span
-            >{/if}
-          <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
-        </div>
-      {/if}
-
-      {#if asking}
-        <div class="question">
-          <p>{ENROLLMENT_GUIDE.askGlasses}</p>
-          <span class="preview-hint">{ENROLLMENT_GUIDE.askGlassesHint}</span>
-          <div class="row">
-            <button type="button" class="btn btn-primary" onclick={() => start(true)}
-              >{ENROLLMENT_GUIDE.glassesYes}</button
-            >
-            <button type="button" class="btn btn-primary" onclick={() => start(false)}
-              >{ENROLLMENT_GUIDE.glassesNo}</button
-            >
-          </div>
-        </div>
-      {:else if shot && plan}
-        <div class="shot" aria-live="polite">
-          <span class="step"
-            >{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span
-          >
-          {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
-          <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
-          {#if autoStopped}
-            <span class="preview-hint">{ENROLLMENT_GUIDE.autoStopped}</span>
-          {:else if shot.switchesCondition}
-            <span class="preview-hint">{ENROLLMENT_GUIDE.helmetWaiting(ENROLLMENT_AUTO.switchCooldownMs / 1000)}</span>
-          {:else}
-            <span class="preview-hint">{ENROLLMENT_GUIDE.autoHint}</span>
-          {/if}
-          {#if !previewChecked}
-            <span class="fit">{ENROLLMENT_GUIDE.checkingFit}</span>
-          {:else if !preview}
-            <span class="fit">{ENROLLMENT_GUIDE.fitUnavailable}</span>
-          {:else}
-            <span class="fit" class:ok={preview.fit === 'ok'}>
-              {ENROLLMENT_GUIDE.fit[preview.fit]}{#if preview.interocular_px != null}
-                · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}{#if auto.streak > 0 && !autoStopped}
-                · {ENROLLMENT_GUIDE.holdStill}{/if}
-            </span>
-          {/if}
-          <div class="row">
-            <button type="button" class="btn" onclick={() => speak(shotPrompts(plan!, shot!))}>
-              <Volume2 size={14} />
-              {ENROLLMENT_GUIDE.speakPose}
-            </button>
-            {#if distancePrompt}
-              <button type="button" class="btn" onclick={() => speak([distancePrompt!])}>
-                <Volume2 size={14} />
-                {ENROLLMENT_GUIDE.speakFit}
-              </button>
-            {/if}
-          </div>
-        </div>
-      {:else if done}
-        <div class="shot" role="status">
-          <span class="pose">{ENROLLMENT_GUIDE.doneTitle}</span>
-          <p>{ENROLLMENT_GUIDE.doneDetail(shots.length)}</p>
-        </div>
-      {/if}
-
-      {#if photoError}
-        <div class="error-box" role="alert">{photoError}</div>
-      {/if}
-
-      {#if photoSuccess && !done}
-        <div class="success-box" role="status">{photoSuccess}</div>
-      {/if}
-
-      <div class="modal-actions">
-        {#if done}
-          <button type="button" class="btn btn-primary" onclick={onSaved}>{ENROLLMENT_GUIDE.finish}</button>
-        {:else}
-          <button type="button" class="btn" onclick={close} disabled={taking}>{WORKERS.cancelBtn}</button>
-          {#if shot}
-            <button
-              type="button"
-              class="btn btn-primary"
-              onclick={takePhoto}
-              disabled={taking || preview?.fit !== 'ok'}
-            >
-              {#if taking}
-                <span class="spin"><LoaderCircle size={14} /></span>
-                {WORKERS.takingPhoto}
-              {:else}
-                <Camera size={14} />
-                {WORKERS.takePhotoBtn}
-              {/if}
-            </button>
-          {/if}
-        {/if}
-      </div>
+  <ModalOverlay labelledby="modal-photo-title" size="lg" scroll>
+    <div class="modal-header">
+      <h3 id="modal-photo-title">
+        {WORKERS.modalPhotoTitle} — {worker.name}
+      </h3>
+      <span class="emp-badge">{worker.employee_no}</span>
     </div>
-  </div>
+    <p class="subtitle">{WORKERS.modalPhotoSubtitle}</p>
+
+    {#if !done}
+      <div class="camera-preview-box">
+        <div class="preview-header">
+          <Camera size={14} />
+          <span>{WORKERS.cameraPreviewTitle}</span>
+        </div>
+        <div class="video-container">
+          <!-- releaseStream: koneksi MJPEG diputus saat modal ditutup (lihat lib/mjpeg.ts) -->
+          <img
+            use:releaseStream
+            src="{api.streamUrl()}?t={streamKey}"
+            alt={WORKERS.cameraPreviewTitle}
+            class="stream-img"
+            class:mirror={mirrorPreview(telemetry.data?.camera)}
+          />
+        </div>
+        {#if mirrorPreview(telemetry.data?.camera)}<span class="preview-hint">{ENROLLMENT_GUIDE.mirrorHint}</span>{/if}
+        <span class="preview-hint">{WORKERS.enrollmentHoldHint}</span>
+      </div>
+    {/if}
+
+    {#if asking}
+      <div class="question">
+        <p>{ENROLLMENT_GUIDE.askGlasses}</p>
+        <span class="preview-hint">{ENROLLMENT_GUIDE.askGlassesHint}</span>
+        <div class="row">
+          <button type="button" class="btn btn-primary" onclick={() => start(true)}
+            >{ENROLLMENT_GUIDE.glassesYes}</button
+          >
+          <button type="button" class="btn btn-primary" onclick={() => start(false)}
+            >{ENROLLMENT_GUIDE.glassesNo}</button
+          >
+        </div>
+      </div>
+    {:else if shot && plan}
+      <div class="shot" aria-live="polite">
+        <span class="step"
+          >{ENROLLMENT_GUIDE.step(shot.number, shots.length)} · {getConditionLabel(shot.condition)}</span
+        >
+        {#if shot.switchesCondition}<p class="switch">{ENROLLMENT_GUIDE.conditionSwitch}</p>{/if}
+        <span class="pose">{ENROLLMENT_GUIDE.poses[shot.pose] ?? shot.pose}</span>
+        {#if autoStopped}
+          <span class="preview-hint">{ENROLLMENT_GUIDE.autoStopped}</span>
+        {:else if shot.switchesCondition}
+          <span class="preview-hint">{ENROLLMENT_GUIDE.helmetWaiting(ENROLLMENT_AUTO.switchCooldownMs / 1000)}</span>
+        {:else}
+          <span class="preview-hint">{ENROLLMENT_GUIDE.autoHint}</span>
+        {/if}
+        {#if !previewChecked}
+          <span class="fit">{ENROLLMENT_GUIDE.checkingFit}</span>
+        {:else if !preview}
+          <span class="fit">{ENROLLMENT_GUIDE.fitUnavailable}</span>
+        {:else}
+          <span class="fit" class:ok={preview.fit === 'ok'}>
+            {ENROLLMENT_GUIDE.fit[preview.fit]}{#if preview.interocular_px != null}
+              · {ENROLLMENT_GUIDE.fitMeasured(preview.interocular_px)}{/if}{#if auto.streak > 0 && !autoStopped}
+              · {ENROLLMENT_GUIDE.holdStill}{/if}
+          </span>
+        {/if}
+        <div class="row">
+          <button type="button" class="btn" onclick={() => speak(shotPrompts(plan!, shot!))}>
+            <Volume2 size={14} />
+            {ENROLLMENT_GUIDE.speakPose}
+          </button>
+          {#if distancePrompt}
+            <button type="button" class="btn" onclick={() => speak([distancePrompt!])}>
+              <Volume2 size={14} />
+              {ENROLLMENT_GUIDE.speakFit}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {:else if done}
+      <div class="shot" role="status">
+        <span class="pose">{ENROLLMENT_GUIDE.doneTitle}</span>
+        <p>{ENROLLMENT_GUIDE.doneDetail(shots.length)}</p>
+      </div>
+    {/if}
+
+    {#if photoError}
+      <div class="error-box" role="alert">{photoError}</div>
+    {/if}
+
+    {#if photoSuccess && !done}
+      <div class="success-box" role="status">{photoSuccess}</div>
+    {/if}
+
+    <div class="modal-actions">
+      {#if done}
+        <button type="button" class="btn btn-primary" onclick={onSaved}>{ENROLLMENT_GUIDE.finish}</button>
+      {:else}
+        <button type="button" class="btn" onclick={close} disabled={taking}>{WORKERS.cancelBtn}</button>
+        {#if shot}
+          <button type="button" class="btn btn-primary" onclick={takePhoto} disabled={taking || preview?.fit !== 'ok'}>
+            {#if taking}
+              <span class="spin"><LoaderCircle size={14} /></span>
+              {WORKERS.takingPhoto}
+            {:else}
+              <Camera size={14} />
+              {WORKERS.takePhotoBtn}
+            {/if}
+          </button>
+        {/if}
+      {/if}
+    </div>
+  </ModalOverlay>
 {/if}
 
 <style>
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--backdrop);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4);
-    z-index: 100;
-  }
-
-  .modal-card {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    width: 100%;
-    max-width: 540px;
-    /* Layar laptop 768 px: tombol Ambil Foto tidak boleh terdorong keluar layar */
-    max-height: calc(100dvh - 2 * var(--space-4));
-    overflow-y: auto;
-    box-shadow: 0 10px 25px var(--backdrop);
-  }
-
   .modal-header {
     display: flex;
     align-items: center;
@@ -442,12 +411,6 @@
     border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     margin-bottom: var(--space-3);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
   }
 
   .spin {

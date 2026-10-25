@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModalOverlay from '../ModalOverlay.svelte'
   import type { OrgEntry } from '../../lib/api/types'
   import { WORKERS, WORKERS_PAGE } from '../../lib/messages'
   import { defaultCompanyId, validateWorkerForm } from '../../lib/workers'
@@ -85,105 +86,82 @@
 </script>
 
 {#if show}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
-    <div class="modal-card">
-      <h3 id="modal-add-title">{WORKERS.modalAddTitle}</h3>
-      {#if addError}
-        <div class="error-box" role="alert">{addError}</div>
-      {/if}
+  <ModalOverlay labelledby="modal-add-title" size="md">
+    <h3 id="modal-add-title">{WORKERS.modalAddTitle}</h3>
+    {#if addError}
+      <div class="error-box" role="alert">{addError}</div>
+    {/if}
 
-      <form class="form-layout" onsubmit={handleAddWorker}>
-        <div class="form-group">
-          <label for="new-emp-no">{WORKERS.fieldEmployeeNo}</label>
-          <input
-            id="new-emp-no"
-            type="text"
-            placeholder={WORKERS.fieldEmployeeNoPlaceholder}
-            bind:value={employeeNo}
-            disabled={adding}
-          />
-          <span class="form-hint">{autoNo ? WORKERS_PAGE.employeeNoAutoHint : WORKERS_PAGE.employeeNoAutoEmpty}</span>
-        </div>
+    <form class="form-layout" onsubmit={handleAddWorker}>
+      <div class="form-group">
+        <label for="new-emp-no">{WORKERS.fieldEmployeeNo}</label>
+        <input
+          id="new-emp-no"
+          type="text"
+          placeholder={WORKERS.fieldEmployeeNoPlaceholder}
+          bind:value={employeeNo}
+          disabled={adding}
+        />
+        <span class="form-hint">{autoNo ? WORKERS_PAGE.employeeNoAutoHint : WORKERS_PAGE.employeeNoAutoEmpty}</span>
+      </div>
 
-        <div class="form-group">
-          <label for="new-name">{WORKERS.fieldName}</label>
+      <div class="form-group">
+        <label for="new-name">{WORKERS.fieldName}</label>
+        <input
+          id="new-name"
+          type="text"
+          placeholder={WORKERS.fieldNamePlaceholder}
+          bind:value={name}
+          disabled={adding}
+          required
+        />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label for="new-nickname">{WORKERS.fieldNickname}</label>
           <input
-            id="new-name"
+            id="new-nickname"
             type="text"
-            placeholder={WORKERS.fieldNamePlaceholder}
-            bind:value={name}
+            placeholder={WORKERS.fieldNicknamePlaceholder}
+            bind:value={nickname}
             disabled={adding}
             required
           />
+          <span class="form-hint">{WORKERS.fieldNicknameHint}</span>
         </div>
 
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label for="new-nickname">{WORKERS.fieldNickname}</label>
-            <input
-              id="new-nickname"
-              type="text"
-              placeholder={WORKERS.fieldNicknamePlaceholder}
-              bind:value={nickname}
-              disabled={adding}
-              required
-            />
-            <span class="form-hint">{WORKERS.fieldNicknameHint}</span>
-          </div>
-
-          <div class="form-group flex-1">
-            <label for="new-gender">{WORKERS.fieldGender}</label>
-            <select id="new-gender" bind:value={gender} disabled={adding}>
-              <option value="male">{WORKERS.genderMale}</option>
-              <option value="female">{WORKERS.genderFemale}</option>
-            </select>
-          </div>
+        <div class="form-group flex-1">
+          <label for="new-gender">{WORKERS.fieldGender}</label>
+          <select id="new-gender" bind:value={gender} disabled={adding}>
+            <option value="male">{WORKERS.genderMale}</option>
+            <option value="female">{WORKERS.genderFemale}</option>
+          </select>
         </div>
+      </div>
 
-        <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={adding} idPrefix="new" />
+      <OrgFields {departments} {companies} bind:departmentId bind:companyId disabled={adding} idPrefix="new" />
 
-        <div class="consent-box">
-          <label class="consent-label">
-            <input type="checkbox" bind:checked={consent} disabled={adding} />
-            <span>{WORKERS.fieldConsentLabel}</span>
-          </label>
-        </div>
+      <div class="consent-box">
+        <label class="consent-label">
+          <input type="checkbox" bind:checked={consent} disabled={adding} />
+          <span>{WORKERS.fieldConsentLabel}</span>
+        </label>
+      </div>
 
-        <div class="modal-actions">
-          <button type="button" class="btn" onclick={onClose} disabled={adding}>
-            {WORKERS.cancelBtn}
-          </button>
-          <button type="submit" class="btn btn-primary" disabled={adding || !consent}>
-            {WORKERS.submitBtn}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick={onClose} disabled={adding}>
+          {WORKERS.cancelBtn}
+        </button>
+        <button type="submit" class="btn btn-primary" disabled={adding || !consent}>
+          {WORKERS.submitBtn}
+        </button>
+      </div>
+    </form>
+  </ModalOverlay>
 {/if}
 
 <style>
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--backdrop);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4);
-    z-index: 100;
-  }
-
-  .modal-card {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    width: 100%;
-    max-width: 520px;
-    box-shadow: 0 10px 25px var(--backdrop);
-  }
-
   h3 {
     margin: 0 0 var(--space-3);
     font-size: var(--text-md);
@@ -266,12 +244,5 @@
     border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     margin-bottom: var(--space-3);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
   }
 </style>
